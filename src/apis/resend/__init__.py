@@ -1,0 +1,1 @@
+"""Implementaciones específicas para Resend."""
