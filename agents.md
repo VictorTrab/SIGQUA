@@ -59,6 +59,7 @@ Consultar según el tipo de tarea:
 - `agents/codex/roles/asegurador_calidad.md`
 - `agents/codex/skills/desarrollo_sicap/SKILL.md`
 - `agents/codex/skills/cierre_tarea_sicap/SKILL.md`
+- `agents/codex/skills/seguridad-sicap/SKILL.md`
 - `agents/codex/skills/mejora_ui_faseada_figma_mcp/SKILL.md`
 - `agents/codex/skills/documentacion_en_boveda/SKILL.md`
 
