@@ -54,9 +54,10 @@ class TestGestorBaseDatos(unittest.TestCase):
             self.assertIn("abonados", tablas)
 
             usuario_admin = conexion.execute(
-                "SELECT nombre_usuario FROM usuarios WHERE id = 1;"
+                "SELECT nombre_usuario, contrasena_hash FROM usuarios WHERE id = 1;"
             ).fetchone()
             self.assertEqual(usuario_admin[0], "admin")
+            self.assertTrue(usuario_admin[1].startswith("scrypt$"))
         finally:
             conexion.close()
 

@@ -47,6 +47,7 @@ Para cada tarea:
 15. Mantener nombres en español, claros y autodescriptivos.
 16. No guardar secretos reales, contraseñas ni tokens sensibles en texto plano.
 17. Mantener documentación breve, útil y defendible para tesis.
+18. Cuando se usen iconos en la UI, preferir Tabler Icons descargados localmente y centralizados en `src/comun/ui/recursos/iconos/tabler/`.
 
 ## Documentos temáticos
 Consultar según el tipo de tarea:

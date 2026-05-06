@@ -858,7 +858,7 @@ SELECT 4, id FROM permisos
 WHERE codigo IN ('dashboard.ver', 'morosidad.ver', 'reportes.generar');
 
 INSERT OR IGNORE INTO usuarios(id, nombre_usuario, nombre_completo, correo, contrasena_hash, estado, observaciones) VALUES
-(1, 'admin', 'Administrador del Sistema', 'admin@sicap.local', 'CAMBIAR_HASH_EN_DESARROLLO', 'ACTIVO', 'Usuario inicial de desarrollo. Cambiar contrasena antes de usar en produccion.');
+(1, 'admin', 'Administrador del Sistema', 'admin@sicap.local', 'scrypt$c081b3c0b1cabcfd1e173ac2293394ee$d3c88ce38c9accabda7c2beeef20c9cb0be9bf8a1014f702cc83d90c83fb8d7e8904a200712554282f89cdc1f6adc9fb2b3544f3732c7fabea9b6357a051a94d', 'ACTIVO', 'Usuario inicial de desarrollo. Contrasena local: Admin123!. Cambiar antes de usar en produccion.');
 
 INSERT OR IGNORE INTO usuarios_roles(usuario_id, rol_id) VALUES (1, 1);
 

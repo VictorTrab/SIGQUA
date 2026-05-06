@@ -31,6 +31,21 @@ class GestorRutas:
     def obtener_ruta_logs(self) -> Path:
         return self.raiz_proyecto / "logs"
 
+    def obtener_ruta_env(self) -> Path:
+        return self.raiz_proyecto / ".env"
+
+    def obtener_ruta_logo_marca(self) -> Path:
+        return self.raiz_proyecto / "src" / "comun" / "ui" / "recursos" / "marca" / "logo.png"
+
+    def obtener_ruta_icono_aplicacion(self) -> Path:
+        return self.raiz_proyecto / "src" / "comun" / "ui" / "recursos" / "marca" / "icono.ico"
+
+    def obtener_ruta_directorio_iconos_tabler(self) -> Path:
+        return self.raiz_proyecto / "src" / "comun" / "ui" / "recursos" / "iconos" / "tabler"
+
+    def obtener_ruta_icono_tabler(self, nombre_icono: str) -> Path:
+        return self.obtener_ruta_directorio_iconos_tabler() / nombre_icono
+
     def obtener_ruta_documentacion_tecnica(self) -> Path:
         ruta_configurada = os.getenv("RUTA_DOCUMENTACION_TECNICA")
         if ruta_configurada:
