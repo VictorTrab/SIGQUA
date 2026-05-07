@@ -6,7 +6,13 @@ from contextlib import closing
 from typing import Protocol
 
 from comun.base_datos import GestorBaseDatos
-from modulos.principal.entidades import MetricaDashboard
+from modulos.principal.entidades import (
+    AnaliticaDashboard,
+    CategoriaDashboard,
+    InsightDashboard,
+    MetricaDashboard,
+    PuntoSerieDashboard,
+)
 
 
 class RepositorioModuloPrincipal(Protocol):
@@ -14,6 +20,9 @@ class RepositorioModuloPrincipal(Protocol):
 
     def obtener_metricas_dashboard(self) -> tuple[MetricaDashboard, ...]:
         """Obtiene las metricas operativas del dashboard."""
+
+    def obtener_analitica_dashboard(self) -> AnaliticaDashboard:
+        """Obtiene series y paneles analiticos para la pantalla de inicio."""
 
 
 class RepositorioModuloPrincipalSQLite:
@@ -43,10 +52,10 @@ class RepositorioModuloPrincipalSQLite:
             pagos_mes_centavos = self._sumar(
                 conexion,
                 """
-                SELECT COALESCE(SUM(monto_total_centavos), 0)
+                SELECT COALESCE(SUM(total_pagado_centavos), 0)
                 FROM pagos
                 WHERE strftime('%Y-%m', fecha_pago) = strftime('%Y-%m', 'now')
-                  AND estado = 'REGISTRADO';
+                  AND estado = 'CONFIRMADO';
                 """,
             )
             casas_en_mora = self._contar(
@@ -64,6 +73,126 @@ class RepositorioModuloPrincipalSQLite:
             MetricaDashboard("deuda", "Deuda pendiente", self._formatear_lps(deuda_centavos), "Cargos pendientes"),
             MetricaDashboard("pagos_mes", "Pagos del mes", self._formatear_lps(pagos_mes_centavos), "Ingresos registrados"),
             MetricaDashboard("mora", "Casas en mora", str(casas_en_mora), "Con cargos vencidos"),
+        )
+
+    def obtener_analitica_dashboard(self) -> AnaliticaDashboard:
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            recaudacion = tuple(
+                PuntoSerieDashboard(str(fila["etiqueta"]), float(fila["valor"] or 0) / 100.0)
+                for fila in conexion.execute(
+                    """
+                    WITH RECURSIVE meses(offseto, fecha_base) AS (
+                        SELECT 5, date('now', 'start of month', '-5 month')
+                        UNION ALL
+                        SELECT offseto - 1, date(fecha_base, '+1 month')
+                        FROM meses
+                        WHERE offseto > 0
+                    )
+                    SELECT
+                        strftime('%m/%Y', m.fecha_base) AS etiqueta,
+                        COALESCE(SUM(p.total_pagado_centavos), 0) AS valor
+                    FROM meses m
+                    LEFT JOIN pagos p
+                        ON strftime('%Y-%m', p.fecha_pago) = strftime('%Y-%m', m.fecha_base)
+                       AND p.estado = 'CONFIRMADO'
+                    GROUP BY m.fecha_base
+                    ORDER BY m.fecha_base;
+                    """
+                ).fetchall()
+            )
+            deuda_por_barrio = tuple(
+                CategoriaDashboard(str(fila["etiqueta"]), float(fila["valor"] or 0) / 100.0)
+                for fila in conexion.execute(
+                    """
+                    SELECT
+                        b.nombre AS etiqueta,
+                        COALESCE(SUM(cg.saldo_pendiente_centavos), 0) AS valor
+                    FROM cargos cg
+                    JOIN casas c ON c.id = cg.casa_id
+                    JOIN barrios b ON b.id = c.barrio_id
+                    WHERE cg.estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
+                    GROUP BY b.id, b.nombre
+                    HAVING valor > 0
+                    ORDER BY valor DESC, b.nombre ASC
+                    LIMIT 5;
+                    """
+                ).fetchall()
+            )
+            estados_servicio = tuple(
+                CategoriaDashboard(str(fila["etiqueta"]), float(fila["valor"] or 0))
+                for fila in conexion.execute(
+                    """
+                    SELECT estado_servicio AS etiqueta, COUNT(*) AS valor
+                    FROM casas
+                    WHERE eliminado_en IS NULL
+                    GROUP BY estado_servicio
+                    ORDER BY COUNT(*) DESC, estado_servicio ASC;
+                    """
+                ).fetchall()
+            )
+
+            ticket_promedio = self._sumar(
+                conexion,
+                """
+                SELECT COALESCE(AVG(total_pagado_centavos), 0)
+                FROM pagos
+                WHERE estado = 'CONFIRMADO';
+                """,
+            )
+            hogares_suspendidos = self._contar(
+                conexion,
+                """
+                SELECT COUNT(*)
+                FROM casas
+                WHERE eliminado_en IS NULL
+                  AND estado_servicio IN ('SUSPENDIDO', 'CORTADO');
+                """,
+            )
+            abonados_con_deuda = self._contar(
+                conexion,
+                """
+                SELECT COUNT(DISTINCT abonado_id)
+                FROM cargos
+                WHERE estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
+                  AND saldo_pendiente_centavos > 0;
+                """,
+            )
+            total_ingresos = self._sumar(
+                conexion,
+                """
+                SELECT COALESCE(SUM(total_pagado_centavos), 0)
+                FROM pagos
+                WHERE estado = 'CONFIRMADO';
+                """,
+            )
+
+        insights = (
+            InsightDashboard(
+                "Ticket promedio",
+                self._formatear_lps(ticket_promedio),
+                "Valor medio por pago confirmado en el sistema.",
+            ),
+            InsightDashboard(
+                "Abonados con deuda",
+                str(abonados_con_deuda),
+                "Usuarios con al menos un cargo pendiente o vencido.",
+            ),
+            InsightDashboard(
+                "Servicios comprometidos",
+                str(hogares_suspendidos),
+                "Casas en estado suspendido o cortado que requieren seguimiento.",
+            ),
+            InsightDashboard(
+                "Ingresos acumulados",
+                self._formatear_lps(total_ingresos),
+                "Total historico confirmado en recaudacion.",
+            ),
+        )
+        return AnaliticaDashboard(
+            recaudacion_mensual=recaudacion,
+            deuda_por_barrio=deuda_por_barrio,
+            estados_servicio=estados_servicio,
+            insights=insights,
         )
 
     @staticmethod
@@ -91,3 +220,15 @@ class RepositorioModuloPrincipalMemoria:
             MetricaDashboard("mora", "Casas en mora", "0", "Sin mora registrada"),
         )
 
+    def obtener_analitica_dashboard(self) -> AnaliticaDashboard:
+        return AnaliticaDashboard(
+            recaudacion_mensual=(),
+            deuda_por_barrio=(),
+            estados_servicio=(),
+            insights=(
+                InsightDashboard("Ticket promedio", "L 0.00", "Sin pagos registrados."),
+                InsightDashboard("Abonados con deuda", "0", "Sin mora registrada."),
+                InsightDashboard("Servicios comprometidos", "0", "Sin incidencias activas."),
+                InsightDashboard("Ingresos acumulados", "L 0.00", "Sin historial financiero."),
+            ),
+        )

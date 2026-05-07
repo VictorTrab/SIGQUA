@@ -5,7 +5,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
-    QHBoxLayout,
     QLabel,
     QPushButton,
     QSizePolicy,
@@ -17,9 +16,9 @@ from PySide6.QtWidgets import (
 
 
 COLOR_TEXTO_PRIMARIO = "#10233d"
-COLOR_TEXTO_SECUNDARIO = "#5d7187"
-COLOR_BORDE = "#d8e2ec"
-COLOR_FONDO_PANEL = "#ffffff"
+COLOR_TEXTO_SECUNDARIO = "rgba(226, 235, 247, 0.82)"
+COLOR_BORDE = "rgba(255, 255, 255, 0.18)"
+COLOR_FONDO_PANEL = "rgba(255, 255, 255, 0.12)"
 
 
 class TarjetaKPI(QFrame):
@@ -29,11 +28,11 @@ class TarjetaKPI(QFrame):
         super().__init__()
         self.setObjectName("tarjetaKPI")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setMinimumHeight(112)
+        self.setMinimumHeight(104)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(6)
+        layout.setContentsMargins(18, 15, 18, 15)
+        layout.setSpacing(5)
 
         self._titulo = QLabel(titulo)
         self._titulo.setObjectName("kpiTitulo")
@@ -58,16 +57,17 @@ class TarjetaKPI(QFrame):
             QFrame#tarjetaKPI {{
                 background-color: {COLOR_FONDO_PANEL};
                 border: 1px solid {COLOR_BORDE};
-                border-radius: 8px;
+                border-radius: 20px;
             }}
             QLabel#kpiTitulo {{
                 color: {COLOR_TEXTO_SECUNDARIO};
                 font-size: 12px;
                 font-weight: 700;
+                letter-spacing: 0.04em;
             }}
             QLabel#kpiValor {{
-                color: {COLOR_TEXTO_PRIMARIO};
-                font-size: 28px;
+                color: #ffffff;
+                font-size: 30px;
                 font-weight: 800;
             }}
             QLabel#kpiDetalle {{
@@ -125,10 +125,10 @@ class VistaPlaceholderModulo(QWidget):
             QFrame#tarjetaPlaceholder {{
                 background-color: {COLOR_FONDO_PANEL};
                 border: 1px solid {COLOR_BORDE};
-                border-radius: 8px;
+                border-radius: 22px;
             }}
             QLabel#placeholderTitulo {{
-                color: {COLOR_TEXTO_PRIMARIO};
+                color: #ffffff;
                 font-size: 22px;
                 font-weight: 800;
             }}
@@ -137,10 +137,10 @@ class VistaPlaceholderModulo(QWidget):
                 font-size: 14px;
             }}
             QLabel#placeholderAviso {{
-                color: #8a5d00;
-                background-color: #fff6df;
-                border: 1px solid #f2d18b;
-                border-radius: 8px;
+                color: #fce6a8;
+                background-color: rgba(255, 246, 223, 0.10);
+                border: 1px solid rgba(242, 209, 139, 0.45);
+                border-radius: 14px;
                 padding: 10px 12px;
                 font-size: 13px;
                 font-weight: 700;
@@ -158,26 +158,38 @@ def configurar_tabla_operativa(tabla: QTableWidget, encabezados: list[str]) -> N
     tabla.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
     tabla.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
     tabla.horizontalHeader().setStretchLastSection(True)
+    tabla.horizontalHeader().setMinimumSectionSize(96)
+    tabla.verticalHeader().setDefaultSectionSize(44)
+    tabla.setShowGrid(False)
+    tabla.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
     tabla.setStyleSheet(
         """
         QTableWidget {
-            background-color: #ffffff;
-            alternate-background-color: #f7fafc;
-            border: 1px solid #d8e2ec;
-            border-radius: 8px;
-            gridline-color: #e6edf4;
-            color: #10233d;
+            background-color: rgba(255, 255, 255, 0.11);
+            alternate-background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 16px;
+            gridline-color: transparent;
+            color: #f7fbff;
+            padding: 4px;
+            selection-background-color: rgba(140, 220, 226, 0.18);
         }
         QHeaderView::section {
-            background-color: #eef4f8;
-            color: #17324d;
+            background-color: rgba(255, 255, 255, 0.12);
+            color: #f7fbff;
             border: none;
-            border-right: 1px solid #d8e2ec;
-            padding: 8px;
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 11px 10px;
             font-weight: 700;
         }
         QTableWidget::item {
-            padding: 8px;
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        QTableWidget::item:selected {
+            background-color: rgba(109, 241, 220, 0.22);
+            color: #ffffff;
         }
         """
     )
@@ -195,33 +207,40 @@ def crear_boton_operativo(texto: str, principal: bool = False) -> QPushButton:
     boton = QPushButton(texto)
     boton.setCursor(Qt.CursorShape.PointingHandCursor)
     boton.setObjectName("botonOperativoPrimario" if principal else "botonOperativo")
-    boton.setMinimumHeight(38)
+    boton.setMinimumHeight(40)
     boton.setStyleSheet(
         """
         QPushButton#botonOperativo,
         QPushButton#botonOperativoPrimario {
-            border-radius: 8px;
+            border-radius: 14px;
             font-size: 13px;
             font-weight: 700;
-            padding: 0 14px;
+            padding: 0 16px;
+            min-height: 40px;
         }
         QPushButton#botonOperativo {
-            background-color: #ffffff;
-            border: 1px solid #c9d7e5;
-            color: #17324d;
+            background-color: rgba(255, 255, 255, 0.11);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: #f7fbff;
         }
         QPushButton#botonOperativo:hover {
-            background-color: #edf5fb;
+            background-color: rgba(255, 255, 255, 0.18);
+            border-color: rgba(255, 255, 255, 0.24);
+        }
+        QPushButton#botonOperativo:pressed {
+            background-color: rgba(255, 255, 255, 0.24);
         }
         QPushButton#botonOperativoPrimario {
-            background-color: #1f2c51;
-            border: 1px solid #1f2c51;
+            background-color: rgba(23, 39, 75, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.10);
             color: #ffffff;
         }
         QPushButton#botonOperativoPrimario:hover {
-            background-color: #263866;
+            background-color: rgba(31, 52, 99, 0.96);
+        }
+        QPushButton#botonOperativoPrimario:pressed {
+            background-color: rgba(18, 32, 64, 0.98);
         }
         """
     )
     return boton
-

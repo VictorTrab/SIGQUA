@@ -40,6 +40,7 @@ class ServicioModuloPrincipal:
             nombre_completo=usuario.nombre_completo,
             perfil=self._resolver_perfil(usuario),
             metricas=self.repositorio_modulo_principal.obtener_metricas_dashboard(),
+            analitica=self.repositorio_modulo_principal.obtener_analitica_dashboard(),
             modulos=modulos_visibles,
             puede_abrir_mantenimiento=usuario.tiene_permiso("mantenimiento.ver"),
         )
@@ -59,4 +60,3 @@ class ServicioModuloPrincipal:
         if modulo.permiso_requerido is None:
             return True
         return usuario.tiene_permiso(modulo.permiso_requerido) or usuario.es_superadministrador()
-

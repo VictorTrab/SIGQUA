@@ -13,7 +13,7 @@ from comun.base_datos import GestorBaseDatos
 from comun.configuracion.gestor_rutas import GestorRutas
 from comun.logs import obtener_logger_sicap
 from comun.sesion import SesionAplicacion
-from comun.ui import ContenedorApiladoAjustable
+from comun.ui import ContenedorApiladoAjustable, VistaPlaceholderModulo
 from modulos.autenticacion import (
     ControladorAutenticacion,
     SesionIniciada,
@@ -27,14 +27,24 @@ from modulos.mantenimiento import (
     ServicioMantenimiento,
     VistaMantenimiento,
 )
+from modulos.barrios import (
+    ControladorBarrios,
+    RepositorioBarriosSQLite,
+    ServicioBarrios,
+    VistaBarrios,
+)
 from modulos.principal import (
     ControladorModuloPrincipal,
-    RepositorioModuloPrincipalMemoria,
+    RepositorioModuloPrincipalSQLite,
     ServicioModuloPrincipal,
     VistaModuloPrincipal,
 )
-from modulos.usuarios.repositorio import RepositorioUsuariosSQLite
-from modulos.usuarios.servicio import ServicioUsuarios
+from modulos.usuarios import (
+    ControladorUsuarios,
+    RepositorioUsuariosSQLite,
+    ServicioUsuarios,
+    VistaUsuarios,
+)
 
 logger = obtener_logger_sicap("app")
 ANCHO_VENTANA_AUTENTICACION = 760
@@ -86,6 +96,8 @@ def crear_ventana_principal(
     servicio_autenticacion.asegurar_usuario_admin_desarrollo()
     repositorio_usuarios = RepositorioUsuariosSQLite(gestor_base_datos)
     servicio_usuarios = ServicioUsuarios(repositorio_usuarios)
+    repositorio_barrios = RepositorioBarriosSQLite(gestor_base_datos)
+    servicio_barrios = ServicioBarrios(repositorio_barrios)
     repositorio_mantenimiento = RepositorioMantenimientoSQLite(gestor_base_datos)
     servicio_mantenimiento = ServicioMantenimiento(repositorio_mantenimiento)
 
@@ -120,8 +132,10 @@ def crear_ventana_principal(
     ventana_principal.sesion_activa = None
     ventana_principal.contenedor_central = contenedor_central
     ventana_principal.controlador_autenticacion = controlador
+    ventana_principal.gestor_base_datos = gestor_base_datos
     ventana_principal.servicio_autenticacion = servicio_autenticacion
     ventana_principal.servicio_usuarios = servicio_usuarios
+    ventana_principal.servicio_barrios = servicio_barrios
     ventana_principal.servicio_mantenimiento = servicio_mantenimiento
     ventana_principal.vista_autenticacion = vista_autenticacion
     logger.info("Ventana principal lista y mostrando autenticacion.")
@@ -142,7 +156,7 @@ def _manejar_autenticacion_exitosa(
     servicio_autenticacion: ServicioAutenticacion,
     sesion_iniciada: SesionIniciada,
 ) -> None:
-    """Abre el modulo principal provisional tras autenticacion exitosa."""
+    """Abre el modulo principal tras autenticacion exitosa."""
     if sesion_iniciada.usuario.requiere_cambio_contrasena:
         logger.info(
             "Usuario '%s' debe completar cambio obligatorio de contrasena.",
@@ -167,7 +181,7 @@ def _manejar_autenticacion_exitosa(
     if not hasattr(ventana_principal, "vista_modulo_principal"):
         vista_modulo_principal = VistaModuloPrincipal()
         servicio_modulo_principal = ServicioModuloPrincipal(
-            RepositorioModuloPrincipalMemoria(),
+            RepositorioModuloPrincipalSQLite(ventana_principal.gestor_base_datos),
         )
         controlador_modulo_principal = ControladorModuloPrincipal(
             servicio_modulo_principal=servicio_modulo_principal,
@@ -186,6 +200,7 @@ def _manejar_autenticacion_exitosa(
         ventana_principal.vista_modulo_principal = vista_modulo_principal
         ventana_principal.controlador_modulo_principal = controlador_modulo_principal
         ventana_principal.servicio_modulo_principal = servicio_modulo_principal
+        _registrar_modulos_operativos(ventana_principal)
 
     if (
         sesion_iniciada.usuario.tiene_permiso("mantenimiento.ver")
@@ -205,10 +220,88 @@ def _manejar_autenticacion_exitosa(
 
     controlador_modulo_principal = ventana_principal.controlador_modulo_principal
     vista_modulo_principal = ventana_principal.vista_modulo_principal
+    _refrescar_modulos_operativos(ventana_principal, sesion_iniciada.usuario)
     controlador_modulo_principal.mostrar_inicio(sesion_iniciada.usuario)
     ventana_principal.setWindowTitle("SICAP | Modulo principal")
     ventana_principal.contenedor_central.setCurrentWidget(vista_modulo_principal)
     _aplicar_modo_principal(ventana_principal)
+
+
+def _registrar_modulos_operativos(ventana_principal: QMainWindow) -> None:
+    """Registra paginas persistentes dentro del shell principal."""
+    vista_modulo_principal = ventana_principal.vista_modulo_principal
+
+    vista_barrios = VistaBarrios()
+    controlador_barrios = ControladorBarrios(
+        servicio_barrios=ventana_principal.servicio_barrios,
+        vista_barrios=vista_barrios,
+    )
+    vista_modulo_principal.registrar_modulo("barrios", vista_barrios)
+
+    vista_usuarios = VistaUsuarios()
+    controlador_usuarios = ControladorUsuarios(
+        servicio_usuarios=ventana_principal.servicio_usuarios,
+        vista_usuarios=vista_usuarios,
+    )
+    vista_modulo_principal.registrar_modulo("usuarios", vista_usuarios)
+
+    for codigo, titulo, descripcion in (
+        (
+            "abonados",
+            "Abonados",
+            "Alta, busqueda, detalle e inactivacion de abonados se construiran sobre barrios.",
+        ),
+        (
+            "casas",
+            "Casas",
+            "Gestion de casas, estado de servicio y cambio de propietario se activara en el siguiente hito.",
+        ),
+        (
+            "pagos",
+            "Pagos",
+            "Registro de pagos y aplicacion desde deuda mas antigua se integraran con cargos y casas.",
+        ),
+        (
+            "morosidad",
+            "Morosidad",
+            "Consulta de deuda, meses pendientes y contexto de cobro se habilitara tras pagos.",
+        ),
+        (
+            "planes_pago",
+            "Planes de pago",
+            "Control de planes y cuotas se construira cuando morosidad este estable.",
+        ),
+        (
+            "reportes",
+            "Reportes",
+            "Reportes operativos se activaran cuando existan datos confiables de pagos y deuda.",
+        ),
+        (
+            "configuracion",
+            "Configuracion",
+            "Configuracion operativa sin correo ni Resend para esta version local.",
+        ),
+    ):
+        vista_modulo_principal.registrar_modulo(
+            codigo,
+            VistaPlaceholderModulo(titulo, descripcion),
+        )
+
+    ventana_principal.vista_barrios = vista_barrios
+    ventana_principal.controlador_barrios = controlador_barrios
+    ventana_principal.vista_usuarios = vista_usuarios
+    ventana_principal.controlador_usuarios = controlador_usuarios
+
+
+def _refrescar_modulos_operativos(
+    ventana_principal: QMainWindow,
+    usuario: object,
+) -> None:
+    """Actualiza los modulos con datos dependientes de la sesion activa."""
+    if hasattr(ventana_principal, "controlador_barrios"):
+        ventana_principal.controlador_barrios.mostrar()
+    if hasattr(ventana_principal, "controlador_usuarios"):
+        ventana_principal.controlador_usuarios.mostrar_para_actor(usuario)
 
 
 def _manejar_cierre_sesion(

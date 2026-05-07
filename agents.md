@@ -58,6 +58,7 @@ Para cada tarea:
 23. La seguridad activa debe respetar la separacion entre `ADMINISTRADOR` operativo y `SUPERADMINISTRADOR` tecnico oculto.
 24. El modulo de mantenimiento debe quedar reservado para `SUPERADMINISTRADOR`.
 25. La recuperacion de acceso vigente es local y administrativa, nunca por correo en esta version.
+26. Todo dato precargado, semilla, ejemplo o registro marcado para desarrollo dentro del repositorio o de la base local debe considerarse exclusivamente dato de prueba y nunca dato productivo real.
 
 ## Documentos tematicos
 Consultar segun el tipo de tarea:

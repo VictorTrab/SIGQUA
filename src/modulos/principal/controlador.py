@@ -25,12 +25,16 @@ class ControladorModuloPrincipal:
         self.vista_modulo_principal.abrir_mantenimiento_solicitado.connect(
             self._manejar_apertura_mantenimiento
         )
+        self.vista_modulo_principal.modulo_solicitado.connect(self._manejar_modulo_solicitado)
         self._callback_cierre_sesion: Callable[[], None] | None = None
         self._callback_apertura_mantenimiento: Callable[[], None] | None = None
 
     def mostrar_inicio(self, usuario: UsuarioAutenticado) -> None:
         estado = self.servicio_modulo_principal.obtener_estado_para_usuario(usuario)
         self.vista_modulo_principal.mostrar_estado(estado)
+
+    def registrar_modulo(self, codigo: str, vista: object) -> None:
+        self.vista_modulo_principal.registrar_modulo(codigo, vista)
 
     def configurar_callback_cierre_sesion(
         self,
@@ -51,3 +55,6 @@ class ControladorModuloPrincipal:
     def _manejar_apertura_mantenimiento(self) -> None:
         if self._callback_apertura_mantenimiento is not None:
             self._callback_apertura_mantenimiento()
+
+    def _manejar_modulo_solicitado(self, codigo: str) -> None:
+        self.vista_modulo_principal.mostrar_modulo(codigo)
