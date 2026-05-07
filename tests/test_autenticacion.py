@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import sqlite3
 import sys
 import tempfile
@@ -21,44 +20,25 @@ from modulos.autenticacion.repositorio import RepositorioAutenticacionSQLite  # 
 from modulos.autenticacion.servicio import ServicioAutenticacion  # noqa: E402
 
 
-class ProveedorCorreoFalso:
-    def __init__(self) -> None:
-        self.correos_enviados: list[dict[str, str]] = []
-
-    def enviar_correo(self, destinatario: str, asunto: str, contenido: str) -> None:
-        self.correos_enviados.append(
-            {
-                "destinatario": destinatario,
-                "asunto": asunto,
-                "contenido": contenido,
-            }
-        )
-
-
 class TestAutenticacion(unittest.TestCase):
     def setUp(self) -> None:
         self.directorio_temporal = tempfile.TemporaryDirectory()
         self.raiz_temporal = Path(self.directorio_temporal.name)
         (self.raiz_temporal / "database" / "migrations").mkdir(parents=True, exist_ok=True)
 
-        ruta_esquema_real = (
-            RAIZ_PROYECTO / "database" / "migrations" / "002_esquema_inicial.sql"
-        )
-        contenido_sql = ruta_esquema_real.read_text(encoding="utf-8")
-        (self.raiz_temporal / "database" / "migrations" / "002_esquema_inicial.sql").write_text(
-            contenido_sql,
-            encoding="utf-8",
-        )
+        for ruta_migracion in (RAIZ_PROYECTO / "database" / "migrations").glob("*.sql"):
+            contenido_sql = ruta_migracion.read_text(encoding="utf-8")
+            (self.raiz_temporal / "database" / "migrations" / ruta_migracion.name).write_text(
+                contenido_sql,
+                encoding="utf-8",
+            )
 
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
         self.gestor_base_datos.inicializar_base_datos()
-        self.proveedor_correo = ProveedorCorreoFalso()
         self.repositorio = RepositorioAutenticacionSQLite(self.gestor_base_datos)
         self.servicio = ServicioAutenticacion(
             repositorio_autenticacion=self.repositorio,
-            proveedor_correo=self.proveedor_correo,
-            entorno="desarrollo",
         )
 
     def tearDown(self) -> None:
@@ -71,13 +51,14 @@ class TestAutenticacion(unittest.TestCase):
 
         self.assertTrue(resultado.exito)
         self.assertIsNotNone(resultado.usuario)
-        self.assertIsNotNone(resultado.token_sesion)
+        self.assertTrue(resultado.requiere_cambio_contrasena)
+        self.assertIsNone(resultado.token_sesion)
 
         conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
         try:
             total_sesiones = conexion.execute("SELECT COUNT(*) FROM sesiones;").fetchone()[0]
             total_intentos = conexion.execute(
-                "SELECT COUNT(*) FROM intentos_login WHERE exito = 1;"
+                "SELECT COUNT(*) FROM intentos_login WHERE resultado = 'EXITOSO';"
             ).fetchone()[0]
             ultimo_acceso = conexion.execute(
                 "SELECT ultimo_acceso_en FROM usuarios WHERE nombre_usuario = 'admin';"
@@ -85,7 +66,7 @@ class TestAutenticacion(unittest.TestCase):
         finally:
             conexion.close()
 
-        self.assertEqual(total_sesiones, 1)
+        self.assertEqual(total_sesiones, 0)
         self.assertEqual(total_intentos, 1)
         self.assertIsNotNone(ultimo_acceso)
 
@@ -99,7 +80,7 @@ class TestAutenticacion(unittest.TestCase):
         conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
         try:
             total_fallidos = conexion.execute(
-                "SELECT COUNT(*) FROM intentos_login WHERE exito = 0;"
+                "SELECT COUNT(*) FROM intentos_login WHERE resultado = 'FALLIDO';"
             ).fetchone()[0]
             total_sesiones = conexion.execute("SELECT COUNT(*) FROM sesiones;").fetchone()[0]
         finally:
@@ -107,6 +88,30 @@ class TestAutenticacion(unittest.TestCase):
 
         self.assertEqual(total_fallidos, 1)
         self.assertEqual(total_sesiones, 0)
+
+    def test_login_fallido_repetido_bloquea_usuario(self) -> None:
+        for _ in range(5):
+            resultado = self.servicio.iniciar_sesion(
+                CredencialesUsuario(nombre_usuario="admin", contrasena_plana="mal-clave")
+            )
+
+        self.assertFalse(resultado.exito)
+        self.assertEqual(resultado.codigo, "USUARIO_BLOQUEADO")
+
+        conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
+        try:
+            estado, intentos = conexion.execute(
+                """
+                SELECT estado, intentos_fallidos
+                FROM usuarios
+                WHERE nombre_usuario = 'admin';
+                """
+            ).fetchone()
+        finally:
+            conexion.close()
+
+        self.assertEqual(estado, "BLOQUEADO")
+        self.assertEqual(intentos, 5)
 
     def test_login_bloqueado_falla_con_mensaje_especifico(self) -> None:
         conexion = self.gestor_base_datos.obtener_conexion()
@@ -125,63 +130,50 @@ class TestAutenticacion(unittest.TestCase):
         self.assertFalse(resultado.exito)
         self.assertIn("bloqueado", resultado.mensaje.lower())
 
-    def test_recuperacion_existente_persiste_token_y_entrega_token_prueba(self) -> None:
-        resultado = self.servicio.solicitar_recuperacion("admin@sicap.local")
-
-        self.assertTrue(resultado.exito)
-        self.assertTrue(resultado.token_prueba)
-        self.assertEqual(len(self.proveedor_correo.correos_enviados), 1)
-
-        conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
-        try:
-            total_tokens = conexion.execute(
-                "SELECT COUNT(*) FROM tokens_recuperacion_contrasena;"
-            ).fetchone()[0]
-        finally:
-            conexion.close()
-
-        self.assertEqual(total_tokens, 1)
-
-    def test_recuperacion_inexistente_no_enumera_cuentas(self) -> None:
-        resultado = self.servicio.solicitar_recuperacion("no-existe@sicap.local")
-
-        self.assertTrue(resultado.exito)
-        self.assertIsNone(resultado.token_prueba)
-        self.assertEqual(len(self.proveedor_correo.correos_enviados), 0)
-
-        conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
-        try:
-            total_tokens = conexion.execute(
-                "SELECT COUNT(*) FROM tokens_recuperacion_contrasena;"
-            ).fetchone()[0]
-        finally:
-            conexion.close()
-
-        self.assertEqual(total_tokens, 0)
-
-    def test_restablecimiento_exitoso_invalida_reutilizacion_del_token(self) -> None:
-        recuperacion = self.servicio.solicitar_recuperacion("admin@sicap.local")
-        self.assertTrue(recuperacion.token_prueba)
-
+    def test_restablecimiento_local_actualiza_hash_y_permita_login_nuevo(self) -> None:
         resultado = self.servicio.restablecer_contrasena(
-            token=recuperacion.token_prueba or "",
+            nombre_usuario="admin",
             nueva_contrasena="NuevaClave123!",
             confirmacion_contrasena="NuevaClave123!",
         )
-
         self.assertTrue(resultado.exito)
+
+        login_anterior = self.servicio.iniciar_sesion(
+            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="Admin123!")
+        )
+        self.assertFalse(login_anterior.exito)
 
         login_nuevo = self.servicio.iniciar_sesion(
             CredencialesUsuario(nombre_usuario="admin", contrasena_plana="NuevaClave123!")
         )
         self.assertTrue(login_nuevo.exito)
+        self.assertFalse(login_nuevo.requiere_cambio_contrasena)
+        self.assertIsNotNone(login_nuevo.token_sesion)
 
-        reutilizacion = self.servicio.restablecer_contrasena(
-            token=recuperacion.token_prueba or "",
-            nueva_contrasena="OtraClave123!",
-            confirmacion_contrasena="OtraClave123!",
+        conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
+        try:
+            ultimo_cambio, requiere = conexion.execute(
+                """
+                SELECT ultimo_cambio_contrasena_en, requiere_cambio_contrasena
+                FROM usuarios
+                WHERE nombre_usuario = 'admin';
+                """
+            ).fetchone()
+        finally:
+            conexion.close()
+
+        self.assertIsNotNone(ultimo_cambio)
+        self.assertEqual(requiere, 0)
+
+    def test_restablecimiento_local_falla_para_usuario_desconocido(self) -> None:
+        resultado = self.servicio.restablecer_contrasena(
+            nombre_usuario="fantasma",
+            nueva_contrasena="NuevaClave123!",
+            confirmacion_contrasena="NuevaClave123!",
         )
-        self.assertFalse(reutilizacion.exito)
+
+        self.assertFalse(resultado.exito)
+        self.assertEqual(resultado.codigo, "USUARIO_NO_ENCONTRADO")
 
     def test_asegurar_usuario_admin_desarrollo_repara_placeholder(self) -> None:
         conexion = self.gestor_base_datos.obtener_conexion()
@@ -202,6 +194,92 @@ class TestAutenticacion(unittest.TestCase):
             CredencialesUsuario(nombre_usuario="admin", contrasena_plana="Admin123!")
         )
         self.assertTrue(resultado.exito)
+
+        login_superadmin = self.servicio.iniciar_sesion(
+            CredencialesUsuario(
+                nombre_usuario="superadmin",
+                contrasena_plana="SuperAdmin123!",
+            )
+        )
+        self.assertTrue(login_superadmin.exito)
+        self.assertTrue(login_superadmin.usuario is not None and login_superadmin.usuario.es_tecnico)
+
+    def test_cerrar_sesion_actualiza_finalizado_en(self) -> None:
+        restablecimiento = self.servicio.restablecer_contrasena(
+            nombre_usuario="admin",
+            nueva_contrasena="NuevaClave123!",
+            confirmacion_contrasena="NuevaClave123!",
+        )
+        self.assertTrue(restablecimiento.exito)
+
+        login = self.servicio.iniciar_sesion(
+            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="NuevaClave123!")
+        )
+        self.assertTrue(login.exito)
+        self.assertTrue(login.token_sesion)
+
+        cierre = self.servicio.cerrar_sesion(login.token_sesion or "")
+        self.assertTrue(cierre.exito)
+
+        conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
+        try:
+            finalizado_en, estado = conexion.execute(
+                "SELECT cerrado_en, estado FROM sesiones WHERE estado = 'CERRADA' LIMIT 1;"
+            ).fetchone()
+        finally:
+            conexion.close()
+
+        self.assertIsNotNone(finalizado_en)
+        self.assertEqual(estado, "CERRADA")
+
+    def test_esquema_nuevo_no_crea_tabla_tokens_recuperacion(self) -> None:
+        conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
+        try:
+            tabla_tokens = conexion.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table' AND name = 'tokens_recuperacion_contrasena';
+                """
+            ).fetchone()
+        finally:
+            conexion.close()
+
+        self.assertIsNone(tabla_tokens)
+
+    def test_migracion_seguridad_crea_vistas_y_tablas_tecnicas(self) -> None:
+        conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
+        try:
+            nombres = {
+                fila[0]
+                for fila in conexion.execute(
+                    """
+                    SELECT name
+                    FROM sqlite_master
+                    WHERE type IN ('table', 'view')
+                      AND name IN (
+                          'historial_respaldos',
+                          'eventos_tecnicos',
+                          'vw_usuarios_operativos',
+                          'vw_usuarios_tecnicos',
+                          'vw_usuarios_restablecibles_por_admin'
+                      );
+                    """
+                ).fetchall()
+            }
+        finally:
+            conexion.close()
+
+        self.assertEqual(
+            nombres,
+            {
+                "historial_respaldos",
+                "eventos_tecnicos",
+                "vw_usuarios_operativos",
+                "vw_usuarios_tecnicos",
+                "vw_usuarios_restablecibles_por_admin",
+            },
+        )
 
 
 if __name__ == "__main__":

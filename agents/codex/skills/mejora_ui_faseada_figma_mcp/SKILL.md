@@ -3,6 +3,7 @@ Fecha de actualización: 2026-05-03
 
 ## Herencia
 Esta skill asume las reglas globales de `agents.md`.
+Cuando la tarea implique implementar o refinar pantallas PySide6, conviene usarla junto con `agents/codex/skills/interfaz_visual_premium_pyside6/SKILL.md`.
 
 ## Objetivo
 Guiar mejoras de UI de SICAP usando el MCP de Figma como referencia de contexto, no como diseño a copiar literalmente.

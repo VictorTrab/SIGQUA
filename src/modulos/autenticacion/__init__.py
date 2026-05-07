@@ -1,6 +1,7 @@
 """Modulo de autenticacion."""
 
 from modulos.autenticacion.controlador import ControladorAutenticacion
+from modulos.autenticacion.entidades import SesionIniciada
 from modulos.autenticacion.repositorio import (
     RepositorioAutenticacion,
     RepositorioAutenticacionSQLite,
@@ -12,6 +13,7 @@ __all__ = [
     "ControladorAutenticacion",
     "RepositorioAutenticacion",
     "RepositorioAutenticacionSQLite",
+    "SesionIniciada",
     "ServicioAutenticacion",
     "VistaAutenticacion",
 ]

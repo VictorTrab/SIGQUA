@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import hashlib
+from logging import Logger
 from secrets import token_urlsafe
 
-from apis.contratos.proveedor_correo import ProveedorCorreo
+from comun.logs import obtener_logger_sicap
 from comun.seguridad import es_hash_scrypt_valido, generar_hash_contrasena, verificar_contrasena
 from modulos.autenticacion.entidades import (
     CredencialesUsuario,
     ResultadoLogin,
     ResultadoOperacion,
-    ResultadoRecuperacion,
-    ResultadoValidacionToken,
-    TokenRecuperacion,
     UsuarioAutenticado,
 )
 from modulos.autenticacion.repositorio import RepositorioAutenticacion
@@ -21,12 +20,8 @@ from modulos.autenticacion.repositorio import RepositorioAutenticacion
 
 FORMATO_FECHA_BD = "%Y-%m-%d %H:%M:%S"
 MENSAJE_LOGIN_INVALIDO = "Usuario o contraseña incorrectos."
-MENSAJE_TOKEN_INVALIDO = "El enlace no es valido o ya expiro."
-MENSAJE_RECUPERACION_GENERICO = (
-    "Si el correo pertenece a una cuenta activa, el enlace de recuperacion ya esta listo."
-)
 CODIGO_VALIDACION = "VALIDACION"
-CODIGO_TOKEN_INVALIDO = "TOKEN_INVALIDO"
+MAXIMO_INTENTOS_FALLIDOS = 5
 
 
 class ServicioAutenticacion:
@@ -35,36 +30,43 @@ class ServicioAutenticacion:
     def __init__(
         self,
         repositorio_autenticacion: RepositorioAutenticacion,
-        proveedor_correo: ProveedorCorreo | None = None,
-        entorno: str = "desarrollo",
         duracion_sesion_horas: int = 8,
-        duracion_token_minutos: int = 30,
     ) -> None:
         self.repositorio_autenticacion = repositorio_autenticacion
-        self.proveedor_correo = proveedor_correo
-        self.entorno = entorno
         self.duracion_sesion_horas = duracion_sesion_horas
-        self.duracion_token_minutos = duracion_token_minutos
+        self._logger: Logger = obtener_logger_sicap("autenticacion.servicio")
 
     def asegurar_usuario_admin_desarrollo(self) -> None:
-        """Repara instalaciones locales que aun conservan el hash placeholder."""
-        usuario_admin = self.repositorio_autenticacion.obtener_usuario_por_nombre_usuario("admin")
-        if usuario_admin is None:
-            return
-
-        if es_hash_scrypt_valido(usuario_admin.contrasena_hash):
-            return
-
-        if usuario_admin.contrasena_hash != "CAMBIAR_HASH_EN_DESARROLLO":
-            return
-
-        marca_tiempo = self._formatear_fecha(self._ahora())
-        nuevo_hash = generar_hash_contrasena("Admin123!")
-        self.repositorio_autenticacion.actualizar_hash_usuario(
-            usuario_admin.identificador,
-            nuevo_hash,
-            marca_tiempo,
+        """Repara instalaciones locales que aun conservan hashes placeholder."""
+        usuarios_desarrollo = (
+            ("admin", "Admin123!"),
+            ("superadmin", "SuperAdmin123!"),
         )
+        for nombre_usuario, contrasena_defecto in usuarios_desarrollo:
+            usuario = self.repositorio_autenticacion.obtener_usuario_por_nombre_usuario(
+                nombre_usuario
+            )
+            if usuario is None:
+                continue
+
+            if es_hash_scrypt_valido(usuario.contrasena_hash):
+                continue
+
+            if usuario.contrasena_hash != "CAMBIAR_HASH_EN_DESARROLLO":
+                continue
+
+            marca_tiempo = self._formatear_fecha(self._ahora())
+            nuevo_hash = generar_hash_contrasena(contrasena_defecto)
+            self.repositorio_autenticacion.actualizar_contrasena_usuario(
+                usuario_id=usuario.identificador,
+                nuevo_hash=nuevo_hash,
+                momento=marca_tiempo,
+                requiere_cambio_contrasena=usuario.requiere_cambio_contrasena,
+            )
+            self._logger.warning(
+                "Se reemplazo el hash placeholder del usuario %s en entorno local.",
+                nombre_usuario,
+            )
 
     def iniciar_sesion(
         self,
@@ -75,28 +77,43 @@ class ServicioAutenticacion:
         contrasena_plana = credenciales.contrasena_plana
 
         if not nombre_usuario or not contrasena_plana:
+            self._logger.warning("Intento de login rechazado por credenciales incompletas.")
             return ResultadoLogin(
                 exito=False,
-                mensaje="Ingresa tu usuario y contrasena.",
+                mensaje="Ingresa tu usuario y contraseña.",
                 codigo=CODIGO_VALIDACION,
             )
 
         usuario = self.repositorio_autenticacion.obtener_usuario_por_nombre_usuario(nombre_usuario)
         if usuario is None:
             self.repositorio_autenticacion.registrar_intento_login(
-                nombre_usuario=nombre_usuario,
-                exito=False,
+                identificador=nombre_usuario,
+                resultado="FALLIDO",
                 usuario_id=None,
-                ip_origen=ip_origen,
+                motivo="USUARIO_NO_EXISTE",
+                equipo=ip_origen,
             )
-            return ResultadoLogin(exito=False, mensaje=MENSAJE_LOGIN_INVALIDO, codigo="LOGIN_INVALIDO")
+            self._logger.warning(
+                "Intento de login fallido para usuario inexistente '%s'.",
+                nombre_usuario,
+            )
+            return ResultadoLogin(
+                exito=False,
+                mensaje=MENSAJE_LOGIN_INVALIDO,
+                codigo="LOGIN_INVALIDO",
+            )
 
         if usuario.estado == "INACTIVO":
             self.repositorio_autenticacion.registrar_intento_login(
-                nombre_usuario=nombre_usuario,
-                exito=False,
+                identificador=nombre_usuario,
+                resultado="FALLIDO",
                 usuario_id=usuario.identificador,
-                ip_origen=ip_origen,
+                motivo="USUARIO_INACTIVO",
+                equipo=ip_origen,
+            )
+            self._logger.warning(
+                "Intento de login rechazado para usuario inactivo '%s'.",
+                nombre_usuario,
             )
             return ResultadoLogin(
                 exito=False,
@@ -106,10 +123,15 @@ class ServicioAutenticacion:
 
         if usuario.estado == "BLOQUEADO":
             self.repositorio_autenticacion.registrar_intento_login(
-                nombre_usuario=nombre_usuario,
-                exito=False,
+                identificador=nombre_usuario,
+                resultado="FALLIDO",
                 usuario_id=usuario.identificador,
-                ip_origen=ip_origen,
+                motivo="USUARIO_BLOQUEADO",
+                equipo=ip_origen,
+            )
+            self._logger.warning(
+                "Intento de login rechazado para usuario bloqueado '%s'.",
+                nombre_usuario,
             )
             return ResultadoLogin(
                 exito=False,
@@ -118,180 +140,187 @@ class ServicioAutenticacion:
             )
 
         if not verificar_contrasena(contrasena_plana, usuario.contrasena_hash):
-            self.repositorio_autenticacion.registrar_intento_login(
-                nombre_usuario=nombre_usuario,
-                exito=False,
-                usuario_id=usuario.identificador,
-                ip_origen=ip_origen,
+            intentos_fallidos = self.repositorio_autenticacion.incrementar_intentos_fallidos(
+                usuario.identificador,
+                self._formatear_fecha(self._ahora()),
             )
-            return ResultadoLogin(exito=False, mensaje=MENSAJE_LOGIN_INVALIDO, codigo="LOGIN_INVALIDO")
+            motivo = "CONTRASENA_INVALIDA"
+            if intentos_fallidos >= MAXIMO_INTENTOS_FALLIDOS:
+                self.repositorio_autenticacion.bloquear_usuario(
+                    usuario_id=usuario.identificador,
+                    momento=self._formatear_fecha(self._ahora()),
+                )
+                motivo = "USUARIO_BLOQUEADO_POR_INTENTOS"
+            self.repositorio_autenticacion.registrar_intento_login(
+                identificador=nombre_usuario,
+                resultado="FALLIDO",
+                usuario_id=usuario.identificador,
+                motivo=motivo,
+                equipo=ip_origen,
+            )
+            self._logger.warning(
+                "Intento de login con contrasena incorrecta para '%s'.",
+                nombre_usuario,
+            )
+            mensaje = MENSAJE_LOGIN_INVALIDO
+            codigo = "LOGIN_INVALIDO"
+            if intentos_fallidos >= MAXIMO_INTENTOS_FALLIDOS:
+                mensaje = "Tu usuario fue bloqueado por seguridad. Contacta al administrador."
+                codigo = "USUARIO_BLOQUEADO"
+            return ResultadoLogin(
+                exito=False,
+                mensaje=mensaje,
+                codigo=codigo,
+            )
 
         momento_actual = self._ahora()
-        expira_en = momento_actual + timedelta(hours=self.duracion_sesion_horas)
-        token_sesion = token_urlsafe(32)
-
+        self.repositorio_autenticacion.reiniciar_intentos_fallidos(
+            usuario.identificador,
+            self._formatear_fecha(momento_actual),
+        )
+        self.repositorio_autenticacion.registrar_intento_login(
+            identificador=nombre_usuario,
+            resultado="EXITOSO",
+            usuario_id=usuario.identificador,
+            motivo=(
+                "CAMBIO_CONTRASENA_OBLIGATORIO"
+                if usuario.requiere_cambio_contrasena
+                else "LOGIN_OK"
+            ),
+            equipo=ip_origen,
+        )
         self.repositorio_autenticacion.actualizar_ultimo_acceso(
             usuario.identificador,
             self._formatear_fecha(momento_actual),
         )
+
+        usuario_autenticado = UsuarioAutenticado.desde_registro(usuario)
+        if usuario.requiere_cambio_contrasena:
+            self._logger.info(
+                "Usuario '%s' autenticado con cambio obligatorio pendiente.",
+                nombre_usuario,
+            )
+            return ResultadoLogin(
+                exito=True,
+                mensaje="Debes cambiar tu contraseña antes de continuar.",
+                codigo="CAMBIO_CONTRASENA_OBLIGATORIO",
+                usuario=usuario_autenticado,
+                token_sesion=None,
+                requiere_cambio_contrasena=True,
+            )
+
+        expira_en = momento_actual + timedelta(hours=self.duracion_sesion_horas)
+        token_sesion = token_urlsafe(32)
         self.repositorio_autenticacion.crear_sesion(
             usuario_id=usuario.identificador,
-            token_sesion=token_sesion,
+            token_sesion_hash=self._generar_hash_token(token_sesion),
             expira_en=self._formatear_fecha(expira_en),
-            ip_origen=ip_origen,
+            equipo=ip_origen,
         )
-        self.repositorio_autenticacion.registrar_intento_login(
-            nombre_usuario=nombre_usuario,
-            exito=True,
-            usuario_id=usuario.identificador,
-            ip_origen=ip_origen,
+        self._logger.info(
+            "Sesion iniciada por '%s' con usuario_id=%s.",
+            nombre_usuario,
+            usuario.identificador,
         )
 
         return ResultadoLogin(
             exito=True,
             mensaje="Autenticacion correcta.",
             codigo="OK",
-            usuario=UsuarioAutenticado.desde_registro(usuario),
+            usuario=usuario_autenticado,
             token_sesion=token_sesion,
-        )
-
-    def solicitar_recuperacion(self, correo: str) -> ResultadoRecuperacion:
-        correo_normalizado = correo.strip().lower()
-        if not correo_normalizado:
-            return ResultadoRecuperacion(
-                exito=False,
-                mensaje="Ingresa el correo de tu cuenta.",
-                codigo=CODIGO_VALIDACION,
-            )
-
-        usuario = self.repositorio_autenticacion.obtener_usuario_por_correo(correo_normalizado)
-        if usuario is None or usuario.estado != "ACTIVO":
-            return ResultadoRecuperacion(
-                exito=True,
-                mensaje=MENSAJE_RECUPERACION_GENERICO,
-                codigo="RECUPERACION_GENERICA",
-            )
-
-        expira_en = self._ahora() + timedelta(minutes=self.duracion_token_minutos)
-        token_generado = token_urlsafe(24)
-        token_persistido = self.repositorio_autenticacion.crear_token_recuperacion(
-            usuario_id=usuario.identificador,
-            token=token_generado,
-            expira_en=self._formatear_fecha(expira_en),
-        )
-
-        if self.proveedor_correo is not None:
-            self.proveedor_correo.enviar_correo(
-                destinatario=usuario.correo,
-                asunto="Recuperacion de acceso a SICAP",
-                contenido=self._construir_contenido_recuperacion(token_persistido),
-            )
-
-        token_prueba = token_generado if self._es_entorno_desarrollo() else None
-        return ResultadoRecuperacion(
-            exito=True,
-            mensaje=MENSAJE_RECUPERACION_GENERICO,
-            codigo="RECUPERACION_GENERICA",
-            token_prueba=token_prueba,
-        )
-
-    def validar_token_recuperacion(self, token: str) -> ResultadoValidacionToken:
-        token_normalizado = token.strip()
-        if not token_normalizado:
-            return ResultadoValidacionToken(
-                exito=False,
-                mensaje=MENSAJE_TOKEN_INVALIDO,
-                codigo=CODIGO_TOKEN_INVALIDO,
-            )
-
-        token_persistido = self.repositorio_autenticacion.obtener_token_recuperacion(token_normalizado)
-        if token_persistido is None:
-            return ResultadoValidacionToken(
-                exito=False,
-                mensaje=MENSAJE_TOKEN_INVALIDO,
-                codigo=CODIGO_TOKEN_INVALIDO,
-            )
-
-        if token_persistido.usado_en is not None:
-            return ResultadoValidacionToken(
-                exito=False,
-                mensaje=MENSAJE_TOKEN_INVALIDO,
-                codigo=CODIGO_TOKEN_INVALIDO,
-            )
-
-        if self._parsear_fecha(token_persistido.expira_en) < self._ahora():
-            return ResultadoValidacionToken(
-                exito=False,
-                mensaje=MENSAJE_TOKEN_INVALIDO,
-                codigo=CODIGO_TOKEN_INVALIDO,
-            )
-
-        return ResultadoValidacionToken(
-            exito=True,
-            mensaje="Define una nueva contrasena para continuar.",
-            codigo="OK",
-            token_recuperacion=token_persistido,
         )
 
     def restablecer_contrasena(
         self,
-        token: str,
+        nombre_usuario: str,
         nueva_contrasena: str,
         confirmacion_contrasena: str,
     ) -> ResultadoOperacion:
+        nombre_usuario_normalizado = nombre_usuario.strip()
+        if not nombre_usuario_normalizado:
+            return ResultadoOperacion(
+                exito=False,
+                mensaje="No se identifico el usuario a restablecer.",
+                codigo=CODIGO_VALIDACION,
+            )
+
         if not nueva_contrasena or not confirmacion_contrasena:
             return ResultadoOperacion(
                 exito=False,
-                mensaje="Completa ambos campos de contrasena.",
+                mensaje="Completa ambos campos de contraseña.",
                 codigo=CODIGO_VALIDACION,
             )
 
         if len(nueva_contrasena) < 8:
             return ResultadoOperacion(
                 exito=False,
-                mensaje="La nueva contrasena debe tener al menos 8 caracteres.",
+                mensaje="La nueva contraseña debe tener al menos 8 caracteres.",
                 codigo=CODIGO_VALIDACION,
             )
 
         if nueva_contrasena != confirmacion_contrasena:
             return ResultadoOperacion(
                 exito=False,
-                mensaje="Las contrasenas no coinciden.",
+                mensaje="Las contraseñas no coinciden.",
                 codigo=CODIGO_VALIDACION,
             )
 
-        resultado_token = self.validar_token_recuperacion(token)
-        if not resultado_token.exito or resultado_token.token_recuperacion is None:
+        usuario = self.repositorio_autenticacion.obtener_usuario_por_nombre_usuario(
+            nombre_usuario_normalizado
+        )
+        if usuario is None:
             return ResultadoOperacion(
                 exito=False,
-                mensaje=MENSAJE_TOKEN_INVALIDO,
-                codigo=CODIGO_TOKEN_INVALIDO,
+                mensaje="El usuario indicado no existe.",
+                codigo="USUARIO_NO_ENCONTRADO",
+            )
+
+        if usuario.estado != "ACTIVO":
+            return ResultadoOperacion(
+                exito=False,
+                mensaje="Solo se permite restablecer contraseña para usuarios activos.",
+                codigo="USUARIO_NO_ACTIVO",
             )
 
         marca_tiempo = self._formatear_fecha(self._ahora())
         nuevo_hash = generar_hash_contrasena(nueva_contrasena)
-        self.repositorio_autenticacion.restablecer_contrasena(
-            usuario_id=resultado_token.token_recuperacion.usuario_id,
-            token_id=resultado_token.token_recuperacion.identificador,
+        self.repositorio_autenticacion.actualizar_contrasena_usuario(
+            usuario_id=usuario.identificador,
             nuevo_hash=nuevo_hash,
             momento=marca_tiempo,
+            requiere_cambio_contrasena=False,
+            restablecida_por_usuario_id=None,
+            fecha_restablecimiento=None,
+        )
+        self._logger.info(
+            "Contraseña restablecida para usuario_id=%s.",
+            usuario.identificador,
         )
         return ResultadoOperacion(
             exito=True,
-            mensaje="Tu contrasena se actualizo correctamente.",
+            mensaje="Tu contraseña se actualizo correctamente.",
             codigo="OK",
         )
 
-    def _construir_contenido_recuperacion(self, token_recuperacion: TokenRecuperacion) -> str:
-        return (
-            "<h2>Recuperacion de acceso a SICAP</h2>"
-            "<p>Tu enlace de recuperacion ya esta listo.</p>"
-            f"<p>Token temporal: <strong>{token_recuperacion.token}</strong></p>"
-            f"<p>Vigencia hasta: <strong>{token_recuperacion.expira_en}</strong></p>"
-        )
+    def cerrar_sesion(self, token_sesion: str) -> ResultadoOperacion:
+        if not token_sesion.strip():
+            return ResultadoOperacion(
+                exito=False,
+                mensaje="No existe una sesion activa para cerrar.",
+                codigo=CODIGO_VALIDACION,
+            )
 
-    def _es_entorno_desarrollo(self) -> bool:
-        return self.entorno.strip().lower() in {"desarrollo", "dev", "development"}
+        self.repositorio_autenticacion.finalizar_sesion(
+            token_sesion_hash=self._generar_hash_token(token_sesion.strip()),
+            momento=self._formatear_fecha(self._ahora()),
+        )
+        self._logger.info("Se finalizo una sesion activa.")
+        return ResultadoOperacion(
+            exito=True,
+            mensaje="Sesion cerrada correctamente.",
+            codigo="OK",
+        )
 
     @staticmethod
     def _ahora() -> datetime:
@@ -302,5 +331,5 @@ class ServicioAutenticacion:
         return fecha.strftime(FORMATO_FECHA_BD)
 
     @staticmethod
-    def _parsear_fecha(valor: str) -> datetime:
-        return datetime.strptime(valor, FORMATO_FECHA_BD)
+    def _generar_hash_token(token_sesion: str) -> str:
+        return hashlib.sha256(token_sesion.encode("utf-8")).hexdigest()

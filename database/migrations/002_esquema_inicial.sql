@@ -387,16 +387,6 @@ CREATE TABLE IF NOT EXISTS sesiones (
     FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON UPDATE CASCADE ON DELETE RESTRICT
 );
 
-CREATE TABLE IF NOT EXISTS tokens_recuperacion_contrasena (
-    id INTEGER PRIMARY KEY,
-    usuario_id INTEGER NOT NULL,
-    token TEXT NOT NULL UNIQUE,
-    expira_en TEXT NOT NULL,
-    usado_en TEXT,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON UPDATE CASCADE ON DELETE RESTRICT
-);
-
 CREATE TABLE IF NOT EXISTS intentos_login (
     id INTEGER PRIMARY KEY,
     usuario_id INTEGER,
@@ -895,8 +885,7 @@ INSERT OR IGNORE INTO configuracion_sistema(clave, valor, tipo_dato, categoria, 
 ('cobro.permitir_pago_adelantado', '1', 'BOOLEANO', 'Cobro', 'Permite registrar pagos adelantados.', 1),
 ('cobro.meses_adelanto_maximo', '12', 'ENTERO', 'Cobro', 'Maximo de meses adelantados permitidos.', 1),
 ('factura.texto_pie', 'Gracias por su pago.', 'TEXTO', 'Factura', 'Texto de pie para comprobantes.', 1),
-('factura.formato_salida', 'PDF', 'TEXTO', 'Factura', 'Formato de salida de comprobantes.', 1),
-('resend.correo_remitente', 'no-reply@sicap.local', 'TEXTO', 'Correo', 'Correo remitente usado por Resend.', 1);
+('factura.formato_salida', 'PDF', 'TEXTO', 'Factura', 'Formato de salida de comprobantes.', 1);
 
 COMMIT;
 

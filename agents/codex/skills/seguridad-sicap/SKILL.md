@@ -1,6 +1,6 @@
 ---
 name: seguridad-sicap
-description: Revisar y reforzar la seguridad practica de SICAP en cambios de autenticacion, SQLite, PySide6, manejo de rutas, reportes, logs, variables de entorno e integraciones externas. Usar cuando Codex vaya a crear, modificar o auditar codigo que toque datos sensibles, consultas SQL, permisos, envio de correos, exportaciones, archivos locales, configuracion o credenciales del proyecto.
+description: Revisar y reforzar la seguridad practica de SICAP en cambios de autenticacion, SQLite, PySide6, manejo de rutas, reportes, logs, variables de entorno y permisos. Usar cuando Codex vaya a crear, modificar o auditar codigo que toque datos sensibles, consultas SQL, roles, mantenimiento tecnico, exportaciones, archivos locales, configuracion o credenciales del proyecto.
 ---
 
 # Seguridad SICAP
@@ -13,13 +13,12 @@ Reducir riesgos reales de SICAP sin meter controles exagerados ni abstracciones 
 
 ## Cuando usarla
 Usar esta skill cuando la tarea implique:
-- autenticacion, usuarios, permisos o recuperacion de acceso;
+- autenticacion, usuarios, permisos o recuperacion administrativa de acceso;
 - consultas SQLite, repositorios o filtros dinamicos;
 - formularios PySide6 que capturen o muestren datos sensibles;
 - exportaciones, reportes o escritura de archivos;
 - logs, errores o trazas con informacion operativa;
-- `src/apis/`, Resend, `.env` o contratos con servicios externos;
-- rutas del sistema, carga de archivos o ubicaciones de salida;
+- variables de entorno, configuracion sensible o rutas de salida;
 - revision de seguridad antes de cerrar una tarea importante.
 
 ## Riesgos prioritarios en SICAP
@@ -29,7 +28,7 @@ Usar esta skill cuando la tarea implique:
 - rutas hardcodeadas o escritura fuera de `gestor_rutas.py`.
 - permisos de usuario insuficientes o validaciones omitidas.
 - reportes o exportaciones que filtren informacion no necesaria.
-- integraciones externas acopladas directamente al proveedor.
+- reintroducir recuperacion por correo, Resend o codigo muerto de un flujo desactivado.
 
 ## Controles obligatorios
 - mantener SQL dentro de repositorios;
@@ -39,24 +38,22 @@ Usar esta skill cuando la tarea implique:
 - no guardar contrasenas en texto plano;
 - no exponer tokens, API keys, datos personales o rutas sensibles en logs;
 - centralizar rutas en `src/comun/configuracion/gestor_rutas.py`;
-- usar contratos para integraciones externas y no acoplar el modulo al proveedor real;
 - aplicar minimo privilegio en acciones administrativas o de configuracion;
+- separar `ADMINISTRADOR` operativo de `SUPERADMINISTRADOR` tecnico;
 - dejar pruebas o verificaciones claras cuando se toque autenticacion, permisos o persistencia sensible.
 
 ## Procedimiento minimo
 1. Leer `agents.md`.
-2. Identificar si el cambio toca autenticacion, persistencia, archivos, reportes o integraciones.
+2. Identificar si el cambio toca autenticacion, persistencia, archivos, reportes o permisos.
 3. Revisar que cada responsabilidad quede en su capa correcta:
    - vista sin SQL ni reglas criticas;
    - servicio con reglas de negocio;
-   - repositorio con acceso SQLite;
-   - API externa detras de contrato.
+   - repositorio con acceso SQLite.
 4. Buscar entradas no confiables:
    - texto de formularios;
    - filtros;
    - rutas;
-   - parametros de reportes;
-   - datos recibidos de APIs.
+   - parametros de reportes.
 5. Confirmar controles de seguridad proporcionales:
    - validacion;
    - saneamiento;
@@ -64,7 +61,7 @@ Usar esta skill cuando la tarea implique:
    - permisos;
    - manejo prudente de errores;
    - proteccion de secretos.
-6. Verificar que la salida final no deje fuga de datos en UI, logs, archivos o correo.
+6. Verificar que la salida final no deje fuga de datos en UI, logs, archivos o configuracion.
 
 ## Checklist por area
 
@@ -95,10 +92,10 @@ Usar esta skill cuando la tarea implique:
 - usar `.env.example` como referencia y nunca subir secretos reales;
 - si una excepcion contiene datos sensibles, resumirla antes de mostrarla o guardarla.
 
-### Integraciones externas
-- aislar Resend u otro proveedor en `src/apis/`;
+### Integraciones futuras
+- no asumir la existencia de `src/apis/`;
+- si vuelve un proveedor externo, aislarlo con contratos claros;
 - no acoplar reglas de negocio a respuestas crudas del proveedor;
-- validar destinatarios, asunto y contenido antes de enviar;
 - manejar fallos externos sin romper integridad local.
 
 ## Criterio de cierre
@@ -106,6 +103,7 @@ Un cambio pasa esta skill solo si:
 - no mezcla UI, negocio y persistencia;
 - no introduce SQL inseguro;
 - no expone secretos ni datos sensibles;
-- respeta contratos y rutas centralizadas;
+- respeta rutas centralizadas;
 - mantiene permisos y validaciones acordes al riesgo;
+- no deja dependencias muertas del flujo por correo;
 - deja el codigo claro y defendible para mantenimiento y tesis.

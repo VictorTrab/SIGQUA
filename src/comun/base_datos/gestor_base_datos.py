@@ -25,11 +25,12 @@ class GestorBaseDatos:
         return conexion
 
     def inicializar_base_datos(self, forzar_recreacion: bool = False) -> Path:
-        """Crea la base de datos desde la migracion versionada si no existe."""
+        """Crea la base y aplica migraciones versionadas pendientes."""
         self._gestor_rutas.asegurar_directorios_base()
 
         ruta_base_datos = self._gestor_rutas.obtener_ruta_base_datos()
         ruta_esquema = self._gestor_rutas.obtener_ruta_esquema_inicial_base_datos()
+        ruta_migraciones = self._gestor_rutas.obtener_ruta_migraciones_base_datos()
 
         if not ruta_esquema.exists():
             raise FileNotFoundError(
@@ -39,11 +40,18 @@ class GestorBaseDatos:
         if forzar_recreacion and ruta_base_datos.exists():
             ruta_base_datos.unlink()
 
-        if ruta_base_datos.exists():
-            return ruta_base_datos
+        if not ruta_base_datos.exists():
+            self._crear_base_desde_esquema_inicial(ruta_base_datos, ruta_esquema)
 
+        self._aplicar_migraciones_pendientes(ruta_base_datos, ruta_migraciones)
+        return ruta_base_datos
+
+    def _crear_base_desde_esquema_inicial(
+        self,
+        ruta_base_datos: Path,
+        ruta_esquema: Path,
+    ) -> None:
         script_sql = ruta_esquema.read_text(encoding="utf-8")
-
         conexion: sqlite3.Connection | None = None
         try:
             conexion = sqlite3.connect(ruta_base_datos)
@@ -72,4 +80,46 @@ class GestorBaseDatos:
             if conexion is not None:
                 conexion.close()
 
-        return ruta_base_datos
+    def _aplicar_migraciones_pendientes(
+        self,
+        ruta_base_datos: Path,
+        ruta_migraciones: Path,
+    ) -> None:
+        rutas_migracion = sorted(ruta_migraciones.glob("[0-9][0-9][0-9]_*.sql"))
+        if not rutas_migracion:
+            return
+
+        conexion = sqlite3.connect(ruta_base_datos)
+        try:
+            conexion.row_factory = sqlite3.Row
+            conexion.execute("PRAGMA foreign_keys = ON;")
+            versiones_aplicadas = {
+                str(fila["version"])
+                for fila in conexion.execute(
+                    "SELECT version FROM esquema_migraciones;"
+                ).fetchall()
+            }
+            for ruta_migracion in rutas_migracion:
+                version = ruta_migracion.stem.split("_", maxsplit=1)[0]
+                if version in versiones_aplicadas:
+                    continue
+
+                script_sql = ruta_migracion.read_text(encoding="utf-8")
+                with conexion:
+                    conexion.executescript(script_sql)
+
+                resultado_integridad = conexion.execute("PRAGMA integrity_check;").fetchone()
+                if not resultado_integridad or resultado_integridad[0] != "ok":
+                    raise RuntimeError(
+                        f"La validacion de integridad SQLite fallo tras aplicar {ruta_migracion.name}."
+                    )
+
+                errores_claves_foraneas = conexion.execute(
+                    "PRAGMA foreign_key_check;"
+                ).fetchall()
+                if errores_claves_foraneas:
+                    raise RuntimeError(
+                        f"Se detectaron errores de claves foraneas tras aplicar {ruta_migracion.name}."
+                    )
+        finally:
+            conexion.close()

@@ -23,6 +23,13 @@ class UsuarioRegistroAutenticacion:
     correo: str
     estado: str
     contrasena_hash: str
+    es_tecnico: bool = False
+    es_oculto: bool = False
+    requiere_cambio_contrasena: bool = False
+    intentos_fallidos: int = 0
+    bloqueado_hasta: str | None = None
+    roles: tuple[str, ...] = ()
+    permisos: frozenset[str] = frozenset()
 
 
 @dataclass(slots=True)
@@ -34,6 +41,11 @@ class UsuarioAutenticado:
     nombre_completo: str
     correo: str
     estado: str
+    es_tecnico: bool = False
+    es_oculto: bool = False
+    requiere_cambio_contrasena: bool = False
+    roles: tuple[str, ...] = ()
+    permisos: frozenset[str] = frozenset()
 
     @classmethod
     def desde_registro(
@@ -46,7 +58,18 @@ class UsuarioAutenticado:
             nombre_completo=usuario_registro.nombre_completo,
             correo=usuario_registro.correo,
             estado=usuario_registro.estado,
+            es_tecnico=usuario_registro.es_tecnico,
+            es_oculto=usuario_registro.es_oculto,
+            requiere_cambio_contrasena=usuario_registro.requiere_cambio_contrasena,
+            roles=usuario_registro.roles,
+            permisos=usuario_registro.permisos,
         )
+
+    def tiene_permiso(self, codigo_permiso: str) -> bool:
+        return codigo_permiso in self.permisos
+
+    def es_superadministrador(self) -> bool:
+        return "SUPERADMINISTRADOR" in self.roles
 
 
 @dataclass(slots=True)
@@ -64,28 +87,12 @@ class ResultadoLogin(ResultadoOperacion):
 
     usuario: UsuarioAutenticado | None = None
     token_sesion: str | None = None
+    requiere_cambio_contrasena: bool = False
 
 
 @dataclass(slots=True)
-class TokenRecuperacion:
-    """Representa un token persistido de recuperacion de contrasena."""
+class SesionIniciada:
+    """Representa una sesion autenticada lista para la app."""
 
-    identificador: int
-    usuario_id: int
-    token: str
-    expira_en: str
-    usado_en: str | None = None
-
-
-@dataclass(slots=True)
-class ResultadoValidacionToken(ResultadoOperacion):
-    """Resultado de validar un token de recuperacion."""
-
-    token_recuperacion: TokenRecuperacion | None = None
-
-
-@dataclass(slots=True)
-class ResultadoRecuperacion(ResultadoOperacion):
-    """Resultado de solicitar recuperacion de contrasena."""
-
-    token_prueba: str | None = None
+    usuario: UsuarioAutenticado
+    token_sesion: str
