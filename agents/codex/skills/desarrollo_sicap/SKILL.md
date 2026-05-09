@@ -5,22 +5,12 @@ Usar esta skill cuando la tarea implique crear, mover o ajustar codigo del proye
 
 ## Flujo
 1. Leer `agents.md`.
-2. Cargar 1 rol principal segun la naturaleza de la tarea.
-3. Confirmar que el cambio respeta la arquitectura modular:
-   - `src/comun/`
-   - `src/modulos/`
-4. Trabajar con archivos simples por modulo:
-   - `entidades.py`
-   - `repositorio.py`
-   - `servicio.py`
-   - `controlador.py`
-   - `vista.py`
-5. Evitar:
-   - SQL en vistas;
-   - logica de negocio en ventanas;
-   - rutas hardcodeadas;
-   - acoplamiento directo con proveedores externos;
-   - reintroducir `src/apis/` o Resend sin una decision explicita.
+2. Revisar primero la documentacion interna relevante antes de consultar fuentes externas.
+3. Cargar 1 rol principal segun la naturaleza de la tarea.
+4. Usar 0 o 1 skill de apoyo solo si agrega valor real al flujo.
+5. Implementar el cambio respetando la arquitectura modular vigente y las reglas activas del rol elegido.
+6. Si hubo investigacion externa, persistir el aprendizaje reutilizable en la skill o rol mas cercano al tema.
+7. Antes de cerrar, pasar por la checklist de `cierre_tarea_sicap` cuando la tarea sea relevante.
 
 ## Resultado esperado
-El cambio debe quedar claro, corto de mantener y coherente con SOLID practico.
+El cambio debe quedar claro, corto de mantener, coherente con SOLID practico y sin duplicar reglas ya definidas en `AGENTS.md`.

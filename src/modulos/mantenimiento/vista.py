@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
 from modulos.mantenimiento.entidades import EstadoMantenimiento
 
@@ -19,21 +19,26 @@ class VistaMantenimiento(QWidget):
         self.setStyleSheet(
             """
             QWidget#vistaMantenimiento {
-                background-color: #f5f7fb;
+                background: transparent;
+            }
+            QFrame#tarjetaMantenimiento {
+                background: rgba(255, 255, 255, 0.10);
+                border: 1px solid rgba(255, 255, 255, 0.16);
+                border-radius: 24px;
             }
             QLabel#tituloMantenimiento {
-                color: #10233d;
-                font-size: 28px;
-                font-weight: 700;
+                color: #ffffff;
+                font-size: 25px;
+                font-weight: 800;
             }
             QLabel#textoMantenimiento {
-                color: #4a6279;
+                color: rgba(235, 242, 248, 0.78);
                 font-size: 14px;
             }
             QLabel#avisoMantenimiento {
-                color: #9a6400;
-                background-color: #fff6df;
-                border: 1px solid #f2d18b;
+                color: #fff0c7;
+                background-color: rgba(255, 206, 120, 0.12);
+                border: 1px solid rgba(255, 206, 120, 0.26);
                 border-radius: 14px;
                 padding: 14px 16px;
                 font-size: 14px;
@@ -41,20 +46,34 @@ class VistaMantenimiento(QWidget):
             }
             QPushButton {
                 min-height: 42px;
-                border: 1px solid #c9d7e5;
+                border: 1px solid rgba(255, 255, 255, 0.18);
                 border-radius: 14px;
-                background-color: #ffffff;
-                color: #17324d;
+                background-color: rgba(255, 255, 255, 0.11);
+                color: #f7fbff;
                 font-size: 13px;
-                font-weight: 600;
+                font-weight: 700;
                 padding: 0 14px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.18);
+                border-color: rgba(255, 255, 255, 0.24);
             }
             """
         )
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(48, 40, 48, 40)
-        layout.setSpacing(16)
+        layout.setContentsMargins(26, 24, 26, 24)
+        layout.setSpacing(0)
+
+        layout.addStretch(1)
+
+        tarjeta = QFrame()
+        tarjeta.setObjectName("tarjetaMantenimiento")
+        tarjeta.setMaximumWidth(780)
+        tarjeta.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        tarjeta_layout = QVBoxLayout(tarjeta)
+        tarjeta_layout.setContentsMargins(32, 30, 32, 30)
+        tarjeta_layout.setSpacing(16)
 
         titulo = QLabel("Modulo de mantenimiento tecnico")
         titulo.setObjectName("tituloMantenimiento")
@@ -81,12 +100,12 @@ class VistaMantenimiento(QWidget):
         boton_volver = QPushButton("Volver al modulo principal")
         boton_volver.clicked.connect(self.volver_solicitado.emit)
 
-        layout.addStretch(1)
-        layout.addWidget(titulo)
-        layout.addWidget(descripcion)
-        layout.addWidget(self._label_resumen)
-        layout.addWidget(aviso)
-        layout.addWidget(boton_volver, alignment=Qt.AlignmentFlag.AlignCenter)
+        tarjeta_layout.addWidget(titulo)
+        tarjeta_layout.addWidget(descripcion)
+        tarjeta_layout.addWidget(self._label_resumen)
+        tarjeta_layout.addWidget(aviso)
+        tarjeta_layout.addWidget(boton_volver, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(tarjeta, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addStretch(1)
 
     def mostrar_estado(self, estado: EstadoMantenimiento) -> None:
@@ -100,3 +119,8 @@ class VistaMantenimiento(QWidget):
             )
         )
 
+    def sizeHint(self) -> QSize:
+        return QSize(780, 420)
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(620, 360)

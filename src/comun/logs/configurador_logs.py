@@ -21,6 +21,7 @@ LOGGER_SICAP_BASE.propagate = False
 def configurar_logs_basicos(
     gestor_rutas: GestorRutas | None = None,
     nivel: int = logging.INFO,
+    nivel_consola: int = logging.WARNING,
 ) -> logging.Logger:
     """Configura logging a consola y archivo rotativo de forma idempotente."""
     gestor_rutas = gestor_rutas or GestorRutas()
@@ -41,7 +42,7 @@ def configurar_logs_basicos(
     formateador = logging.Formatter(FORMATO_LOGS)
 
     handler_consola = logging.StreamHandler()
-    handler_consola.setLevel(nivel)
+    handler_consola.setLevel(nivel_consola)
     handler_consola.setFormatter(formateador)
 
     handler_archivo = RotatingFileHandler(
@@ -57,7 +58,6 @@ def configurar_logs_basicos(
     logger_principal.addHandler(handler_archivo)
     logger_principal._sicap_logs_configurados = True  # type: ignore[attr-defined]
     logger_principal._ruta_log_sicap = str(ruta_log)  # type: ignore[attr-defined]
-    logger_principal.info("Logs configurados en %s", ruta_log)
     return logger_principal
 
 

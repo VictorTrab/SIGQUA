@@ -114,9 +114,9 @@ class VistaUsuarios(QWidget):
 
         panel_acciones = QFrame()
         panel_acciones.setObjectName("panelOperativo")
-        panel_acciones.setMinimumWidth(316)
-        panel_acciones.setMaximumWidth(364)
-        panel_acciones.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        panel_acciones.setMinimumWidth(284)
+        panel_acciones.setMaximumWidth(332)
+        panel_acciones.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         acciones_layout = QVBoxLayout(panel_acciones)
         acciones_layout.setContentsMargins(20, 20, 20, 20)
         acciones_layout.setSpacing(10)

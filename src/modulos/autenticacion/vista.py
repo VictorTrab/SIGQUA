@@ -22,7 +22,6 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QFrame,
-    QGraphicsBlurEffect,
     QGraphicsDropShadowEffect,
     QGraphicsOpacityEffect,
     QHBoxLayout,
@@ -545,9 +544,9 @@ class VistaAutenticacion(QWidget):
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding,
         )
-        efecto_blur = QGraphicsBlurEffect(fondo_blur)
-        efecto_blur.setBlurRadius(18)
-        fondo_blur.setGraphicsEffect(efecto_blur)
+        # Evita bloqueos de render al apilar varias paginas en Windows.
+        # Conservamos el efecto vidrio con una capa translucida, sin blur en tiempo real.
+        fondo_blur.setGraphicsEffect(None)
 
         tarjeta = QFrame()
         tarjeta.setObjectName("tarjetaAutenticacion")

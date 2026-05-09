@@ -17,7 +17,9 @@ if str(RUTA_SRC) not in sys.path:
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
 from modulos.barrios.entidades import (  # noqa: E402
+    FILTRO_BARRIOS_ACTIVOS,
     FILTRO_BARRIOS_CON_ABONADOS,
+    FILTRO_BARRIOS_INACTIVOS,
     FILTRO_BARRIOS_SIN_ABONADOS,
 )
 from modulos.barrios.repositorio import RepositorioBarriosSQLite  # noqa: E402
@@ -74,6 +76,24 @@ class TestBarrios(unittest.TestCase):
         self.assertEqual(pagina_con_abonados.total_registros, 3)
         self.assertEqual(pagina_sin_abonados.total_registros, 1)
         self.assertEqual(pagina_sin_abonados.items[0].nombre, "Nuevo Sector")
+
+    def test_filtros_rapidos_distinguen_barrios_activos_e_inactivos(self) -> None:
+        creacion = self.servicio.guardar(
+            identificador=None,
+            nombre="Sector Suspendido",
+            estado="INACTIVO",
+            observaciones="Barrio para validar filtro de estado.",
+        )
+        self.assertTrue(creacion.exito)
+
+        pagina_activos = self.servicio.listar(filtro_rapido=FILTRO_BARRIOS_ACTIVOS)
+        pagina_inactivos = self.servicio.listar(filtro_rapido=FILTRO_BARRIOS_INACTIVOS)
+
+        self.assertEqual(pagina_activos.total_registros, 3)
+        self.assertTrue(all(barrio.estado == "ACTIVO" for barrio in pagina_activos.items))
+        self.assertEqual(pagina_inactivos.total_registros, 1)
+        self.assertEqual(pagina_inactivos.items[0].nombre, "Sector Suspendido")
+        self.assertEqual(pagina_inactivos.items[0].estado, "INACTIVO")
 
     def test_exportacion_csv_genera_columnas_operativas(self) -> None:
         ruta_exportacion = self.raiz_temporal / "barrios.csv"

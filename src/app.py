@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import sys
+from typing import Any
 
 from dotenv import load_dotenv
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import Qt, QtMsgType, qInstallMessageHandler
+from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import QApplication, QMainWindow, QSizePolicy
 
 from comun.base_datos import GestorBaseDatos
@@ -49,6 +50,9 @@ from modulos.usuarios import (
 logger = obtener_logger_sicap("app")
 ANCHO_VENTANA_AUTENTICACION = 760
 ALTO_VENTANA_AUTENTICACION = 680
+ANCHO_VENTANA_PRINCIPAL = 1360
+ALTO_VENTANA_PRINCIPAL = 820
+MARGEN_VENTANA_PRINCIPAL = 72
 MAXIMO_TAMANO_VENTANA = 16777215
 FLAGS_VENTANA_AUTENTICACION = (
     Qt.WindowType.Window
@@ -65,6 +69,30 @@ FLAGS_VENTANA_PRINCIPAL = (
     | Qt.WindowType.WindowMaximizeButtonHint
     | Qt.WindowType.WindowCloseButtonHint
 )
+PATRONES_QT_RUIDOSOS = (
+    "QPropertyAnimation::updateState (opacity): Changing state of an animation without target",
+    "QWindowsWindow::setGeometry: Unable to set geometry",
+    "QFont::setPointSize: Point size <= 0",
+)
+_filtro_qt_configurado = False
+
+
+def _filtrar_mensajes_qt(
+    _tipo: QtMsgType,
+    _contexto: Any,
+    mensaje: str,
+) -> None:
+    if any(patron in mensaje for patron in PATRONES_QT_RUIDOSOS):
+        return
+    sys.stderr.write(f"{mensaje}\n")
+
+
+def _configurar_filtro_mensajes_qt() -> None:
+    global _filtro_qt_configurado
+    if _filtro_qt_configurado:
+        return
+    qInstallMessageHandler(_filtrar_mensajes_qt)
+    _filtro_qt_configurado = True
 
 
 def crear_ventana_principal(
@@ -73,10 +101,15 @@ def crear_ventana_principal(
     """Construye la aplicacion y la ventana principal sin iniciar el loop."""
     gestor_rutas = gestor_rutas or GestorRutas()
     load_dotenv(gestor_rutas.obtener_ruta_env(), override=False)
+    _configurar_filtro_mensajes_qt()
     logger.info("Iniciando composition root de SICAP.")
 
     aplicacion = QApplication.instance() or QApplication(sys.argv)
     aplicacion.setApplicationName("SICAP")
+    fuente_aplicacion = QFont(aplicacion.font())
+    if fuente_aplicacion.pointSize() <= 0:
+        fuente_aplicacion.setPointSize(10)
+    aplicacion.setFont(fuente_aplicacion)
 
     ruta_icono = gestor_rutas.obtener_ruta_icono_aplicacion()
     if ruta_icono.exists():
@@ -364,6 +397,8 @@ def _manejar_retorno_desde_mantenimiento(ventana_principal: QMainWindow) -> None
 def _aplicar_modo_autenticacion(ventana_principal: QMainWindow) -> None:
     """Aplica un tamano fijo al login para evitar deformaciones al volver."""
     estaba_visible = ventana_principal.isVisible()
+    if estaba_visible:
+        ventana_principal.hide()
     ventana_principal.showNormal()
     ventana_principal.setWindowFlags(FLAGS_VENTANA_AUTENTICACION)
     ventana_principal.setMinimumSize(
@@ -380,18 +415,37 @@ def _aplicar_modo_autenticacion(ventana_principal: QMainWindow) -> None:
     )
     ventana_principal.adjustSize()
     if estaba_visible:
+        ventana_principal.showNormal()
         ventana_principal.show()
     _centrar_ventana_en_pantalla(ventana_principal)
 
 
 def _aplicar_modo_principal(ventana_principal: QMainWindow) -> None:
-    """Libera restricciones del login y devuelve un area de trabajo amplia."""
+    """Libera restricciones del login y abre el shell principal maximizado."""
     estaba_visible = ventana_principal.isVisible()
+    if estaba_visible:
+        ventana_principal.hide()
+    ventana_principal.showNormal()
     ventana_principal.setWindowFlags(FLAGS_VENTANA_PRINCIPAL)
     ventana_principal.setMinimumSize(0, 0)
     ventana_principal.setMaximumSize(MAXIMO_TAMANO_VENTANA, MAXIMO_TAMANO_VENTANA)
-    if estaba_visible:
-        ventana_principal.showMaximized()
+    pantalla = ventana_principal.screen() or QApplication.primaryScreen()
+    if pantalla is not None:
+        geometria_disponible = pantalla.availableGeometry()
+        ancho_objetivo = max(
+            min(ANCHO_VENTANA_PRINCIPAL, geometria_disponible.width()),
+            geometria_disponible.width() - MARGEN_VENTANA_PRINCIPAL,
+        )
+        alto_objetivo = max(
+            min(ALTO_VENTANA_PRINCIPAL, geometria_disponible.height()),
+            geometria_disponible.height() - MARGEN_VENTANA_PRINCIPAL,
+        )
+        ancho_objetivo = min(ancho_objetivo, geometria_disponible.width())
+        alto_objetivo = min(alto_objetivo, geometria_disponible.height())
+        ventana_principal.resize(ancho_objetivo, alto_objetivo)
+    else:
+        ventana_principal.resize(ANCHO_VENTANA_PRINCIPAL, ALTO_VENTANA_PRINCIPAL)
+    ventana_principal.showMaximized()
 
 
 def _centrar_ventana_en_pantalla(ventana_principal: QMainWindow) -> None:

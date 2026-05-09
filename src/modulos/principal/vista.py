@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from statistics import fmean
 
 from PySide6.QtCharts import (
@@ -14,10 +15,23 @@ from PySide6.QtCharts import (
     QPieSeries,
     QValueAxis,
 )
-from PySide6.QtCore import QEasingCurve, QMargins, QPropertyAnimation, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QPaintEvent, QPainter, QPen, QPixmap
+from PySide6.QtCore import (
+    QEvent,
+    QEasingCurve,
+    QMargins,
+    QPauseAnimation,
+    QPoint,
+    QPropertyAnimation,
+    QSequentialAnimationGroup,
+    QSize,
+    Qt,
+    Signal,
+)
+from PySide6.QtGui import QColor, QPaintEvent, QPainter, QPainterPath, QPen, QPixmap, QResizeEvent
 from PySide6.QtWidgets import (
+    QDialog,
     QFrame,
+    QGraphicsDropShadowEffect,
     QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
@@ -27,12 +41,21 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from comun.configuracion.gestor_rutas import GestorRutas
-from comun.ui import VistaPlaceholderModulo, crear_boton_operativo, obtener_icono_tabler_coloreado
+from comun.ui import (
+    BotonAccionContextual,
+    DialogoConfirmacionSicap,
+    DialogoMensajeSicap,
+    VistaPlaceholderModulo,
+    crear_boton_operativo,
+    obtener_icono_tabler_coloreado,
+)
+from comun.ui.componentes import COLOR_FONDO_DIALOGO
 from modulos.principal.entidades import (
     AnaliticaDashboard,
     CategoriaDashboard,
@@ -44,6 +67,13 @@ from modulos.principal.entidades import (
 
 
 COLOR_FONDO_PRINCIPAL = "#2c2966"
+ANCHO_MINIMO_SHELL_PRINCIPAL = 960
+ALTO_MINIMO_SHELL_PRINCIPAL = 640
+ANCHO_RUPTURA_DASHBOARD_AMPLIO = 1320
+ANCHO_RUPTURA_DASHBOARD_MEDIO = 980
+ANCHO_RUPTURA_METRICAS_4_COLUMNAS = 1380
+ANCHO_RUPTURA_METRICAS_3_COLUMNAS = 1040
+ANCHO_RUPTURA_METRICAS_2_COLUMNAS = 760
 
 
 class TarjetaMetricaEjecutiva(QFrame):
@@ -54,11 +84,11 @@ class TarjetaMetricaEjecutiva(QFrame):
         self._color_fondo = color_fondo
         self.setObjectName("tarjetaMetricaEjecutiva")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setMinimumHeight(102)
+        self.setMinimumHeight(90)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 14, 18, 14)
-        layout.setSpacing(6)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(4)
 
         self._titulo = QLabel("")
         self._titulo.setObjectName("tituloMetricaEjecutiva")
@@ -97,17 +127,17 @@ class TarjetaMetricaEjecutiva(QFrame):
             }}
             QLabel#tituloMetricaEjecutiva {{
                 color: rgba(27, 36, 48, 220);
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 700;
             }}
             QLabel#valorMetricaEjecutiva {{
                 color: #1b2430;
-                font-size: 30px;
+                font-size: 26px;
                 font-weight: 900;
             }}
             QLabel#detalleMetricaEjecutiva {{
                 color: #55606f;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 600;
             }}
             """
@@ -171,6 +201,603 @@ class TarjetaInsight(QWidget):
         self._detalle.setText(insight.detalle)
 
 
+class SeccionSidebarDesplegable(QFrame):
+    """Agrupa modulos del sidebar en una lista plegable."""
+
+    def __init__(self, titulo: str) -> None:
+        super().__init__()
+        self._titulo = titulo
+        self._expandida = True
+        self._modulos: set[str] = set()
+        self._modulo_activo: str | None = None
+        self.setObjectName("seccionSidebarCard")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        self._boton_toggle = QToolButton()
+        self._boton_toggle.setObjectName("botonToggleSidebar")
+        self._boton_toggle.setText(titulo.upper())
+        self._boton_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self._boton_toggle.setArrowType(Qt.ArrowType.DownArrow)
+        self._boton_toggle.setCheckable(False)
+        self._boton_toggle.clicked.connect(self._alternar)
+
+        self._contenedor_items = QWidget()
+        self._contenedor_items.setObjectName("contenedorItemsSidebar")
+        self._layout_items = QVBoxLayout(self._contenedor_items)
+        self._layout_items.setContentsMargins(0, 0, 0, 0)
+        self._layout_items.setSpacing(6)
+
+        layout.addWidget(self._boton_toggle)
+        layout.addWidget(self._contenedor_items)
+
+    def agregar_boton(self, codigo_modulo: str, boton: QPushButton) -> None:
+        self._modulos.add(codigo_modulo)
+        self._layout_items.addWidget(boton)
+
+    def marcar_modulo_activo(self, codigo_modulo: str) -> None:
+        self._modulo_activo = codigo_modulo if codigo_modulo in self._modulos else None
+        tiene_activo = self._modulo_activo is not None
+        self._boton_toggle.setProperty("activa", tiene_activo)
+        self._boton_toggle.style().unpolish(self._boton_toggle)
+        self._boton_toggle.style().polish(self._boton_toggle)
+        if tiene_activo:
+            self.establecer_expandida(True, forzar=True)
+
+    def establecer_expandida(self, expandida: bool, forzar: bool = False) -> None:
+        if not expandida and self._modulo_activo is not None and not forzar:
+            return
+        self._expandida = expandida
+        self._contenedor_items.setVisible(expandida)
+        self._boton_toggle.setArrowType(
+            Qt.ArrowType.DownArrow if expandida else Qt.ArrowType.RightArrow
+        )
+        self._boton_toggle.setProperty("expandida", expandida)
+        self._boton_toggle.style().unpolish(self._boton_toggle)
+        self._boton_toggle.style().polish(self._boton_toggle)
+
+    def esta_expandida(self) -> bool:
+        return self._expandida
+
+    def _alternar(self) -> None:
+        self.establecer_expandida(not self.esta_expandida())
+
+
+class BotonPerfilUsuario(QPushButton):
+    """Disparador del perfil en el encabezado superior."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("botonPerfilHeader")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setCheckable(False)
+        self.setMinimumSize(238, 60)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(10)
+
+        self._avatar = QLabel("A")
+        self._avatar.setObjectName("avatarPerfilHeader")
+        self._avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._avatar.setFixedSize(38, 38)
+
+        bloque_texto = QVBoxLayout()
+        bloque_texto.setContentsMargins(0, 0, 0, 0)
+        bloque_texto.setSpacing(2)
+
+        self._periodo = QLabel("Hoy")
+        self._periodo.setObjectName("periodoHeader")
+        self._periodo.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._usuario = QLabel("")
+        self._usuario.setObjectName("usuarioActivo")
+        self._usuario.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._perfil = QLabel("")
+        self._perfil.setObjectName("perfilActivo")
+        self._perfil.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        bloque_texto.addWidget(self._periodo)
+        bloque_texto.addWidget(self._usuario)
+        bloque_texto.addWidget(self._perfil)
+
+        layout.addWidget(self._avatar, alignment=Qt.AlignmentFlag.AlignVCenter)
+        layout.addLayout(bloque_texto, 1)
+
+    @property
+    def label_periodo(self) -> QLabel:
+        return self._periodo
+
+    @property
+    def label_usuario(self) -> QLabel:
+        return self._usuario
+
+    @property
+    def label_perfil(self) -> QLabel:
+        return self._perfil
+
+    def actualizar(self, nombre_completo: str, perfil: str) -> None:
+        self._usuario.setText(nombre_completo)
+        self._perfil.setText(perfil)
+        self._avatar.setText(self._resolver_iniciales(nombre_completo))
+        self.updateGeometry()
+        self.adjustSize()
+
+    def sizeHint(self) -> QSize:
+        return QSize(246, 60)
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(232, 60)
+
+    @staticmethod
+    def _resolver_iniciales(nombre_completo: str) -> str:
+        partes = [parte for parte in nombre_completo.strip().split() if parte]
+        if not partes:
+            return "US"
+        if len(partes) == 1:
+            return partes[0][:2].upper()
+        return f"{partes[0][0]}{partes[1][0]}".upper()
+
+
+class PanelPerfilUsuario(QFrame):
+    """Ventana flotante de perfil inspirada en el componente de Figma."""
+
+    cerrar_sesion_solicitada = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("panelPerfilUsuario")
+        self.setWindowFlags(
+            Qt.WindowType.Popup
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.NoDropShadowWindowHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setMinimumWidth(360)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(14)
+
+        encabezado = QFrame()
+        encabezado.setObjectName("encabezadoPanelPerfil")
+        layout_encabezado = QHBoxLayout(encabezado)
+        layout_encabezado.setContentsMargins(14, 14, 14, 14)
+        layout_encabezado.setSpacing(12)
+
+        self._avatar = QLabel("US")
+        self._avatar.setObjectName("avatarPanelPerfil")
+        self._avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._avatar.setFixedSize(54, 54)
+
+        bloque_identidad = QVBoxLayout()
+        bloque_identidad.setContentsMargins(0, 0, 0, 0)
+        bloque_identidad.setSpacing(2)
+        self._nombre = QLabel("")
+        self._nombre.setObjectName("nombrePanelPerfil")
+        self._rol = QLabel("")
+        self._rol.setObjectName("rolPanelPerfil")
+        bloque_identidad.addWidget(self._nombre)
+        bloque_identidad.addWidget(self._rol)
+
+        layout_encabezado.addWidget(self._avatar)
+        layout_encabezado.addLayout(bloque_identidad, 1)
+
+        panel_datos = QFrame()
+        panel_datos.setObjectName("bloquePanelPerfil")
+        layout_datos = QVBoxLayout(panel_datos)
+        layout_datos.setContentsMargins(14, 14, 14, 14)
+        layout_datos.setSpacing(10)
+
+        self._correo = self._crear_fila_dato("Correo electr\u00f3nico", "mail.svg")
+        self._ultimo_acceso = self._crear_fila_dato("\u00daltimo acceso", "clock.svg")
+        self._estado_sesion = self._crear_fila_dato("Estado de sesi\u00f3n", "circle-check.svg")
+        layout_datos.addWidget(self._correo["contenedor"])
+        layout_datos.addWidget(self._ultimo_acceso["contenedor"])
+        layout_datos.addWidget(self._estado_sesion["contenedor"])
+
+        panel_acciones = QFrame()
+        panel_acciones.setObjectName("bloquePanelPerfil")
+        layout_acciones = QVBoxLayout(panel_acciones)
+        layout_acciones.setContentsMargins(10, 10, 10, 10)
+        layout_acciones.setSpacing(6)
+
+        self._boton_mi_perfil = self._crear_boton_accion(
+            "Mi perfil",
+            "user.svg",
+            "edicion",
+        )
+        self._boton_ayuda = self._crear_boton_accion(
+            "Ayuda y soporte",
+            "help.svg",
+            "ayuda",
+        )
+        self._boton_acerca = self._crear_boton_accion(
+            "Acerca del sistema",
+            "info-circle.svg",
+            "informacion",
+        )
+        self._boton_cerrar_sesion = self._crear_boton_accion(
+            "Cerrar sesi\u00f3n",
+            "arrow-left.svg",
+            "salida",
+        )
+        self._boton_mi_perfil.clicked.connect(
+            lambda: self._mostrar_informacion(
+                "Mi perfil",
+                "La edici\u00f3n detallada del perfil se integrar\u00e1 en el siguiente hito.",
+                "user.svg",
+                "edicion",
+            )
+        )
+        self._boton_ayuda.clicked.connect(
+            lambda: self._mostrar_informacion(
+                "Ayuda y soporte",
+                "El acceso directo a ayuda y soporte se integrar\u00e1 en el siguiente hito.",
+                "help.svg",
+                "ayuda",
+            )
+        )
+        self._boton_acerca.clicked.connect(
+            lambda: self._mostrar_informacion(
+                "Acerca del sistema",
+                "SICAP\nVersi\u00f3n 2.0.0\nJunta de Agua de Yarumela",
+                "info-circle.svg",
+                "informacion",
+            )
+        )
+        self._boton_cerrar_sesion.clicked.connect(self._emitir_cierre_sesion)
+        layout_acciones.addWidget(self._boton_mi_perfil)
+        layout_acciones.addWidget(self._boton_ayuda)
+        layout_acciones.addWidget(self._boton_acerca)
+        layout_acciones.addWidget(self._boton_cerrar_sesion)
+
+        pie = QFrame()
+        pie.setObjectName("piePanelPerfil")
+        layout_pie = QVBoxLayout(pie)
+        layout_pie.setContentsMargins(12, 12, 12, 12)
+        layout_pie.setSpacing(2)
+
+        etiqueta_sistema = QLabel("SICAP")
+        etiqueta_sistema.setObjectName("sistemaPanelPerfil")
+        etiqueta_version = QLabel("Versi\u00f3n 2.0.0")
+        etiqueta_version.setObjectName("detallePanelPerfil")
+        etiqueta_institucion = QLabel("Junta de Agua de Yarumela")
+        etiqueta_institucion.setObjectName("detallePanelPerfil")
+        etiqueta_desarrollado = QLabel("Desarrollado por Proyecto SICAP")
+        etiqueta_desarrollado.setObjectName("detallePanelPerfil")
+        layout_pie.addWidget(etiqueta_sistema)
+        layout_pie.addWidget(etiqueta_version)
+        layout_pie.addWidget(etiqueta_institucion)
+        layout_pie.addWidget(etiqueta_desarrollado)
+
+        layout.addWidget(encabezado)
+        layout.addWidget(panel_datos)
+        layout.addWidget(panel_acciones)
+        layout.addWidget(pie)
+
+    def actualizar(
+        self,
+        nombre_completo: str,
+        rol: str,
+        correo: str,
+        ultimo_acceso: str,
+        estado_sesion: str,
+    ) -> None:
+        self._avatar.setText(BotonPerfilUsuario._resolver_iniciales(nombre_completo))
+        self._nombre.setText(nombre_completo)
+        self._rol.setText(rol)
+        self._correo["valor"].setText(correo)
+        self._ultimo_acceso["valor"].setText(ultimo_acceso)
+        self._estado_sesion["valor"].setText(estado_sesion)
+
+    def mostrar_desde(self, disparador: QWidget) -> None:
+        self.adjustSize()
+        posicion = disparador.mapToGlobal(disparador.rect().bottomRight())
+        destino_x = posicion.x() - self.width()
+        destino_y = posicion.y() + 10
+        self.move(QPoint(destino_x, destino_y))
+        self.show()
+        self.raise_()
+
+    def _crear_fila_dato(self, titulo: str, icono: str) -> dict[str, QWidget | QLabel]:
+        contenedor = QFrame()
+        contenedor.setObjectName("filaDatoPerfil")
+        layout = QHBoxLayout(contenedor)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        icono_label = QLabel("")
+        icono_label.setObjectName("iconoDatoPerfil")
+        icono_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icono_label.setFixedSize(32, 32)
+        icono_label.setPixmap(
+            obtener_icono_tabler_coloreado(icono, "#d7e9ff", tamano=16).pixmap(16, 16)
+        )
+
+        bloque = QVBoxLayout()
+        bloque.setContentsMargins(0, 0, 0, 0)
+        bloque.setSpacing(1)
+        etiqueta = QLabel(titulo)
+        etiqueta.setObjectName("tituloDatoPerfil")
+        valor = QLabel("")
+        valor.setObjectName("valorDatoPerfil")
+        valor.setWordWrap(True)
+        bloque.addWidget(etiqueta)
+        bloque.addWidget(valor)
+
+        layout.addWidget(icono_label, alignment=Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(bloque, 1)
+        return {"contenedor": contenedor, "valor": valor}
+
+    def _crear_boton_accion(self, texto: str, icono: str, variante: str) -> QPushButton:
+        return BotonAccionContextual(texto, icono, variante)
+
+    def _mostrar_informacion(
+        self,
+        titulo: str,
+        mensaje: str,
+        icono: str,
+        variante: str,
+    ) -> None:
+        self.hide()
+        DialogoMensajeSicap(
+            titulo,
+            mensaje,
+            icono=icono,
+            variante=variante,
+            parent=self.parentWidget() or self,
+        ).exec()
+
+    def _emitir_cierre_sesion(self) -> None:
+        self.hide()
+        dialogo = DialogoConfirmacionSicap(
+            titulo="Confirmar cierre de sesi\u00f3n",
+            descripcion=(
+                "Vas a cerrar la sesi\u00f3n actual en este equipo. "
+                "Confirma solo si deseas salir ahora."
+            ),
+            texto_confirmar="Confirmar salida",
+            icono="alert-triangle.svg",
+            variante_confirmar="salida",
+            color_fondo=COLOR_FONDO_DIALOGO,
+            parent=self.parentWidget() or self,
+        )
+        if dialogo.exec() == QDialog.DialogCode.Accepted:
+            self.cerrar_sesion_solicitada.emit()
+
+
+class DialogoPruebaModalBase(QDialog):
+    """Base de laboratorio para comparar estrategias de modal."""
+
+    def __init__(
+        self,
+        titulo: str,
+        descripcion: str,
+        etiqueta_tecnica: str,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._titulo_modal = titulo
+        self._descripcion_modal = descripcion
+        self._etiqueta_tecnica = etiqueta_tecnica
+        self.setModal(True)
+        self.setMinimumWidth(480)
+        self._layout_raiz = QVBoxLayout(self)
+        self._layout_raiz.setContentsMargins(0, 0, 0, 0)
+        self._layout_raiz.setSpacing(0)
+
+    def _construir_panel_contenido(
+        self,
+        contenedor: QWidget,
+        color_fondo: str,
+        radio: int,
+        borde: str,
+    ) -> None:
+        layout = QVBoxLayout(contenedor)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(14)
+
+        titulo = QLabel(self._titulo_modal)
+        titulo.setStyleSheet("color: #ffffff; font-size: 22px; font-weight: 900;")
+        descripcion = QLabel(self._descripcion_modal)
+        descripcion.setWordWrap(True)
+        descripcion.setStyleSheet("color: rgba(240, 244, 255, 0.88); font-size: 13px; font-weight: 700;")
+
+        etiqueta = QLabel(self._etiqueta_tecnica)
+        etiqueta.setWordWrap(True)
+        etiqueta.setStyleSheet(
+            "color: rgba(247, 249, 255, 0.82);"
+            "background: rgba(255, 255, 255, 0.08);"
+            f"border: 1px solid {borde};"
+            "padding: 10px 12px;"
+            "font-size: 12px;"
+            "font-weight: 700;"
+            "border-radius: 12px;"
+        )
+
+        bloque = QFrame()
+        bloque.setStyleSheet(
+            "QFrame {"
+            f"background: {color_fondo};"
+            f"border: 1px solid {borde};"
+            f"border-radius: {0 if radio <= 0 else 4}px;"
+            "}"
+        )
+        layout_bloque = QVBoxLayout(bloque)
+        layout_bloque.setContentsMargins(0, 0, 0, 0)
+        layout_bloque.setSpacing(8)
+        layout_bloque.addWidget(QLabel("Vista previa del cuerpo del modal"))
+        layout_bloque.addWidget(
+            QLabel("Color sólido base #565384, misma familia visual que el flujo actual.")
+        )
+
+        fila_acciones = QHBoxLayout()
+        fila_acciones.setContentsMargins(0, 0, 0, 0)
+        fila_acciones.setSpacing(12)
+
+        boton_cancelar = BotonAccionContextual(
+            "Cancelar",
+            "arrow-left.svg",
+            "neutro",
+            centrado=True,
+        )
+        boton_cancelar.setMinimumWidth(148)
+        boton_cancelar.clicked.connect(self.reject)
+
+        boton_confirmar = BotonAccionContextual(
+            "Confirmar prueba",
+            "circle-check.svg",
+            "primario",
+            centrado=True,
+        )
+        boton_confirmar.setMinimumWidth(176)
+        boton_confirmar.clicked.connect(self.accept)
+
+        fila_acciones.addWidget(boton_cancelar)
+        fila_acciones.addStretch(1)
+        fila_acciones.addWidget(boton_confirmar)
+
+        layout.addWidget(titulo)
+        layout.addWidget(descripcion)
+        layout.addWidget(etiqueta)
+        layout.addWidget(bloque)
+        layout.addLayout(fila_acciones)
+
+
+class DialogoPruebaModalSistema(DialogoPruebaModalBase):
+    """Alternativa con marco nativo del sistema."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(
+            titulo="Prueba modal con marco del sistema",
+            descripcion="Usa QDialog estándar con borde nativo de Windows y panel interno redondeado.",
+            etiqueta_tecnica="Alternativa robusta: evita forma personalizada de la ventana.",
+            parent=parent,
+        )
+        self.setWindowTitle("Prueba modal del sistema")
+
+        panel = QFrame()
+        panel.setStyleSheet(
+            "QFrame {"
+            f"background: {COLOR_FONDO_DIALOGO};"
+            "border: 1px solid rgba(255, 255, 255, 0.14);"
+            "border-radius: 4px;"
+            "}"
+        )
+        self._construir_panel_contenido(
+            panel,
+            COLOR_FONDO_DIALOGO,
+            4,
+            "rgba(255, 255, 255, 0.14)",
+        )
+        self._layout_raiz.addWidget(panel)
+
+
+class DialogoPruebaModalRecto(DialogoPruebaModalBase):
+    """Alternativa opaca rectangular sin esquinas redondeadas."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(
+            titulo="Prueba modal rectangular",
+            descripcion="Ventana opaca sin recorte ni translucencia, pensada para descartar artefactos.",
+            etiqueta_tecnica="Alternativa de control: no usa máscara ni transparencia.",
+            parent=parent,
+        )
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        self.setStyleSheet(f"QDialog {{ background: {COLOR_FONDO_DIALOGO}; }}")
+        self._layout_raiz.setContentsMargins(0, 0, 0, 0)
+
+        panel = QWidget()
+        panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._construir_panel_contenido(
+            panel,
+            COLOR_FONDO_DIALOGO,
+            0,
+            "rgba(255, 255, 255, 0.14)",
+        )
+        self._layout_raiz.addWidget(panel)
+
+
+class DialogoPruebaModalMascara(DialogoPruebaModalBase):
+    """Alternativa opaca con máscara redondeada."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(
+            titulo="Prueba modal con máscara",
+            descripcion="Ventana sólida redondeada por máscara, sin translucencia ni blur.",
+            etiqueta_tecnica="Alternativa actual: top-level opaco + setMask() + radio moderado.",
+            parent=parent,
+        )
+        self._radio = 4
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._layout_raiz.setContentsMargins(0, 0, 0, 0)
+
+        panel = QWidget()
+        panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._construir_panel_contenido(
+            panel,
+            COLOR_FONDO_DIALOGO,
+            self._radio,
+            "rgba(255, 255, 255, 0.14)",
+        )
+        self._layout_raiz.addWidget(panel)
+
+    def resizeEvent(self, evento: QResizeEvent) -> None:
+        ruta = QPainterPath()
+        ruta.addRoundedRect(self.rect(), self._radio, self._radio)
+        self.setMask(ruta.toFillPolygon().toPolygon())
+        super().resizeEvent(evento)
+
+    def paintEvent(self, evento: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(COLOR_FONDO_DIALOGO))
+        painter.drawRect(self.rect())
+        painter.end()
+        super().paintEvent(evento)
+
+
+class DialogoPruebaModalTranslucido(DialogoPruebaModalBase):
+    """Alternativa con translucidez y sombra suave."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(
+            titulo="Prueba modal translúcido",
+            descripcion="Ventana sin marco con fondo translúcido y panel interno redondeado con sombra.",
+            etiqueta_tecnica="Alternativa de bordes suaves: depende del compositor de Windows.",
+            parent=parent,
+        )
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+
+        panel = QFrame()
+        panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        panel.setStyleSheet(
+            "QFrame {"
+            f"background: {COLOR_FONDO_DIALOGO};"
+            "border: 1px solid rgba(255, 255, 255, 0.18);"
+            "border-radius: 4px;"
+            "}"
+        )
+        sombra = QGraphicsDropShadowEffect(panel)
+        sombra.setBlurRadius(24)
+        sombra.setOffset(0, 8)
+        sombra.setColor(QColor(18, 18, 42, 110))
+        panel.setGraphicsEffect(sombra)
+        self._construir_panel_contenido(
+            panel,
+            COLOR_FONDO_DIALOGO,
+            4,
+            "rgba(255, 255, 255, 0.18)",
+        )
+        self._layout_raiz.addWidget(panel)
+
+
 class VistaModuloPrincipal(QWidget):
     """Shell operativo con sidebar, header y area central navegable."""
 
@@ -183,14 +810,51 @@ class VistaModuloPrincipal(QWidget):
         self._gestor_rutas = GestorRutas()
         self.setObjectName("vistaModuloPrincipal")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._correo_usuario_actual = "soporte@sicap.local"
+        self._modulo_activo = "dashboard"
         self._botones_modulos: dict[str, QPushButton] = {}
+        self._secciones_sidebar: dict[str, SeccionSidebarDesplegable] = {}
+        self._estado_secciones_sidebar: dict[str, bool] = {
+            "Vista general": True,
+            "Registro y control": True,
+            "Cobranza": False,
+            "Administración": False,
+            "Soporte": False,
+            "Otros": False,
+        }
         self._paginas_modulos: dict[str, QWidget] = {}
         self._tarjetas_metricas: dict[str, TarjetaMetricaEjecutiva] = {}
+        self._orden_metricas: list[str] = []
         self._filas_ranking: list[FilaRanking] = []
         self._tarjetas_insight: list[TarjetaInsight] = []
         self._animaciones_activas: list[object] = []
+        self._modo_dashboard_actual = "amplio"
+        self._ultimo_ancho_dashboard = -1
+        self._panel_perfil_usuario = PanelPerfilUsuario(self)
+        self._panel_perfil_usuario.cerrar_sesion_solicitada.connect(
+            self.cerrar_sesion_solicitada.emit
+        )
         self._aplicar_estilos()
         self._construir_ui()
+
+    def sizeHint(self) -> QSize:
+        return QSize(1500, 900)
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(ANCHO_MINIMO_SHELL_PRINCIPAL, ALTO_MINIMO_SHELL_PRINCIPAL)
+
+    def resizeEvent(self, evento: QResizeEvent) -> None:
+        super().resizeEvent(evento)
+        self._actualizar_disposicion_dashboard()
+
+    def eventFilter(self, objeto: object, evento: QEvent) -> bool:
+        if (
+            hasattr(self, "_scroll_dashboard")
+            and objeto is self._scroll_dashboard.viewport()
+            and evento.type() == QEvent.Type.Resize
+        ):
+            self._actualizar_disposicion_dashboard()
+        return super().eventFilter(objeto, evento)
 
     def paintEvent(self, evento: QPaintEvent) -> None:
         """Pinta el fondo principal del shell."""
@@ -210,30 +874,47 @@ class VistaModuloPrincipal(QWidget):
         self._paginas_modulos[codigo] = widget
         self._stack_contenido.addWidget(widget)
 
+    def preparar_perfil_usuario(self, correo: str) -> None:
+        self._correo_usuario_actual = correo.strip() or "soporte@sicap.local"
+
     def mostrar_estado(self, estado: EstadoModuloPrincipal) -> None:
         primer_nombre = estado.nombre_completo.split()[0] if estado.nombre_completo else estado.nombre_usuario
         self._label_bienvenida.setText(f"Resumen general, {primer_nombre}")
         self._label_subresumen.setText(
             "Monitorea ingresos, deuda pendiente y estabilidad operativa desde un solo tablero."
         )
-        self._label_usuario.setText(estado.nombre_completo)
-        self._label_perfil.setText(estado.perfil)
+        self._boton_perfil_header.actualizar(estado.nombre_completo, estado.perfil)
+        momento_actual = datetime.now().strftime("%d/%m/%Y %I:%M %p")
+        self._label_periodo.setText("Sesi\u00f3n actual")
+        self._panel_perfil_usuario.actualizar(
+            nombre_completo=estado.nombre_completo,
+            rol=estado.perfil,
+            correo=self._correo_usuario_actual,
+            ultimo_acceso=momento_actual,
+            estado_sesion="Activa en este equipo",
+        )
         self._reconstruir_sidebar(estado.modulos)
         self._mostrar_metricas(estado)
         self._mostrar_analitica(estado.analitica)
         self._boton_mantenimiento.setVisible(estado.puede_abrir_mantenimiento)
+        self._panel_acciones_sidebar.setVisible(estado.puede_abrir_mantenimiento)
         self.mostrar_modulo("dashboard")
+        self._actualizar_disposicion_dashboard()
         self._animar_aparicion_dashboard()
 
     def mostrar_modulo(self, codigo: str) -> None:
         pagina = self._paginas_modulos.get(codigo)
         if pagina is None:
             return
+        self._modulo_activo = codigo
         self._stack_contenido.setCurrentWidget(pagina)
         for codigo_boton, boton in self._botones_modulos.items():
             boton.setProperty("activo", codigo_boton == codigo)
             boton.style().unpolish(boton)
             boton.style().polish(boton)
+        for titulo, seccion in self._secciones_sidebar.items():
+            seccion.marcar_modulo_activo(codigo)
+            self._estado_secciones_sidebar[titulo] = seccion.esta_expandida()
 
     def _construir_ui(self) -> None:
         layout_raiz = QHBoxLayout(self)
@@ -242,10 +923,12 @@ class VistaModuloPrincipal(QWidget):
 
         self._sidebar = QFrame()
         self._sidebar.setObjectName("sidebarPrincipal")
-        self._sidebar.setFixedWidth(278)
+        self._sidebar.setMinimumWidth(224)
+        self._sidebar.setMaximumWidth(232)
+        self._sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         layout_sidebar = QVBoxLayout(self._sidebar)
-        layout_sidebar.setContentsMargins(18, 18, 18, 18)
-        layout_sidebar.setSpacing(14)
+        layout_sidebar.setContentsMargins(14, 14, 14, 14)
+        layout_sidebar.setSpacing(12)
 
         layout_sidebar.addWidget(self._crear_encabezado_sidebar())
 
@@ -269,40 +952,36 @@ class VistaModuloPrincipal(QWidget):
         self._scroll_navegacion.setWidget(contenedor_navegacion)
         layout_sidebar.addWidget(self._scroll_navegacion, 1)
 
-        panel_acciones_sidebar = QFrame()
-        panel_acciones_sidebar.setObjectName("panelAccionesSidebar")
-        layout_acciones_sidebar = QVBoxLayout(panel_acciones_sidebar)
-        layout_acciones_sidebar.setContentsMargins(12, 12, 12, 12)
-        layout_acciones_sidebar.setSpacing(10)
+        self._panel_acciones_sidebar = QFrame()
+        self._panel_acciones_sidebar.setObjectName("panelAccionesSidebar")
+        layout_acciones_sidebar = QVBoxLayout(self._panel_acciones_sidebar)
+        layout_acciones_sidebar.setContentsMargins(10, 10, 10, 10)
+        layout_acciones_sidebar.setSpacing(8)
 
         self._boton_mantenimiento = self._crear_boton_sidebar(
-            ModuloNavegacion("mantenimiento", "Mantenimiento", "", "lock.svg")
+            ModuloNavegacion("mantenimiento", "Mantenimiento", "", "lock.svg"),
+            tipo="accion",
         )
         self._boton_mantenimiento.clicked.connect(self.abrir_mantenimiento_solicitado.emit)
         self._boton_mantenimiento.setVisible(False)
         layout_acciones_sidebar.addWidget(self._boton_mantenimiento)
-
-        self._boton_cerrar_sesion = self._crear_boton_sidebar(
-            ModuloNavegacion("logout", "Cerrar sesion", "", "arrow-left.svg")
-        )
-        self._boton_cerrar_sesion.clicked.connect(self.cerrar_sesion_solicitada.emit)
-        layout_acciones_sidebar.addWidget(self._boton_cerrar_sesion)
-        layout_sidebar.addWidget(panel_acciones_sidebar)
+        self._panel_acciones_sidebar.setVisible(False)
+        layout_sidebar.addWidget(self._panel_acciones_sidebar)
 
         panel = QWidget()
         panel.setObjectName("panelPrincipal")
         layout_panel = QVBoxLayout(panel)
         layout_panel.setContentsMargins(0, 0, 0, 0)
-        layout_panel.setSpacing(16)
+        layout_panel.setSpacing(12)
 
         header = QFrame()
         header.setObjectName("headerPrincipal")
         layout_header = QHBoxLayout(header)
-        layout_header.setContentsMargins(18, 18, 18, 18)
-        layout_header.setSpacing(16)
+        layout_header.setContentsMargins(14, 14, 14, 14)
+        layout_header.setSpacing(12)
 
         bloque_titulo = QVBoxLayout()
-        bloque_titulo.setSpacing(4)
+        bloque_titulo.setSpacing(3)
         self._label_bienvenida = QLabel("Resumen general")
         self._label_bienvenida.setObjectName("tituloPrincipal")
         self._label_subresumen = QLabel("")
@@ -311,23 +990,14 @@ class VistaModuloPrincipal(QWidget):
         bloque_titulo.addWidget(self._label_bienvenida)
         bloque_titulo.addWidget(self._label_subresumen)
 
-        panel_usuario_header = QFrame()
-        panel_usuario_header.setObjectName("panelUsuarioHeader")
-        bloque_usuario = QVBoxLayout(panel_usuario_header)
-        bloque_usuario.setContentsMargins(14, 12, 14, 12)
-        bloque_usuario.setSpacing(2)
-        self._label_periodo = QLabel("Hoy")
-        self._label_periodo.setObjectName("periodoHeader")
-        self._label_usuario = QLabel("")
-        self._label_usuario.setObjectName("usuarioActivo")
-        self._label_perfil = QLabel("")
-        self._label_perfil.setObjectName("perfilActivo")
-        bloque_usuario.addWidget(self._label_periodo, alignment=Qt.AlignmentFlag.AlignRight)
-        bloque_usuario.addWidget(self._label_usuario, alignment=Qt.AlignmentFlag.AlignRight)
-        bloque_usuario.addWidget(self._label_perfil, alignment=Qt.AlignmentFlag.AlignRight)
+        self._boton_perfil_header = BotonPerfilUsuario()
+        self._boton_perfil_header.clicked.connect(self._alternar_panel_perfil_usuario)
+        self._label_periodo = self._boton_perfil_header.label_periodo
+        self._label_usuario = self._boton_perfil_header.label_usuario
+        self._label_perfil = self._boton_perfil_header.label_perfil
 
         layout_header.addLayout(bloque_titulo, 1)
-        layout_header.addWidget(panel_usuario_header, alignment=Qt.AlignmentFlag.AlignTop)
+        layout_header.addWidget(self._boton_perfil_header, alignment=Qt.AlignmentFlag.AlignTop)
 
         self._stack_contenido = QStackedWidget()
         self._stack_contenido.setObjectName("stackPrincipal")
@@ -344,23 +1014,46 @@ class VistaModuloPrincipal(QWidget):
     def _crear_dashboard(self) -> QWidget:
         pagina = QWidget()
         pagina.setObjectName("paginaDashboard")
-        layout = QVBoxLayout(pagina)
+        layout_pagina = QVBoxLayout(pagina)
+        layout_pagina.setContentsMargins(0, 0, 0, 0)
+        layout_pagina.setSpacing(0)
+
+        self._scroll_dashboard = QScrollArea()
+        self._scroll_dashboard.setObjectName("scrollDashboard")
+        self._scroll_dashboard.setWidgetResizable(True)
+        self._scroll_dashboard.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll_dashboard.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll_dashboard.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._scroll_dashboard.viewport().setAutoFillBackground(False)
+        self._scroll_dashboard.viewport().installEventFilter(self)
+
+        self._contenido_dashboard = QWidget()
+        self._contenido_dashboard.setObjectName("contenidoDashboard")
+        self._contenido_dashboard.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
+        self._contenido_dashboard.setAutoFillBackground(False)
+        layout = QVBoxLayout(self._contenido_dashboard)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
 
         self._grid_metricas = QGridLayout()
-        self._grid_metricas.setHorizontalSpacing(14)
-        self._grid_metricas.setVerticalSpacing(14)
+        self._grid_metricas.setHorizontalSpacing(10)
+        self._grid_metricas.setVerticalSpacing(10)
         layout.addLayout(self._grid_metricas)
 
-        fila_superior = QHBoxLayout()
-        fila_superior.setSpacing(16)
+        self._layout_paneles_dashboard = QGridLayout()
+        self._layout_paneles_dashboard.setHorizontalSpacing(12)
+        self._layout_paneles_dashboard.setVerticalSpacing(12)
+        layout.addLayout(self._layout_paneles_dashboard)
 
-        panel_tendencia = QFrame()
-        panel_tendencia.setObjectName("tarjetaPanel")
-        layout_tendencia = QVBoxLayout(panel_tendencia)
-        layout_tendencia.setContentsMargins(20, 18, 20, 18)
-        layout_tendencia.setSpacing(10)
+        self._panel_tendencia = QFrame()
+        self._panel_tendencia.setObjectName("tarjetaPanel")
+        self._panel_tendencia.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        layout_tendencia = QVBoxLayout(self._panel_tendencia)
+        layout_tendencia.setContentsMargins(16, 14, 16, 14)
+        layout_tendencia.setSpacing(8)
 
         fila_titulo = QHBoxLayout()
         fila_titulo.setSpacing(10)
@@ -373,16 +1066,17 @@ class VistaModuloPrincipal(QWidget):
         fila_titulo.addWidget(tabs)
 
         self._grafica_tendencia = self._crear_chart_view()
-        self._grafica_tendencia.setMinimumHeight(268)
+        self._grafica_tendencia.setMinimumHeight(212)
         layout_tendencia.addLayout(fila_titulo)
         layout_tendencia.addWidget(self._grafica_tendencia, 1)
 
-        panel_ranking = QFrame()
-        panel_ranking.setObjectName("tarjetaPanel")
-        panel_ranking.setFixedWidth(272)
-        layout_ranking = QVBoxLayout(panel_ranking)
-        layout_ranking.setContentsMargins(18, 17, 18, 18)
-        layout_ranking.setSpacing(10)
+        self._panel_ranking = QFrame()
+        self._panel_ranking.setObjectName("tarjetaPanel")
+        self._panel_ranking.setMinimumWidth(224)
+        self._panel_ranking.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        layout_ranking = QVBoxLayout(self._panel_ranking)
+        layout_ranking.setContentsMargins(14, 14, 14, 14)
+        layout_ranking.setSpacing(8)
         titulo_ranking = QLabel("Deuda por barrio")
         titulo_ranking.setObjectName("tituloPanel")
         descripcion_ranking = QLabel("Zonas con mayor saldo pendiente.")
@@ -394,34 +1088,29 @@ class VistaModuloPrincipal(QWidget):
         layout_ranking.addLayout(self._layout_ranking)
         layout_ranking.addStretch(1)
 
-        fila_superior.addWidget(panel_tendencia, 1)
-        fila_superior.addWidget(panel_ranking)
-        layout.addLayout(fila_superior)
-
-        fila_inferior = QHBoxLayout()
-        fila_inferior.setSpacing(16)
-
-        panel_estados = QFrame()
-        panel_estados.setObjectName("tarjetaPanel")
-        layout_estados = QVBoxLayout(panel_estados)
-        layout_estados.setContentsMargins(20, 18, 20, 18)
-        layout_estados.setSpacing(10)
+        self._panel_estados = QFrame()
+        self._panel_estados.setObjectName("tarjetaPanel")
+        self._panel_estados.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        layout_estados = QVBoxLayout(self._panel_estados)
+        layout_estados.setContentsMargins(16, 14, 16, 14)
+        layout_estados.setSpacing(8)
         titulo_estados = QLabel("Estado del servicio")
         titulo_estados.setObjectName("tituloPanel")
         descripcion_estados = QLabel("Distribucion de casas por estado operativo.")
         descripcion_estados.setObjectName("descripcionPanel")
         self._grafica_estados = self._crear_chart_view()
-        self._grafica_estados.setMinimumHeight(210)
+        self._grafica_estados.setMinimumHeight(170)
         layout_estados.addWidget(titulo_estados)
         layout_estados.addWidget(descripcion_estados)
         layout_estados.addWidget(self._grafica_estados, 1)
 
-        panel_insights = QFrame()
-        panel_insights.setObjectName("tarjetaPanel")
-        panel_insights.setFixedWidth(308)
-        layout_insights = QVBoxLayout(panel_insights)
-        layout_insights.setContentsMargins(18, 17, 18, 18)
-        layout_insights.setSpacing(10)
+        self._panel_insights = QFrame()
+        self._panel_insights.setObjectName("tarjetaPanel")
+        self._panel_insights.setMinimumWidth(248)
+        self._panel_insights.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        layout_insights = QVBoxLayout(self._panel_insights)
+        layout_insights.setContentsMargins(14, 14, 14, 14)
+        layout_insights.setSpacing(8)
         titulo_insights = QLabel("Lecturas clave")
         titulo_insights.setObjectName("tituloPanel")
         descripcion_insights = QLabel("Indicadores ejecutivos para seguimiento rapido.")
@@ -433,25 +1122,26 @@ class VistaModuloPrincipal(QWidget):
         layout_insights.addLayout(self._layout_insights)
         layout_insights.addStretch(1)
 
-        panel_distribucion = QFrame()
-        panel_distribucion.setObjectName("tarjetaPanel")
-        layout_distribucion = QVBoxLayout(panel_distribucion)
-        layout_distribucion.setContentsMargins(20, 18, 20, 18)
-        layout_distribucion.setSpacing(10)
+        self._panel_distribucion = QFrame()
+        self._panel_distribucion.setObjectName("tarjetaPanel")
+        self._panel_distribucion.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        layout_distribucion = QVBoxLayout(self._panel_distribucion)
+        layout_distribucion.setContentsMargins(16, 14, 16, 14)
+        layout_distribucion.setSpacing(8)
         titulo_distribucion = QLabel("Distribucion de deuda")
         titulo_distribucion.setObjectName("tituloPanel")
         descripcion_distribucion = QLabel("Peso relativo del saldo pendiente por barrio.")
         descripcion_distribucion.setObjectName("descripcionPanel")
         self._grafica_distribucion = self._crear_chart_view()
-        self._grafica_distribucion.setMinimumHeight(210)
+        self._grafica_distribucion.setMinimumHeight(170)
         layout_distribucion.addWidget(titulo_distribucion)
         layout_distribucion.addWidget(descripcion_distribucion)
         layout_distribucion.addWidget(self._grafica_distribucion, 1)
 
-        fila_inferior.addWidget(panel_estados, 1)
-        fila_inferior.addWidget(panel_distribucion, 1)
-        fila_inferior.addWidget(panel_insights)
-        layout.addLayout(fila_inferior)
+        layout.addStretch(1)
+        self._scroll_dashboard.setWidget(self._contenido_dashboard)
+        layout_pagina.addWidget(self._scroll_dashboard)
+        self._actualizar_disposicion_dashboard()
         return pagina
 
     def _mostrar_metricas(self, estado: EstadoModuloPrincipal) -> None:
@@ -461,12 +1151,14 @@ class VistaModuloPrincipal(QWidget):
             if item.widget() is not None:
                 item.widget().deleteLater()
         self._tarjetas_metricas.clear()
+        self._orden_metricas.clear()
 
         for indice, metrica in enumerate(estado.metricas):
             tarjeta = TarjetaMetricaEjecutiva(colores[indice % len(colores)])
             tarjeta.actualizar(metrica.titulo, metrica.valor, metrica.detalle)
             self._tarjetas_metricas[metrica.codigo] = tarjeta
-            self._grid_metricas.addWidget(tarjeta, 0, indice)
+            self._orden_metricas.append(metrica.codigo)
+        self._actualizar_disposicion_metricas()
 
     def _mostrar_analitica(self, analitica: AnaliticaDashboard) -> None:
         self._construir_ranking(analitica.deuda_por_barrio)
@@ -477,19 +1169,144 @@ class VistaModuloPrincipal(QWidget):
             self._crear_chart_distribucion_deuda(analitica.deuda_por_barrio)
         )
 
+    def _ancho_disponible_dashboard(self) -> int:
+        if hasattr(self, "_scroll_dashboard") and self._scroll_dashboard is not None:
+            return max(0, self._scroll_dashboard.viewport().width())
+        return max(0, self.width())
+
+    def _actualizar_disposicion_dashboard(self) -> None:
+        if not hasattr(self, "_layout_paneles_dashboard"):
+            return
+        ancho_actual = self._ancho_disponible_dashboard()
+        if ancho_actual <= 0 or ancho_actual == self._ultimo_ancho_dashboard:
+            return
+        self._ultimo_ancho_dashboard = ancho_actual
+        self._actualizar_disposicion_metricas()
+        self._actualizar_disposicion_paneles_dashboard()
+
+    def _actualizar_disposicion_metricas(self) -> None:
+        if not hasattr(self, "_grid_metricas") or not self._orden_metricas:
+            return
+
+        while self._grid_metricas.count():
+            self._grid_metricas.takeAt(0)
+
+        ancho = self._ancho_disponible_dashboard()
+        if ancho >= ANCHO_RUPTURA_METRICAS_4_COLUMNAS:
+            columnas_metricas = 4
+        elif ancho >= ANCHO_RUPTURA_METRICAS_3_COLUMNAS:
+            columnas_metricas = 3
+        elif ancho >= ANCHO_RUPTURA_METRICAS_2_COLUMNAS:
+            columnas_metricas = 2
+        else:
+            columnas_metricas = 1
+
+        for indice, codigo_metrica in enumerate(self._orden_metricas):
+            tarjeta = self._tarjetas_metricas.get(codigo_metrica)
+            if tarjeta is None:
+                continue
+            fila, columna = divmod(indice, columnas_metricas)
+            self._grid_metricas.addWidget(tarjeta, fila, columna)
+
+        for columna in range(columnas_metricas):
+            self._grid_metricas.setColumnStretch(columna, 1)
+
+    def _actualizar_disposicion_paneles_dashboard(self) -> None:
+        while self._layout_paneles_dashboard.count():
+            self._layout_paneles_dashboard.takeAt(0)
+
+        ancho = self._ancho_disponible_dashboard()
+        limite_expandido = 16777215
+
+        if ancho >= ANCHO_RUPTURA_DASHBOARD_AMPLIO:
+            self._modo_dashboard_actual = "amplio"
+            self._aplicar_alturas_paneles_dashboard(
+                tendencia=320,
+                ranking=320,
+                estados=276,
+                distribucion=276,
+                insights=276,
+            )
+            self._panel_ranking.setMaximumWidth(286)
+            self._panel_insights.setMaximumWidth(286)
+            self._layout_paneles_dashboard.addWidget(self._panel_tendencia, 0, 0, 1, 2)
+            self._layout_paneles_dashboard.addWidget(self._panel_ranking, 0, 2)
+            self._layout_paneles_dashboard.addWidget(self._panel_estados, 1, 0)
+            self._layout_paneles_dashboard.addWidget(self._panel_distribucion, 1, 1)
+            self._layout_paneles_dashboard.addWidget(self._panel_insights, 1, 2)
+            self._layout_paneles_dashboard.setColumnStretch(0, 3)
+            self._layout_paneles_dashboard.setColumnStretch(1, 3)
+            self._layout_paneles_dashboard.setColumnStretch(2, 2)
+            return
+
+        self._panel_ranking.setMaximumWidth(limite_expandido)
+        self._panel_insights.setMaximumWidth(limite_expandido)
+
+        if ancho >= ANCHO_RUPTURA_DASHBOARD_MEDIO:
+            self._modo_dashboard_actual = "medio"
+            self._aplicar_alturas_paneles_dashboard(
+                tendencia=302,
+                ranking=158,
+                estados=258,
+                distribucion=258,
+                insights=224,
+            )
+            self._layout_paneles_dashboard.addWidget(self._panel_tendencia, 0, 0, 1, 2)
+            self._layout_paneles_dashboard.addWidget(self._panel_ranking, 1, 0, 1, 2)
+            self._layout_paneles_dashboard.addWidget(self._panel_estados, 2, 0)
+            self._layout_paneles_dashboard.addWidget(self._panel_distribucion, 2, 1)
+            self._layout_paneles_dashboard.addWidget(self._panel_insights, 3, 0, 1, 2)
+            self._layout_paneles_dashboard.setColumnStretch(0, 1)
+            self._layout_paneles_dashboard.setColumnStretch(1, 1)
+            return
+
+        self._modo_dashboard_actual = "compacto"
+        self._aplicar_alturas_paneles_dashboard(
+            tendencia=288,
+            ranking=154,
+            estados=244,
+            distribucion=244,
+            insights=218,
+        )
+        self._layout_paneles_dashboard.addWidget(self._panel_tendencia, 0, 0)
+        self._layout_paneles_dashboard.addWidget(self._panel_ranking, 1, 0)
+        self._layout_paneles_dashboard.addWidget(self._panel_estados, 2, 0)
+        self._layout_paneles_dashboard.addWidget(self._panel_distribucion, 3, 0)
+        self._layout_paneles_dashboard.addWidget(self._panel_insights, 4, 0)
+        self._layout_paneles_dashboard.setColumnStretch(0, 1)
+
+    def _aplicar_alturas_paneles_dashboard(
+        self,
+        *,
+        tendencia: int,
+        ranking: int,
+        estados: int,
+        distribucion: int,
+        insights: int,
+    ) -> None:
+        self._establecer_altura_panel(self._panel_tendencia, tendencia)
+        self._establecer_altura_panel(self._panel_ranking, ranking)
+        self._establecer_altura_panel(self._panel_estados, estados)
+        self._establecer_altura_panel(self._panel_distribucion, distribucion)
+        self._establecer_altura_panel(self._panel_insights, insights)
+
+    @staticmethod
+    def _establecer_altura_panel(panel: QWidget, altura: int) -> None:
+        panel.setMinimumHeight(altura)
+        panel.setMaximumHeight(altura)
+
     def _reconstruir_sidebar(self, modulos: tuple[ModuloNavegacion, ...]) -> None:
         while self._contenedor_botones.count():
             item = self._contenedor_botones.takeAt(0)
             if item.widget() is not None:
                 item.widget().deleteLater()
         self._botones_modulos.clear()
+        self._secciones_sidebar.clear()
         secciones: dict[str, list[ModuloNavegacion]] = {
             "Vista general": [],
-            "Barrios": [],
-            "Abonados": [],
-            "Casas": [],
-            "Cobranza y control": [],
-            "Administracion": [],
+            "Registro y control": [],
+            "Cobranza": [],
+            "Administración": [],
             "Soporte": [],
             "Otros": [],
         }
@@ -502,24 +1319,26 @@ class VistaModuloPrincipal(QWidget):
         for titulo_seccion, modulos_seccion in secciones.items():
             if not modulos_seccion:
                 continue
-            widget_seccion = QFrame()
-            widget_seccion.setObjectName("seccionSidebarCard")
-            layout_seccion = QVBoxLayout(widget_seccion)
-            layout_seccion.setContentsMargins(12, 12, 12, 12)
-            layout_seccion.setSpacing(8)
-
-            etiqueta = QLabel(titulo_seccion.upper())
-            etiqueta.setObjectName("categoriaSidebar")
-            layout_seccion.addWidget(etiqueta)
+            widget_seccion = SeccionSidebarDesplegable(titulo_seccion)
+            self._secciones_sidebar[titulo_seccion] = widget_seccion
 
             for modulo in modulos_seccion:
-                boton = self._crear_boton_sidebar(modulo)
+                boton = self._crear_boton_sidebar(modulo, tipo="modulo")
                 boton.clicked.connect(
                     lambda checked=False, codigo=modulo.codigo: self._solicitar_modulo(codigo)
                 )
-                layout_seccion.addWidget(boton)
+                widget_seccion.agregar_boton(modulo.codigo, boton)
                 self._botones_modulos[modulo.codigo] = boton
 
+            expandida = self._estado_secciones_sidebar.get(titulo_seccion, False)
+            widget_seccion.establecer_expandida(expandida, forzar=True)
+            widget_seccion.marcar_modulo_activo(self._modulo_activo)
+            widget_seccion._boton_toggle.clicked.connect(
+                lambda checked=False, titulo=titulo_seccion, seccion=widget_seccion: self._registrar_estado_seccion_sidebar(
+                    titulo,
+                    seccion.esta_expandida(),
+                )
+            )
             self._contenedor_botones.addWidget(widget_seccion)
 
         self._contenedor_botones.addStretch(1)
@@ -528,9 +1347,19 @@ class VistaModuloPrincipal(QWidget):
         self.modulo_solicitado.emit(codigo)
         self.mostrar_modulo(codigo)
 
-    def _crear_boton_sidebar(self, modulo: ModuloNavegacion) -> QPushButton:
+    def _registrar_estado_seccion_sidebar(self, titulo: str, expandida: bool) -> None:
+        self._estado_secciones_sidebar[titulo] = expandida
+
+    def _alternar_panel_perfil_usuario(self) -> None:
+        if self._panel_perfil_usuario.isVisible():
+            self._panel_perfil_usuario.hide()
+            return
+        self._panel_perfil_usuario.mostrar_desde(self._boton_perfil_header)
+
+    def _crear_boton_sidebar(self, modulo: ModuloNavegacion, tipo: str = "modulo") -> QPushButton:
         boton = crear_boton_operativo(modulo.titulo)
         boton.setObjectName("botonSidebar")
+        boton.setProperty("tipoSidebar", tipo)
         boton.setIcon(obtener_icono_tabler_coloreado(modulo.icono, "#eef6ff", tamano=18))
         boton.setIconSize(boton.iconSize())
         boton.setToolTip(modulo.descripcion or modulo.titulo)
@@ -545,7 +1374,7 @@ class VistaModuloPrincipal(QWidget):
 
         label_logo = QLabel()
         label_logo.setObjectName("logoSidebar")
-        label_logo.setFixedSize(42, 42)
+        label_logo.setFixedSize(48, 48)
         label_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ruta_logo = self._gestor_rutas.obtener_ruta_logo_marca()
         if ruta_logo.exists():
@@ -553,8 +1382,8 @@ class VistaModuloPrincipal(QWidget):
             if not pixmap_logo.isNull():
                 label_logo.setPixmap(
                     pixmap_logo.scaled(
-                        34,
-                        34,
+                        40,
+                        40,
                         Qt.AspectRatioMode.KeepAspectRatio,
                         Qt.TransformationMode.SmoothTransformation,
                     )
@@ -579,16 +1408,12 @@ class VistaModuloPrincipal(QWidget):
     def _resolver_categoria_sidebar(codigo_modulo: str) -> str:
         if codigo_modulo == "dashboard":
             return "Vista general"
-        if codigo_modulo == "barrios":
-            return "Barrios"
-        if codigo_modulo in {"abonados", "atencion_abonado", "conexion_reconexion"}:
-            return "Abonados"
-        if codigo_modulo == "casas":
-            return "Casas"
-        if codigo_modulo in {"pagos", "historial_pagos", "morosidad", "planes_pago", "reportes"}:
-            return "Cobranza y control"
-        if codigo_modulo in {"usuarios", "configuracion"}:
-            return "Administracion"
+        if codigo_modulo in {"barrios", "abonados", "casas", "atencion_abonado", "conexion_reconexion"}:
+            return "Registro y control"
+        if codigo_modulo in {"pagos", "historial_pagos", "morosidad", "planes_pago"}:
+            return "Cobranza"
+        if codigo_modulo in {"usuarios", "configuracion", "reportes"}:
+            return "Administración"
         if codigo_modulo in {"ayuda_soporte"}:
             return "Soporte"
         return "Otros"
@@ -751,22 +1576,43 @@ class VistaModuloPrincipal(QWidget):
         return view
 
     def _animar_aparicion_dashboard(self) -> None:
-        self._animaciones_activas.clear()
         widgets = [
             *self._tarjetas_metricas.values(),
             *self._filas_ranking,
             *self._tarjetas_insight,
         ]
+        for animacion_activa in self._animaciones_activas:
+            if isinstance(animacion_activa, QSequentialAnimationGroup):
+                animacion_activa.stop()
+        for widget in widgets:
+            if widget.graphicsEffect() is not None:
+                widget.setGraphicsEffect(None)
+        self._animaciones_activas.clear()
         for indice, widget in enumerate(widgets):
             efecto = QGraphicsOpacityEffect(widget)
             widget.setGraphicsEffect(efecto)
+            efecto.setOpacity(0.0)
             animacion = QPropertyAnimation(efecto, b"opacity", self)
             animacion.setDuration(220)
             animacion.setStartValue(0.0)
             animacion.setEndValue(1.0)
             animacion.setEasingCurve(QEasingCurve.Type.OutCubic)
-            self._animaciones_activas.append((efecto, animacion))
-            QTimer.singleShot(indice * 35, animacion.start)
+            grupo = QSequentialAnimationGroup(self)
+            grupo.addAnimation(QPauseAnimation(indice * 35, grupo))
+            grupo.addAnimation(animacion)
+
+            def _finalizar_animacion(
+                widget_animado: QWidget = widget,
+                grupo_animado: QSequentialAnimationGroup = grupo,
+            ) -> None:
+                widget_animado.setGraphicsEffect(None)
+                if grupo_animado in self._animaciones_activas:
+                    self._animaciones_activas.remove(grupo_animado)
+                grupo_animado.deleteLater()
+
+            grupo.finished.connect(_finalizar_animacion)
+            self._animaciones_activas.append(grupo)
+            grupo.start()
 
     @staticmethod
     def _formatear_moneda(valor: float) -> str:
@@ -779,8 +1625,14 @@ class VistaModuloPrincipal(QWidget):
                 background: transparent;
             }
             QWidget#panelPrincipal,
-            QWidget#paginaDashboard {
+            QWidget#paginaDashboard,
+            QWidget#contenidoDashboard,
+            QScrollArea#scrollDashboard,
+            QScrollArea#scrollDashboard > QWidget > QWidget {
                 background: transparent;
+            }
+            QScrollArea#scrollDashboard {
+                border: none;
             }
             QFrame#sidebarPrincipal,
             QFrame#headerPrincipal {
@@ -810,12 +1662,35 @@ class VistaModuloPrincipal(QWidget):
             QFrame#panelUsuarioHeader {
                 background: rgba(255, 255, 255, 0.05);
                 border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 18px;
+                border-radius: 16px;
+            }
+            QPushButton#botonPerfilHeader {
+                min-width: 232px;
+                min-height: 60px;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.10);
+                border-radius: 16px;
+                text-align: left;
+            }
+            QPushButton#botonPerfilHeader:hover {
+                background: rgba(255, 255, 255, 0.09);
+                border-color: rgba(255, 255, 255, 0.16);
+            }
+            QLabel#avatarPerfilHeader {
+                background: rgba(109, 241, 220, 0.16);
+                border: 1px solid rgba(109, 241, 220, 0.24);
+                border-radius: 19px;
+                color: #ffffff;
+                font-size: 14px;
+                font-weight: 900;
+            }
+            QWidget#contenedorItemsSidebar {
+                background: transparent;
             }
             QLabel#logoSidebar {
                 background: rgba(255, 255, 255, 0.08);
                 border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 14px;
+                border-radius: 12px;
             }
             QFrame#separadorSidebar {
                 color: rgba(255, 255, 255, 0.10);
@@ -825,7 +1700,7 @@ class VistaModuloPrincipal(QWidget):
             }
             QLabel#marcaPrincipal {
                 color: #ffffff;
-                font-size: 22px;
+                font-size: 19px;
                 font-weight: 900;
             }
             QLabel#subtituloMarca,
@@ -833,49 +1708,66 @@ class VistaModuloPrincipal(QWidget):
             QLabel#perfilActivo,
             QLabel#periodoHeader {
                 color: rgba(235, 242, 248, 0.76);
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 600;
             }
             QLabel#descripcionPanel,
             QLabel#tabsSuaves {
                 color: #8b96a8;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 600;
             }
             QLabel#tituloPrincipal,
             QLabel#usuarioActivo {
                 color: #ffffff;
             }
-            QLabel#categoriaSidebar {
-                color: rgba(235, 242, 248, 0.68);
-                font-size: 11px;
-                font-weight: 800;
-                letter-spacing: 0.8px;
-                padding: 2px 4px 4px 4px;
+            QToolButton#botonToggleSidebar {
+                min-height: 28px;
+                border: none;
+                border-radius: 10px;
+                background: transparent;
+                color: rgba(245, 251, 255, 0.72);
+                font-size: 10px;
+                font-weight: 900;
+                text-align: left;
+                padding: 0 2px;
+            }
+            QToolButton#botonToggleSidebar:hover {
+                background: rgba(255, 255, 255, 0.05);
+            }
+            QToolButton#botonToggleSidebar[activa="true"] {
+                color: #ffffff;
             }
             QLabel#tituloPrincipal {
-                font-size: 22px;
+                font-size: 18px;
                 font-weight: 900;
             }
             QLabel#tituloPanel {
                 color: #1b2430;
-                font-size: 15px;
-                font-weight: 800;
-            }
-            QLabel#usuarioActivo {
                 font-size: 14px;
                 font-weight: 800;
             }
-            QPushButton#botonSidebar {
-                min-height: 44px;
-                border: 1px solid transparent;
-                border-radius: 16px;
-                background: rgba(255, 255, 255, 0.04);
-                color: rgba(245, 251, 255, 0.94);
+            QLabel#usuarioActivo {
                 font-size: 13px;
                 font-weight: 800;
+            }
+            QPushButton#botonSidebar {
+                min-height: 38px;
+                border: 1px solid transparent;
+                border-radius: 14px;
+                background: rgba(255, 255, 255, 0.04);
+                color: rgba(245, 251, 255, 0.94);
+                font-size: 12px;
+                font-weight: 800;
                 text-align: left;
-                padding: 0 16px;
+                padding: 0 13px;
+            }
+            QPushButton#botonSidebar[tipoSidebar="modulo"] {
+                margin-left: 8px;
+                padding-left: 14px;
+            }
+            QPushButton#botonSidebar[tipoSidebar="accion"] {
+                background: rgba(255, 255, 255, 0.06);
             }
             QPushButton#botonSidebar:hover {
                 background: rgba(255, 255, 255, 0.10);
@@ -894,33 +1786,33 @@ class VistaModuloPrincipal(QWidget):
                     stop: 1 rgba(237, 247, 252, 0.10)
                 );
                 border: 1px solid rgba(255, 255, 255, 0.24);
-                border-radius: 18px;
+                border-radius: 16px;
             }
             QLabel#insightTitulo {
                 color: rgba(64, 78, 98, 196);
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 700;
             }
             QLabel#insightValor {
                 color: #1b2430;
-                font-size: 23px;
+                font-size: 20px;
                 font-weight: 900;
             }
             QLabel#insightDetalle {
                 color: #6d7889;
-                font-size: 12px;
+                font-size: 11px;
             }
             QFrame#filaRanking {
                 background: transparent;
             }
             QLabel#rankingEtiqueta {
                 color: #374151;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 600;
             }
             QLabel#rankingValor {
                 color: #1f2530;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 700;
             }
             QProgressBar#rankingBarra {
@@ -931,6 +1823,52 @@ class VistaModuloPrincipal(QWidget):
             QProgressBar#rankingBarra::chunk {
                 background: rgba(31, 37, 48, 0.72);
                 border-radius: 4px;
+            }
+            QFrame#panelPerfilUsuario {
+                background: #2c2966;
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 22px;
+            }
+            QFrame#encabezadoPanelPerfil,
+            QFrame#bloquePanelPerfil,
+            QFrame#piePanelPerfil {
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.10);
+                border-radius: 18px;
+            }
+            QLabel#avatarPanelPerfil {
+                background: rgba(109, 241, 220, 0.16);
+                border: 1px solid rgba(109, 241, 220, 0.24);
+                border-radius: 27px;
+                color: #ffffff;
+                font-size: 18px;
+                font-weight: 900;
+            }
+            QLabel#nombrePanelPerfil {
+                color: #ffffff;
+                font-size: 16px;
+                font-weight: 900;
+            }
+            QLabel#rolPanelPerfil,
+            QLabel#tituloDatoPerfil,
+            QLabel#detallePanelPerfil {
+                color: rgba(235, 242, 248, 0.70);
+                font-size: 12px;
+                font-weight: 600;
+            }
+            QLabel#valorDatoPerfil,
+            QLabel#sistemaPanelPerfil {
+                color: #f5fbff;
+                font-size: 13px;
+                font-weight: 800;
+            }
+            QLabel#sistemaPanelPerfil {
+                font-size: 14px;
+            }
+            QLabel#iconoDatoPerfil {
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 12px;
             }
             """
         )

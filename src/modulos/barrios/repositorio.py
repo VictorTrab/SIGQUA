@@ -8,7 +8,9 @@ from typing import Protocol
 from comun.base_datos import GestorBaseDatos
 from modulos.barrios.entidades import (
     Barrio,
+    FILTRO_BARRIOS_ACTIVOS,
     FILTRO_BARRIOS_CON_ABONADOS,
+    FILTRO_BARRIOS_INACTIVOS,
     FILTRO_BARRIOS_SIN_ABONADOS,
     FILTRO_BARRIOS_TODOS,
     ResumenBarrios,
@@ -220,6 +222,10 @@ class RepositorioBarriosSQLite:
             condiciones.append("COALESCE(ab.total_abonados, 0) > 0")
         elif filtro_rapido == FILTRO_BARRIOS_SIN_ABONADOS:
             condiciones.append("COALESCE(ab.total_abonados, 0) = 0")
+        elif filtro_rapido == FILTRO_BARRIOS_ACTIVOS:
+            condiciones.append("b.estado = 'ACTIVO'")
+        elif filtro_rapido == FILTRO_BARRIOS_INACTIVOS:
+            condiciones.append("b.estado = 'INACTIVO'")
 
         return condiciones, parametros
 

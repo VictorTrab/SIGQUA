@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
-import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 
@@ -15,8 +16,8 @@ RUTA_SRC = RAIZ_PROYECTO / "src"
 if str(RUTA_SRC) not in sys.path:
     sys.path.insert(0, str(RUTA_SRC))
 
-from PySide6.QtWidgets import QApplication  # noqa: E402
 from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtWidgets import QApplication, QToolButton, QWidget  # noqa: E402
 
 from app import (  # noqa: E402
     ALTO_VENTANA_AUTENTICACION,
@@ -33,6 +34,8 @@ from modulos.autenticacion.vista import (  # noqa: E402
     VistaAutenticacion,
 )
 from modulos.mantenimiento.vista import VistaMantenimiento  # noqa: E402
+from modulos.barrios.vista import VistaBarrios  # noqa: E402
+from modulos.barrios.entidades import Barrio  # noqa: E402
 from modulos.principal.vista import VistaModuloPrincipal  # noqa: E402
 
 
@@ -50,14 +53,23 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 encoding="utf-8",
             )
 
+    @staticmethod
+    def _crear_raiz_temporal_prueba(prefijo: str) -> Path:
+        raiz_temporal = RAIZ_PROYECTO / ".codex-temp" / f"{prefijo}_{uuid.uuid4().hex}"
+        (raiz_temporal / "database" / "migrations").mkdir(parents=True, exist_ok=True)
+        return raiz_temporal
+
     def test_vista_usa_tres_paginas_reutilizables_y_navegacion_local(self) -> None:
         vista = VistaAutenticacion()
+        fondo_blur = vista._pagina_login.findChild(type(vista._boton_login.parentWidget()), "fondoBlurTarjeta")
 
         self.assertEqual(vista._stack.count(), 3)
         self.assertEqual(vista._boton_login.parentWidget().maximumWidth(), ANCHO_MAXIMO_TARJETA)
         self.assertGreater(vista.maximumWidth(), ANCHO_MAXIMO_TARJETA)
         self.assertEqual(COLOR_GRADIENTE_INICIAL, "#1abc9c")
         self.assertEqual(COLOR_GRADIENTE_FINAL, "#1f2c51")
+        self.assertIsNotNone(fondo_blur)
+        self.assertIsNone(fondo_blur.graphicsEffect())
         self.assertEqual(len(vista._campo_contrasena.actions()), 2)
         self.assertEqual(vista._campo_contrasena.echoMode(), vista._campo_contrasena.EchoMode.Password)
 
@@ -114,9 +126,8 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertEqual(eventos_olvido, [True])
 
     def test_app_compone_ventana_y_deja_login_con_tamano_fijo(self) -> None:
-        with tempfile.TemporaryDirectory() as directorio_temporal:
-            raiz_temporal = Path(directorio_temporal)
-            (raiz_temporal / "database" / "migrations").mkdir(parents=True, exist_ok=True)
+        raiz_temporal = self._crear_raiz_temporal_prueba("test_login_fijo")
+        try:
             self._copiar_migraciones(raiz_temporal)
 
             gestor_rutas = GestorRutas(raiz_proyecto=raiz_temporal)
@@ -138,11 +149,12 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 bool(ventana_principal.windowFlags() & Qt.WindowType.WindowCloseButtonHint)
             )
             ventana_principal.close()
+        finally:
+            shutil.rmtree(raiz_temporal, ignore_errors=True)
 
     def test_post_login_abre_modulo_principal_provisional(self) -> None:
-        with tempfile.TemporaryDirectory() as directorio_temporal:
-            raiz_temporal = Path(directorio_temporal)
-            (raiz_temporal / "database" / "migrations").mkdir(parents=True, exist_ok=True)
+        raiz_temporal = self._crear_raiz_temporal_prueba("test_post_login")
+        try:
             self._copiar_migraciones(raiz_temporal)
 
             gestor_rutas = GestorRutas(raiz_proyecto=raiz_temporal)
@@ -160,6 +172,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                     token_sesion="token-prueba-123",
                 )
             )
+            self.aplicacion.processEvents()
 
             self.assertIs(ventana_principal.centralWidget(), ventana_principal.contenedor_central)
             self.assertIsInstance(
@@ -174,12 +187,16 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertTrue(
                 bool(ventana_principal.windowFlags() & Qt.WindowType.WindowMaximizeButtonHint)
             )
+            self.assertTrue(
+                bool(ventana_principal.windowState() & Qt.WindowState.WindowMaximized)
+            )
             ventana_principal.close()
+        finally:
+            shutil.rmtree(raiz_temporal, ignore_errors=True)
 
     def test_logout_regresa_a_login_y_limpia_sesion(self) -> None:
-        with tempfile.TemporaryDirectory() as directorio_temporal:
-            raiz_temporal = Path(directorio_temporal)
-            (raiz_temporal / "database" / "migrations").mkdir(parents=True, exist_ok=True)
+        raiz_temporal = self._crear_raiz_temporal_prueba("test_logout")
+        try:
             self._copiar_migraciones(raiz_temporal)
 
             gestor_rutas = GestorRutas(raiz_proyecto=raiz_temporal)
@@ -225,11 +242,61 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 vista_autenticacion._mensaje_login.text(),
             )
             ventana_principal.close()
+        finally:
+            shutil.rmtree(raiz_temporal, ignore_errors=True)
+
+    def test_dashboard_principal_refluye_y_tiene_scroll_responsivo(self) -> None:
+        raiz_temporal = RAIZ_PROYECTO / ".codex-temp" / f"test_dashboard_{uuid.uuid4().hex}"
+        try:
+            (raiz_temporal / "database" / "migrations").mkdir(parents=True, exist_ok=True)
+            self._copiar_migraciones(raiz_temporal)
+
+            gestor_rutas = GestorRutas(raiz_proyecto=raiz_temporal)
+            _, ventana_principal, vista_autenticacion = crear_ventana_principal(gestor_rutas)
+
+            vista_autenticacion.autenticacion_exitosa.emit(
+                SesionIniciada(
+                    usuario=UsuarioAutenticado(
+                        identificador=1,
+                        nombre_usuario="admin",
+                        nombre_completo="Administrador del Sistema",
+                        correo="admin@sicap.local",
+                        estado="ACTIVO",
+                    ),
+                    token_sesion="token-dashboard",
+                )
+            )
+
+            vista_principal = ventana_principal.vista_modulo_principal
+            ventana_principal.show()
+            self.aplicacion.processEvents()
+            self.assertTrue(vista_principal._scroll_dashboard.widgetResizable())
+
+            ventana_principal.resize(1200, 760)
+            self.aplicacion.processEvents()
+            self.assertEqual(vista_principal._modo_dashboard_actual, "compacto")
+            self.assertGreater(vista_principal._scroll_dashboard.verticalScrollBar().maximum(), 0)
+
+            ventana_principal.resize(1600, 960)
+            self.aplicacion.processEvents()
+            self.assertEqual(vista_principal._modo_dashboard_actual, "medio")
+            self.assertGreater(vista_principal._scroll_dashboard.verticalScrollBar().maximum(), 0)
+
+            ventana_principal.resize(1900, 1080)
+            self.aplicacion.processEvents()
+            self.assertEqual(vista_principal._modo_dashboard_actual, "amplio")
+            self.assertIs(
+                vista_principal._stack_contenido.currentWidget(),
+                vista_principal._pagina_dashboard,
+            )
+            self.assertEqual(vista_principal._scroll_dashboard.verticalScrollBar().maximum(), 0)
+            ventana_principal.close()
+        finally:
+            shutil.rmtree(raiz_temporal, ignore_errors=True)
 
     def test_controlador_permite_abrir_restablecimiento_administrativo(self) -> None:
-        with tempfile.TemporaryDirectory() as directorio_temporal:
-            raiz_temporal = Path(directorio_temporal)
-            (raiz_temporal / "database" / "migrations").mkdir(parents=True, exist_ok=True)
+        raiz_temporal = self._crear_raiz_temporal_prueba("test_restablecimiento")
+        try:
             self._copiar_migraciones(raiz_temporal)
 
             gestor_rutas = GestorRutas(raiz_proyecto=raiz_temporal)
@@ -244,11 +311,12 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertIs(vista_autenticacion._stack.currentWidget(), vista_autenticacion._pagina_restablecer)
             self.assertIn("admin", vista_autenticacion._label_usuario_restablecer.text().lower())
             ventana_principal.close()
+        finally:
+            shutil.rmtree(raiz_temporal, ignore_errors=True)
 
     def test_superadmin_ve_y_abre_mantenimiento_tecnico(self) -> None:
-        with tempfile.TemporaryDirectory() as directorio_temporal:
-            raiz_temporal = Path(directorio_temporal)
-            (raiz_temporal / "database" / "migrations").mkdir(parents=True, exist_ok=True)
+        raiz_temporal = self._crear_raiz_temporal_prueba("test_superadmin")
+        try:
             self._copiar_migraciones(raiz_temporal)
 
             gestor_rutas = GestorRutas(raiz_proyecto=raiz_temporal)
@@ -283,6 +351,57 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 VistaModuloPrincipal,
             )
             ventana_principal.close()
+        finally:
+            shutil.rmtree(raiz_temporal, ignore_errors=True)
+
+    def test_vista_barrios_usa_radio_minimo_en_panel_interno_de_tabla(self) -> None:
+        vista = VistaBarrios()
+        vista.show()
+        self.aplicacion.processEvents()
+
+        panel_tabla = vista.findChild(QWidget, "panelTablaBarrios")
+        tabla = vista.findChild(type(vista._tabla), "tablaBarrios")
+        viewport = vista._tabla.viewport()
+
+        self.assertIsNotNone(panel_tabla)
+        self.assertIs(tabla, vista._tabla)
+        self.assertEqual(viewport.objectName(), "viewportTablaBarrios")
+        self.assertIn("QFrame#panelTablaBarrios", vista.styleSheet())
+        self.assertIn("QTableWidget#tablaBarrios", vista.styleSheet())
+        self.assertIn(f"border-radius: {vista.RADIO_PANEL_TABLA}px;", vista.styleSheet())
+        self.assertIn(f"padding: 0 0 {vista.RADIO_PANEL_TABLA}px 0;", vista.styleSheet())
+        self.assertIn("QTableWidget#tablaBarrios QHeaderView::section", vista.styleSheet())
+        self.assertEqual(vista._tabla.frameShape(), vista._tabla.Shape.NoFrame)
+        self.assertFalse(vista._tabla.horizontalHeader().stretchLastSection())
+
+        fila_acciones = vista._crear_acciones_fila(
+            Barrio(identificador=1, nombre="Centro", estado="ACTIVO")
+        )
+        botones_accion = fila_acciones.findChildren(QToolButton, "botonIconoFilaBarrio")
+        self.assertEqual(len(botones_accion), 3)
+        self.assertTrue(all(not boton.text() for boton in botones_accion))
+        self.assertTrue(all(not boton.icon().isNull() for boton in botones_accion))
+        self.assertTrue(all(boton.iconSize().width() == 18 for boton in botones_accion))
+        self.assertEqual(fila_acciones.minimumHeight(), 58)
+        vista.close()
+
+    def test_notificacion_barrios_desaparece_tras_temporizador(self) -> None:
+        vista = VistaBarrios()
+
+        vista.mostrar_mensaje("Barrio actualizado correctamente.")
+
+        self.assertFalse(vista._mensaje.isHidden())
+        self.assertTrue(vista._temporizador_mensaje.isActive())
+        self.assertEqual(
+            vista._temporizador_mensaje.interval(),
+            vista.DURACION_MENSAJE_MS,
+        )
+
+        vista._temporizador_mensaje.timeout.emit()
+
+        self.assertTrue(vista._mensaje.isHidden())
+        self.assertEqual(vista._mensaje.text(), "")
+        vista.close()
 
 
 if __name__ == "__main__":

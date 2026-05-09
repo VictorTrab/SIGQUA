@@ -1,5 +1,5 @@
 # Skill: documentacion_en_boveda
-Fecha de actualización: 2026-05-03
+Fecha de actualización: 2026-05-07
 
 ## Herencia
 Esta skill asume las reglas globales de `agents.md`.
@@ -30,7 +30,10 @@ Usar esta skill cuando la tarea implique:
 - preferir ubicar cada documento en la carpeta temática correcta;
 - mantener la documentación en español;
 - usar enlaces internos de Obsidian cuando aporten valor real;
-- no duplicar información si ya existe una nota adecuada.
+- no duplicar información si ya existe una nota adecuada;
+- si una investigación en la web produce una regla o criterio reutilizable para Codex, registrar el aprendizaje en la skill o rol correspondiente antes o junto con la nota externa;
+- usar esta skill para guardar documentación de trabajo, no para repetir reglas que ya quedaron institucionalizadas en `AGENTS.md`, roles o skills temáticas.
+- cuando se cree o refactorice la UI de un módulo, registrar también una nota de composición visual del módulo con: tipos de ventanas, widgets principales, modales, layouts, componentes reutilizados, estilos y `objectName` relevantes.
 
 ## Ubicación temática sugerida
 

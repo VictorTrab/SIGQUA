@@ -2,6 +2,10 @@
 
 from comun.ui.contenedor_apilado import ContenedorApiladoAjustable
 from comun.ui.componentes import (
+    BotonAccionContextual,
+    DialogoBaseSicap,
+    DialogoConfirmacionSicap,
+    DialogoMensajeSicap,
     TarjetaKPI,
     VistaPlaceholderModulo,
     configurar_tabla_operativa,
@@ -16,6 +20,10 @@ from comun.ui.iconos import (
 
 __all__ = [
     "ContenedorApiladoAjustable",
+    "BotonAccionContextual",
+    "DialogoBaseSicap",
+    "DialogoConfirmacionSicap",
+    "DialogoMensajeSicap",
     "TarjetaKPI",
     "VistaPlaceholderModulo",
     "configurar_tabla_operativa",

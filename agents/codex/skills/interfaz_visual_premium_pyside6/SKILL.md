@@ -1,63 +1,63 @@
 # Skill: interfaz_visual_premium_pyside6
 
-Fecha de actualización: 2026-05-06
+Fecha de actualizacion: 2026-05-07
 
 ## Herencia
-- Esta skill asume las reglas globales de `agents.md`.
+- Esta skill asume las reglas globales de `AGENTS.md`.
 - Usar junto con la skill de mejora UI basada en Figma MCP.
 - Aplicar antes de implementar cualquier pantalla nueva o al refactorizar una existente.
 - Pensada para SICAP, PySide6, escritorio administrativo y desarrollo por fases.
 
 ## Objetivo
-Guiar a Codex para crear interfaces bonitas, agradables, consistentes y sin errores de visualización.
-La meta no es copiar Figma Make literalmente, sino mejorar el diseño antes de implementarlo.
+Guiar a Codex para crear interfaces bonitas, agradables, consistentes y sin errores de visualizacion.
+La meta no es copiar Figma Make literalmente, sino mejorar el diseno antes de implementarlo.
 
-## Cuándo usarla
+## Cuando usarla
 Usar esta skill cuando:
 - se implemente una pantalla nueva;
-- se traduzca un diseño de Figma a PySide6;
-- existan problemas de espaciado, jerarquía, contraste o estados;
-- una interfaz se vea plana, rígida, saturada o poco profesional;
+- se traduzca un diseno de Figma a PySide6;
+- existan problemas de espaciado, jerarquia, contraste o estados;
+- una interfaz se vea plana, rigida, saturada o poco profesional;
 - haya errores al redimensionar o al usar resoluciones distintas.
 
 ## Principios obligatorios
 
 ### 1. No copiar Figma Make a ciegas
 Antes de implementar, analizar:
-- qué ayuda al flujo;
-- qué sobra;
-- qué se repite;
-- qué rompe la jerarquía visual;
-- qué puede simplificarse.
+- que ayuda al flujo;
+- que sobra;
+- que se repite;
+- que rompe la jerarquia visual;
+- que puede simplificarse.
 
 Siempre decidir:
 - dejar;
 - modificar;
 - eliminar.
 
-### 2. No usar tamaños fijos como base del diseño
-- No diseñar para una sola resolución.
-- No fijar geometrías manuales si un layout puede resolverlo.
+### 2. No usar tamanos fijos como base del diseno
+- No disenar para una sola resolucion.
+- No fijar geometrias manuales si un layout puede resolverlo.
 - Usar layouts, stretch, spacers, sizePolicy, sizeHint y minimumSizeHint.
-- La interfaz debe mantenerse usable al maximizar, restaurar o cambiar de resolución.
-- Si una zona puede crecer demasiado, limitarla con un ancho máximo razonable.
+- La interfaz debe mantenerse usable al maximizar, restaurar o cambiar de resolucion.
+- Si una zona puede crecer demasiado, limitarla con un ancho maximo razonable.
 
 ### 3. Usar neutros con temperatura, no grises puros como fondo principal
 - Evitar fondos `#FFFFFF`, `#000000` y grises puros como base visual general.
 - Templar los neutros con un ligero matiz de la marca o del contexto visual.
-- Usar superficies vivas, no “grises muertos”.
+- Usar superficies vivas, no "grises muertos".
 - Mantener el matiz sutil; no convertir el fondo en un color de marca saturado.
-- Sombras, bordes suaves y texto secundario deben sentirse parte del mismo sistema cromático.
+- Sombras, bordes suaves y texto secundario deben sentirse parte del mismo sistema cromatico.
 
 ### 4. Separar color por roles
-Definir siempre colores por función:
+Definir siempre colores por funcion:
 - fondo base;
 - superficie;
 - texto principal;
 - texto secundario;
 - borde;
 - acento de marca;
-- éxito;
+- exito;
 - advertencia;
 - error;
 - estado deshabilitado;
@@ -66,14 +66,14 @@ Definir siempre colores por función:
 - pressed;
 - selected.
 
-No elegir colores sueltos por intuición en cada pantalla.
+No elegir colores sueltos por intuicion en cada pantalla.
 Crear primero una mini escala visual reutilizable.
 
 ### 5. Mantener contraste suficiente
 - Todo texto normal debe conservar contraste legible.
-- No sacrificar legibilidad por estética.
+- No sacrificar legibilidad por estetica.
 - Si un color se ve bonito pero reduce lectura, corregirlo.
-- El texto secundario debe seguir siendo legible, no “fantasma”.
+- El texto secundario debe seguir siendo legible, no "fantasma".
 
 ### 6. Hacer visible el estado interactivo
 Todo control interactivo debe mostrar claramente:
@@ -83,45 +83,45 @@ Todo control interactivo debe mostrar claramente:
 - pressed;
 - deshabilitado;
 - error;
-- éxito si aplica.
+- exito si aplica.
 
 Nunca depender solo del color para comunicar estado.
-Acompañar con borde, grosor, fondo, icono o texto de apoyo cuando haga falta.
+Acompanar con borde, grosor, fondo, icono o texto de apoyo cuando haga falta.
 
 ### 7. Respetar foco de teclado y accesibilidad
-- Todo input, botón, combo, tabla y control navegable debe tener foco visible.
+- Todo input, boton, combo, tabla y control navegable debe tener foco visible.
 - El foco no debe desaparecer por estilos decorativos.
-- Si el diseño usa borde muy sutil, reforzar el foco con un anillo o borde más marcado.
-- Validar navegación por teclado en formularios importantes.
+- Si el diseno usa borde muy sutil, reforzar el foco con un anillo o borde mas marcado.
+- Validar navegacion por teclado en formularios importantes.
 
-### 8. Construir jerarquía visual real
+### 8. Construir jerarquia visual real
 Antes de implementar cada pantalla, identificar:
-- acción principal;
-- acción secundaria;
-- información primaria;
-- información de apoyo;
-- alertas o estados críticos.
+- accion principal;
+- accion secundaria;
+- informacion primaria;
+- informacion de apoyo;
+- alertas o estados criticos.
 
-La jerarquía se construye con:
-- tamaño;
-- peso tipográfico;
+La jerarquia se construye con:
+- tamano;
+- peso tipografico;
 - contraste;
 - espacio;
-- agrupación;
-- elevación;
-- alineación.
+- agrupacion;
+- elevacion;
+- alineacion.
 
 No usar color de marca para todo.
-La acción principal debe destacar, pero no contaminar toda la pantalla.
+La accion principal debe destacar, pero no contaminar toda la pantalla.
 
 ### 9. Usar espacio con sistema
 - Mantener una escala consistente de espaciado.
-- Preferir múltiplos estables.
-- Repetir el mismo patrón de márgenes y padding entre pantallas similares.
-- Evitar bloques apretados o con separación arbitraria.
+- Preferir multiplos estables.
+- Repetir el mismo patron de margenes y padding entre pantallas similares.
+- Evitar bloques apretados o con separacion arbitraria.
 - El espacio debe ayudar a leer y agrupar.
 
-### 10. Agrupar por intención, no solo por proximidad
+### 10. Agrupar por intencion, no solo por proximidad
 Cada pantalla debe dividirse en bloques claros:
 - encabezado;
 - filtros;
@@ -131,18 +131,18 @@ Cada pantalla debe dividirse en bloques claros:
 - acciones;
 - mensajes de estado.
 
-Si dos elementos no pertenecen al mismo bloque lógico, no deben competir visualmente.
+Si dos elementos no pertenecen al mismo bloque logico, no deben competir visualmente.
 
 ### 11. Limitar ancho de lectura y formularios
 - Formularios e inputs no deben expandirse indefinidamente en monitores grandes.
-- Usar contenedores internos con ancho máximo razonable.
-- Tablas sí pueden aprovechar más ancho, pero con columnas bien priorizadas.
-- Los diálogos no deben ser ni claustrofóbicos ni gigantes sin necesidad.
+- Usar contenedores internos con ancho maximo razonable.
+- Tablas si pueden aprovechar mas ancho, pero con columnas bien priorizadas.
+- Los dialogos no deben ser ni claustrofobicos ni gigantes sin necesidad.
 
-### 12. Usar bordes, radios y sombras con moderación
+### 12. Usar bordes, radios y sombras con moderacion
 - Bordes para separar y definir.
 - Radios para suavizar.
-- Sombras para elevación real, no para decorar todo.
+- Sombras para elevacion real, no para decorar todo.
 - No mezclar bordes fuertes con sombras fuertes en todos los elementos.
 - Si una tarjeta ya se separa por fondo y espacio, no agregar ruido extra.
 
@@ -150,62 +150,72 @@ Si dos elementos no pertenecen al mismo bloque lógico, no deben competir visual
 Eliminar:
 - decoraciones que no aportan;
 - demasiados chips visibles al mismo tiempo;
-- demasiados colores semánticos simultáneos;
+- demasiados colores semanticos simultaneos;
 - fondos con efectos innecesarios;
-- líneas divisorias por costumbre;
+- lineas divisorias por costumbre;
 - botones con el mismo nivel visual.
 
-### 14. Diseñar modo claro y oscuro con intención
+### 14. Disenar modo claro y oscuro con intencion
 - Modo oscuro no es negro puro.
-- Usar profundidad, no vacío.
-- Revisar que el sistema mantenga contraste y jerarquía en ambos temas si aplica.
-- No invertir colores manualmente sin revisar estados y elevación.
+- Usar profundidad, no vacio.
+- Revisar que el sistema mantenga contraste y jerarquia en ambos temas si aplica.
+- No invertir colores manualmente sin revisar estados y elevacion.
 
 ### 15. Pensar en escritorio real
 Como SICAP es una app de escritorio:
 - aprovechar ancho para claridad, no para llenar por llenar;
-- usar paneles, tablas y formularios con buena distribución;
-- evitar pantallas tipo móvil estiradas;
-- mantener menús, encabezados y áreas de trabajo consistentes;
-- priorizar productividad y lectura rápida.
+- usar paneles, tablas y formularios con buena distribucion;
+- evitar pantallas tipo movil estiradas;
+- mantener menus, encabezados y areas de trabajo consistentes;
+- priorizar productividad y lectura rapida.
 
-## Procedimiento mínimo por pantalla
+## Procedimiento minimo por pantalla
 Antes de codificar, responder en breve:
-1. propósito de la pantalla;
-2. acción principal;
-3. datos más importantes;
-4. errores visuales del diseño fuente;
-5. qué se deja;
-6. qué se modifica;
-7. qué se elimina.
+1. proposito de la pantalla;
+2. accion principal;
+3. datos mas importantes;
+4. errores visuales del diseno fuente;
+5. que se deja;
+6. que se modifica;
+7. que se elimina.
 
 Luego implementar.
 
 ## Checklist obligatorio antes de cerrar una pantalla
-- ¿Se adapta al redimensionamiento?
-- ¿Tiene jerarquía visual clara?
-- ¿El contraste es legible?
-- ¿Los estados interactivos son visibles?
-- ¿El foco de teclado se ve?
-- ¿Los formularios no están demasiado anchos?
-- ¿La pantalla evita ruido visual?
-- ¿Usa espacio consistente?
-- ¿Se siente parte del mismo sistema que el resto?
-- ¿Se ve mejor que el diseño fuente y no solo igual?
+- Se adapta al redimensionamiento?
+- Tiene jerarquia visual clara?
+- El contraste es legible?
+- Los estados interactivos son visibles?
+- El foco de teclado se ve?
+- Los formularios no estan demasiado anchos?
+- La pantalla evita ruido visual?
+- Usa espacio consistente?
+- Se siente parte del mismo sistema que el resto?
+- Se ve mejor que el diseno fuente y no solo igual?
 
-## Errores que Codex debe corregir automáticamente
+## Errores que Codex debe corregir automaticamente
 - fondos planos con grises puros;
 - formularios demasiado anchos;
-- botones sin jerarquía;
+- botones sin jerarquia;
 - inputs sin foco visible;
 - uso excesivo del color de marca;
 - tablas sin aire visual;
-- modales gigantes o muy pequeños;
+- modales gigantes o muy pequenos;
 - chips o filtros repetidos;
-- secciones sin agrupación clara;
+- secciones sin agrupacion clara;
 - layouts que se rompen al maximizar;
-- textos secundarios demasiado débiles;
+- textos secundarios demasiado debiles;
 - ausencia de estados hover, focus o disabled.
 
+## Reglas tecnicas PySide6 para no repetir errores
+- cuando una mejora toque modales, popovers, dialogs u overlays, estilizar desde un contenedor raiz comun y no con `setStyleSheet()` aislado sobre cada hijo visible;
+- si se necesita cambiar el color base de un modal, verificar que encabezado, cuerpo, pie y bloques internos compartan la misma regla sin introducir bordes o lineas parasitas;
+- recordar que `QWidget` propaga pintado y estilos a hijos; por eso un override mal dirigido puede contaminar `QLabel`, `QFrame` o celdas internas;
+- para animaciones con `QPropertyAnimation`, asegurar que el target y su parent vivan toda la animacion;
+- evitar `QTimer.singleShot(..., animacion.start)` si la animacion puede quedar sin target antes de arrancar;
+- no liberar manualmente efectos graficos o animaciones si Qt ya toma propiedad de ellos por el parent o por `setGraphicsEffect()`;
+- en Windows, no asumir que maximizar o usar `availableGeometry()` sobre toda la ventana es inocuo; validar que sigan visibles los botones del sistema y que el contenido no exceda el area util;
+- si una pantalla se vuelve demasiado grande, corregir primero `sizeHint`, `minimumSizeHint`, anchos fijos y paneles laterales antes de forzar geometria externa.
+
 ## Resultado esperado
-Interfaces de escritorio limpias, agradables, consistentes y profesionales, con buen uso del color, mejor jerarquía visual, espaciado sólido, estados claros y sin errores de visualización al cambiar tamaño o resolución.
+Interfaces de escritorio limpias, agradables, consistentes y profesionales, con buen uso del color, mejor jerarquia visual, espaciado solido, estados claros y sin errores de visualizacion al cambiar tamano o resolucion.

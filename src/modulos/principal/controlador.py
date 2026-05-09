@@ -30,6 +30,7 @@ class ControladorModuloPrincipal:
         self._callback_apertura_mantenimiento: Callable[[], None] | None = None
 
     def mostrar_inicio(self, usuario: UsuarioAutenticado) -> None:
+        self.vista_modulo_principal.preparar_perfil_usuario(usuario.correo)
         estado = self.servicio_modulo_principal.obtener_estado_para_usuario(usuario)
         self.vista_modulo_principal.mostrar_estado(estado)
 

@@ -1,5 +1,5 @@
 # Reglas globales del agente Codex para SICAP
-Fecha de actualizacion: 2026-05-06
+Fecha de actualizacion: 2026-05-07
 
 ## Proposito
 Este archivo define las reglas globales y obligatorias para trabajar SICAP con Codex.
@@ -26,6 +26,13 @@ Para cada tarea:
 - cargar solo 1 rol principal desde `agents/codex/roles/`;
 - cargar 0 o 1 skill de apoyo desde `agents/codex/skills/`;
 - evitar leer reglas completas no relacionadas con la tarea actual.
+
+## Regla de consulta documental
+Antes de buscar informacion fuera del proyecto:
+- revisar primero la documentacion ya presente en el repositorio, `AGENTS.md`, roles, skills, notas tecnicas y comentarios utiles del codigo;
+- si la respuesta no existe o es insuficiente, buscar en la web usando como fuente principal la documentacion oficial aplicable;
+- si la investigacion externa deja una regla, hallazgo o criterio reutilizable para futuras tareas, resumirlo y agregarlo en la skill o rol correspondiente;
+- evitar duplicar la misma regla en varios archivos cuando baste con una referencia clara desde el documento mas adecuado.
 
 ## Reglas obligatorias
 1. Usar arquitectura modular con modulos dentro de `src/modulos/`.
@@ -59,6 +66,15 @@ Para cada tarea:
 24. El modulo de mantenimiento debe quedar reservado para `SUPERADMINISTRADOR`.
 25. La recuperacion de acceso vigente es local y administrativa, nunca por correo en esta version.
 26. Todo dato precargado, semilla, ejemplo o registro marcado para desarrollo dentro del repositorio o de la base local debe considerarse exclusivamente dato de prueba y nunca dato productivo real.
+27. Antes de cambiar infraestructura visual de PySide6 como modales, animaciones, geometria o estilo global, verificar primero documentacion oficial de Qt for Python y usarla como fuente principal.
+28. En PySide6, no aplicar colores o bordes globales de ventanas con `setStyleSheet()` directo sobre cada hijo visible si la intencion es estilizar el conjunto; preferir selectores por `objectName` desde el contenedor raiz porque los estilos y el pintado se propagan a los hijos.
+29. En modales y ventanas flotantes, el color base y las variaciones visuales deben definirse desde un contenedor raiz comun; evitar mezclar overrides locales por widget que generen lineas parasitas, bordes fantasmas o inconsistencias entre encabezado, cuerpo y pie.
+30. En animaciones PySide6, cada `QPropertyAnimation` debe conservar `targetObject` y `parent` validos durante todo el ciclo; no arrancar animaciones diferidas si el objeto puede desaparecer antes, y no llamar `deleteLater()` sobre efectos graficos cuyo ciclo de vida ya controla Qt al desmontarlos del widget.
+31. Al pasar de login fijo a shell principal en Windows, no forzar geometria equivalente a pantalla completa con `setGeometry(availableGeometry)` ni asumir que maximizar siempre es seguro; preferir `resize()` con limites razonables, centrar la ventana y verificar que la barra del sistema conserve botones visibles.
+32. Toda correccion de UI que toque ventanas, modales, animaciones o geometria debe validarse al menos con: compilacion Python, una prueba `offscreen` de instanciacion y una verificacion visual o de tamaño efectivo para detectar regresiones de layout o controles ocultos.
+33. En Windows, evitar agregar o aumentar bordes redondeados en ventanas modales top-level personalizadas; `setMask()` produce recorte visual tosco y halos perceptibles en esquinas. Para modales del sistema, preferir radio minimo practico (por ejemplo `4px`) o esquinas rectas.
+34. Cuando una tarea requiera investigacion tecnica, buscar primero antecedentes dentro del proyecto; solo si faltan o no alcanzan, consultar la web y luego persistir el aprendizaje reutilizable en la skill o rol mas cercano al tema.
+35. Cuando se cree o refactorice la UI de un modulo, documentar en la boveda externa la composicion del modulo: tipos de ventanas o widgets usados, modales, layouts principales, componentes reutilizados, estilos relevantes, `objectName` importantes y flujo visual base.
 
 ## Documentos tematicos
 Consultar segun el tipo de tarea:

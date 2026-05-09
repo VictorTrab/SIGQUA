@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QElapsedTimer, QEvent, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
@@ -18,24 +18,31 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QSizePolicy,
     QTableWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from comun.ui import (
+    BotonAccionContextual,
+    DialogoBaseSicap,
+    DialogoConfirmacionSicap,
+    DialogoMensajeSicap,
     configurar_tabla_operativa,
     crear_boton_operativo,
     crear_item_tabla,
     obtener_icono_tabler_coloreado,
 )
+from comun.ui.componentes import COLOR_FONDO_DIALOGO, RADIO_TARJETA_DIALOGO
 from modulos.barrios.entidades import (
     Barrio,
+    FILTRO_BARRIOS_ACTIVOS,
     FILTRO_BARRIOS_CON_ABONADOS,
+    FILTRO_BARRIOS_INACTIVOS,
     FILTRO_BARRIOS_SIN_ABONADOS,
     FILTRO_BARRIOS_TODOS,
     FormularioBarrio,
@@ -50,25 +57,25 @@ class TarjetaResumenBarrio(QFrame):
     def __init__(self, icono: str, color_icono: str) -> None:
         super().__init__()
         self.setObjectName("tarjetaResumenBarrios")
-        self.setMinimumHeight(116)
+        self.setMinimumHeight(96)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(14)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
 
         self._icono = QLabel("")
         self._icono.setObjectName("iconoTarjetaResumen")
-        self._icono.setFixedSize(44, 44)
+        self._icono.setFixedSize(38, 38)
         self._icono.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._icono.setPixmap(
-            obtener_icono_tabler_coloreado(icono, color_icono, tamano=20).pixmap(20, 20)
+            obtener_icono_tabler_coloreado(icono, color_icono, tamano=18).pixmap(18, 18)
         )
         self._icono.setProperty("colorTarjeta", color_icono)
 
         bloque_texto = QVBoxLayout()
         bloque_texto.setContentsMargins(0, 0, 0, 0)
-        bloque_texto.setSpacing(3)
+        bloque_texto.setSpacing(2)
 
         self._titulo = QLabel("")
         self._titulo.setObjectName("tituloTarjetaResumen")
@@ -92,17 +99,58 @@ class TarjetaResumenBarrio(QFrame):
         self._detalle.setText(detalle)
 
 
-class DialogoFormularioBarrio(QDialog):
+class BotonIconoFilaBarrio(QToolButton):
+    """Boton de accion compacto con icono centrado y color en hover."""
+
+    COLOR_BASE = "#c8d6f1"
+    INTERVALO_TOOLTIP_MS = 1600
+
+    def __init__(self, icono: str, color_hover: str, tooltip: str) -> None:
+        super().__init__()
+        self._icono = icono
+        self._color_hover = color_hover
+        self._temporizador_tooltip = QElapsedTimer()
+        self.setObjectName("botonIconoFilaBarrio")
+        self.setToolTip(tooltip)
+        self.setToolTipDuration(1400)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setAutoRaise(True)
+        self.setFixedSize(32, 32)
+        self.setIconSize(QSize(18, 18))
+        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self._actualizar_icono(self.COLOR_BASE)
+
+    def event(self, evento: QEvent) -> bool:
+        if evento.type() == QEvent.Type.ToolTip:
+            if (
+                self._temporizador_tooltip.isValid()
+                and self._temporizador_tooltip.elapsed() < self.INTERVALO_TOOLTIP_MS
+            ):
+                return True
+            self._temporizador_tooltip.restart()
+        return super().event(evento)
+
+    def enterEvent(self, evento: object) -> None:
+        self._actualizar_icono(self._color_hover)
+        super().enterEvent(evento)
+
+    def leaveEvent(self, evento: object) -> None:
+        self._actualizar_icono(self.COLOR_BASE)
+        super().leaveEvent(evento)
+
+    def _actualizar_icono(self, color_icono: str) -> None:
+        self.setIcon(obtener_icono_tabler_coloreado(self._icono, color_icono, tamano=18))
+
+
+class DialogoFormularioBarrio(DialogoBaseSicap):
     """Modal para crear o editar barrios."""
 
     def __init__(self, barrio: Barrio | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._barrio = barrio
-        self.setModal(True)
         self.setMinimumWidth(460)
-        self.setWindowTitle("Editar barrio" if barrio else "Nuevo barrio")
         self._construir_ui()
-        self._aplicar_estilos()
 
     def obtener_formulario(self) -> FormularioBarrio:
         return FormularioBarrio(
@@ -121,17 +169,19 @@ class DialogoFormularioBarrio(QDialog):
         super().accept()
 
     def _construir_ui(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 22, 22, 22)
-        layout.setSpacing(16)
-
         titulo = QLabel("Editar barrio" if self._barrio else "Nuevo barrio")
-        titulo.setObjectName("tituloDialogoBarrio")
+        titulo.setObjectName("tituloDialogoSicap")
         descripcion = QLabel(
             "Completa el formulario con la informacion principal del barrio."
         )
-        descripcion.setObjectName("descripcionDialogoBarrio")
+        descripcion.setObjectName("descripcionDialogoSicap")
         descripcion.setWordWrap(True)
+
+        panel_formulario = QFrame()
+        panel_formulario.setObjectName("bloqueDialogoSicap")
+        layout_panel_formulario = QVBoxLayout(panel_formulario)
+        layout_panel_formulario.setContentsMargins(18, 18, 18, 18)
+        layout_panel_formulario.setSpacing(14)
 
         formulario = QFormLayout()
         formulario.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -155,84 +205,52 @@ class DialogoFormularioBarrio(QDialog):
         formulario.addRow("Nombre del barrio", self._campo_nombre)
         formulario.addRow("Estado", self._combo_estado)
         formulario.addRow("Observaciones", self._campo_observaciones)
+        layout_panel_formulario.addLayout(formulario)
 
         self._mensaje = QLabel("")
-        self._mensaje.setObjectName("mensajeDialogoBarrio")
+        self._mensaje.setObjectName("mensajeErrorDialogoSicap")
         self._mensaje.setVisible(False)
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(10)
-        fila_acciones.addStretch(1)
-        boton_cancelar = crear_boton_operativo("Cancelar")
-        boton_guardar = crear_boton_operativo("Guardar cambios", principal=True)
+        boton_cancelar = BotonAccionContextual(
+            "Cancelar",
+            "arrow-left.svg",
+            "neutro",
+            centrado=True,
+        )
+        boton_guardar = BotonAccionContextual(
+            "Guardar cambios",
+            "circle-check.svg",
+            "primario",
+            centrado=True,
+        )
+        boton_cancelar.setMinimumWidth(148)
+        boton_guardar.setMinimumWidth(176)
         boton_cancelar.clicked.connect(self.reject)
         boton_guardar.clicked.connect(self.accept)
         fila_acciones.addWidget(boton_cancelar)
+        fila_acciones.addStretch(1)
         fila_acciones.addWidget(boton_guardar)
 
-        layout.addWidget(titulo)
-        layout.addWidget(descripcion)
-        layout.addLayout(formulario)
-        layout.addWidget(self._mensaje)
-        layout.addLayout(fila_acciones)
-
-    def _aplicar_estilos(self) -> None:
         self.setStyleSheet(
-            """
-            QDialog {
-                background: #1f2a44;
-                border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 24px;
-            }
-            QLabel#tituloDialogoBarrio {
-                color: #ffffff;
-                font-size: 20px;
-                font-weight: 900;
-            }
-            QLabel#descripcionDialogoBarrio,
-            QLabel#mensajeDialogoBarrio {
-                color: rgba(232, 239, 249, 0.80);
-                font-size: 13px;
-            }
-            QLabel#mensajeDialogoBarrio {
-                color: #ffd7d2;
-                background: rgba(191, 60, 44, 0.18);
-                border: 1px solid rgba(255, 205, 199, 0.20);
-                border-radius: 14px;
-                padding: 10px 12px;
-                font-weight: 700;
-            }
+            self.styleSheet()
+            + """
             QLabel {
                 color: #f5fbff;
                 font-size: 13px;
                 font-weight: 700;
             }
-            QLineEdit, QComboBox, QPlainTextEdit {
-                border: 1px solid rgba(255, 255, 255, 0.18);
-                border-radius: 14px;
-                background: rgba(255, 255, 255, 0.11);
-                color: #f5fbff;
-                padding: 10px 12px;
-                font-size: 13px;
-            }
-            QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus {
-                border-color: rgba(109, 241, 220, 0.40);
-                background: rgba(255, 255, 255, 0.16);
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 24px;
-            }
-            QComboBox QAbstractItemView {
-                background: #24304d;
-                color: #f5fbff;
-                selection-background-color: rgba(109, 241, 220, 0.22);
-            }
             """
         )
+        self.layout_cabecera.addWidget(titulo)
+        self.layout_cabecera.addWidget(descripcion)
+        self.layout_cuerpo.addWidget(panel_formulario)
+        self.layout_cuerpo.addWidget(self._mensaje)
+        self.layout_pie.addLayout(fila_acciones)
 
 
-class DialogoDetalleBarrio(QDialog):
+class DialogoDetalleBarrio(DialogoBaseSicap):
     """Modal para consultar detalle del barrio."""
 
     def __init__(
@@ -245,34 +263,27 @@ class DialogoDetalleBarrio(QDialog):
         self._barrio = barrio
         self._fecha_actualizada = fecha_actualizada
         self._accion_resultado = "cerrar"
-        self.setModal(True)
         self.setMinimumWidth(560)
-        self.setWindowTitle("Detalle de barrio")
         self._construir_ui()
-        self._aplicar_estilos()
 
     @property
     def accion_resultado(self) -> str:
         return self._accion_resultado
 
     def _construir_ui(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 22, 22, 22)
-        layout.setSpacing(16)
-
         titulo = QLabel("Detalle de barrio")
-        titulo.setObjectName("tituloDialogoBarrio")
+        titulo.setObjectName("tituloDialogoSicap")
         descripcion = QLabel(
             "Consulta informacion general, estado operativo y estadisticas del barrio."
         )
-        descripcion.setObjectName("descripcionDialogoBarrio")
+        descripcion.setObjectName("descripcionDialogoSicap")
         descripcion.setWordWrap(True)
 
-        encabezado = QFrame()
-        encabezado.setObjectName("bloqueDetalleBarrio")
-        encabezado_layout = QVBoxLayout(encabezado)
-        encabezado_layout.setContentsMargins(18, 18, 18, 18)
-        encabezado_layout.setSpacing(10)
+        panel_detalle = QFrame()
+        panel_detalle.setObjectName("panelContenidoDetalleBarrio")
+        panel_detalle_layout = QVBoxLayout(panel_detalle)
+        panel_detalle_layout.setContentsMargins(16, 16, 16, 16)
+        panel_detalle_layout.setSpacing(14)
 
         fila_superior = QHBoxLayout()
         fila_superior.setSpacing(12)
@@ -324,17 +335,35 @@ class DialogoDetalleBarrio(QDialog):
         )
         observaciones.setObjectName("campoDetalleBarrioAmplio")
 
-        encabezado_layout.addLayout(fila_superior)
-        encabezado_layout.addLayout(grid_info)
-        encabezado_layout.addLayout(fila_metricas)
-        encabezado_layout.addWidget(observaciones)
+        separador_acciones = QFrame()
+        separador_acciones.setObjectName("separadorDetalleBarrio")
+        separador_acciones.setFixedHeight(1)
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(10)
-        boton_cerrar = crear_boton_operativo("Cerrar")
-        boton_ver_abonados = crear_boton_operativo("Ver abonados")
-        boton_ver_casas = crear_boton_operativo("Ver casas")
-        boton_editar = crear_boton_operativo("Editar", principal=True)
+        boton_cerrar = BotonAccionContextual(
+            "Cerrar",
+            "arrow-left.svg",
+            "neutro",
+            centrado=True,
+        )
+        boton_ver_abonados = BotonAccionContextual(
+            "Ver abonados",
+            "user.svg",
+            "informacion",
+            centrado=True,
+        )
+        boton_ver_casas = BotonAccionContextual(
+            "Ver casas",
+            "home.svg",
+            "informacion",
+            centrado=True,
+        )
+        boton_editar = BotonAccionContextual("Editar", "key.svg", "edicion", centrado=True)
+        boton_cerrar.setMinimumWidth(136)
+        boton_ver_abonados.setMinimumWidth(156)
+        boton_ver_casas.setMinimumWidth(140)
+        boton_editar.setMinimumWidth(132)
 
         boton_cerrar.clicked.connect(self.reject)
         boton_ver_abonados.clicked.connect(self._mostrar_aviso_abonados)
@@ -347,10 +376,18 @@ class DialogoDetalleBarrio(QDialog):
         fila_acciones.addWidget(boton_ver_casas)
         fila_acciones.addWidget(boton_editar)
 
-        layout.addWidget(titulo)
-        layout.addWidget(descripcion)
-        layout.addWidget(encabezado)
-        layout.addLayout(fila_acciones)
+        panel_detalle_layout.addLayout(fila_superior)
+        panel_detalle_layout.addLayout(grid_info)
+        panel_detalle_layout.addLayout(fila_metricas)
+        panel_detalle_layout.addWidget(observaciones)
+        panel_detalle_layout.addWidget(separador_acciones)
+        panel_detalle_layout.addLayout(fila_acciones)
+
+        self.layout_cabecera.addWidget(titulo)
+        self.layout_cabecera.addWidget(descripcion)
+        self.layout_cuerpo.addWidget(panel_detalle)
+        self._pie.setVisible(False)
+        self._aplicar_estilos()
 
     def _crear_campo_detalle(self, etiqueta: str, valor: str) -> QFrame:
         tarjeta = QFrame()
@@ -385,193 +422,123 @@ class DialogoDetalleBarrio(QDialog):
         return tarjeta
 
     def _mostrar_aviso_abonados(self) -> None:
-        QMessageBox.information(
-            self,
+        DialogoMensajeSicap(
             "Ver abonados",
             "La navegacion hacia el modulo de abonados se integrara en el siguiente hito.",
-        )
+            icono="user.svg",
+            variante="informacion",
+            parent=self.parentWidget() or self,
+        ).exec()
 
     def _mostrar_aviso_casas(self) -> None:
-        QMessageBox.information(
-            self,
+        DialogoMensajeSicap(
             "Ver casas",
             "La navegacion hacia el modulo de casas se integrara en el siguiente hito.",
-        )
+            icono="home.svg",
+            variante="informacion",
+            parent=self.parentWidget() or self,
+        ).exec()
 
     def _solicitar_edicion(self) -> None:
         self._accion_resultado = "editar"
         self.accept()
 
     def _aplicar_estilos(self) -> None:
+        radio = RADIO_TARJETA_DIALOGO
         self.setStyleSheet(
-            """
-            QDialog {
-                background: #1f2a44;
-                border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 24px;
-            }
-            QLabel#tituloDialogoBarrio {
-                color: #ffffff;
-                font-size: 20px;
-                font-weight: 900;
-            }
-            QLabel#descripcionDialogoBarrio {
-                color: rgba(232, 239, 249, 0.80);
-                font-size: 13px;
-            }
-            QFrame#bloqueDetalleBarrio,
+            self.styleSheet()
+            + f"""
+            QFrame#panelContenidoDetalleBarrio {{
+                background: {COLOR_FONDO_DIALOGO};
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: {radio}px;
+            }}
             QFrame#campoDetalleBarrio,
             QFrame#campoDetalleBarrioAmplio,
-            QFrame#tarjetaMiniDetalleBarrio {
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                border-radius: 18px;
-            }
-            QLabel#codigoBarrioDetalle {
+            QFrame#tarjetaMiniDetalleBarrio {{
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.10);
+                border-radius: {radio}px;
+            }}
+            QFrame#separadorDetalleBarrio {{
+                background: rgba(255, 255, 255, 0.12);
+                border: none;
+            }}
+            QLabel#codigoBarrioDetalle {{
                 color: #8ec9ff;
                 font-size: 12px;
                 font-weight: 800;
                 letter-spacing: 0.08em;
-            }
-            QLabel#nombreBarrioDetalle {
+            }}
+            QLabel#nombreBarrioDetalle {{
                 color: #ffffff;
                 font-size: 22px;
                 font-weight: 900;
-            }
-            QLabel#badgeDetalleBarrio {
-                border-radius: 12px;
+            }}
+            QLabel#badgeDetalleBarrio {{
+                border-radius: {radio}px;
                 padding: 8px 12px;
                 font-size: 12px;
                 font-weight: 800;
                 color: #ffffff;
                 background: rgba(160, 174, 192, 0.22);
                 border: 1px solid rgba(255, 255, 255, 0.12);
-            }
-            QLabel#badgeDetalleBarrio[activo="true"] {
+            }}
+            QLabel#badgeDetalleBarrio[activo="true"] {{
                 color: #d9fff5;
                 background: rgba(16, 120, 98, 0.24);
                 border-color: rgba(158, 231, 214, 0.26);
-            }
-            QLabel#etiquetaDetalleBarrio {
+            }}
+            QLabel#etiquetaDetalleBarrio {{
                 color: rgba(232, 239, 249, 0.72);
                 font-size: 12px;
                 font-weight: 700;
-            }
-            QLabel#valorDetalleBarrio {
+            }}
+            QLabel#valorDetalleBarrio {{
                 color: #f7fbff;
                 font-size: 14px;
                 font-weight: 700;
-            }
-            QLabel#valorTarjetaMiniDetalle {
+            }}
+            QLabel#valorTarjetaMiniDetalle {{
                 color: #ffffff;
                 font-size: 24px;
                 font-weight: 900;
-            }
+            }}
             """
         )
 
 
-class DialogoConfirmacionEstadoBarrio(QDialog):
+class DialogoConfirmacionEstadoBarrio(DialogoConfirmacionSicap):
     """Modal de confirmacion para activar o inactivar barrios."""
 
     def __init__(self, barrio: Barrio, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
         self._barrio = barrio
-        self.setModal(True)
-        self.setMinimumWidth(420)
-        self.setWindowTitle("Confirmar cambio de estado")
-        self._construir_ui()
-        self._aplicar_estilos()
-
-    def _construir_ui(self) -> None:
         nuevo_estado = "inactivar" if self._barrio.estado == "ACTIVO" else "activar"
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 22, 22, 22)
-        layout.setSpacing(16)
-
-        titulo = QLabel("Confirmar cambio de estado")
-        titulo.setObjectName("tituloDialogoBarrio")
-        descripcion = QLabel(
-            f"Estas a punto de {nuevo_estado} el barrio seleccionado. Verifica los datos antes de confirmar."
-        )
-        descripcion.setObjectName("descripcionDialogoBarrio")
-        descripcion.setWordWrap(True)
-
-        panel = QFrame()
-        panel.setObjectName("bloqueConfirmacionBarrio")
-        panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(16, 16, 16, 16)
-        panel_layout.setSpacing(8)
-
-        for etiqueta, valor in (
-            ("Barrio", self._barrio.nombre),
-            ("Codigo", self._barrio.codigo),
-            ("Estado actual", self._barrio.estado.title()),
-            ("Accion", nuevo_estado.title()),
-        ):
-            fila = QHBoxLayout()
-            fila.setSpacing(12)
-            label_etiqueta = QLabel(etiqueta)
-            label_etiqueta.setObjectName("etiquetaConfirmacionBarrio")
-            label_valor = QLabel(valor)
-            label_valor.setObjectName("valorConfirmacionBarrio")
-            fila.addWidget(label_etiqueta, 1)
-            fila.addWidget(label_valor, 2)
-            panel_layout.addLayout(fila)
-
-        fila_botones = QHBoxLayout()
-        fila_botones.setSpacing(10)
-        fila_botones.addStretch(1)
-        boton_cancelar = crear_boton_operativo("Cancelar")
-        boton_confirmar = crear_boton_operativo("Confirmar", principal=True)
-        boton_cancelar.clicked.connect(self.reject)
-        boton_confirmar.clicked.connect(self.accept)
-        fila_botones.addWidget(boton_cancelar)
-        fila_botones.addWidget(boton_confirmar)
-
-        layout.addWidget(titulo)
-        layout.addWidget(descripcion)
-        layout.addWidget(panel)
-        layout.addLayout(fila_botones)
-
-    def _aplicar_estilos(self) -> None:
-        self.setStyleSheet(
-            """
-            QDialog {
-                background: #1f2a44;
-                border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 24px;
-            }
-            QLabel#tituloDialogoBarrio {
-                color: #ffffff;
-                font-size: 20px;
-                font-weight: 900;
-            }
-            QLabel#descripcionDialogoBarrio {
-                color: rgba(232, 239, 249, 0.80);
-                font-size: 13px;
-            }
-            QFrame#bloqueConfirmacionBarrio {
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                border-radius: 18px;
-            }
-            QLabel#etiquetaConfirmacionBarrio {
-                color: rgba(232, 239, 249, 0.72);
-                font-size: 12px;
-                font-weight: 700;
-            }
-            QLabel#valorConfirmacionBarrio {
-                color: #ffffff;
-                font-size: 14px;
-                font-weight: 800;
-            }
-            """
+        super().__init__(
+            titulo="Confirmar cambio de estado",
+            descripcion=(
+                f"Estas a punto de {nuevo_estado} el barrio seleccionado. "
+                "Verifica los datos antes de confirmar."
+            ),
+            detalles=(
+                ("Barrio", self._barrio.nombre),
+                ("Codigo", self._barrio.codigo),
+                ("Estado actual", self._barrio.estado.title()),
+                ("Accion", nuevo_estado.title()),
+            ),
+            texto_confirmar="Confirmar",
+            icono="alert-triangle.svg",
+            variante_confirmar="advertencia",
+            parent=parent,
         )
 
 
 class VistaBarrios(QWidget):
     """Pantalla principal del modulo de barrios."""
+
+    RADIO_PANEL_TABLA = 18
+    ANCHO_COLUMNA_ACCIONES = 164
+    DURACION_MENSAJE_MS = 5200
 
     filtro_texto_cambiado = Signal(str)
     filtro_rapido_cambiado = Signal(str)
@@ -586,6 +553,9 @@ class VistaBarrios(QWidget):
         super().__init__()
         self._pagina_actual = 1
         self._total_paginas = 1
+        self._temporizador_mensaje = QTimer(self)
+        self._temporizador_mensaje.setSingleShot(True)
+        self._temporizador_mensaje.timeout.connect(self._ocultar_mensaje)
         self._construir_ui()
         self._aplicar_estilos()
 
@@ -637,9 +607,10 @@ class VistaBarrios(QWidget):
             self._tabla.setCellWidget(fila, 6, self._crear_acciones_fila(barrio))
 
         self._tabla.resizeRowsToContents()
+        self._tabla.setColumnWidth(6, max(self._tabla.columnWidth(6), self.ANCHO_COLUMNA_ACCIONES))
         self._actualizar_estado_vacio(pagina.total_registros == 0)
         self._label_paginacion.setText(
-            f"Mostrando {pagina.indice_inicio}-{pagina.indice_fin} de {pagina.total_registros} barrios"
+            f"Mostrando {pagina.indice_inicio}-{pagina.indice_fin} de {pagina.total_registros} registros"
         )
         self._label_numero_pagina.setText(
             f"Pagina {self._pagina_actual} de {self._total_paginas}"
@@ -648,11 +619,18 @@ class VistaBarrios(QWidget):
         self._boton_pagina_siguiente.setEnabled(self._pagina_actual < self._total_paginas)
 
     def mostrar_mensaje(self, mensaje: str, es_error: bool = False) -> None:
+        self._temporizador_mensaje.stop()
         self._mensaje.setText(mensaje)
         self._mensaje.setVisible(bool(mensaje))
         self._mensaje.setProperty("error", es_error)
         self._mensaje.style().unpolish(self._mensaje)
         self._mensaje.style().polish(self._mensaje)
+        if mensaje:
+            self._temporizador_mensaje.start(self.DURACION_MENSAJE_MS)
+
+    def _ocultar_mensaje(self) -> None:
+        self._mensaje.clear()
+        self._mensaje.setVisible(False)
 
     def solicitar_datos_barrio(self, barrio: Barrio | None = None) -> FormularioBarrio | None:
         dialogo = DialogoFormularioBarrio(barrio=barrio, parent=self)
@@ -681,13 +659,13 @@ class VistaBarrios(QWidget):
     def _construir_ui(self) -> None:
         self.setObjectName("vistaBarrios")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 10)
-        layout.setSpacing(16)
+        layout.setContentsMargins(6, 4, 6, 6)
+        layout.setSpacing(12)
 
         encabezado = QHBoxLayout()
-        encabezado.setSpacing(12)
+        encabezado.setSpacing(10)
         bloque_titulo = QVBoxLayout()
-        bloque_titulo.setSpacing(4)
+        bloque_titulo.setSpacing(2)
         titulo = QLabel("Barrios")
         titulo.setObjectName("tituloModulo")
         descripcion = QLabel("Gestion de barrios y organizacion territorial")
@@ -697,7 +675,7 @@ class VistaBarrios(QWidget):
         bloque_titulo.addWidget(descripcion)
 
         fila_acciones = QHBoxLayout()
-        fila_acciones.setSpacing(10)
+        fila_acciones.setSpacing(8)
         fila_acciones.addStretch(1)
         boton_exportar = crear_boton_operativo("Exportar")
         boton_nuevo = crear_boton_operativo("Nuevo barrio", principal=True)
@@ -715,8 +693,8 @@ class VistaBarrios(QWidget):
         self._mensaje.setWordWrap(True)
 
         fila_tarjetas = QGridLayout()
-        fila_tarjetas.setHorizontalSpacing(14)
-        fila_tarjetas.setVerticalSpacing(14)
+        fila_tarjetas.setHorizontalSpacing(10)
+        fila_tarjetas.setVerticalSpacing(10)
         self._tarjeta_total = TarjetaResumenBarrio("map-pin.svg", "#8ec9ff")
         self._tarjeta_activos = TarjetaResumenBarrio("circle-check.svg", "#8de8c7")
         self._tarjeta_con_abonados = TarjetaResumenBarrio("user.svg", "#f7cc7a")
@@ -729,20 +707,22 @@ class VistaBarrios(QWidget):
         panel_filtros = QFrame()
         panel_filtros.setObjectName("panelOperativoBarrios")
         layout_filtros = QVBoxLayout(panel_filtros)
-        layout_filtros.setContentsMargins(18, 18, 18, 18)
-        layout_filtros.setSpacing(12)
+        layout_filtros.setContentsMargins(14, 14, 14, 14)
+        layout_filtros.setSpacing(10)
 
         self._campo_busqueda = QLineEdit()
         self._campo_busqueda.setPlaceholderText("Buscar barrio")
         self._campo_busqueda.textChanged.connect(self.filtro_texto_cambiado.emit)
 
         fila_chips = QHBoxLayout()
-        fila_chips.setSpacing(8)
+        fila_chips.setSpacing(6)
         self._grupo_filtros = QButtonGroup(self)
         self._grupo_filtros.setExclusive(True)
         self._botones_filtros: dict[str, QPushButton] = {}
         for codigo, texto in (
             (FILTRO_BARRIOS_TODOS, "Todos"),
+            (FILTRO_BARRIOS_ACTIVOS, "Activos"),
+            (FILTRO_BARRIOS_INACTIVOS, "Inactivos"),
             (FILTRO_BARRIOS_CON_ABONADOS, "Con abonados"),
             (FILTRO_BARRIOS_SIN_ABONADOS, "Sin abonados"),
         ):
@@ -763,12 +743,13 @@ class VistaBarrios(QWidget):
         layout_filtros.addLayout(fila_chips)
 
         panel_tabla = QFrame()
-        panel_tabla.setObjectName("panelOperativoBarrios")
+        panel_tabla.setObjectName("panelTablaBarrios")
         layout_tabla = QVBoxLayout(panel_tabla)
-        layout_tabla.setContentsMargins(18, 18, 18, 18)
-        layout_tabla.setSpacing(12)
+        layout_tabla.setContentsMargins(14, 14, 14, 14)
+        layout_tabla.setSpacing(10)
 
         self._tabla = QTableWidget(0, 7)
+        self._tabla.setObjectName("tablaBarrios")
         configurar_tabla_operativa(
             self._tabla,
             [
@@ -781,6 +762,7 @@ class VistaBarrios(QWidget):
                 "Acciones",
             ],
         )
+        self._tabla.horizontalHeader().setStretchLastSection(False)
         self._tabla.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self._tabla.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -789,8 +771,13 @@ class VistaBarrios(QWidget):
         self._tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self._tabla.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self._tabla.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        self._tabla.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
-        self._tabla.verticalHeader().setDefaultSectionSize(54)
+        self._tabla.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.Interactive)
+        self._tabla.setColumnWidth(6, self.ANCHO_COLUMNA_ACCIONES)
+        self._tabla.verticalHeader().setDefaultSectionSize(58)
+        self._tabla.setFrameShape(QFrame.Shape.NoFrame)
+        self._tabla.setViewportMargins(0, 0, 0, self.RADIO_PANEL_TABLA)
+        self._tabla.viewport().setObjectName("viewportTablaBarrios")
+        self._tabla.viewport().setAutoFillBackground(False)
 
         self._estado_vacio = QLabel("No hay barrios que coincidan con los filtros actuales.")
         self._estado_vacio.setObjectName("estadoVacioBarrios")
@@ -798,8 +785,8 @@ class VistaBarrios(QWidget):
         self._estado_vacio.setVisible(False)
 
         pie_tabla = QHBoxLayout()
-        pie_tabla.setSpacing(10)
-        self._label_paginacion = QLabel("Mostrando 0-0 de 0 barrios")
+        pie_tabla.setSpacing(8)
+        self._label_paginacion = QLabel("Mostrando 0-0 de 0 registros")
         self._label_paginacion.setObjectName("textoPieBarrios")
         pie_tabla.addWidget(self._label_paginacion)
         pie_tabla.addStretch(1)
@@ -844,37 +831,51 @@ class VistaBarrios(QWidget):
 
     def _crear_acciones_fila(self, barrio: Barrio) -> QWidget:
         contenedor = QWidget()
+        contenedor.setObjectName("contenedorAccionesBarrio")
+        contenedor.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        contenedor.setMinimumWidth(self.ANCHO_COLUMNA_ACCIONES)
+        contenedor.setMinimumHeight(58)
         layout = QHBoxLayout(contenedor)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        layout.setContentsMargins(0, 0, 0, 14)
+        layout.setSpacing(10)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        boton_ver = QPushButton("Ver detalle")
-        boton_editar = QPushButton("Editar")
-        boton_estado = QPushButton("Inactivar" if barrio.estado == "ACTIVO" else "Activar")
-        for boton in (boton_ver, boton_editar, boton_estado):
-            boton.setObjectName("botonFilaBarrio")
-            boton.setCursor(Qt.CursorShape.PointingHandCursor)
-            boton.setMinimumHeight(30)
+        boton_accion_detalle = BotonIconoFilaBarrio(
+            "eye.svg",
+            "#4fa3ff",
+            "Ver informacion",
+        )
+        boton_accion_editar = BotonIconoFilaBarrio(
+            "key.svg",
+            "#4fa3ff",
+            "Editar",
+        )
+        accion_desactiva = barrio.estado == "ACTIVO"
+        boton_accion_estado = BotonIconoFilaBarrio(
+            "lock.svg" if accion_desactiva else "circle-check.svg",
+            "#ff625c" if accion_desactiva else "#4fa3ff",
+            "Desactivar" if accion_desactiva else "Activar",
+        )
 
-        boton_ver.clicked.connect(
+        boton_accion_detalle.clicked.connect(
             lambda checked=False, identificador=barrio.identificador: self.detalle_barrio_solicitado.emit(
                 int(identificador or 0)
             )
         )
-        boton_editar.clicked.connect(
+        boton_accion_editar.clicked.connect(
             lambda checked=False, identificador=barrio.identificador: self.editar_barrio_solicitado.emit(
                 int(identificador or 0)
             )
         )
-        boton_estado.clicked.connect(
+        boton_accion_estado.clicked.connect(
             lambda checked=False, identificador=barrio.identificador: self.cambio_estado_solicitado.emit(
                 int(identificador or 0)
             )
         )
 
-        layout.addWidget(boton_ver)
-        layout.addWidget(boton_editar)
-        layout.addWidget(boton_estado)
+        layout.addWidget(boton_accion_detalle)
+        layout.addWidget(boton_accion_editar)
+        layout.addWidget(boton_accion_estado)
         return contenedor
 
     def _actualizar_estado_vacio(self, sin_datos: bool) -> None:
@@ -882,6 +883,7 @@ class VistaBarrios(QWidget):
         self._tabla.setVisible(not sin_datos)
 
     def _aplicar_estilos(self) -> None:
+        radio_panel_tabla = self.RADIO_PANEL_TABLA
         self.setStyleSheet(
             """
             QWidget#vistaBarrios {
@@ -889,22 +891,22 @@ class VistaBarrios(QWidget):
             }
             QLabel#tituloModulo {
                 color: #ffffff;
-                font-size: 23px;
+                font-size: 19px;
                 font-weight: 900;
             }
             QLabel#descripcionModulo,
             QLabel#textoPieBarrios,
             QLabel#detalleTarjetaResumen {
                 color: rgba(235, 242, 248, 0.76);
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 600;
             }
             QLabel#mensajeBarrios {
                 color: #d9fff5;
-                font-size: 13px;
+                font-size: 12px;
                 font-weight: 700;
-                padding: 10px 12px;
-                border-radius: 14px;
+                padding: 8px 10px;
+                border-radius: 12px;
                 background-color: rgba(16, 120, 98, 0.16);
                 border: 1px solid rgba(158, 231, 214, 0.26);
             }
@@ -917,44 +919,96 @@ class VistaBarrios(QWidget):
             QFrame#tarjetaResumenBarrios {
                 background: rgba(255, 255, 255, 0.10);
                 border: 1px solid rgba(255, 255, 255, 0.16);
-                border-radius: 22px;
+                border-radius: 18px;
+            }
+            QFrame#panelTablaBarrios {
+                background: rgba(255, 255, 255, 0.10);
+                border: 1px solid rgba(255, 255, 255, 0.16);
+                border-radius: """
+            + str(radio_panel_tabla)
+            + """px;
+            }
+            QTableWidget#tablaBarrios {
+                background: rgba(255, 255, 255, 0.03);
+                background-clip: padding;
+                border: none;
+                border-radius: """
+            + str(radio_panel_tabla)
+            + """px;
+                padding: 0 0 """
+            + str(radio_panel_tabla)
+            + """px 0;
+            }
+            QWidget#viewportTablaBarrios {
+                background: transparent;
+                border: none;
+                border-bottom-left-radius: """
+            + str(radio_panel_tabla)
+            + """px;
+                border-bottom-right-radius: """
+            + str(radio_panel_tabla)
+            + """px;
+            }
+            QTableWidget#tablaBarrios QHeaderView::section:first {
+                border-top-left-radius: """
+            + str(radio_panel_tabla)
+            + """px;
+            }
+            QTableWidget#tablaBarrios QHeaderView::section {
+                background: rgba(255, 255, 255, 0.10);
+                color: #f7fbff;
+                border: none;
+                border-right: 1px solid rgba(255, 255, 255, 0.06);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                padding: 10px 12px;
+                font-size: 12px;
+                font-weight: 800;
+            }
+            QTableWidget#tablaBarrios QHeaderView::section:last {
+                border-top-right-radius: """
+            + str(radio_panel_tabla)
+            + """px;
+            }
+            QTableWidget#tablaBarrios::item {
+                padding: 9px 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
             }
             QLabel#iconoTarjetaResumen {
                 background: rgba(255, 255, 255, 0.08);
                 border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 14px;
+                border-radius: 12px;
             }
             QLabel#tituloTarjetaResumen {
                 color: rgba(235, 242, 248, 0.72);
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 700;
             }
             QLabel#valorTarjetaResumen {
                 color: #ffffff;
-                font-size: 24px;
+                font-size: 20px;
                 font-weight: 900;
             }
             QLineEdit {
-                min-height: 42px;
+                min-height: 36px;
                 border: 1px solid rgba(255, 255, 255, 0.18);
-                border-radius: 14px;
+                border-radius: 12px;
                 background: rgba(255, 255, 255, 0.11);
                 color: #f5fbff;
-                padding: 0 12px;
-                font-size: 13px;
+                padding: 0 10px;
+                font-size: 12px;
             }
             QLineEdit:focus {
                 border-color: rgba(109, 241, 220, 0.42);
                 background: rgba(255, 255, 255, 0.16);
             }
             QPushButton#chipFiltroBarrio {
-                min-height: 34px;
-                border-radius: 12px;
-                padding: 0 14px;
+                min-height: 30px;
+                border-radius: 11px;
+                padding: 0 12px;
                 background: rgba(255, 255, 255, 0.06);
                 border: 1px solid rgba(255, 255, 255, 0.14);
                 color: #ecf5ff;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 700;
             }
             QPushButton#chipFiltroBarrio:hover {
@@ -966,9 +1020,9 @@ class VistaBarrios(QWidget):
                 border-color: rgba(255, 255, 255, 0.18);
             }
             QLabel#badgeEstadoBarrio {
-                border-radius: 12px;
-                padding: 7px 12px;
-                font-size: 12px;
+                border-radius: 11px;
+                padding: 6px 10px;
+                font-size: 11px;
                 font-weight: 800;
                 color: #f4f8fb;
                 background: rgba(132, 146, 166, 0.22);
@@ -979,23 +1033,25 @@ class VistaBarrios(QWidget):
                 background: rgba(16, 120, 98, 0.22);
                 border-color: rgba(158, 231, 214, 0.26);
             }
-            QPushButton#botonFilaBarrio {
-                border-radius: 10px;
-                border: 1px solid rgba(255, 255, 255, 0.14);
-                background: rgba(255, 255, 255, 0.10);
-                color: #f7fbff;
-                padding: 0 10px;
-                font-size: 12px;
-                font-weight: 700;
+            QWidget#contenedorAccionesBarrio {
+                background: transparent;
             }
-            QPushButton#botonFilaBarrio:hover {
-                background: rgba(255, 255, 255, 0.16);
+            QToolButton#botonIconoFilaBarrio {
+                background: transparent;
+                border: none;
+                border-radius: 8px;
+                padding: 0px;
+                margin: 0px;
+            }
+            QToolButton#botonIconoFilaBarrio:hover {
+                background: transparent;
+                border: none;
             }
             QLabel#estadoVacioBarrios {
                 color: rgba(235, 242, 248, 0.76);
-                font-size: 13px;
+                font-size: 12px;
                 font-weight: 700;
-                padding: 24px 16px;
+                padding: 20px 14px;
             }
             QLabel {
                 color: #f4fbff;

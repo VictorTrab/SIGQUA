@@ -12,3 +12,4 @@ Usar esta skill antes de cerrar una tarea técnica relevante.
 6. Confirmar que integraciones externas dependen de contratos.
 7. Confirmar que no se expusieron secretos o datos sensibles.
 8. Confirmar que la documentación quedó útil si la tarea la requería.
+9. Confirmar que, si hubo investigación externa, el aprendizaje reutilizable quedó reflejado en la skill o rol correspondiente y no solo en la respuesta puntual.
