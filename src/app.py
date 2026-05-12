@@ -34,6 +34,30 @@ from modulos.barrios import (
     ServicioBarrios,
     VistaBarrios,
 )
+from modulos.abonados import (
+    ControladorAbonados,
+    RepositorioAbonadosSQLite,
+    ServicioAbonados,
+    VistaAbonados,
+)
+from modulos.casas import (
+    ControladorCasas,
+    RepositorioCasasSQLite,
+    ServicioCasas,
+    VistaCasas,
+)
+from modulos.configuracion import (
+    ControladorConfiguracion,
+    RepositorioConfiguracionSQLite,
+    ServicioConfiguracion,
+    VistaConfiguracion,
+)
+from modulos.planes_pago import (
+    ControladorPlanesPago,
+    RepositorioPlanesPagoSQLite,
+    ServicioPlanesPago,
+    VistaPlanesPago,
+)
 from modulos.principal import (
     ControladorModuloPrincipal,
     RepositorioModuloPrincipalSQLite,
@@ -131,6 +155,14 @@ def crear_ventana_principal(
     servicio_usuarios = ServicioUsuarios(repositorio_usuarios)
     repositorio_barrios = RepositorioBarriosSQLite(gestor_base_datos)
     servicio_barrios = ServicioBarrios(repositorio_barrios)
+    repositorio_casas = RepositorioCasasSQLite(gestor_base_datos)
+    servicio_casas = ServicioCasas(repositorio_casas)
+    repositorio_abonados = RepositorioAbonadosSQLite(gestor_base_datos)
+    servicio_abonados = ServicioAbonados(repositorio_abonados, repositorio_casas)
+    repositorio_planes_pago = RepositorioPlanesPagoSQLite(gestor_base_datos)
+    servicio_planes_pago = ServicioPlanesPago(repositorio_planes_pago)
+    repositorio_configuracion = RepositorioConfiguracionSQLite(gestor_base_datos)
+    servicio_configuracion = ServicioConfiguracion(repositorio_configuracion, gestor_rutas)
     repositorio_mantenimiento = RepositorioMantenimientoSQLite(gestor_base_datos)
     servicio_mantenimiento = ServicioMantenimiento(repositorio_mantenimiento)
 
@@ -169,6 +201,10 @@ def crear_ventana_principal(
     ventana_principal.servicio_autenticacion = servicio_autenticacion
     ventana_principal.servicio_usuarios = servicio_usuarios
     ventana_principal.servicio_barrios = servicio_barrios
+    ventana_principal.servicio_casas = servicio_casas
+    ventana_principal.servicio_abonados = servicio_abonados
+    ventana_principal.servicio_planes_pago = servicio_planes_pago
+    ventana_principal.servicio_configuracion = servicio_configuracion
     ventana_principal.servicio_mantenimiento = servicio_mantenimiento
     ventana_principal.vista_autenticacion = vista_autenticacion
     logger.info("Ventana principal lista y mostrando autenticacion.")
@@ -271,6 +307,27 @@ def _registrar_modulos_operativos(ventana_principal: QMainWindow) -> None:
     )
     vista_modulo_principal.registrar_modulo("barrios", vista_barrios)
 
+    vista_abonados = VistaAbonados()
+    controlador_abonados = ControladorAbonados(
+        servicio_abonados=ventana_principal.servicio_abonados,
+        vista_abonados=vista_abonados,
+    )
+    vista_modulo_principal.registrar_modulo("abonados", vista_abonados)
+
+    vista_casas = VistaCasas()
+    controlador_casas = ControladorCasas(
+        servicio_casas=ventana_principal.servicio_casas,
+        vista_casas=vista_casas,
+    )
+    vista_modulo_principal.registrar_modulo("casas", vista_casas)
+
+    vista_planes_pago = VistaPlanesPago()
+    controlador_planes_pago = ControladorPlanesPago(
+        servicio_planes_pago=ventana_principal.servicio_planes_pago,
+        vista_planes_pago=vista_planes_pago,
+    )
+    vista_modulo_principal.registrar_modulo("planes_pago", vista_planes_pago)
+
     vista_usuarios = VistaUsuarios()
     controlador_usuarios = ControladorUsuarios(
         servicio_usuarios=ventana_principal.servicio_usuarios,
@@ -279,16 +336,6 @@ def _registrar_modulos_operativos(ventana_principal: QMainWindow) -> None:
     vista_modulo_principal.registrar_modulo("usuarios", vista_usuarios)
 
     for codigo, titulo, descripcion in (
-        (
-            "abonados",
-            "Abonados",
-            "Alta, busqueda, detalle e inactivacion de abonados se construiran sobre barrios.",
-        ),
-        (
-            "casas",
-            "Casas",
-            "Gestion de casas, estado de servicio y cambio de propietario se activara en el siguiente hito.",
-        ),
         (
             "pagos",
             "Pagos",
@@ -300,19 +347,9 @@ def _registrar_modulos_operativos(ventana_principal: QMainWindow) -> None:
             "Consulta de deuda, meses pendientes y contexto de cobro se habilitara tras pagos.",
         ),
         (
-            "planes_pago",
-            "Planes de pago",
-            "Control de planes y cuotas se construira cuando morosidad este estable.",
-        ),
-        (
             "reportes",
             "Reportes",
             "Reportes operativos se activaran cuando existan datos confiables de pagos y deuda.",
-        ),
-        (
-            "configuracion",
-            "Configuracion",
-            "Configuracion operativa sin correo ni Resend para esta version local.",
         ),
     ):
         vista_modulo_principal.registrar_modulo(
@@ -320,10 +357,25 @@ def _registrar_modulos_operativos(ventana_principal: QMainWindow) -> None:
             VistaPlaceholderModulo(titulo, descripcion),
         )
 
+    vista_configuracion = VistaConfiguracion()
+    controlador_configuracion = ControladorConfiguracion(
+        servicio_configuracion=ventana_principal.servicio_configuracion,
+        vista_configuracion=vista_configuracion,
+    )
+    vista_modulo_principal.registrar_modulo("configuracion", vista_configuracion)
+
     ventana_principal.vista_barrios = vista_barrios
     ventana_principal.controlador_barrios = controlador_barrios
+    ventana_principal.vista_abonados = vista_abonados
+    ventana_principal.controlador_abonados = controlador_abonados
+    ventana_principal.vista_casas = vista_casas
+    ventana_principal.controlador_casas = controlador_casas
+    ventana_principal.vista_planes_pago = vista_planes_pago
+    ventana_principal.controlador_planes_pago = controlador_planes_pago
     ventana_principal.vista_usuarios = vista_usuarios
     ventana_principal.controlador_usuarios = controlador_usuarios
+    ventana_principal.vista_configuracion = vista_configuracion
+    ventana_principal.controlador_configuracion = controlador_configuracion
 
 
 def _refrescar_modulos_operativos(
@@ -333,8 +385,16 @@ def _refrescar_modulos_operativos(
     """Actualiza los modulos con datos dependientes de la sesion activa."""
     if hasattr(ventana_principal, "controlador_barrios"):
         ventana_principal.controlador_barrios.mostrar()
+    if hasattr(ventana_principal, "controlador_abonados"):
+        ventana_principal.controlador_abonados.mostrar_para_actor(usuario)
+    if hasattr(ventana_principal, "controlador_casas"):
+        ventana_principal.controlador_casas.mostrar_para_actor(usuario)
+    if hasattr(ventana_principal, "controlador_planes_pago"):
+        ventana_principal.controlador_planes_pago.mostrar_para_actor(usuario)
     if hasattr(ventana_principal, "controlador_usuarios"):
         ventana_principal.controlador_usuarios.mostrar_para_actor(usuario)
+    if hasattr(ventana_principal, "controlador_configuracion"):
+        ventana_principal.controlador_configuracion.mostrar_para_actor(usuario)
 
 
 def _manejar_cierre_sesion(

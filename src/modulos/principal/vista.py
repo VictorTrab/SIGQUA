@@ -52,10 +52,17 @@ from comun.ui import (
     DialogoConfirmacionSicap,
     DialogoMensajeSicap,
     VistaPlaceholderModulo,
+    aplicar_estilo_boton_operativo,
     crear_boton_operativo,
     obtener_icono_tabler_coloreado,
+    resolver_variante_boton_modal,
 )
 from comun.ui.componentes import COLOR_FONDO_DIALOGO
+from comun.ui.temas import (
+    TEMA_SICAP_PREDETERMINADO,
+    establecer_tema_actual,
+    obtener_paleta_tema,
+)
 from modulos.principal.entidades import (
     AnaliticaDashboard,
     CategoriaDashboard,
@@ -79,9 +86,10 @@ ANCHO_RUPTURA_METRICAS_2_COLUMNAS = 760
 class TarjetaMetricaEjecutiva(QFrame):
     """Tarjeta KPI con acento pastel para el dashboard ejecutivo."""
 
-    def __init__(self, color_fondo: str) -> None:
+    def __init__(self, color_fondo: str, nombre_tema: str = TEMA_SICAP_PREDETERMINADO) -> None:
         super().__init__()
         self._color_fondo = color_fondo
+        self._tema_actual = nombre_tema
         self.setObjectName("tarjetaMetricaEjecutiva")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setMinimumHeight(90)
@@ -109,10 +117,11 @@ class TarjetaMetricaEjecutiva(QFrame):
         self._detalle.setText(detalle)
 
     def _aplicar_estilo(self) -> None:
+        paleta = obtener_paleta_tema(self._tema_actual)
         color_base = QColor(self._color_fondo)
         tono_superior = QColor(color_base)
-        tono_superior.setAlpha(164)
-        tono_inferior = QColor(255, 255, 255, 104)
+        tono_superior.setAlpha(150 if self._tema_actual == "claro" else 164)
+        tono_inferior = QColor(255, 255, 255, 186 if self._tema_actual == "claro" else 104)
         self.setStyleSheet(
             f"""
             QFrame#tarjetaMetricaEjecutiva {{
@@ -122,26 +131,30 @@ class TarjetaMetricaEjecutiva(QFrame):
                     stop: 0 rgba({tono_superior.red()}, {tono_superior.green()}, {tono_superior.blue()}, {tono_superior.alpha()}),
                     stop: 1 rgba({tono_inferior.red()}, {tono_inferior.green()}, {tono_inferior.blue()}, {tono_inferior.alpha()})
                 );
-                border: 1px solid rgba(255, 255, 255, 162);
+                border: 1px solid {paleta["tarjeta_panel_borde"]};
                 border-radius: 17px;
             }}
             QLabel#tituloMetricaEjecutiva {{
-                color: rgba(27, 36, 48, 220);
+                color: {paleta["texto_panel_principal"]};
                 font-size: 11px;
                 font-weight: 700;
             }}
             QLabel#valorMetricaEjecutiva {{
-                color: #1b2430;
+                color: {paleta["texto_panel_fuerte"]};
                 font-size: 26px;
                 font-weight: 900;
             }}
             QLabel#detalleMetricaEjecutiva {{
-                color: #55606f;
+                color: {paleta["texto_panel_detalle"]};
                 font-size: 11px;
                 font-weight: 600;
             }}
             """
         )
+
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._tema_actual = nombre_tema
+        self._aplicar_estilo()
 
 
 class FilaRanking(QFrame):
@@ -597,7 +610,7 @@ class DialogoPruebaModalBase(QDialog):
     ) -> None:
         layout = QVBoxLayout(contenedor)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(14)
+        layout.setSpacing(10)
 
         titulo = QLabel(self._titulo_modal)
         titulo.setStyleSheet("color: #ffffff; font-size: 22px; font-weight: 900;")
@@ -611,10 +624,10 @@ class DialogoPruebaModalBase(QDialog):
             "color: rgba(247, 249, 255, 0.82);"
             "background: rgba(255, 255, 255, 0.08);"
             f"border: 1px solid {borde};"
-            "padding: 10px 12px;"
+            "padding: 8px 10px;"
             "font-size: 12px;"
             "font-weight: 700;"
-            "border-radius: 12px;"
+            "border-radius: 4px;"
         )
 
         bloque = QFrame()
@@ -635,24 +648,24 @@ class DialogoPruebaModalBase(QDialog):
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setContentsMargins(0, 0, 0, 0)
-        fila_acciones.setSpacing(12)
+        fila_acciones.setSpacing(10)
 
         boton_cancelar = BotonAccionContextual(
             "Cancelar",
-            "arrow-left.svg",
-            "neutro",
+            variante=resolver_variante_boton_modal("Cancelar", "neutro"),
             centrado=True,
+            mostrar_icono=False,
         )
-        boton_cancelar.setMinimumWidth(148)
+        boton_cancelar.setMinimumWidth(132)
         boton_cancelar.clicked.connect(self.reject)
 
         boton_confirmar = BotonAccionContextual(
             "Confirmar prueba",
-            "circle-check.svg",
-            "primario",
+            variante=resolver_variante_boton_modal("Confirmar prueba", "primario"),
             centrado=True,
+            mostrar_icono=False,
         )
-        boton_confirmar.setMinimumWidth(176)
+        boton_confirmar.setMinimumWidth(160)
         boton_confirmar.clicked.connect(self.accept)
 
         fila_acciones.addWidget(boton_cancelar)
@@ -810,6 +823,8 @@ class VistaModuloPrincipal(QWidget):
         self._gestor_rutas = GestorRutas()
         self.setObjectName("vistaModuloPrincipal")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._correo_usuario_actual = "soporte@sicap.local"
         self._modulo_activo = "dashboard"
         self._botones_modulos: dict[str, QPushButton] = {}
@@ -830,10 +845,12 @@ class VistaModuloPrincipal(QWidget):
         self._animaciones_activas: list[object] = []
         self._modo_dashboard_actual = "amplio"
         self._ultimo_ancho_dashboard = -1
+        self._ultimo_estado_mostrado: EstadoModuloPrincipal | None = None
         self._panel_perfil_usuario = PanelPerfilUsuario(self)
         self._panel_perfil_usuario.cerrar_sesion_solicitada.connect(
             self.cerrar_sesion_solicitada.emit
         )
+        establecer_tema_actual(self._tema_actual)
         self._aplicar_estilos()
         self._construir_ui()
 
@@ -862,7 +879,7 @@ class VistaModuloPrincipal(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(COLOR_FONDO_PRINCIPAL))
+        painter.setBrush(QColor(str(self._paleta_tema["fondo_principal"])))
         painter.drawRect(self.rect())
         painter.end()
 
@@ -872,12 +889,15 @@ class VistaModuloPrincipal(QWidget):
         if codigo in self._paginas_modulos:
             return
         self._paginas_modulos[codigo] = widget
+        if hasattr(widget, "aplicar_tema"):
+            widget.aplicar_tema(self._tema_actual)
         self._stack_contenido.addWidget(widget)
 
     def preparar_perfil_usuario(self, correo: str) -> None:
         self._correo_usuario_actual = correo.strip() or "soporte@sicap.local"
 
     def mostrar_estado(self, estado: EstadoModuloPrincipal) -> None:
+        self._ultimo_estado_mostrado = estado
         primer_nombre = estado.nombre_completo.split()[0] if estado.nombre_completo else estado.nombre_usuario
         self._label_bienvenida.setText(f"Resumen general, {primer_nombre}")
         self._label_subresumen.setText(
@@ -902,6 +922,57 @@ class VistaModuloPrincipal(QWidget):
         self._actualizar_disposicion_dashboard()
         self._animar_aparicion_dashboard()
 
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._tema_actual = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        self._paleta_tema = obtener_paleta_tema(self._tema_actual)
+        establecer_tema_actual(self._tema_actual)
+        self._aplicar_estilos()
+        self._actualizar_boton_tema()
+        self._aplicar_tema_a_descendientes()
+        if self._ultimo_estado_mostrado is not None:
+            self._mostrar_metricas(self._ultimo_estado_mostrado)
+            self._mostrar_analitica(self._ultimo_estado_mostrado.analitica)
+        self.update()
+
+    def _alternar_tema(self) -> None:
+        self.aplicar_tema("claro" if self._tema_actual == "oscuro" else "oscuro")
+
+    def _actualizar_boton_tema(self) -> None:
+        if not hasattr(self, "_boton_tema"):
+            return
+        if self._tema_actual == "oscuro":
+            self._boton_tema.setText("Modo claro")
+            self._boton_tema.setIcon(obtener_icono_tabler_coloreado("sun.svg", str(self._paleta_tema["icono_tema_activo"]), tamano=18))
+        else:
+            self._boton_tema.setText("Modo oscuro")
+            self._boton_tema.setIcon(obtener_icono_tabler_coloreado("moon-stars.svg", str(self._paleta_tema["icono_tema_inactivo"]), tamano=18))
+        self._boton_tema.setProperty("temaActivo", self._tema_actual)
+        self._boton_tema.style().unpolish(self._boton_tema)
+        self._boton_tema.style().polish(self._boton_tema)
+
+    def _aplicar_tema_a_descendientes(self) -> None:
+        for tarjeta in self._tarjetas_metricas.values():
+            tarjeta.aplicar_tema(self._tema_actual)
+        for boton in self.findChildren(BotonAccionContextual):
+            boton.aplicar_tema(self._tema_actual)
+        for boton in self.findChildren(QPushButton):
+            if boton.objectName() == "botonOperativo":
+                aplicar_estilo_boton_operativo(boton, principal=False)
+            elif boton.objectName() == "botonOperativoPrimario":
+                aplicar_estilo_boton_operativo(boton, principal=True)
+            elif boton.objectName() == "botonSidebar":
+                nombre_icono = boton.property("iconoSidebar")
+                if isinstance(nombre_icono, str):
+                    color_icono = (
+                        str(self._paleta_tema["texto_principal"])
+                        if boton.property("activo") is True
+                        else str(self._paleta_tema["icono_tema_inactivo"])
+                    )
+                    boton.setIcon(obtener_icono_tabler_coloreado(nombre_icono, color_icono, tamano=18))
+        for pagina in self._paginas_modulos.values():
+            if hasattr(pagina, "aplicar_tema"):
+                pagina.aplicar_tema(self._tema_actual)
+
     def mostrar_modulo(self, codigo: str) -> None:
         pagina = self._paginas_modulos.get(codigo)
         if pagina is None:
@@ -912,6 +983,14 @@ class VistaModuloPrincipal(QWidget):
             boton.setProperty("activo", codigo_boton == codigo)
             boton.style().unpolish(boton)
             boton.style().polish(boton)
+            nombre_icono = boton.property("iconoSidebar")
+            if isinstance(nombre_icono, str):
+                color_icono = (
+                    str(self._paleta_tema["texto_principal"])
+                    if codigo_boton == codigo
+                    else str(self._paleta_tema["icono_tema_inactivo"])
+                )
+                boton.setIcon(obtener_icono_tabler_coloreado(nombre_icono, color_icono, tamano=18))
         for titulo, seccion in self._secciones_sidebar.items():
             seccion.marcar_modulo_activo(codigo)
             self._estado_secciones_sidebar[titulo] = seccion.esta_expandida()
@@ -923,8 +1002,8 @@ class VistaModuloPrincipal(QWidget):
 
         self._sidebar = QFrame()
         self._sidebar.setObjectName("sidebarPrincipal")
-        self._sidebar.setMinimumWidth(224)
-        self._sidebar.setMaximumWidth(232)
+        self._sidebar.setMinimumWidth(204)
+        self._sidebar.setMaximumWidth(212)
         self._sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         layout_sidebar = QVBoxLayout(self._sidebar)
         layout_sidebar.setContentsMargins(14, 14, 14, 14)
@@ -995,8 +1074,17 @@ class VistaModuloPrincipal(QWidget):
         self._label_periodo = self._boton_perfil_header.label_periodo
         self._label_usuario = self._boton_perfil_header.label_usuario
         self._label_perfil = self._boton_perfil_header.label_perfil
+        self._boton_tema = QPushButton()
+        self._boton_tema.setObjectName("botonTemaHeader")
+        self._boton_tema.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._boton_tema.setToolTip("Alternar entre modo oscuro y modo claro")
+        self._boton_tema.setMinimumHeight(42)
+        self._boton_tema.setIconSize(QSize(18, 18))
+        self._boton_tema.clicked.connect(self._alternar_tema)
+        self._actualizar_boton_tema()
 
         layout_header.addLayout(bloque_titulo, 1)
+        layout_header.addWidget(self._boton_tema, alignment=Qt.AlignmentFlag.AlignTop)
         layout_header.addWidget(self._boton_perfil_header, alignment=Qt.AlignmentFlag.AlignTop)
 
         self._stack_contenido = QStackedWidget()
@@ -1154,7 +1242,10 @@ class VistaModuloPrincipal(QWidget):
         self._orden_metricas.clear()
 
         for indice, metrica in enumerate(estado.metricas):
-            tarjeta = TarjetaMetricaEjecutiva(colores[indice % len(colores)])
+            tarjeta = TarjetaMetricaEjecutiva(
+                colores[indice % len(colores)],
+                nombre_tema=self._tema_actual,
+            )
             tarjeta.actualizar(metrica.titulo, metrica.valor, metrica.detalle)
             self._tarjetas_metricas[metrica.codigo] = tarjeta
             self._orden_metricas.append(metrica.codigo)
@@ -1360,7 +1451,14 @@ class VistaModuloPrincipal(QWidget):
         boton = crear_boton_operativo(modulo.titulo)
         boton.setObjectName("botonSidebar")
         boton.setProperty("tipoSidebar", tipo)
-        boton.setIcon(obtener_icono_tabler_coloreado(modulo.icono, "#eef6ff", tamano=18))
+        boton.setProperty("iconoSidebar", modulo.icono)
+        boton.setIcon(
+            obtener_icono_tabler_coloreado(
+                modulo.icono,
+                str(self._paleta_tema["icono_tema_inactivo"]),
+                tamano=18,
+            )
+        )
         boton.setIconSize(boton.iconSize())
         boton.setToolTip(modulo.descripcion or modulo.titulo)
         return boton
@@ -1464,12 +1562,13 @@ class VistaModuloPrincipal(QWidget):
 
         actual = QLineSeries()
         actual.setName("Actual")
-        actual.setColor(QColor("#1f2530"))
-        actual.setPen(QPen(QColor("#1f2530"), 2.1))
+        color_linea = QColor(str(self._paleta_tema["grafica_linea"]))
+        actual.setColor(color_linea)
+        actual.setPen(QPen(color_linea, 2.1))
 
         referencia = QLineSeries()
         referencia.setName("Promedio")
-        pen_referencia = QPen(QColor("#8ab4ff"), 1.8)
+        pen_referencia = QPen(QColor(str(self._paleta_tema["icono_tarjeta_info"])), 1.8)
         pen_referencia.setStyle(Qt.PenStyle.DotLine)
         referencia.setPen(pen_referencia)
 
@@ -1489,15 +1588,15 @@ class VistaModuloPrincipal(QWidget):
 
         eje_x = QBarCategoryAxis()
         eje_x.append([punto.etiqueta for punto in serie])
-        eje_x.setLabelsColor(QColor("#8b96a8"))
+        eje_x.setLabelsColor(QColor(str(self._paleta_tema["grafica_texto"])))
         eje_x.setGridLineVisible(False)
 
         eje_y = QValueAxis()
         maximo = max(valores + [promedio, 1.0])
         eje_y.setRange(0, maximo * 1.25)
         eje_y.setTickCount(5)
-        eje_y.setLabelsColor(QColor("#8b96a8"))
-        eje_y.setGridLineColor(QColor("#eef2f7"))
+        eje_y.setLabelsColor(QColor(str(self._paleta_tema["grafica_texto"])))
+        eje_y.setGridLineColor(QColor(str(self._paleta_tema["grafica_grid"])))
         eje_y.setLabelFormat("%.0f")
 
         chart.addAxis(eje_x, Qt.AlignmentFlag.AlignBottom)
@@ -1511,7 +1610,7 @@ class VistaModuloPrincipal(QWidget):
     def _crear_chart_estados(self, categorias: tuple[CategoriaDashboard, ...]) -> QChart:
         datos = categorias or (CategoriaDashboard("Sin datos", 0.0),)
         barset = QBarSet("Casas")
-        colores = ["#8fb2ec", "#61d4c8", "#000000", "#7ab1f2", "#b598ea", "#75d685"]
+        colores = list(self._paleta_tema["grafica_pie_colores"])
         for indice, categoria in enumerate(datos):
             barset.append(categoria.valor)
             if indice < len(colores):
@@ -1527,15 +1626,15 @@ class VistaModuloPrincipal(QWidget):
 
         eje_x = QBarCategoryAxis()
         eje_x.append([categoria.etiqueta.title() for categoria in datos])
-        eje_x.setLabelsColor(QColor("#8b96a8"))
+        eje_x.setLabelsColor(QColor(str(self._paleta_tema["grafica_texto"])))
         eje_x.setGridLineVisible(False)
 
         eje_y = QValueAxis()
         maximo = max((categoria.valor for categoria in datos), default=1.0) or 1.0
         eje_y.setRange(0, maximo * 1.25)
         eje_y.setTickCount(5)
-        eje_y.setLabelsColor(QColor("#8b96a8"))
-        eje_y.setGridLineColor(QColor("#eef2f7"))
+        eje_y.setLabelsColor(QColor(str(self._paleta_tema["grafica_texto"])))
+        eje_y.setGridLineColor(QColor(str(self._paleta_tema["grafica_grid"])))
         eje_y.setLabelFormat("%.0f")
 
         chart.addAxis(eje_x, Qt.AlignmentFlag.AlignBottom)
@@ -1551,12 +1650,12 @@ class VistaModuloPrincipal(QWidget):
         datos = categorias or (CategoriaDashboard("Sin deuda", 1.0),)
         serie = QPieSeries()
         serie.setHoleSize(0.58)
-        colores = ["#000000", "#8fb2ec", "#9ee4c4", "#7fb8ff", "#c5d2dd"]
+        colores = list(self._paleta_tema["grafica_pie_colores"])
         for indice, categoria in enumerate(datos):
             trozo = serie.append(categoria.etiqueta, max(categoria.valor, 0.01))
             trozo.setColor(QColor(colores[indice % len(colores)]))
             trozo.setLabelVisible(False)
-            trozo.setBorderColor(QColor("#ffffff"))
+            trozo.setBorderColor(QColor(str(self._paleta_tema["grafica_borde_trozo"])))
             trozo.setBorderWidth(1)
 
         chart = QChart()
@@ -1564,7 +1663,7 @@ class VistaModuloPrincipal(QWidget):
         chart.setBackgroundVisible(False)
         chart.legend().setVisible(True)
         chart.legend().setAlignment(Qt.AlignmentFlag.AlignRight)
-        chart.legend().setLabelColor(QColor("#687588"))
+        chart.legend().setLabelColor(QColor(str(self._paleta_tema["grafica_texto"])))
         chart.setMargins(QMargins(0, 0, 0, 0))
         return chart
 
@@ -1675,6 +1774,30 @@ class VistaModuloPrincipal(QWidget):
             QPushButton#botonPerfilHeader:hover {
                 background: rgba(255, 255, 255, 0.09);
                 border-color: rgba(255, 255, 255, 0.16);
+            }
+            QPushButton#botonTemaHeader {
+                min-height: 42px;
+                min-width: 148px;
+                border-radius: 14px;
+                padding: 0 14px;
+                background: rgba(255, 255, 255, 0.06);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                color: #f5fbff;
+                font-size: 12px;
+                font-weight: 800;
+                text-align: left;
+            }
+            QPushButton#botonTemaHeader:hover {
+                background: rgba(255, 255, 255, 0.10);
+                border-color: rgba(255, 255, 255, 0.18);
+            }
+            QPushButton#botonTemaHeader:pressed {
+                background: rgba(255, 255, 255, 0.14);
+                border-color: rgba(255, 255, 255, 0.24);
+            }
+            QPushButton#botonTemaHeader:focus {
+                background: rgba(255, 255, 255, 0.12);
+                border-color: rgba(247, 204, 122, 0.44);
             }
             QLabel#avatarPerfilHeader {
                 background: rgba(109, 241, 220, 0.16);
@@ -1872,3 +1995,131 @@ class VistaModuloPrincipal(QWidget):
             }
             """
         )
+        if self._tema_actual == "claro":
+            paleta = self._paleta_tema
+            self.setStyleSheet(
+                self.styleSheet()
+                + f"""
+                QFrame#sidebarPrincipal,
+                QFrame#headerPrincipal {{
+                    background: {paleta["fondo_superficie"]};
+                    border: 1px solid {paleta["borde_principal"]};
+                }}
+                QFrame#tarjetaPanel {{
+                    background: qlineargradient(
+                        x1: 0, y1: 0,
+                        x2: 1, y2: 1,
+                        stop: 0 {paleta["tarjeta_panel_stop_1"]},
+                        stop: 0.52 {paleta["tarjeta_panel_stop_2"]},
+                        stop: 1 {paleta["tarjeta_panel_stop_3"]}
+                    );
+                    border: 1px solid {paleta["tarjeta_panel_borde"]};
+                }}
+                QFrame#seccionSidebarCard,
+                QFrame#panelAccionesSidebar,
+                QFrame#panelUsuarioHeader,
+                QFrame#panelPerfilUsuario,
+                QFrame#encabezadoPanelPerfil,
+                QFrame#bloquePanelPerfil,
+                QFrame#piePanelPerfil {{
+                    background: {paleta["fondo_superficie_suave"]};
+                    border: 1px solid {paleta["borde_suave"]};
+                }}
+                QPushButton#botonPerfilHeader,
+                QPushButton#botonTemaHeader {{
+                    background: {paleta["fondo_superficie_suave"]};
+                    border: 1px solid {paleta["borde_suave"]};
+                    color: {paleta["texto_input"]};
+                }}
+                QPushButton#botonPerfilHeader:hover,
+                QPushButton#botonTemaHeader:hover {{
+                    background: {paleta["fondo_superficie"]};
+                    border-color: {paleta["borde_principal"]};
+                }}
+                QPushButton#botonTemaHeader:pressed {{
+                    background: {paleta["fondo_superficie"]};
+                    border-color: {paleta["borde_principal"]};
+                }}
+                QPushButton#botonTemaHeader:focus {{
+                    background: {paleta["fondo_superficie_suave"]};
+                    border-color: {paleta["icono_tema_activo"]};
+                }}
+                QLabel#avatarPerfilHeader,
+                QLabel#avatarPanelPerfil {{
+                    background: {paleta["fondo_avatar"]};
+                    border: 1px solid {paleta["borde_avatar"]};
+                    color: {paleta["texto_principal"]};
+                }}
+                QLabel#marcaPrincipal,
+                QLabel#tituloPrincipal,
+                QLabel#usuarioActivo,
+                QLabel#nombrePanelPerfil {{
+                    color: {paleta["texto_principal"]};
+                }}
+                QLabel#subtituloMarca,
+                QLabel#descripcionPrincipal,
+                QLabel#perfilActivo,
+                QLabel#periodoHeader,
+                QLabel#rolPanelPerfil,
+                QLabel#tituloDatoPerfil,
+                QLabel#detallePanelPerfil,
+                QLabel#descripcionPanel,
+                QLabel#tabsSuaves {{
+                    color: {paleta["texto_secundario"]};
+                }}
+                QLabel#tituloPanel,
+                QLabel#valorDatoPerfil,
+                QLabel#sistemaPanelPerfil {{
+                    color: {paleta["texto_panel_principal"]};
+                }}
+                QToolButton#botonToggleSidebar {{
+                    color: {paleta["texto_secundario"]};
+                }}
+                QToolButton#botonToggleSidebar:hover {{
+                    background: {paleta["fondo_superficie_suave"]};
+                }}
+                QToolButton#botonToggleSidebar[activa="true"] {{
+                    color: {paleta["texto_principal"]};
+                }}
+                QPushButton#botonSidebar {{
+                    background: {paleta["fondo_superficie_muy_suave"]};
+                    color: {paleta["texto_input"]};
+                }}
+                QPushButton#botonSidebar[tipoSidebar="accion"] {{
+                    background: {paleta["fondo_panel_accion"]};
+                }}
+                QPushButton#botonSidebar:hover {{
+                    background: {paleta["fondo_superficie"]};
+                    border-color: {paleta["borde_principal"]};
+                }}
+                QPushButton#botonSidebar[activo="true"] {{
+                    background: {paleta["fondo_badge_activo"]};
+                    border-color: {paleta["borde_badge_activo"]};
+                    color: {paleta["texto_principal"]};
+                }}
+                QWidget#tarjetaInsight {{
+                    background: {paleta["fondo_superficie_suave"]};
+                    border: 1px solid {paleta["borde_principal"]};
+                }}
+                QLabel#insightTitulo,
+                QLabel#rankingEtiqueta,
+                QLabel#rankingValor,
+                QLabel#insightDetalle {{
+                    color: {paleta["texto_panel_detalle"]};
+                }}
+                QLabel#insightValor {{
+                    color: {paleta["texto_panel_fuerte"]};
+                }}
+                QProgressBar#rankingBarra {{
+                    background: {paleta["ranking_barra"]};
+                }}
+                QProgressBar#rankingBarra::chunk {{
+                    background: {paleta["ranking_chunk"]};
+                }}
+                QLabel#iconoDatoPerfil,
+                QLabel#logoSidebar {{
+                    background: {paleta["fondo_superficie_suave"]};
+                    border: 1px solid {paleta["borde_suave"]};
+                }}
+                """
+            )

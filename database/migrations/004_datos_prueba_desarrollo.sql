@@ -438,7 +438,152 @@ JOIN periodos_cobro p
 WHERE a.dni = '0801199000044';
 
 -- ============================================================
--- 7. Pago y comprobante de prueba
+-- 7. Plan de pago activo e historial de propietarios
+-- ============================================================
+
+INSERT INTO planes_pago(
+    abonado_id,
+    casa_id,
+    fecha_inicio,
+    fecha_fin,
+    monto_total_centavos,
+    cuota_regular_centavos,
+    cantidad_cuotas,
+    cuotas_pagadas,
+    estado,
+    observaciones,
+    creado_por
+)
+SELECT
+    a.id,
+    c.id,
+    date('now', 'start of month'),
+    date('now', 'start of month', '+1 month', '+29 day'),
+    70000,
+    35000,
+    2,
+    0,
+    'ACTIVO',
+    '[PRUEBA] Plan activo asociado a cargos pendientes de la casa.',
+    (SELECT id FROM usuarios WHERE lower(nombre_usuario) = 'admin')
+FROM abonados a
+JOIN casas c ON c.abonado_id = a.id
+WHERE a.dni = '0801199000022'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM planes_pago pp
+      WHERE pp.casa_id = c.id
+        AND pp.estado = 'ACTIVO'
+  );
+
+INSERT INTO cuotas_plan_pago(
+    plan_pago_id,
+    numero_cuota,
+    fecha_vencimiento,
+    monto_centavos,
+    saldo_pendiente_centavos,
+    estado,
+    cargo_id
+)
+SELECT
+    pp.id,
+    1,
+    date('now', '-5 day'),
+    35000,
+    35000,
+    'VENCIDO',
+    cg.id
+FROM planes_pago pp
+JOIN casas c ON c.id = pp.casa_id
+JOIN abonados a ON a.id = c.abonado_id
+JOIN cargos cg ON cg.casa_id = c.id
+WHERE a.dni = '0801199000022'
+  AND cg.descripcion = '[PRUEBA] Servicio mensual vencido'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM cuotas_plan_pago cpp
+      WHERE cpp.plan_pago_id = pp.id
+        AND cpp.numero_cuota = 1
+  );
+
+INSERT INTO cuotas_plan_pago(
+    plan_pago_id,
+    numero_cuota,
+    fecha_vencimiento,
+    monto_centavos,
+    saldo_pendiente_centavos,
+    estado,
+    cargo_id
+)
+SELECT
+    pp.id,
+    2,
+    date('now', '+25 day'),
+    35000,
+    35000,
+    'PENDIENTE',
+    cg.id
+FROM planes_pago pp
+JOIN casas c ON c.id = pp.casa_id
+JOIN abonados a ON a.id = c.abonado_id
+JOIN cargos cg ON cg.casa_id = c.id
+WHERE a.dni = '0801199000022'
+  AND cg.descripcion = '[PRUEBA] Servicio mensual pendiente'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM cuotas_plan_pago cpp
+      WHERE cpp.plan_pago_id = pp.id
+        AND cpp.numero_cuota = 2
+  );
+
+INSERT INTO planes_pago_cargos(plan_pago_id, cargo_id)
+SELECT
+    pp.id,
+    cg.id
+FROM planes_pago pp
+JOIN casas c ON c.id = pp.casa_id
+JOIN abonados a ON a.id = c.abonado_id
+JOIN cargos cg ON cg.casa_id = c.id
+WHERE a.dni = '0801199000022'
+  AND cg.descripcion IN (
+      '[PRUEBA] Servicio mensual vencido',
+      '[PRUEBA] Servicio mensual pendiente'
+  )
+  AND NOT EXISTS (
+      SELECT 1
+      FROM planes_pago_cargos ppc
+      WHERE ppc.plan_pago_id = pp.id
+        AND ppc.cargo_id = cg.id
+  );
+
+INSERT INTO historial_propietarios_casa(
+    casa_id,
+    abonado_anterior_id,
+    abonado_nuevo_id,
+    fecha_cambio,
+    motivo,
+    usuario_id
+)
+SELECT
+    c.id,
+    a_anterior.id,
+    a_nuevo.id,
+    datetime('now', '-18 day'),
+    '[PRUEBA] Traspaso administrativo previo registrado para pruebas.',
+    (SELECT id FROM usuarios WHERE lower(nombre_usuario) = 'admin')
+FROM casas c
+JOIN abonados a_nuevo ON a_nuevo.id = c.abonado_id
+JOIN abonados a_anterior ON a_anterior.dni = '0801199000011'
+WHERE a_nuevo.dni = '0801199000044'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM historial_propietarios_casa h
+      WHERE h.casa_id = c.id
+        AND h.abonado_nuevo_id = a_nuevo.id
+  );
+
+-- ============================================================
+-- 8. Pago y comprobante de prueba
 -- ============================================================
 
 INSERT INTO pagos(
@@ -535,7 +680,67 @@ WHERE p.referencia_externa = 'PAGO-PRUEBA-001'
   );
 
 -- ============================================================
--- 8. Registro de migracion
+-- 9. Reajuste de triggers de auditoria tras migraciones legacy
+-- ============================================================
+
+DROP TRIGGER IF EXISTS trg_auditoria_pago_anulado;
+CREATE TRIGGER trg_auditoria_pago_anulado
+AFTER UPDATE OF estado ON pagos
+FOR EACH ROW
+WHEN OLD.estado <> NEW.estado AND NEW.estado = 'ANULADO'
+BEGIN
+    INSERT INTO auditoria(
+        usuario_id,
+        accion,
+        entidad,
+        entidad_id,
+        resumen,
+        datos_antes_json,
+        datos_despues_json,
+        fecha_evento
+    )
+    VALUES (
+        NEW.anulado_por,
+        'ANULAR_PAGO',
+        'pagos',
+        NEW.id,
+        'Pago anulado: REC-' || printf('%06d', NEW.id),
+        json_object('estado', OLD.estado, 'total_pagado_centavos', OLD.total_pagado_centavos),
+        json_object('estado', NEW.estado, 'motivo_anulacion', NEW.motivo_anulacion),
+        datetime('now')
+    );
+END;
+
+DROP TRIGGER IF EXISTS trg_auditoria_cambio_estado_casa;
+CREATE TRIGGER trg_auditoria_cambio_estado_casa
+AFTER UPDATE OF estado_servicio ON casas
+FOR EACH ROW
+WHEN OLD.estado_servicio <> NEW.estado_servicio
+BEGIN
+    INSERT INTO auditoria(
+        usuario_id,
+        accion,
+        entidad,
+        entidad_id,
+        resumen,
+        datos_antes_json,
+        datos_despues_json,
+        fecha_evento
+    )
+    VALUES (
+        NULL,
+        'CAMBIAR_ESTADO_SERVICIO',
+        'casas',
+        NEW.id,
+        'Cambio de estado de servicio de casa ' || NEW.id,
+        json_object('estado_servicio', OLD.estado_servicio),
+        json_object('estado_servicio', NEW.estado_servicio),
+        datetime('now')
+    );
+END;
+
+-- ============================================================
+-- 10. Registro de migracion
 -- ============================================================
 
 INSERT INTO esquema_migraciones(version, descripcion, checksum)

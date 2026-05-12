@@ -17,7 +17,7 @@ if str(RUTA_SRC) not in sys.path:
     sys.path.insert(0, str(RUTA_SRC))
 
 from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtWidgets import QApplication, QToolButton, QWidget  # noqa: E402
+from PySide6.QtWidgets import QApplication, QScrollArea, QTableWidget, QToolButton, QWidget  # noqa: E402
 
 from app import (  # noqa: E402
     ALTO_VENTANA_AUTENTICACION,
@@ -34,8 +34,37 @@ from modulos.autenticacion.vista import (  # noqa: E402
     VistaAutenticacion,
 )
 from modulos.mantenimiento.vista import VistaMantenimiento  # noqa: E402
-from modulos.barrios.vista import VistaBarrios  # noqa: E402
+from modulos.barrios.vista import (  # noqa: E402
+    DialogoConfirmacionEstadoBarrio,
+    DialogoDetalleBarrio,
+    DialogoFormularioBarrio,
+    VistaBarrios,
+)
 from modulos.barrios.entidades import Barrio  # noqa: E402
+from modulos.abonados.vista import (  # noqa: E402
+    DialogoConfirmacionEstadoAbonado,
+    DialogoDetalleAbonado,
+    DialogoFormularioAbonado,
+    VistaAbonados,
+)
+from modulos.abonados.entidades import Abonado, OpcionBarrio  # noqa: E402
+from modulos.casas.vista import (  # noqa: E402
+    DialogoCambioDuenoCasa,
+    DialogoConfirmacionEstadoCasa,
+    DialogoDetalleCasa,
+    DialogoFormularioCasa,
+    DialogoHistorialPropietariosCasa,
+    VistaCasas,
+)
+from modulos.configuracion.vista import VistaConfiguracion  # noqa: E402
+from modulos.casas.entidades import (  # noqa: E402
+    Casa,
+    DetalleCasa,
+    HistorialPropietarioCasa,
+    OpcionAbonado,
+    OpcionBarrio as OpcionBarrioCasa,
+)
+from modulos.planes_pago.vista import VistaPlanesPago  # noqa: E402
 from modulos.principal.vista import VistaModuloPrincipal  # noqa: E402
 
 
@@ -184,6 +213,9 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertEqual(ventana_principal.sesion_activa.token_sesion, "token-prueba-123")
             self.assertEqual(ventana_principal.contenedor_central.count(), 2)
             self.assertFalse(ventana_principal.vista_modulo_principal._boton_mantenimiento.isVisible())
+            self.assertIsInstance(ventana_principal.vista_casas, VistaCasas)
+            self.assertIsInstance(ventana_principal.vista_planes_pago, VistaPlanesPago)
+            self.assertIsInstance(ventana_principal.vista_configuracion, VistaConfiguracion)
             self.assertTrue(
                 bool(ventana_principal.windowFlags() & Qt.WindowType.WindowMaximizeButtonHint)
             )
@@ -277,7 +309,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertEqual(vista_principal._modo_dashboard_actual, "compacto")
             self.assertGreater(vista_principal._scroll_dashboard.verticalScrollBar().maximum(), 0)
 
-            ventana_principal.resize(1600, 960)
+            ventana_principal.resize(1500, 960)
             self.aplicacion.processEvents()
             self.assertEqual(vista_principal._modo_dashboard_actual, "medio")
             self.assertGreater(vista_principal._scroll_dashboard.verticalScrollBar().maximum(), 0)
@@ -402,6 +434,358 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertTrue(vista._mensaje.isHidden())
         self.assertEqual(vista._mensaje.text(), "")
         vista.close()
+
+    def test_vista_abonados_usa_patron_visual_de_barrios_en_tabla_y_acciones(self) -> None:
+        vista = VistaAbonados()
+        vista.show()
+        self.aplicacion.processEvents()
+
+        panel_tabla = vista.findChild(QWidget, "panelTablaAbonados")
+        tabla = vista.findChild(type(vista._tabla), "tablaAbonados")
+        viewport = vista._tabla.viewport()
+
+        self.assertIsNotNone(panel_tabla)
+        self.assertIs(tabla, vista._tabla)
+        self.assertEqual(viewport.objectName(), "viewportTablaAbonados")
+        self.assertIn("QFrame#panelTablaAbonados", vista.styleSheet())
+        self.assertIn("QTableWidget#tablaAbonados", vista.styleSheet())
+        self.assertIn(f"border-radius: {vista.RADIO_PANEL_TABLA}px;", vista.styleSheet())
+        self.assertIn(f"padding: 0 0 {vista.RADIO_PANEL_TABLA}px 0;", vista.styleSheet())
+        self.assertIn("QTableWidget#tablaAbonados QHeaderView::section", vista.styleSheet())
+        self.assertEqual(vista._tabla.frameShape(), vista._tabla.Shape.NoFrame)
+        self.assertFalse(vista._tabla.horizontalHeader().stretchLastSection())
+
+        fila_acciones = vista._crear_acciones_fila(
+            Abonado(identificador=1, dni="0801199000011", nombre_completo="Ana Martinez", estado="ACTIVO")
+        )
+        botones_accion = fila_acciones.findChildren(QToolButton, "botonIconoFilaAbonado")
+        self.assertEqual(len(botones_accion), 3)
+        self.assertTrue(all(not boton.text() for boton in botones_accion))
+        self.assertTrue(all(not boton.icon().isNull() for boton in botones_accion))
+        self.assertTrue(all(boton.iconSize().width() == 18 for boton in botones_accion))
+        self.assertEqual(fila_acciones.minimumHeight(), 58)
+        vista.close()
+
+    def test_notificacion_abonados_desaparece_tras_temporizador(self) -> None:
+        vista = VistaAbonados()
+
+        vista.mostrar_mensaje("Abonado actualizado correctamente.")
+
+        self.assertFalse(vista._mensaje.isHidden())
+        self.assertTrue(vista._temporizador_mensaje.isActive())
+        self.assertEqual(
+            vista._temporizador_mensaje.interval(),
+            vista.DURACION_MENSAJE_MS,
+        )
+
+        vista._temporizador_mensaje.timeout.emit()
+
+        self.assertTrue(vista._mensaje.isHidden())
+        self.assertEqual(vista._mensaje.text(), "")
+        vista.close()
+
+    def test_vista_casas_usa_patron_visual_compatibile_y_acciones_compactas(self) -> None:
+        vista = VistaCasas()
+        vista.show()
+        self.aplicacion.processEvents()
+
+        panel_tabla = vista.findChild(QWidget, "panelTablaCasas")
+        tabla = vista.findChild(type(vista._tabla), "tablaCasas")
+        viewport = vista._tabla.viewport()
+
+        self.assertIsNotNone(panel_tabla)
+        self.assertIs(tabla, vista._tabla)
+        self.assertEqual(viewport.objectName(), "viewportTablaCasas")
+        self.assertIn("QFrame#panelTablaCasas", vista.styleSheet())
+        self.assertIn("QTableWidget#tablaCasas", vista.styleSheet())
+        self.assertIn(f"border-radius: {vista.RADIO_PANEL_TABLA}px;", vista.styleSheet())
+        self.assertIn(f"padding: 0 0 {vista.RADIO_PANEL_TABLA}px 0;", vista.styleSheet())
+        self.assertIn("QTableWidget#tablaCasas QHeaderView::section", vista.styleSheet())
+        self.assertEqual(vista._tabla.frameShape(), vista._tabla.Shape.NoFrame)
+        self.assertFalse(vista._tabla.horizontalHeader().stretchLastSection())
+
+        fila_acciones = vista._crear_acciones_fila(
+            Casa(identificador=1, abonado_nombre="Ana Martinez", barrio_nombre="Centro", estado_servicio="ACTIVO")
+        )
+        botones_accion = fila_acciones.findChildren(QToolButton, "botonIconoFilaCasa")
+        self.assertEqual(len(botones_accion), 5)
+        self.assertTrue(all(not boton.text() for boton in botones_accion))
+        self.assertTrue(all(not boton.icon().isNull() for boton in botones_accion))
+        self.assertTrue(all(boton.iconSize().width() == 18 for boton in botones_accion))
+        self.assertEqual(fila_acciones.minimumHeight(), 58)
+        vista.close()
+
+    def test_shell_principal_reduce_ancho_sidebar_sin_expandir_menu(self) -> None:
+        vista_principal = VistaModuloPrincipal()
+
+        self.assertEqual(vista_principal._sidebar.minimumWidth(), 204)
+        self.assertEqual(vista_principal._sidebar.maximumWidth(), 212)
+        vista_principal.close()
+
+    def test_notificacion_casas_desaparece_tras_temporizador(self) -> None:
+        vista = VistaCasas()
+
+        vista.mostrar_mensaje("Casa actualizada correctamente.")
+
+        self.assertFalse(vista._mensaje.isHidden())
+        self.assertTrue(vista._temporizador_mensaje.isActive())
+        self.assertEqual(
+            vista._temporizador_mensaje.interval(),
+            vista.DURACION_MENSAJE_MS,
+        )
+
+        vista._temporizador_mensaje.timeout.emit()
+
+        self.assertTrue(vista._mensaje.isHidden())
+        self.assertEqual(vista._mensaje.text(), "")
+        vista.close()
+
+    def test_dialogos_casas_optimizan_detalle_scroll_y_tabla_historial_estilizada(self) -> None:
+        casa = Casa(
+            identificador=7,
+            abonado_id=3,
+            abonado_nombre="Diana Flores",
+            abonado_dni="0801199000033",
+            barrio_nombre="San Jorge",
+            direccion_referencia="Frente al pozo principal, pasaje norte",
+            observaciones="Observacion administrativa larga para validar separacion visual.",
+            estado_servicio="SUSPENDIDO",
+            deuda_total_centavos=123450,
+            meses_pendientes=4,
+            meses_en_mora=2,
+        )
+        historial = [
+            HistorialPropietarioCasa(
+                identificador=1,
+                fecha_cambio="2026-05-01 10:30:00",
+                abonado_anterior_nombre="Ana Martinez",
+                abonado_nuevo_nombre="Diana Flores",
+                motivo="Actualizacion administrativa",
+                usuario_nombre="Administrador",
+            )
+        ]
+
+        dialogo_detalle = DialogoDetalleCasa(
+            detalle=DetalleCasa(
+                casa=casa,
+                historial_propietarios=tuple(historial),
+                ultima_fecha_cambio_dueno="2026-05-01 10:30:00",
+            ),
+            formateador_fecha=lambda valor: valor,
+            formateador_moneda=lambda valor: f"L {valor / 100:,.2f}",
+        )
+        dialogo_detalle.show()
+        self.aplicacion.processEvents()
+
+        scroll = dialogo_detalle.findChild(QScrollArea, "scrollDetalleCasa")
+        self.assertIsNotNone(scroll)
+        self.assertTrue(scroll.widgetResizable())
+        self.assertIn("QScrollArea#scrollDetalleCasa", dialogo_detalle.styleSheet())
+        self.assertIn("QFrame#seccionDetalleCasa", dialogo_detalle.styleSheet())
+        self.assertIn("QLabel#tituloSeccionDetalleCasa", dialogo_detalle.styleSheet())
+
+        dialogo_historial = DialogoHistorialPropietariosCasa(
+            casa=casa,
+            historial=historial,
+            formateador_fecha=lambda valor: valor,
+        )
+        dialogo_historial.show()
+        self.aplicacion.processEvents()
+
+        tabla_historial = dialogo_historial.findChild(QTableWidget, "tablaHistorialCasa")
+        self.assertIsNotNone(tabla_historial)
+        self.assertEqual(tabla_historial.viewport().objectName(), "viewportTablaHistorialCasa")
+        self.assertIn("QTableWidget#tablaHistorialCasa", dialogo_historial.styleSheet())
+        self.assertIn("QFrame#panelHistorialCasa", dialogo_historial.styleSheet())
+        self.assertIn("QTableWidget#tablaHistorialCasa QHeaderView::section", dialogo_historial.styleSheet())
+
+        dialogo_detalle.close()
+        dialogo_historial.close()
+
+    def test_dialogos_abonados_y_barrios_usan_scroll_y_secciones_optimizadas(self) -> None:
+        dialogo_abonado = DialogoDetalleAbonado(
+            abonado=Abonado(
+                identificador=5,
+                dni="0801199000055",
+                nombre_completo="Victor Hugo Lopez Hernandez",
+                telefono="9999-0001",
+                barrio_nombre="Centro",
+                direccion_referencia="Casa esquinera frente al parque central",
+                observaciones="Observacion extensa para validar lectura y separacion visual.",
+                estado="ACTIVO",
+                total_casas=3,
+                meses_en_mora=1,
+                deuda_total_centavos=80500,
+                tiene_plan_activo=True,
+            ),
+            fecha_actualizada="2026-05-09 08:00:00",
+            deuda_formateada="L 805.00",
+        )
+        dialogo_abonado.show()
+        self.aplicacion.processEvents()
+
+        scroll_abonado = dialogo_abonado.findChild(QScrollArea, "scrollDetalleAbonado")
+        self.assertIsNotNone(scroll_abonado)
+        self.assertTrue(scroll_abonado.widgetResizable())
+        self.assertIn("QFrame#seccionDetalleAbonado", dialogo_abonado.styleSheet())
+        self.assertIn("QLabel#tituloSeccionDetalleAbonado", dialogo_abonado.styleSheet())
+
+        dialogo_barrio = DialogoDetalleBarrio(
+            barrio=Barrio(
+                identificador=2,
+                nombre="San Jorge",
+                estado="ACTIVO",
+                observaciones="Observacion territorial larga para validar el nuevo bloque de detalle.",
+                total_abonados=24,
+                total_casas=28,
+            ),
+            fecha_actualizada="2026-05-09 08:00:00",
+        )
+        dialogo_barrio.show()
+        self.aplicacion.processEvents()
+
+        scroll_barrio = dialogo_barrio.findChild(QScrollArea, "scrollDetalleBarrio")
+        self.assertIsNotNone(scroll_barrio)
+        self.assertTrue(scroll_barrio.widgetResizable())
+        self.assertIn("QFrame#seccionDetalleBarrio", dialogo_barrio.styleSheet())
+        self.assertIn("QLabel#tituloSeccionDetalleBarrio", dialogo_barrio.styleSheet())
+
+        dialogo_abonado.close()
+        dialogo_barrio.close()
+
+    def test_formularios_y_confirmaciones_usan_modalidad_visual_armonizada(self) -> None:
+        abonado = Abonado(
+            identificador=3,
+            dni="0801199000033",
+            nombre_completo="Diana Flores",
+            telefono="9999-3030",
+            barrio_id=1,
+            barrio_nombre="Centro",
+            direccion_referencia="Dos cuadras al sur del tanque",
+            observaciones="Observacion de prueba.",
+            estado="ACTIVO",
+        )
+        barrio = Barrio(
+            identificador=2,
+            nombre="San Jorge",
+            estado="ACTIVO",
+            observaciones="Observacion del barrio.",
+            total_abonados=10,
+            total_casas=12,
+        )
+        casa = Casa(
+            identificador=8,
+            abonado_id=3,
+            abonado_nombre="Diana Flores",
+            abonado_dni="0801199000033",
+            barrio_id=2,
+            barrio_nombre="San Jorge",
+            direccion_referencia="Casa frente al parque",
+            observaciones="Observacion de casa.",
+            estado_servicio="ACTIVO",
+        )
+
+        dialogo_form_abonado = DialogoFormularioAbonado(
+            barrios=[OpcionBarrio(1, "Centro"), OpcionBarrio(2, "San Jorge")],
+            abonado=abonado,
+        )
+        dialogo_form_barrio = DialogoFormularioBarrio(barrio=barrio)
+        dialogo_form_casa = DialogoFormularioCasa(
+            barrios=[OpcionBarrioCasa(1, "Centro"), OpcionBarrioCasa(2, "San Jorge")],
+            abonados=[OpcionAbonado(3, "Diana Flores", "0801199000033", "ACTIVO")],
+            casa=casa,
+        )
+        dialogo_cambio_dueno = DialogoCambioDuenoCasa(
+            casa=casa,
+            abonados=[
+                OpcionAbonado(3, "Diana Flores", "0801199000033", "ACTIVO"),
+                OpcionAbonado(4, "Ernesto Lopez", "0801199000044", "ACTIVO"),
+            ],
+        )
+        dialogo_confirm_abonado = DialogoConfirmacionEstadoAbonado(abonado)
+        dialogo_confirm_barrio = DialogoConfirmacionEstadoBarrio(barrio)
+        dialogo_confirm_casa = DialogoConfirmacionEstadoCasa(casa)
+
+        for dialogo in (
+            dialogo_form_abonado,
+            dialogo_form_barrio,
+            dialogo_form_casa,
+            dialogo_cambio_dueno,
+            dialogo_confirm_abonado,
+            dialogo_confirm_barrio,
+            dialogo_confirm_casa,
+        ):
+            dialogo.show()
+            self.aplicacion.processEvents()
+            self.assertGreaterEqual(dialogo.minimumWidth(), 520)
+            self.assertIn("QFrame#bloqueDialogoSicap", dialogo.styleSheet())
+            dialogo.close()
+
+    def test_toggle_tema_aplica_paleta_clara_en_shell_y_modulos_registrados(self) -> None:
+        vista_principal = VistaModuloPrincipal()
+        vista_barrios = VistaBarrios()
+        vista_abonados = VistaAbonados()
+        vista_casas = VistaCasas()
+        vista_planes = VistaPlanesPago()
+        vista_configuracion = VistaConfiguracion()
+
+        vista_principal.registrar_modulo("barrios", vista_barrios)
+        vista_principal.registrar_modulo("abonados", vista_abonados)
+        vista_principal.registrar_modulo("casas", vista_casas)
+        vista_principal.registrar_modulo("planes_pago", vista_planes)
+        vista_principal.registrar_modulo("configuracion", vista_configuracion)
+        vista_principal.show()
+        self.aplicacion.processEvents()
+
+        vista_principal.aplicar_tema("claro")
+        self.aplicacion.processEvents()
+
+        self.assertEqual(vista_principal._tema_actual, "claro")
+        self.assertEqual(vista_principal._boton_tema.text(), "Modo oscuro")
+        self.assertEqual(vista_principal._boton_tema.property("temaActivo"), "claro")
+        self.assertFalse(vista_principal._boton_tema.icon().isNull())
+        self.assertEqual(vista_barrios._tema_actual, "claro")
+        self.assertEqual(vista_abonados._tema_actual, "claro")
+        self.assertEqual(vista_casas._tema_actual, "claro")
+        self.assertEqual(vista_planes._tema_actual, "claro")
+        self.assertEqual(vista_configuracion._tema_actual, "claro")
+        self.assertIn("QPushButton#botonTemaHeader", vista_principal.styleSheet())
+        self.assertIn("#eef2f7", vista_principal._paleta_tema["fondo_principal"])
+
+        vista_principal._alternar_tema()
+        self.aplicacion.processEvents()
+
+        self.assertEqual(vista_principal._tema_actual, "oscuro")
+        self.assertEqual(vista_principal._boton_tema.text(), "Modo claro")
+        self.assertEqual(vista_barrios._tema_actual, "oscuro")
+        self.assertEqual(vista_abonados._tema_actual, "oscuro")
+        self.assertEqual(vista_casas._tema_actual, "oscuro")
+        self.assertEqual(vista_planes._tema_actual, "oscuro")
+        self.assertEqual(vista_configuracion._tema_actual, "oscuro")
+        vista_principal.close()
+        vista_barrios.close()
+        vista_abonados.close()
+        vista_casas.close()
+        vista_planes.close()
+        vista_configuracion.close()
+
+    def test_vistas_planes_y_configuracion_siguen_patron_visual_compartido(self) -> None:
+        vista_planes = VistaPlanesPago()
+        vista_configuracion = VistaConfiguracion()
+        vista_planes.show()
+        vista_configuracion.show()
+        self.aplicacion.processEvents()
+
+        self.assertIn("QFrame#panelTablaPlanes", vista_planes.styleSheet())
+        self.assertEqual(vista_planes._tabla.viewport().objectName(), "viewportTablaPlanes")
+        self.assertEqual(vista_configuracion._tabs.count(), 4)
+        self.assertEqual(vista_configuracion._tabs.tabText(0), "Datos de la junta")
+        self.assertEqual(vista_configuracion._tabs.tabText(1), "Parametros de cobro")
+        self.assertEqual(vista_configuracion._tabs.tabText(2), "Seguridad")
+        self.assertEqual(vista_configuracion._tabs.tabText(3), "Informacion")
+
+        vista_planes.close()
+        vista_configuracion.close()
 
 
 if __name__ == "__main__":

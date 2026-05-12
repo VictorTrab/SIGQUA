@@ -15,8 +15,10 @@ if str(RUTA_SRC) not in sys.path:
     sys.path.insert(0, str(RUTA_SRC))
 
 from PySide6.QtCore import QPoint  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication, QPushButton  # noqa: E402
 
+from modulos.abonados.entidades import OpcionBarrio  # noqa: E402
+from modulos.abonados.vista import DialogoFormularioAbonado  # noqa: E402
 from comun.ui.componentes import (  # noqa: E402
     MARGEN_EXTERNO_DIALOGO,
     RADIO_TARJETA_DIALOGO,
@@ -37,6 +39,12 @@ class TestDialogosSicap(unittest.TestCase):
         dialogo.show()
         self.aplicacion.processEvents()
         return dialogo, dialogo.grab().toImage()
+
+    def _assert_botones_solo_texto(self, dialogo) -> None:
+        botones = dialogo.findChildren(QPushButton)
+        self.assertTrue(botones)
+        for boton in botones:
+            self.assertTrue(boton.icon().isNull(), boton.text())
 
     def test_dialogo_mensaje_recorta_esquinas_y_conserva_transparencia(self) -> None:
         dialogo, _ = self._capturar_dialogo(
@@ -79,6 +87,20 @@ class TestDialogosSicap(unittest.TestCase):
             self.assertEqual(origen_tarjeta, QPoint(0, 0))
             self.assertFalse(mascara.contains(QPoint(0, 0)))
             self.assertTrue(mascara.contains(QPoint(RADIO_TARJETA_DIALOGO, 1)))
+            self._assert_botones_solo_texto(dialogo)
+            dialogo.close()
+
+    def test_dialogos_compactos_eliminan_iconos_en_botones(self) -> None:
+        dialogos = [
+            DialogoMensajeSicap("Aviso", "Mensaje breve para revisar acciones compactas."),
+            DialogoFormularioAbonado(barrios=[OpcionBarrio(1, "Centro")]),
+        ]
+
+        for dialogo in dialogos:
+            self._capturar_dialogo(dialogo)
+            self._assert_botones_solo_texto(dialogo)
+            self.assertLessEqual(dialogo._layout_tarjeta.contentsMargins().left(), 14)
+            self.assertLessEqual(dialogo.layout_cuerpo.spacing(), 10)
             dialogo.close()
 
     def test_dialogo_detalle_barrio_unifica_panel_y_acciones_en_un_mismo_bloque(self) -> None:

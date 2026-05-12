@@ -16,7 +16,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from comun.ui import configurar_tabla_operativa, crear_boton_operativo, crear_item_tabla
+from comun.ui import (
+    aplicar_estilo_boton_operativo,
+    configurar_tabla_operativa,
+    crear_boton_operativo,
+    crear_item_tabla,
+)
+from comun.ui.temas import TEMA_SICAP_PREDETERMINADO, obtener_paleta_tema
 from modulos.usuarios.entidades import UsuarioSistema
 
 
@@ -29,9 +35,19 @@ class VistaUsuarios(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
+        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._usuario_seleccionado: UsuarioSistema | None = None
         self._construir_ui()
         self._aplicar_estilos()
+
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._tema_actual = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        self._paleta_tema = obtener_paleta_tema(self._tema_actual)
+        self._aplicar_estilos()
+        aplicar_estilo_boton_operativo(self._boton_recargar, principal=False)
+        aplicar_estilo_boton_operativo(self._boton_restablecer, principal=True)
+        aplicar_estilo_boton_operativo(self._boton_desbloquear, principal=False)
 
     def mostrar_usuarios(self, usuarios: list[UsuarioSistema]) -> None:
         """Renderiza el listado visible para el actor autenticado."""
@@ -259,3 +275,42 @@ class VistaUsuarios(QWidget):
             }
             """
         )
+        if self._tema_actual == "claro":
+            paleta = self._paleta_tema
+            self.setStyleSheet(
+                self.styleSheet()
+                + f"""
+                #tituloModulo,
+                #subtituloPanel {{
+                    color: {paleta["texto_principal"]};
+                }}
+                #descripcionModulo,
+                #textoSecundario,
+                QLabel {{
+                    color: {paleta["texto_secundario"]};
+                }}
+                #panelOperativo {{
+                    background: {paleta["fondo_superficie"]};
+                    border: 1px solid {paleta["borde_principal"]};
+                }}
+                QLineEdit {{
+                    border: 1px solid {paleta["borde_medio"]};
+                    background: {paleta["fondo_input"]};
+                    color: {paleta["texto_input"]};
+                }}
+                QLineEdit:focus {{
+                    border: 1px solid {paleta["borde_foco_input"]};
+                    background: {paleta["fondo_input_focus"]};
+                }}
+                #mensajeModulo[estado="exito"] {{
+                    color: {paleta["texto_exito"]};
+                    background: {paleta["fondo_exito"]};
+                    border: 1px solid {paleta["borde_exito"]};
+                }}
+                #mensajeModulo[estado="error"] {{
+                    color: {paleta["texto_error"]};
+                    background: {paleta["fondo_error"]};
+                    border: 1px solid {paleta["borde_error"]};
+                }}
+                """
+            )

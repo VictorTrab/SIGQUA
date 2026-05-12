@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QRectF, QSize, Qt
-from PySide6.QtGui import QPaintEvent, QPainter, QPainterPath, QRegion, QResizeEvent
+from PySide6.QtGui import QIcon, QPaintEvent, QPainter, QPainterPath, QRegion, QResizeEvent
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -18,6 +18,12 @@ from PySide6.QtWidgets import (
 )
 
 from comun.ui.iconos import obtener_icono_tabler_coloreado
+from comun.ui.temas import (
+    TEMA_SICAP_PREDETERMINADO,
+    obtener_paleta_tema,
+    obtener_paleta_tema_actual,
+    obtener_tema_actual,
+)
 
 
 COLOR_TEXTO_PRIMARIO = "#10233d"
@@ -27,9 +33,13 @@ COLOR_FONDO_PANEL = "rgba(255, 255, 255, 0.12)"
 COLOR_FONDO_DIALOGO = "#565384"
 RADIO_TARJETA_DIALOGO = 4
 MARGEN_EXTERNO_DIALOGO = 0
+PADDING_TARJETA_DIALOGO = 14
+ESPACIADO_TARJETA_DIALOGO = 10
+PADDING_BLOQUE_DIALOGO = 12
+ALTURA_BOTON_DIALOGO = 34
 
 
-def _crear_estilo_dialogo_sicap(color_fondo: str) -> str:
+def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> str:
     return f"""
     QDialog#dialogoBaseSicap,
     QWidget#tarjetaDialogoSicap,
@@ -41,86 +51,96 @@ def _crear_estilo_dialogo_sicap(color_fondo: str) -> str:
     }}
     QFrame#bloqueDialogoSicap {{
         background: {color_fondo};
-        border: 1px solid rgba(255, 255, 255, 0.10);
+        border: 1px solid {paleta["borde_suave"]};
         border-radius: 4px;
     }}
     QLabel#tituloDialogoSicap {{
-        color: #ffffff;
-        font-size: 20px;
-        font-weight: 900;
+        color: {paleta["texto_principal"]};
+        font-size: 18px;
+        font-weight: 800;
     }}
     QLabel#descripcionDialogoSicap {{
-        color: rgba(232, 239, 249, 0.80);
-        font-size: 13px;
+        color: {paleta["texto_suave"]};
+        font-size: 12px;
     }}
     QLabel#mensajeErrorDialogoSicap {{
-        color: #ffd7d2;
-        background: rgba(191, 60, 44, 0.18);
-        border: 1px solid rgba(255, 205, 199, 0.20);
+        color: {paleta["texto_error"]};
+        background: {paleta["fondo_error"]};
+        border: 1px solid {paleta["borde_error"]};
         border-radius: 4px;
-        padding: 10px 12px;
-        font-size: 13px;
+        padding: 8px 10px;
+        font-size: 12px;
         font-weight: 700;
     }}
     QLabel#etiquetaDatoDialogoSicap {{
-        color: rgba(232, 239, 249, 0.72);
+        color: {paleta["texto_muted"]};
         font-size: 12px;
         font-weight: 700;
     }}
     QLabel#valorDatoDialogoSicap {{
-        color: #f5fbff;
+        color: {paleta["texto_input"]};
         font-size: 13px;
         font-weight: 800;
     }}
     QLineEdit, QComboBox, QPlainTextEdit {{
-        border: 1px solid rgba(255, 255, 255, 0.18);
+        border: 1px solid {paleta["borde_medio"]};
         border-radius: 4px;
-        background: rgba(255, 255, 255, 0.11);
-        color: #f5fbff;
-        padding: 10px 12px;
+        background: {paleta["fondo_input"]};
+        color: {paleta["texto_input"]};
+        padding: 8px 10px;
         font-size: 13px;
     }}
     QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus {{
-        border-color: rgba(109, 241, 220, 0.40);
-        background: rgba(255, 255, 255, 0.16);
+        border-color: {paleta["borde_foco_input"]};
+        background: {paleta["fondo_input_focus"]};
     }}
     QComboBox::drop-down {{
         border: none;
         width: 24px;
     }}
     QComboBox QAbstractItemView {{
-        background: #24304d;
-        color: #f5fbff;
-        selection-background-color: rgba(109, 241, 220, 0.22);
+        background: {paleta["fondo_dialogo"]};
+        color: {paleta["texto_input"]};
+        selection-background-color: {paleta["fondo_badge_activo"]};
     }}
     QLabel {{
-        color: #f5fbff;
+        color: {paleta["texto_input"]};
         font-size: 13px;
         font-weight: 700;
     }}
     """
 
-
-ESTILO_DIALOGO_SICAP = _crear_estilo_dialogo_sicap(COLOR_FONDO_DIALOGO)
+ESTILO_DIALOGO_SICAP = _crear_estilo_dialogo_sicap(
+    COLOR_FONDO_DIALOGO,
+    obtener_paleta_tema_actual(),
+)
 
 MAPA_VARIANTES_ACCION: dict[str, dict[str, str]] = {
     "neutro": {
         "fondo": "rgba(255, 255, 255, 0.04)",
-        "fondo_hover": "rgba(255, 255, 255, 0.10)",
-        "fondo_pressed": "rgba(255, 255, 255, 0.16)",
+        "fondo_hover": "rgba(255, 255, 255, 0.12)",
+        "fondo_pressed": "rgba(255, 255, 255, 0.19)",
+        "fondo_focus": "rgba(255, 255, 255, 0.10)",
         "borde": "rgba(255, 255, 255, 0.10)",
-        "borde_hover": "rgba(255, 255, 255, 0.14)",
+        "borde_hover": "rgba(255, 255, 255, 0.20)",
+        "borde_pressed": "rgba(255, 255, 255, 0.24)",
+        "borde_focus": "rgba(255, 255, 255, 0.28)",
         "texto": "#f5fbff",
+        "texto_hover": "#ffffff",
         "icono": "#f5fbff",
         "icono_hover": "#ffffff",
     },
     "informacion": {
-        "fondo": "rgba(79, 163, 255, 0.08)",
-        "fondo_hover": "rgba(79, 163, 255, 0.18)",
-        "fondo_pressed": "rgba(79, 163, 255, 0.24)",
+        "fondo": "rgba(79, 163, 255, 0.10)",
+        "fondo_hover": "rgba(46, 127, 255, 0.30)",
+        "fondo_pressed": "rgba(32, 110, 226, 0.38)",
+        "fondo_focus": "rgba(46, 127, 255, 0.22)",
         "borde": "rgba(131, 195, 255, 0.16)",
-        "borde_hover": "rgba(131, 195, 255, 0.28)",
+        "borde_hover": "rgba(139, 199, 255, 0.42)",
+        "borde_pressed": "rgba(164, 214, 255, 0.48)",
+        "borde_focus": "rgba(164, 214, 255, 0.56)",
         "texto": "#dff1ff",
+        "texto_hover": "#ffffff",
         "icono": "#8ec9ff",
         "icono_hover": "#dff1ff",
     },
@@ -128,53 +148,195 @@ MAPA_VARIANTES_ACCION: dict[str, dict[str, str]] = {
         "fondo": "rgba(146, 128, 255, 0.08)",
         "fondo_hover": "rgba(146, 128, 255, 0.18)",
         "fondo_pressed": "rgba(146, 128, 255, 0.24)",
+        "fondo_focus": "rgba(146, 128, 255, 0.16)",
         "borde": "rgba(198, 182, 255, 0.16)",
         "borde_hover": "rgba(198, 182, 255, 0.28)",
+        "borde_pressed": "rgba(214, 202, 255, 0.34)",
+        "borde_focus": "rgba(214, 202, 255, 0.42)",
         "texto": "#f0ebff",
+        "texto_hover": "#ffffff",
         "icono": "#c6b6ff",
         "icono_hover": "#f5f1ff",
     },
     "edicion": {
-        "fondo": "rgba(247, 204, 122, 0.08)",
-        "fondo_hover": "rgba(247, 204, 122, 0.18)",
-        "fondo_pressed": "rgba(247, 204, 122, 0.24)",
+        "fondo": "rgba(247, 204, 122, 0.10)",
+        "fondo_hover": "rgba(234, 182, 63, 0.28)",
+        "fondo_pressed": "rgba(214, 162, 44, 0.36)",
+        "fondo_focus": "rgba(234, 182, 63, 0.20)",
         "borde": "rgba(247, 204, 122, 0.16)",
-        "borde_hover": "rgba(247, 204, 122, 0.28)",
+        "borde_hover": "rgba(247, 204, 122, 0.36)",
+        "borde_pressed": "rgba(255, 219, 145, 0.44)",
+        "borde_focus": "rgba(255, 219, 145, 0.52)",
         "texto": "#fff4da",
+        "texto_hover": "#fffaf0",
         "icono": "#f7cc7a",
         "icono_hover": "#fff0c7",
     },
     "primario": {
-        "fondo": "rgba(109, 241, 220, 0.10)",
-        "fondo_hover": "rgba(109, 241, 220, 0.20)",
-        "fondo_pressed": "rgba(109, 241, 220, 0.28)",
+        "fondo": "rgba(73, 201, 154, 0.16)",
+        "fondo_hover": "rgba(33, 170, 114, 0.34)",
+        "fondo_pressed": "rgba(20, 139, 90, 0.44)",
+        "fondo_focus": "rgba(33, 170, 114, 0.24)",
         "borde": "rgba(109, 241, 220, 0.18)",
-        "borde_hover": "rgba(109, 241, 220, 0.30)",
+        "borde_hover": "rgba(129, 245, 210, 0.40)",
+        "borde_pressed": "rgba(167, 255, 229, 0.48)",
+        "borde_focus": "rgba(167, 255, 229, 0.56)",
         "texto": "#ebfffb",
+        "texto_hover": "#ffffff",
         "icono": "#9ef3e4",
         "icono_hover": "#ffffff",
     },
     "salida": {
-        "fondo": "rgba(255, 255, 255, 0.04)",
-        "fondo_hover": "rgba(187, 48, 39, 0.18)",
-        "fondo_pressed": "rgba(187, 48, 39, 0.28)",
-        "borde": "rgba(255, 255, 255, 0.10)",
-        "borde_hover": "rgba(255, 137, 126, 0.28)",
+        "fondo": "rgba(182, 62, 52, 0.12)",
+        "fondo_hover": "rgba(187, 48, 39, 0.34)",
+        "fondo_pressed": "rgba(157, 32, 24, 0.44)",
+        "fondo_focus": "rgba(187, 48, 39, 0.22)",
+        "borde": "rgba(255, 153, 143, 0.18)",
+        "borde_hover": "rgba(255, 137, 126, 0.40)",
+        "borde_pressed": "rgba(255, 168, 160, 0.48)",
+        "borde_focus": "rgba(255, 168, 160, 0.54)",
         "texto": "#f5fbff",
+        "texto_hover": "#ffffff",
         "icono": "#f5fbff",
         "icono_hover": "#ff7c72",
     },
     "advertencia": {
-        "fondo": "rgba(255, 206, 120, 0.08)",
-        "fondo_hover": "rgba(255, 206, 120, 0.18)",
-        "fondo_pressed": "rgba(255, 206, 120, 0.24)",
+        "fondo": "rgba(255, 206, 120, 0.10)",
+        "fondo_hover": "rgba(255, 206, 120, 0.20)",
+        "fondo_pressed": "rgba(255, 206, 120, 0.28)",
+        "fondo_focus": "rgba(255, 206, 120, 0.16)",
         "borde": "rgba(255, 206, 120, 0.16)",
-        "borde_hover": "rgba(255, 206, 120, 0.28)",
+        "borde_hover": "rgba(255, 206, 120, 0.32)",
+        "borde_pressed": "rgba(255, 218, 154, 0.38)",
+        "borde_focus": "rgba(255, 218, 154, 0.46)",
         "texto": "#fff5db",
+        "texto_hover": "#fffaf0",
         "icono": "#ffcf75",
         "icono_hover": "#fff5db",
     },
 }
+
+
+def _obtener_mapa_variantes_accion(nombre_tema: str) -> dict[str, dict[str, str]]:
+    if nombre_tema == "claro":
+        return {
+            "neutro": {
+                "fondo": "rgba(111, 129, 149, 0.08)",
+                "fondo_hover": "rgba(111, 129, 149, 0.14)",
+                "fondo_pressed": "rgba(111, 129, 149, 0.20)",
+                "fondo_focus": "rgba(111, 129, 149, 0.12)",
+                "borde": "rgba(131, 145, 164, 0.24)",
+                "borde_hover": "rgba(131, 145, 164, 0.34)",
+                "borde_pressed": "rgba(131, 145, 164, 0.40)",
+                "borde_focus": "rgba(131, 145, 164, 0.48)",
+                "texto": "#31465c",
+                "texto_hover": "#223548",
+                "icono": "#4b6075",
+                "icono_hover": "#223548",
+            },
+            "informacion": {
+                "fondo": "rgba(79, 163, 255, 0.12)",
+                "fondo_hover": "rgba(46, 127, 255, 0.20)",
+                "fondo_pressed": "rgba(46, 127, 255, 0.28)",
+                "fondo_focus": "rgba(46, 127, 255, 0.16)",
+                "borde": "rgba(79, 163, 255, 0.24)",
+                "borde_hover": "rgba(46, 127, 255, 0.34)",
+                "borde_pressed": "rgba(46, 127, 255, 0.42)",
+                "borde_focus": "rgba(46, 127, 255, 0.48)",
+                "texto": "#2e597f",
+                "texto_hover": "#1f476d",
+                "icono": "#3d84c8",
+                "icono_hover": "#1f476d",
+            },
+            "ayuda": {
+                "fondo": "rgba(146, 128, 255, 0.10)",
+                "fondo_hover": "rgba(146, 128, 255, 0.18)",
+                "fondo_pressed": "rgba(146, 128, 255, 0.24)",
+                "fondo_focus": "rgba(146, 128, 255, 0.14)",
+                "borde": "rgba(146, 128, 255, 0.22)",
+                "borde_hover": "rgba(146, 128, 255, 0.30)",
+                "borde_pressed": "rgba(146, 128, 255, 0.38)",
+                "borde_focus": "rgba(146, 128, 255, 0.44)",
+                "texto": "#5d4ea0",
+                "texto_hover": "#4b3f88",
+                "icono": "#7262b0",
+                "icono_hover": "#4b3f88",
+            },
+            "edicion": {
+                "fondo": "rgba(247, 204, 122, 0.14)",
+                "fondo_hover": "rgba(234, 182, 63, 0.24)",
+                "fondo_pressed": "rgba(214, 162, 44, 0.30)",
+                "fondo_focus": "rgba(234, 182, 63, 0.18)",
+                "borde": "rgba(214, 162, 44, 0.22)",
+                "borde_hover": "rgba(214, 162, 44, 0.30)",
+                "borde_pressed": "rgba(214, 162, 44, 0.38)",
+                "borde_focus": "rgba(214, 162, 44, 0.44)",
+                "texto": "#8a6521",
+                "texto_hover": "#725118",
+                "icono": "#b07f2f",
+                "icono_hover": "#725118",
+            },
+            "primario": {
+                "fondo": "rgba(73, 201, 154, 0.14)",
+                "fondo_hover": "rgba(33, 170, 114, 0.24)",
+                "fondo_pressed": "rgba(20, 139, 90, 0.30)",
+                "fondo_focus": "rgba(33, 170, 114, 0.18)",
+                "borde": "rgba(33, 170, 114, 0.22)",
+                "borde_hover": "rgba(33, 170, 114, 0.30)",
+                "borde_pressed": "rgba(20, 139, 90, 0.38)",
+                "borde_focus": "rgba(20, 139, 90, 0.44)",
+                "texto": "#26694b",
+                "texto_hover": "#1d563d",
+                "icono": "#2f8e66",
+                "icono_hover": "#1d563d",
+            },
+            "salida": {
+                "fondo": "rgba(182, 62, 52, 0.12)",
+                "fondo_hover": "rgba(187, 48, 39, 0.22)",
+                "fondo_pressed": "rgba(157, 32, 24, 0.28)",
+                "fondo_focus": "rgba(187, 48, 39, 0.16)",
+                "borde": "rgba(182, 62, 52, 0.22)",
+                "borde_hover": "rgba(182, 62, 52, 0.32)",
+                "borde_pressed": "rgba(157, 32, 24, 0.40)",
+                "borde_focus": "rgba(157, 32, 24, 0.46)",
+                "texto": "#a84336",
+                "texto_hover": "#8f2d21",
+                "icono": "#bf5d52",
+                "icono_hover": "#8f2d21",
+            },
+            "advertencia": {
+                "fondo": "rgba(255, 206, 120, 0.14)",
+                "fondo_hover": "rgba(255, 206, 120, 0.22)",
+                "fondo_pressed": "rgba(255, 206, 120, 0.28)",
+                "fondo_focus": "rgba(255, 206, 120, 0.18)",
+                "borde": "rgba(237, 185, 96, 0.24)",
+                "borde_hover": "rgba(237, 185, 96, 0.34)",
+                "borde_pressed": "rgba(237, 185, 96, 0.40)",
+                "borde_focus": "rgba(237, 185, 96, 0.48)",
+                "texto": "#8d6b28",
+                "texto_hover": "#73541b",
+                "icono": "#b98a3a",
+                "icono_hover": "#73541b",
+            },
+        }
+    return MAPA_VARIANTES_ACCION
+
+
+def resolver_variante_boton_modal(texto: str, variante_sugerida: str = "neutro") -> str:
+    """Ajusta la variante visual segun la accion escrita en el boton."""
+
+    texto_normalizado = texto.casefold()
+    acciones_destructivas = ("salir", "cerrar", "cancelar", "suspender", "inactivar", "desactivar")
+    acciones_informativas = ("detalle", "ver ")
+    acciones_positivas = ("guardar", "confirmar", "activar")
+
+    if any(palabra in texto_normalizado for palabra in acciones_destructivas):
+        return "salida"
+    if any(palabra in texto_normalizado for palabra in acciones_informativas):
+        return "informacion"
+    if any(palabra in texto_normalizado for palabra in acciones_positivas):
+        return "primario"
+    return variante_sugerida if variante_sugerida in MAPA_VARIANTES_ACCION else "neutro"
 
 
 class DialogoBaseSicap(QDialog):
@@ -188,7 +350,9 @@ class DialogoBaseSicap(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setMinimumWidth(420)
-        self._color_fondo_dialogo = COLOR_FONDO_DIALOGO
+        self._nombre_tema = obtener_tema_actual()
+        self._paleta_tema = obtener_paleta_tema_actual()
+        self._color_fondo_dialogo = str(self._paleta_tema["fondo_dialogo"])
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -198,33 +362,38 @@ class DialogoBaseSicap(QDialog):
         self._tarjeta.setObjectName("tarjetaDialogoSicap")
         self._tarjeta.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._layout_tarjeta = QVBoxLayout(self._tarjeta)
-        self._layout_tarjeta.setContentsMargins(18, 18, 18, 18)
-        self._layout_tarjeta.setSpacing(14)
+        self._layout_tarjeta.setContentsMargins(
+            PADDING_TARJETA_DIALOGO,
+            PADDING_TARJETA_DIALOGO,
+            PADDING_TARJETA_DIALOGO,
+            PADDING_TARJETA_DIALOGO,
+        )
+        self._layout_tarjeta.setSpacing(ESPACIADO_TARJETA_DIALOGO)
 
         self._cabecera = QFrame()
         self._cabecera.setObjectName("cabeceraDialogoSicap")
         self._layout_cabecera = QVBoxLayout(self._cabecera)
-        self._layout_cabecera.setContentsMargins(18, 18, 18, 18)
-        self._layout_cabecera.setSpacing(8)
+        self._layout_cabecera.setContentsMargins(0, 0, 0, 0)
+        self._layout_cabecera.setSpacing(6)
 
         self._cuerpo = QFrame()
         self._cuerpo.setObjectName("cuerpoDialogoSicap")
         self._layout_cuerpo = QVBoxLayout(self._cuerpo)
-        self._layout_cuerpo.setContentsMargins(18, 18, 18, 18)
-        self._layout_cuerpo.setSpacing(14)
+        self._layout_cuerpo.setContentsMargins(0, 0, 0, 0)
+        self._layout_cuerpo.setSpacing(10)
 
         self._pie = QFrame()
         self._pie.setObjectName("pieDialogoSicap")
         self._pie.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._layout_pie = QVBoxLayout(self._pie)
-        self._layout_pie.setContentsMargins(16, 14, 16, 14)
+        self._layout_pie.setContentsMargins(0, 0, 0, 0)
         self._layout_pie.setSpacing(0)
 
         self._layout_tarjeta.addWidget(self._cabecera)
         self._layout_tarjeta.addWidget(self._cuerpo)
         self._layout_tarjeta.addWidget(self._pie)
         layout.addWidget(self._tarjeta)
-        self.setStyleSheet(_crear_estilo_dialogo_sicap(self._color_fondo_dialogo))
+        self.setStyleSheet(_crear_estilo_dialogo_sicap(self._color_fondo_dialogo, self._paleta_tema))
 
     def resizeEvent(self, evento: QResizeEvent) -> None:
         self._actualizar_mascara_dialogo()
@@ -244,7 +413,7 @@ class DialogoBaseSicap(QDialog):
 
     @property
     def layout_tarjeta(self) -> QVBoxLayout:
-        return self._layout_cuerpo
+        return self._layout_tarjeta
 
     @property
     def layout_cuerpo(self) -> QVBoxLayout:
@@ -257,7 +426,14 @@ class DialogoBaseSicap(QDialog):
     def aplicar_color_fondo_personalizado(self, color_fondo: str) -> None:
         self._color_fondo_dialogo = color_fondo
         self.update()
-        self.setStyleSheet(_crear_estilo_dialogo_sicap(color_fondo))
+        self.setStyleSheet(_crear_estilo_dialogo_sicap(color_fondo, self._paleta_tema))
+
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._nombre_tema = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        self._paleta_tema = obtener_paleta_tema(self._nombre_tema)
+        self._color_fondo_dialogo = str(self._paleta_tema["fondo_dialogo"])
+        self.update()
+        self.setStyleSheet(_crear_estilo_dialogo_sicap(self._color_fondo_dialogo, self._paleta_tema))
 
     def _actualizar_mascara_dialogo(self) -> None:
         if self.width() <= 0 or self.height() <= 0:
@@ -274,18 +450,22 @@ class BotonAccionContextual(QPushButton):
     def __init__(
         self,
         texto: str,
-        icono: str,
+        icono: str | None = None,
         variante: str = "neutro",
         centrado: bool = False,
+        mostrar_icono: bool = True,
     ) -> None:
         super().__init__(texto)
         self._icono = icono
         self._variante = variante if variante in MAPA_VARIANTES_ACCION else "neutro"
         self._centrado = centrado
+        self._mostrar_icono = mostrar_icono and bool(icono)
+        self._nombre_tema = obtener_tema_actual()
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setObjectName("botonAccionContextual")
-        self.setMinimumHeight(36)
+        self.setMinimumHeight(ALTURA_BOTON_DIALOGO)
         self.setIconSize(QSize(16, 16))
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._aplicar_estilos()
         self._actualizar_icono(False)
 
@@ -298,35 +478,51 @@ class BotonAccionContextual(QPushButton):
         super().leaveEvent(evento)
 
     def _actualizar_icono(self, hover: bool) -> None:
-        colores = MAPA_VARIANTES_ACCION[self._variante]
+        if not self._mostrar_icono or not self._icono:
+            self.setIcon(QIcon())
+            return
+        colores = _obtener_mapa_variantes_accion(self._nombre_tema)[self._variante]
         color_icono = colores["icono_hover"] if hover else colores["icono"]
         self.setIcon(obtener_icono_tabler_coloreado(self._icono, color_icono, tamano=18))
 
     def _aplicar_estilos(self) -> None:
-        colores = MAPA_VARIANTES_ACCION[self._variante]
+        colores = _obtener_mapa_variantes_accion(self._nombre_tema)[self._variante]
         alineacion = "center" if self._centrado else "left"
         self.setStyleSheet(
             f"""
             QPushButton#botonAccionContextual {{
-                min-height: 36px;
+                min-height: {ALTURA_BOTON_DIALOGO}px;
                 border-radius: 4px;
                 border: 1px solid {colores["borde"]};
                 background: {colores["fondo"]};
                 color: {colores["texto"]};
                 text-align: {alineacion};
-                padding: 0 13px;
+                padding: 0 12px;
                 font-size: 12px;
                 font-weight: 800;
             }}
             QPushButton#botonAccionContextual:hover {{
                 border-color: {colores["borde_hover"]};
                 background: {colores["fondo_hover"]};
+                color: {colores["texto_hover"]};
             }}
             QPushButton#botonAccionContextual:pressed {{
                 background: {colores["fondo_pressed"]};
+                border-color: {colores["borde_pressed"]};
+                color: {colores["texto_hover"]};
+            }}
+            QPushButton#botonAccionContextual:focus {{
+                background: {colores["fondo_focus"]};
+                border-color: {colores["borde_focus"]};
+                color: {colores["texto_hover"]};
             }}
             """
         )
+
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._nombre_tema = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        self._aplicar_estilos()
+        self._actualizar_icono(False)
 
 
 class DialogoMensajeSicap(DialogoBaseSicap):
@@ -342,67 +538,33 @@ class DialogoMensajeSicap(DialogoBaseSicap):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setMinimumWidth(440)
+        self.setMinimumWidth(420)
         self._cuerpo.setVisible(False)
-
-        encabezado = QHBoxLayout()
-        encabezado.setSpacing(14)
-
-        icono_label = QLabel("")
-        icono_label.setObjectName("iconoDialogoSicap")
-        icono_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icono_label.setFixedSize(46, 46)
-        icono_label.setPixmap(
-            obtener_icono_tabler_coloreado(
-                icono,
-                MAPA_VARIANTES_ACCION.get(variante, MAPA_VARIANTES_ACCION["informacion"])[
-                    "icono_hover"
-                ],
-                tamano=22,
-            ).pixmap(22, 22)
-        )
-
-        bloque_titulo = QVBoxLayout()
-        bloque_titulo.setContentsMargins(0, 0, 0, 0)
-        bloque_titulo.setSpacing(4)
 
         label_titulo = QLabel(titulo)
         label_titulo.setObjectName("tituloDialogoSicap")
         label_mensaje = QLabel(mensaje)
         label_mensaje.setObjectName("descripcionDialogoSicap")
         label_mensaje.setWordWrap(True)
-        bloque_titulo.addWidget(label_titulo)
-        bloque_titulo.addWidget(label_mensaje)
-
-        encabezado.addWidget(icono_label, alignment=Qt.AlignmentFlag.AlignTop)
-        encabezado.addLayout(bloque_titulo, 1)
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setContentsMargins(0, 0, 0, 0)
-        fila_acciones.setSpacing(12)
+        fila_acciones.setSpacing(10)
         fila_acciones.addStretch(1)
+        variante_boton = resolver_variante_boton_modal(texto_boton, variante)
         boton_cerrar = BotonAccionContextual(
             texto_boton,
-            "circle-check.svg",
-            variante,
+            variante=variante_boton,
             centrado=True,
+            mostrar_icono=False,
         )
-        boton_cerrar.setMinimumWidth(152)
+        boton_cerrar.setMinimumWidth(136)
         boton_cerrar.clicked.connect(self.accept)
         fila_acciones.addWidget(boton_cerrar)
 
-        self.layout_cabecera.addLayout(encabezado)
+        self.layout_cabecera.addWidget(label_titulo)
+        self.layout_cabecera.addWidget(label_mensaje)
         self.layout_pie.addLayout(fila_acciones)
-        self.setStyleSheet(
-            self.styleSheet()
-            + """
-            QLabel#iconoDialogoSicap {
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 4px;
-            }
-            """
-        )
 
 
 class DialogoConfirmacionSicap(DialogoBaseSicap):
@@ -420,50 +582,32 @@ class DialogoConfirmacionSicap(DialogoBaseSicap):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setMinimumWidth(460)
-
-        encabezado = QHBoxLayout()
-        encabezado.setSpacing(14)
-
-        icono_label = QLabel("")
-        icono_label.setObjectName("iconoDialogoSicap")
-        icono_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icono_label.setFixedSize(48, 48)
-        icono_label.setPixmap(
-            obtener_icono_tabler_coloreado(
-                icono,
-                MAPA_VARIANTES_ACCION.get(variante_confirmar, MAPA_VARIANTES_ACCION["primario"])[
-                    "icono_hover"
-                ],
-                tamano=22,
-            ).pixmap(22, 22)
-        )
-
-        bloque_titulo = QVBoxLayout()
-        bloque_titulo.setContentsMargins(0, 0, 0, 0)
-        bloque_titulo.setSpacing(4)
+        self.setMinimumWidth(520)
 
         label_titulo = QLabel(titulo)
         label_titulo.setObjectName("tituloDialogoSicap")
         label_descripcion = QLabel(descripcion)
         label_descripcion.setObjectName("descripcionDialogoSicap")
         label_descripcion.setWordWrap(True)
-        bloque_titulo.addWidget(label_titulo)
-        bloque_titulo.addWidget(label_descripcion)
-
-        encabezado.addWidget(icono_label, alignment=Qt.AlignmentFlag.AlignTop)
-        encabezado.addLayout(bloque_titulo, 1)
-        self.layout_cabecera.addLayout(encabezado)
+        self.layout_cabecera.addWidget(label_titulo)
+        self.layout_cabecera.addWidget(label_descripcion)
 
         if detalles:
+            titulo_resumen = QLabel("Resumen de la accion")
+            titulo_resumen.setObjectName("etiquetaDatoDialogoSicap")
             panel_detalles = QFrame()
             panel_detalles.setObjectName("bloqueDialogoSicap")
             layout_detalles = QVBoxLayout(panel_detalles)
-            layout_detalles.setContentsMargins(16, 16, 16, 16)
+            layout_detalles.setContentsMargins(
+                PADDING_BLOQUE_DIALOGO,
+                PADDING_BLOQUE_DIALOGO,
+                PADDING_BLOQUE_DIALOGO,
+                PADDING_BLOQUE_DIALOGO,
+            )
             layout_detalles.setSpacing(10)
             for etiqueta, valor in detalles:
                 fila = QHBoxLayout()
-                fila.setSpacing(12)
+                fila.setSpacing(10)
                 label_etiqueta = QLabel(etiqueta)
                 label_etiqueta.setObjectName("etiquetaDatoDialogoSicap")
                 label_valor = QLabel(valor)
@@ -472,44 +616,36 @@ class DialogoConfirmacionSicap(DialogoBaseSicap):
                 fila.addWidget(label_etiqueta, 1)
                 fila.addWidget(label_valor, 2)
                 layout_detalles.addLayout(fila)
+            self.layout_cuerpo.addWidget(titulo_resumen)
             self.layout_cuerpo.addWidget(panel_detalles)
         else:
             self._cuerpo.setVisible(False)
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setContentsMargins(0, 0, 0, 0)
-        fila_acciones.setSpacing(12)
+        fila_acciones.setSpacing(10)
+        variante_cancelar = resolver_variante_boton_modal("Cancelar", "neutro")
+        variante_confirmacion = resolver_variante_boton_modal(texto_confirmar, variante_confirmar)
         boton_cancelar = BotonAccionContextual(
             "Cancelar",
-            "arrow-left.svg",
-            "neutro",
+            variante=variante_cancelar,
             centrado=True,
+            mostrar_icono=False,
         )
         boton_confirmar = BotonAccionContextual(
             texto_confirmar,
-            "circle-check.svg",
-            variante_confirmar,
+            variante=variante_confirmacion,
             centrado=True,
+            mostrar_icono=False,
         )
-        boton_cancelar.setMinimumWidth(148)
-        boton_confirmar.setMinimumWidth(176)
+        boton_cancelar.setMinimumWidth(132)
+        boton_confirmar.setMinimumWidth(160)
         boton_cancelar.clicked.connect(self.reject)
         boton_confirmar.clicked.connect(self.accept)
         fila_acciones.addWidget(boton_cancelar)
         fila_acciones.addStretch(1)
         fila_acciones.addWidget(boton_confirmar)
         self.layout_pie.addLayout(fila_acciones)
-
-        self.setStyleSheet(
-            self.styleSheet()
-            + """
-            QLabel#iconoDialogoSicap {
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 4px;
-            }
-            """
-        )
         if color_fondo:
             self.aplicar_color_fondo_personalizado(color_fondo)
 
@@ -577,6 +713,8 @@ class VistaPlaceholderModulo(QWidget):
     def __init__(self, titulo: str, descripcion: str) -> None:
         super().__init__()
         self.setObjectName("vistaPlaceholderModulo")
+        self._tema_actual = obtener_tema_actual()
+        self._paleta_tema = obtener_paleta_tema_actual()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addStretch(1)
@@ -610,29 +748,30 @@ class VistaPlaceholderModulo(QWidget):
         self._aplicar_estilos()
 
     def _aplicar_estilos(self) -> None:
+        paleta = self._paleta_tema
         self.setStyleSheet(
             f"""
             QWidget#vistaPlaceholderModulo {{
                 background-color: transparent;
             }}
             QFrame#tarjetaPlaceholder {{
-                background-color: {COLOR_FONDO_PANEL};
-                border: 1px solid {COLOR_BORDE};
+                background-color: {paleta["fondo_superficie"]};
+                border: 1px solid {paleta["borde_principal"]};
                 border-radius: 22px;
             }}
             QLabel#placeholderTitulo {{
-                color: #ffffff;
+                color: {paleta["texto_principal"]};
                 font-size: 22px;
                 font-weight: 800;
             }}
             QLabel#placeholderDescripcion {{
-                color: {COLOR_TEXTO_SECUNDARIO};
+                color: {paleta["texto_secundario"]};
                 font-size: 14px;
             }}
             QLabel#placeholderAviso {{
-                color: #fce6a8;
-                background-color: rgba(255, 246, 223, 0.10);
-                border: 1px solid rgba(242, 209, 139, 0.45);
+                color: {paleta["texto_advertencia"]};
+                background-color: {paleta["fondo_advertencia"]};
+                border: 1px solid {paleta["borde_advertencia"]};
                 border-radius: 14px;
                 padding: 10px 12px;
                 font-size: 13px;
@@ -640,6 +779,11 @@ class VistaPlaceholderModulo(QWidget):
             }}
             """
         )
+
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._tema_actual = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        self._paleta_tema = obtener_paleta_tema(self._tema_actual)
+        self._aplicar_estilos()
 
 
 def configurar_tabla_operativa(tabla: QTableWidget, encabezados: list[str]) -> None:
@@ -665,45 +809,61 @@ def crear_item_tabla(texto: object) -> QTableWidgetItem:
     return item
 
 
+def aplicar_estilo_boton_operativo(boton: QPushButton, principal: bool = False) -> None:
+    """Aplica el estilo visual del boton operativo segun el tema activo."""
+    paleta = obtener_paleta_tema_actual()
+    hover_primario = (
+        paleta["fondo_superficie_suave"]
+        if paleta["nombre"] == "claro"
+        else "rgba(31, 52, 99, 0.96)"
+    )
+    pressed_primario = (
+        paleta["fondo_superficie"]
+        if paleta["nombre"] == "claro"
+        else "rgba(18, 32, 64, 0.98)"
+    )
+    boton.setStyleSheet(
+        f"""
+        QPushButton#botonOperativo,
+        QPushButton#botonOperativoPrimario {{
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 0 14px;
+            min-height: 36px;
+        }}
+        QPushButton#botonOperativo {{
+            background-color: {paleta["fondo_input"]};
+            border: 1px solid {paleta["borde_medio"]};
+            color: {paleta["texto_input"]};
+        }}
+        QPushButton#botonOperativo:hover {{
+            background-color: {paleta["fondo_superficie"]};
+            border-color: {paleta["borde_principal"]};
+        }}
+        QPushButton#botonOperativo:pressed {{
+            background-color: {paleta["fondo_superficie_suave"]};
+        }}
+        QPushButton#botonOperativoPrimario {{
+            background-color: {paleta["fondo_dialogo"]};
+            border: 1px solid {paleta["borde_suave"]};
+            color: {paleta["texto_principal"]};
+        }}
+        QPushButton#botonOperativoPrimario:hover {{
+            background-color: {hover_primario};
+        }}
+        QPushButton#botonOperativoPrimario:pressed {{
+            background-color: {pressed_primario};
+        }}
+        """
+    )
+
+
 def crear_boton_operativo(texto: str, principal: bool = False) -> QPushButton:
     """Crea un boton consistente para acciones de modulos."""
     boton = QPushButton(texto)
     boton.setCursor(Qt.CursorShape.PointingHandCursor)
     boton.setObjectName("botonOperativoPrimario" if principal else "botonOperativo")
     boton.setMinimumHeight(36)
-    boton.setStyleSheet(
-        """
-        QPushButton#botonOperativo,
-        QPushButton#botonOperativoPrimario {
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 700;
-            padding: 0 14px;
-            min-height: 36px;
-        }
-        QPushButton#botonOperativo {
-            background-color: rgba(255, 255, 255, 0.11);
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            color: #f7fbff;
-        }
-        QPushButton#botonOperativo:hover {
-            background-color: rgba(255, 255, 255, 0.18);
-            border-color: rgba(255, 255, 255, 0.24);
-        }
-        QPushButton#botonOperativo:pressed {
-            background-color: rgba(255, 255, 255, 0.24);
-        }
-        QPushButton#botonOperativoPrimario {
-            background-color: rgba(23, 39, 75, 0.92);
-            border: 1px solid rgba(255, 255, 255, 0.10);
-            color: #ffffff;
-        }
-        QPushButton#botonOperativoPrimario:hover {
-            background-color: rgba(31, 52, 99, 0.96);
-        }
-        QPushButton#botonOperativoPrimario:pressed {
-            background-color: rgba(18, 32, 64, 0.98);
-        }
-        """
-    )
+    aplicar_estilo_boton_operativo(boton, principal=principal)
     return boton

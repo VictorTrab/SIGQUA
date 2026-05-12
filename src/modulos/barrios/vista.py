@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFileDialog,
-    QFormLayout,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -20,6 +19,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QTableWidget,
     QToolButton,
@@ -32,12 +32,15 @@ from comun.ui import (
     DialogoBaseSicap,
     DialogoConfirmacionSicap,
     DialogoMensajeSicap,
+    aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
     crear_boton_operativo,
     crear_item_tabla,
     obtener_icono_tabler_coloreado,
+    resolver_variante_boton_modal,
 )
 from comun.ui.componentes import COLOR_FONDO_DIALOGO, RADIO_TARJETA_DIALOGO
+from comun.ui.temas import TEMA_SICAP_PREDETERMINADO, obtener_paleta_tema
 from modulos.barrios.entidades import (
     Barrio,
     FILTRO_BARRIOS_ACTIVOS,
@@ -109,6 +112,7 @@ class BotonIconoFilaBarrio(QToolButton):
         super().__init__()
         self._icono = icono
         self._color_hover = color_hover
+        self._color_base = self.COLOR_BASE
         self._temporizador_tooltip = QElapsedTimer()
         self.setObjectName("botonIconoFilaBarrio")
         self.setToolTip(tooltip)
@@ -136,11 +140,16 @@ class BotonIconoFilaBarrio(QToolButton):
         super().enterEvent(evento)
 
     def leaveEvent(self, evento: object) -> None:
-        self._actualizar_icono(self.COLOR_BASE)
+        self._actualizar_icono(self._color_base)
         super().leaveEvent(evento)
 
     def _actualizar_icono(self, color_icono: str) -> None:
         self.setIcon(obtener_icono_tabler_coloreado(self._icono, color_icono, tamano=18))
+
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        paleta = obtener_paleta_tema(nombre_tema)
+        self._color_base = str(paleta["icono_fila_base"])
+        self._actualizar_icono(self._color_base)
 
 
 class DialogoFormularioBarrio(DialogoBaseSicap):
@@ -149,7 +158,8 @@ class DialogoFormularioBarrio(DialogoBaseSicap):
     def __init__(self, barrio: Barrio | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._barrio = barrio
-        self.setMinimumWidth(460)
+        self.setMinimumWidth(560)
+        self.setMinimumHeight(500)
         self._construir_ui()
 
     def obtener_formulario(self) -> FormularioBarrio:
@@ -177,17 +187,10 @@ class DialogoFormularioBarrio(DialogoBaseSicap):
         descripcion.setObjectName("descripcionDialogoSicap")
         descripcion.setWordWrap(True)
 
-        panel_formulario = QFrame()
-        panel_formulario.setObjectName("bloqueDialogoSicap")
-        layout_panel_formulario = QVBoxLayout(panel_formulario)
-        layout_panel_formulario.setContentsMargins(18, 18, 18, 18)
-        layout_panel_formulario.setSpacing(14)
-
-        formulario = QFormLayout()
-        formulario.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
-        formulario.setFormAlignment(Qt.AlignmentFlag.AlignTop)
-        formulario.setHorizontalSpacing(12)
-        formulario.setVerticalSpacing(12)
+        formulario = QGridLayout()
+        formulario.setContentsMargins(0, 0, 0, 0)
+        formulario.setHorizontalSpacing(10)
+        formulario.setVerticalSpacing(10)
 
         self._campo_nombre = QLineEdit()
         self._campo_nombre.setPlaceholderText("Nombre del barrio")
@@ -195,17 +198,36 @@ class DialogoFormularioBarrio(DialogoBaseSicap):
         self._combo_estado.addItems(["ACTIVO", "INACTIVO"])
         self._campo_observaciones = QPlainTextEdit()
         self._campo_observaciones.setPlaceholderText("Observaciones")
-        self._campo_observaciones.setFixedHeight(112)
+        self._campo_observaciones.setFixedHeight(92)
 
         if self._barrio is not None:
             self._campo_nombre.setText(self._barrio.nombre)
             self._combo_estado.setCurrentText(self._barrio.estado)
             self._campo_observaciones.setPlainText(self._barrio.observaciones)
 
-        formulario.addRow("Nombre del barrio", self._campo_nombre)
-        formulario.addRow("Estado", self._combo_estado)
-        formulario.addRow("Observaciones", self._campo_observaciones)
-        layout_panel_formulario.addLayout(formulario)
+        formulario.addWidget(
+            self._crear_bloque_formulario("Nombre del barrio", self._campo_nombre),
+            0,
+            0,
+        )
+        formulario.addWidget(
+            self._crear_bloque_formulario("Estado", self._combo_estado),
+            0,
+            1,
+        )
+        formulario.addWidget(
+            self._crear_bloque_formulario("Observaciones", self._campo_observaciones),
+            1,
+            0,
+            1,
+            2,
+        )
+
+        panel_datos = self._crear_panel_formulario(
+            "Datos principales",
+            "Configura el nombre del barrio y su estado operativo dentro del sistema.",
+        )
+        panel_datos.layout().addLayout(formulario)
 
         self._mensaje = QLabel("")
         self._mensaje.setObjectName("mensajeErrorDialogoSicap")
@@ -213,20 +235,22 @@ class DialogoFormularioBarrio(DialogoBaseSicap):
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(10)
+        variante_cancelar = resolver_variante_boton_modal("Cancelar", "neutro")
+        variante_guardar = resolver_variante_boton_modal("Guardar cambios", "primario")
         boton_cancelar = BotonAccionContextual(
             "Cancelar",
-            "arrow-left.svg",
-            "neutro",
+            variante=variante_cancelar,
             centrado=True,
+            mostrar_icono=False,
         )
         boton_guardar = BotonAccionContextual(
             "Guardar cambios",
-            "circle-check.svg",
-            "primario",
+            variante=variante_guardar,
             centrado=True,
+            mostrar_icono=False,
         )
-        boton_cancelar.setMinimumWidth(148)
-        boton_guardar.setMinimumWidth(176)
+        boton_cancelar.setMinimumWidth(132)
+        boton_guardar.setMinimumWidth(160)
         boton_cancelar.clicked.connect(self.reject)
         boton_guardar.clicked.connect(self.accept)
         fila_acciones.addWidget(boton_cancelar)
@@ -235,19 +259,46 @@ class DialogoFormularioBarrio(DialogoBaseSicap):
 
         self.setStyleSheet(
             self.styleSheet()
-            + """
-            QLabel {
-                color: #f5fbff;
+            + f"""
+            QLabel {{
+                color: {self._paleta_tema["texto_input"]};
                 font-size: 13px;
                 font-weight: 700;
-            }
+            }}
             """
         )
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(panel_formulario)
+        self.layout_cuerpo.addWidget(panel_datos)
         self.layout_cuerpo.addWidget(self._mensaje)
         self.layout_pie.addLayout(fila_acciones)
+
+    def _crear_bloque_formulario(self, etiqueta: str, campo: QWidget) -> QWidget:
+        bloque = QWidget()
+        layout = QVBoxLayout(bloque)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        label = QLabel(etiqueta)
+        label.setObjectName("etiquetaDatoDialogoSicap")
+        layout.addWidget(label)
+        layout.addWidget(campo)
+        return bloque
+
+    def _crear_panel_formulario(self, titulo: str, descripcion: str) -> QFrame:
+        panel = QFrame()
+        panel.setObjectName("bloqueDialogoSicap")
+        layout_panel = QVBoxLayout(panel)
+        layout_panel.setContentsMargins(14, 14, 14, 14)
+        layout_panel.setSpacing(10)
+        label_titulo = QLabel(titulo)
+        label_titulo.setObjectName("etiquetaDatoDialogoSicap")
+        label_descripcion = QLabel(descripcion)
+        label_descripcion.setObjectName("descripcionDialogoSicap")
+        label_descripcion.setWordWrap(True)
+        layout_panel.addWidget(label_titulo)
+        layout_panel.addWidget(label_descripcion)
+        return panel
 
 
 class DialogoDetalleBarrio(DialogoBaseSicap):
@@ -263,7 +314,8 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
         self._barrio = barrio
         self._fecha_actualizada = fecha_actualizada
         self._accion_resultado = "cerrar"
-        self.setMinimumWidth(560)
+        self.setMinimumWidth(780)
+        self.setMinimumHeight(580)
         self._construir_ui()
 
     @property
@@ -279,10 +331,23 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
         descripcion.setObjectName("descripcionDialogoSicap")
         descripcion.setWordWrap(True)
 
+        scroll = QScrollArea()
+        scroll.setObjectName("scrollDetalleBarrio")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        contenedor_scroll = QWidget()
+        contenedor_scroll.setObjectName("contenedorScrollDetalleBarrio")
+        layout_scroll = QVBoxLayout(contenedor_scroll)
+        layout_scroll.setContentsMargins(0, 0, 0, 0)
+        layout_scroll.setSpacing(12)
+
         panel_detalle = QFrame()
         panel_detalle.setObjectName("panelContenidoDetalleBarrio")
         panel_detalle_layout = QVBoxLayout(panel_detalle)
-        panel_detalle_layout.setContentsMargins(16, 16, 16, 16)
+        panel_detalle_layout.setContentsMargins(18, 18, 18, 18)
         panel_detalle_layout.setSpacing(14)
 
         fila_superior = QHBoxLayout()
@@ -305,9 +370,13 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
         fila_superior.addLayout(bloque_nombre, 1)
         fila_superior.addWidget(estado, alignment=Qt.AlignmentFlag.AlignTop)
 
+        encabezado_contexto = self._crear_encabezado_seccion_detalle(
+            "Contexto territorial",
+            "Consulta el codigo, estado operativo y la ultima actualizacion del barrio.",
+        )
         grid_info = QGridLayout()
-        grid_info.setHorizontalSpacing(12)
-        grid_info.setVerticalSpacing(12)
+        grid_info.setHorizontalSpacing(14)
+        grid_info.setVerticalSpacing(14)
         grid_info.addWidget(self._crear_campo_detalle("Codigo", self._barrio.codigo), 0, 0)
         grid_info.addWidget(self._crear_campo_detalle("Estado", self._barrio.estado.title()), 0, 1)
         grid_info.addWidget(
@@ -318,6 +387,10 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
             2,
         )
 
+        encabezado_metricas = self._crear_encabezado_seccion_detalle(
+            "Cobertura operativa",
+            "Resume la cantidad de abonados y casas relacionadas con el barrio.",
+        )
         fila_metricas = QHBoxLayout()
         fila_metricas.setSpacing(12)
         fila_metricas.addWidget(
@@ -341,29 +414,36 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(10)
+        variante_cerrar = resolver_variante_boton_modal("Cerrar", "neutro")
+        variante_ver = resolver_variante_boton_modal("Ver detalle", "informacion")
         boton_cerrar = BotonAccionContextual(
             "Cerrar",
-            "arrow-left.svg",
-            "neutro",
+            variante=variante_cerrar,
             centrado=True,
+            mostrar_icono=False,
         )
         boton_ver_abonados = BotonAccionContextual(
             "Ver abonados",
-            "user.svg",
-            "informacion",
+            variante=variante_ver,
             centrado=True,
+            mostrar_icono=False,
         )
         boton_ver_casas = BotonAccionContextual(
             "Ver casas",
-            "home.svg",
-            "informacion",
+            variante=variante_ver,
             centrado=True,
+            mostrar_icono=False,
         )
-        boton_editar = BotonAccionContextual("Editar", "key.svg", "edicion", centrado=True)
-        boton_cerrar.setMinimumWidth(136)
-        boton_ver_abonados.setMinimumWidth(156)
-        boton_ver_casas.setMinimumWidth(140)
-        boton_editar.setMinimumWidth(132)
+        boton_editar = BotonAccionContextual(
+            "Editar",
+            variante="edicion",
+            centrado=True,
+            mostrar_icono=False,
+        )
+        boton_cerrar.setMinimumWidth(124)
+        boton_ver_abonados.setMinimumWidth(140)
+        boton_ver_casas.setMinimumWidth(132)
+        boton_editar.setMinimumWidth(124)
 
         boton_cerrar.clicked.connect(self.reject)
         boton_ver_abonados.clicked.connect(self._mostrar_aviso_abonados)
@@ -377,24 +457,70 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
         fila_acciones.addWidget(boton_editar)
 
         panel_detalle_layout.addLayout(fila_superior)
-        panel_detalle_layout.addLayout(grid_info)
-        panel_detalle_layout.addLayout(fila_metricas)
-        panel_detalle_layout.addWidget(observaciones)
+        panel_detalle_layout.addWidget(
+            self._crear_bloque_seccion_detalle(encabezado_contexto, grid_info)
+        )
+        panel_detalle_layout.addWidget(
+            self._crear_bloque_seccion_detalle(encabezado_metricas, fila_metricas)
+        )
+        panel_detalle_layout.addWidget(
+            self._crear_bloque_seccion_detalle(
+                self._crear_encabezado_seccion_detalle(
+                    "Observaciones",
+                    "Notas administrativas o contexto adicional del barrio.",
+                ),
+                [observaciones],
+            )
+        )
         panel_detalle_layout.addWidget(separador_acciones)
         panel_detalle_layout.addLayout(fila_acciones)
+        layout_scroll.addWidget(panel_detalle)
+        scroll.setWidget(contenedor_scroll)
 
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(panel_detalle)
+        self.layout_cuerpo.addWidget(scroll)
         self._pie.setVisible(False)
         self._aplicar_estilos()
+
+    def _crear_encabezado_seccion_detalle(self, titulo: str, descripcion: str) -> QWidget:
+        bloque = QWidget()
+        layout = QVBoxLayout(bloque)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        label_titulo = QLabel(titulo)
+        label_titulo.setObjectName("tituloSeccionDetalleBarrio")
+        label_descripcion = QLabel(descripcion)
+        label_descripcion.setObjectName("descripcionSeccionDetalleBarrio")
+        label_descripcion.setWordWrap(True)
+        layout.addWidget(label_titulo)
+        layout.addWidget(label_descripcion)
+        return bloque
+
+    def _crear_bloque_seccion_detalle(
+        self,
+        encabezado: QWidget,
+        contenido: QGridLayout | QHBoxLayout | list[QWidget],
+    ) -> QFrame:
+        bloque = QFrame()
+        bloque.setObjectName("seccionDetalleBarrio")
+        layout = QVBoxLayout(bloque)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+        layout.addWidget(encabezado)
+        if isinstance(contenido, list):
+            for widget in contenido:
+                layout.addWidget(widget)
+        else:
+            layout.addLayout(contenido)
+        return bloque
 
     def _crear_campo_detalle(self, etiqueta: str, valor: str) -> QFrame:
         tarjeta = QFrame()
         tarjeta.setObjectName("campoDetalleBarrio")
         layout = QVBoxLayout(tarjeta)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(4)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(5)
 
         label_etiqueta = QLabel(etiqueta)
         label_etiqueta.setObjectName("etiquetaDetalleBarrio")
@@ -410,7 +536,7 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
         tarjeta = QFrame()
         tarjeta.setObjectName("tarjetaMiniDetalleBarrio")
         layout = QVBoxLayout(tarjeta)
-        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(4)
 
         label_titulo = QLabel(titulo)
@@ -445,63 +571,84 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
 
     def _aplicar_estilos(self) -> None:
         radio = RADIO_TARJETA_DIALOGO
+        paleta = self._paleta_tema
         self.setStyleSheet(
             self.styleSheet()
             + f"""
+            QScrollArea#scrollDetalleBarrio,
+            QWidget#contenedorScrollDetalleBarrio {{
+                background: transparent;
+                border: none;
+            }}
             QFrame#panelContenidoDetalleBarrio {{
-                background: {COLOR_FONDO_DIALOGO};
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                background: {self._color_fondo_dialogo};
+                border: 1px solid {paleta["borde_principal"]};
+                border-radius: {radio}px;
+            }}
+            QFrame#seccionDetalleBarrio {{
+                background: {paleta["fondo_superficie"]};
+                border: 1px solid {paleta["borde_principal"]};
                 border-radius: {radio}px;
             }}
             QFrame#campoDetalleBarrio,
             QFrame#campoDetalleBarrioAmplio,
             QFrame#tarjetaMiniDetalleBarrio {{
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.10);
+                background: {paleta["fondo_superficie_suave"]};
+                border: 1px solid {paleta["borde_suave"]};
                 border-radius: {radio}px;
             }}
             QFrame#separadorDetalleBarrio {{
-                background: rgba(255, 255, 255, 0.12);
+                background: {paleta["borde_principal"]};
                 border: none;
             }}
+            QLabel#tituloSeccionDetalleBarrio {{
+                color: {paleta["texto_principal"]};
+                font-size: 14px;
+                font-weight: 800;
+            }}
+            QLabel#descripcionSeccionDetalleBarrio {{
+                color: {paleta["texto_suave"]};
+                font-size: 11px;
+                font-weight: 600;
+            }}
             QLabel#codigoBarrioDetalle {{
-                color: #8ec9ff;
+                color: {paleta["icono_tarjeta_info"]};
                 font-size: 12px;
                 font-weight: 800;
                 letter-spacing: 0.08em;
             }}
             QLabel#nombreBarrioDetalle {{
-                color: #ffffff;
-                font-size: 22px;
+                color: {paleta["texto_principal"]};
+                font-size: 19px;
                 font-weight: 900;
             }}
             QLabel#badgeDetalleBarrio {{
                 border-radius: {radio}px;
-                padding: 8px 12px;
+                padding: 6px 10px;
                 font-size: 12px;
                 font-weight: 800;
-                color: #ffffff;
-                background: rgba(160, 174, 192, 0.22);
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                color: {paleta["texto_badge"]};
+                background: {paleta["fondo_badge"]};
+                border: 1px solid {paleta["borde_suave"]};
             }}
             QLabel#badgeDetalleBarrio[activo="true"] {{
-                color: #d9fff5;
-                background: rgba(16, 120, 98, 0.24);
-                border-color: rgba(158, 231, 214, 0.26);
+                color: {paleta["texto_badge_activo"]};
+                background: {paleta["fondo_badge_activo"]};
+                border-color: {paleta["borde_badge_activo"]};
             }}
             QLabel#etiquetaDetalleBarrio {{
-                color: rgba(232, 239, 249, 0.72);
-                font-size: 12px;
+                color: {paleta["texto_muted"]};
+                font-size: 11px;
                 font-weight: 700;
             }}
             QLabel#valorDetalleBarrio {{
-                color: #f7fbff;
-                font-size: 14px;
+                color: {paleta["texto_input"]};
+                font-size: 12px;
                 font-weight: 700;
             }}
             QLabel#valorTarjetaMiniDetalle {{
-                color: #ffffff;
-                font-size: 24px;
+                color: {paleta["texto_principal"]};
+                font-size: 20px;
                 font-weight: 900;
             }}
             """
@@ -526,9 +673,9 @@ class DialogoConfirmacionEstadoBarrio(DialogoConfirmacionSicap):
                 ("Estado actual", self._barrio.estado.title()),
                 ("Accion", nuevo_estado.title()),
             ),
-            texto_confirmar="Confirmar",
+            texto_confirmar=nuevo_estado.title(),
             icono="alert-triangle.svg",
-            variante_confirmar="advertencia",
+            variante_confirmar="salida" if nuevo_estado == "inactivar" else "primario",
             parent=parent,
         )
 
@@ -551,6 +698,8 @@ class VistaBarrios(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
+        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._pagina_actual = 1
         self._total_paginas = 1
         self._temporizador_mensaje = QTimer(self)
@@ -558,6 +707,18 @@ class VistaBarrios(QWidget):
         self._temporizador_mensaje.timeout.connect(self._ocultar_mensaje)
         self._construir_ui()
         self._aplicar_estilos()
+
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._tema_actual = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        self._paleta_tema = obtener_paleta_tema(self._tema_actual)
+        self._aplicar_estilos()
+        for boton in self.findChildren(QPushButton):
+            if boton.objectName() == "botonOperativo":
+                aplicar_estilo_boton_operativo(boton, principal=False)
+            elif boton.objectName() == "botonOperativoPrimario":
+                aplicar_estilo_boton_operativo(boton, principal=True)
+        for boton_icono in self.findChildren(BotonIconoFilaBarrio):
+            boton_icono.aplicar_tema(self._tema_actual)
 
     def mostrar_resumen(self, resumen: ResumenBarrios) -> None:
         self._tarjeta_total.actualizar(
@@ -1058,3 +1219,88 @@ class VistaBarrios(QWidget):
             }
             """
         )
+        if self._tema_actual == "claro":
+            paleta = self._paleta_tema
+            self.setStyleSheet(
+                self.styleSheet()
+                + f"""
+                QWidget {{
+                    background: transparent;
+                }}
+                QLabel#tituloModulo,
+                QLabel#valorTarjetaResumen,
+                QLabel#nombreBarrioDetalle {{
+                    color: {paleta["texto_principal"]};
+                }}
+                QLabel#descripcionModulo,
+                QLabel#detalleTarjetaResumen,
+                QLabel#textoPieBarrios,
+                QLabel#etiquetaDetalleBarrio {{
+                    color: {paleta["texto_secundario"]};
+                }}
+                QLabel#mensajeBarrios[error="false"] {{
+                    color: {paleta["texto_exito"]};
+                    background-color: {paleta["fondo_exito"]};
+                    border: 1px solid {paleta["borde_exito"]};
+                }}
+                QLabel#mensajeBarrios[error="true"] {{
+                    color: {paleta["texto_error"]};
+                    background-color: {paleta["fondo_error"]};
+                    border: 1px solid {paleta["borde_error"]};
+                }}
+                QFrame#panelOperativoBarrios,
+                QFrame#panelTablaBarrios,
+                QFrame#tarjetaResumenBarrios {{
+                    background: {paleta["fondo_superficie"]};
+                    border: 1px solid {paleta["borde_principal"]};
+                }}
+                QTableWidget#tablaBarrios {{
+                    background: {paleta["fondo_superficie_muy_suave"]};
+                }}
+                QTableWidget#tablaBarrios QHeaderView::section {{
+                    background: {paleta["fondo_tabla_header"]};
+                    color: {paleta["texto_input"]};
+                    border-right: 1px solid {paleta["borde_suave"]};
+                    border-bottom: 1px solid {paleta["borde_suave"]};
+                }}
+                QLineEdit {{
+                    border: 1px solid {paleta["borde_medio"]};
+                    background: {paleta["fondo_input"]};
+                    color: {paleta["texto_input"]};
+                }}
+                QLineEdit:focus {{
+                    border-color: {paleta["borde_foco_input"]};
+                    background: {paleta["fondo_input_focus"]};
+                }}
+                QPushButton#chipFiltroBarrio {{
+                    background: {paleta["fondo_chip"]};
+                    border: 1px solid {paleta["borde_suave"]};
+                    color: {paleta["texto_chip"]};
+                }}
+                QPushButton#chipFiltroBarrio:hover {{
+                    background: {paleta["fondo_chip_hover"]};
+                }}
+                QPushButton#chipFiltroBarrio:checked {{
+                    color: {paleta["texto_chip_activo"]};
+                    background: {paleta["fondo_chip_activo"]};
+                    border-color: {paleta["borde_chip_activo"]};
+                }}
+                QLabel#badgeEstadoBarrio {{
+                    color: {paleta["texto_badge"]};
+                    background: {paleta["fondo_badge"]};
+                    border: 1px solid {paleta["borde_suave"]};
+                }}
+                QLabel#badgeEstadoBarrio[activo="true"] {{
+                    color: {paleta["texto_badge_activo"]};
+                    background: {paleta["fondo_badge_activo"]};
+                    border-color: {paleta["borde_badge_activo"]};
+                }}
+                QLabel#estadoVacioBarrios {{
+                    color: {paleta["texto_secundario"]};
+                }}
+                QLabel#tituloTarjetaResumen,
+                QLabel#codigoBarrioDetalle {{
+                    color: {paleta["texto_panel_secundario"]};
+                }}
+                """
+            )
