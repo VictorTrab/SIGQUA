@@ -5,6 +5,7 @@ import shutil
 import sys
 import unittest
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 
@@ -66,6 +67,9 @@ from modulos.casas.entidades import (  # noqa: E402
 )
 from modulos.planes_pago.vista import VistaPlanesPago  # noqa: E402
 from modulos.principal.vista import VistaModuloPrincipal  # noqa: E402
+from modulos.principal.entidades import AnaliticaDashboard, EstadoModuloPrincipal, MensajeCabeceraPrincipal, ModuloNavegacion  # noqa: E402
+from modulos.usuarios.entidades import PermisoSistema, ResumenUsuarios, RolSistema, UsuarioSistema  # noqa: E402
+from modulos.usuarios.vista import VistaUsuarios  # noqa: E402
 
 
 class TestVistaYAppAutenticacion(unittest.TestCase):
@@ -518,8 +522,69 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
     def test_shell_principal_reduce_ancho_sidebar_sin_expandir_menu(self) -> None:
         vista_principal = VistaModuloPrincipal()
 
-        self.assertEqual(vista_principal._sidebar.minimumWidth(), 204)
-        self.assertEqual(vista_principal._sidebar.maximumWidth(), 212)
+        self.assertEqual(vista_principal._sidebar.minimumWidth(), 192)
+        self.assertEqual(vista_principal._sidebar.maximumWidth(), 198)
+        vista_principal.close()
+
+    def test_shell_principal_resuelve_saludo_por_hora(self) -> None:
+        self.assertEqual(
+            VistaModuloPrincipal._resolver_saludo(datetime(2026, 5, 16, 6, 0, 0)),
+            "Buenos dias",
+        )
+        self.assertEqual(
+            VistaModuloPrincipal._resolver_saludo(datetime(2026, 5, 16, 13, 0, 0)),
+            "Buenas tardes",
+        )
+        self.assertEqual(
+            VistaModuloPrincipal._resolver_saludo(datetime(2026, 5, 16, 22, 0, 0)),
+            "Buenas noches",
+        )
+
+    def test_shell_principal_muestra_estado_rapido_en_encabezado(self) -> None:
+        vista_principal = VistaModuloPrincipal()
+        estado = EstadoModuloPrincipal(
+            nombre_usuario="admin",
+            nombre_completo="Admin Usuario",
+            perfil="ADMINISTRADOR",
+            metricas=(),
+            analitica=AnaliticaDashboard((), (), (), ()),
+            mensajes_cabecera=(
+                MensajeCabeceraPrincipal(
+                    "CORRECTO",
+                    "Sistema funcionando correctamente.",
+                    "circle-check.svg",
+                ),
+                MensajeCabeceraPrincipal(
+                    "ADVERTENCIA",
+                    "Hay casas con deuda mayor a 5 meses.",
+                    "alert-triangle.svg",
+                ),
+                MensajeCabeceraPrincipal(
+                    "INFORMACION",
+                    "17 pagos registrados hoy.",
+                    "info-circle.svg",
+                ),
+            ),
+            evento_reciente=MensajeCabeceraPrincipal(
+                "INFORMACION",
+                "Ultimo respaldo realizado hoy.",
+                "clock.svg",
+            ),
+            modulos=(ModuloNavegacion("dashboard", "Inicio", "", "circle-check.svg"),),
+            puede_abrir_mantenimiento=False,
+        )
+
+        vista_principal.mostrar_estado(estado)
+        vista_principal.show()
+        self.aplicacion.processEvents()
+
+        self.assertIn("Admin", vista_principal._label_bienvenida.text())
+        self.assertIn("Monitorea ingresos", vista_principal._label_subresumen.text())
+        self.assertIn("Actividad:", vista_principal._label_evento_cabecera.text())
+        self.assertGreaterEqual(vista_principal._boton_perfil_header.minimumWidth(), 48)
+        self.assertEqual(len(vista_principal._tarjetas_estado_header), 3)
+        self.assertEqual(vista_principal._tarjeta_estado_principal.property("tipoEstado"), "CORRECTO")
+        self.assertEqual(vista_principal._panel_estado_header.maximumWidth(), 460)
         vista_principal.close()
 
     def test_notificacion_casas_desaparece_tras_temporizador(self) -> None:
@@ -721,7 +786,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertIn("QFrame#bloqueDialogoSicap", dialogo.styleSheet())
             dialogo.close()
 
-    def test_toggle_tema_aplica_paleta_clara_en_shell_y_modulos_registrados(self) -> None:
+    def test_shell_permanece_en_tema_oscuro_sin_boton_de_cambio(self) -> None:
         vista_principal = VistaModuloPrincipal()
         vista_barrios = VistaBarrios()
         vista_abonados = VistaAbonados()
@@ -740,28 +805,15 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista_principal.aplicar_tema("claro")
         self.aplicacion.processEvents()
 
-        self.assertEqual(vista_principal._tema_actual, "claro")
-        self.assertEqual(vista_principal._boton_tema.text(), "Modo oscuro")
-        self.assertEqual(vista_principal._boton_tema.property("temaActivo"), "claro")
-        self.assertFalse(vista_principal._boton_tema.icon().isNull())
-        self.assertEqual(vista_barrios._tema_actual, "claro")
-        self.assertEqual(vista_abonados._tema_actual, "claro")
-        self.assertEqual(vista_casas._tema_actual, "claro")
-        self.assertEqual(vista_planes._tema_actual, "claro")
-        self.assertEqual(vista_configuracion._tema_actual, "claro")
-        self.assertIn("QPushButton#botonTemaHeader", vista_principal.styleSheet())
-        self.assertIn("#eef2f7", vista_principal._paleta_tema["fondo_principal"])
-
-        vista_principal._alternar_tema()
-        self.aplicacion.processEvents()
-
         self.assertEqual(vista_principal._tema_actual, "oscuro")
-        self.assertEqual(vista_principal._boton_tema.text(), "Modo claro")
+        self.assertFalse(hasattr(vista_principal, "_boton_tema"))
         self.assertEqual(vista_barrios._tema_actual, "oscuro")
         self.assertEqual(vista_abonados._tema_actual, "oscuro")
         self.assertEqual(vista_casas._tema_actual, "oscuro")
         self.assertEqual(vista_planes._tema_actual, "oscuro")
         self.assertEqual(vista_configuracion._tema_actual, "oscuro")
+        self.assertNotIn("botonTemaHeader", vista_principal.styleSheet())
+        self.assertIn("#2c2966", vista_principal._paleta_tema["fondo_principal"])
         vista_principal.close()
         vista_barrios.close()
         vista_abonados.close()
@@ -778,14 +830,94 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
         self.assertIn("QFrame#panelTablaPlanes", vista_planes.styleSheet())
         self.assertEqual(vista_planes._tabla.viewport().objectName(), "viewportTablaPlanes")
-        self.assertEqual(vista_configuracion._tabs.count(), 4)
+        self.assertEqual(vista_configuracion._tabs.count(), 5)
         self.assertEqual(vista_configuracion._tabs.tabText(0), "Datos de la junta")
-        self.assertEqual(vista_configuracion._tabs.tabText(1), "Parametros de cobro")
-        self.assertEqual(vista_configuracion._tabs.tabText(2), "Seguridad")
-        self.assertEqual(vista_configuracion._tabs.tabText(3), "Informacion")
+        self.assertEqual(vista_configuracion._tabs.tabText(1), "Factura y comprobantes")
+        self.assertEqual(vista_configuracion._tabs.tabText(2), "Parametros de cobro")
+        self.assertEqual(vista_configuracion._tabs.tabText(3), "Control y respaldo")
+        self.assertEqual(vista_configuracion._tabs.tabText(4), "Informacion")
 
         vista_planes.close()
         vista_configuracion.close()
+
+    def test_vista_usuarios_copia_patron_visual_con_pestanas_filtros_y_acciones(self) -> None:
+        vista = VistaUsuarios()
+        roles = [
+            RolSistema(
+                identificador=1,
+                nombre="ADMINISTRADOR",
+                descripcion="Acceso administrativo",
+                estado="ACTIVO",
+                es_sistema=True,
+                total_usuarios=1,
+                permisos=(
+                    PermisoSistema("usuarios.gestionar", "Gestionar usuarios", "", "Usuarios"),
+                    PermisoSistema("reportes.generar", "Generar reportes", "", "Reportes"),
+                ),
+            ),
+            RolSistema(
+                identificador=2,
+                nombre="CAJERO",
+                descripcion="Acceso de caja",
+                estado="ACTIVO",
+                es_sistema=True,
+                total_usuarios=2,
+                permisos=(PermisoSistema("pagos.registrar", "Registrar pagos", "", "Pagos"),),
+            ),
+        ]
+        usuarios = [
+            UsuarioSistema(
+                identificador=1,
+                nombre_usuario="admin",
+                nombre_completo="Admin Usuario",
+                correo="admin@sicap.local",
+                estado="ACTIVO",
+                roles=("ADMINISTRADOR",),
+            )
+        ]
+
+        permisos = [
+            PermisoSistema("usuarios.gestionar", "Gestionar usuarios", "", "Usuarios"),
+            PermisoSistema("reportes.generar", "Generar reportes", "", "Reportes"),
+            PermisoSistema("pagos.registrar", "Registrar pagos", "", "Pagos"),
+        ]
+
+        vista.mostrar_roles(roles, permisos)
+        vista.mostrar_resumen(
+            ResumenUsuarios(
+                total_usuarios=1,
+                usuarios_activos=1,
+                administradores=1,
+                accesos_hoy=1,
+            )
+        )
+        vista.mostrar_usuarios(usuarios, lambda valor: "Sin registro" if valor is None else valor)
+        vista.show()
+        self.aplicacion.processEvents()
+
+        self.assertEqual(vista._tabs.count(), 2)
+        self.assertEqual(vista._tabs.tabText(0), "Usuarios")
+        self.assertEqual(vista._tabs.tabText(1), "Roles y permisos")
+        self.assertEqual(vista._combo_roles.count(), 3)
+        self.assertEqual(vista._tabla.viewport().objectName(), "viewportTablaUsuarios")
+        self.assertIn("QFrame#panelTablaUsuarios", vista.styleSheet())
+        self.assertIn("QPushButton#chipFiltroUsuario", vista.styleSheet())
+        self.assertIn("QFrame#panelPermisosUsuarios", vista.styleSheet())
+
+        fila_acciones = vista._crear_acciones_fila(usuarios[0])
+        botones_accion = fila_acciones.findChildren(QToolButton, "botonIconoFilaUsuario")
+        self.assertEqual(len(botones_accion), 4)
+        self.assertTrue(all(not boton.text() for boton in botones_accion))
+        self.assertTrue(all(not boton.icon().isNull() for boton in botones_accion))
+        self.assertTrue(all(boton.iconSize().width() == 18 for boton in botones_accion))
+        self.assertEqual(fila_acciones.minimumHeight(), 58)
+        self.assertFalse(
+            any(
+                label.objectName() == "tituloModulo" and label.text() == "Usuarios"
+                for label in vista.findChildren(type(vista._estado_vacio))
+            )
+        )
+        vista.close()
 
 
 if __name__ == "__main__":

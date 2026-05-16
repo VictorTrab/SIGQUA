@@ -12,8 +12,6 @@ FILTRO_PLANES_CON_MORA = "CON_MORA"
 FILTRO_PLANES_SERVICIO = "SERVICIO"
 
 TIPOS_PLAN_VALIDOS = (
-    "MESES_PENDIENTES",
-    "MORA",
     "CONEXION",
     "RECONEXION",
 )
@@ -31,8 +29,8 @@ class PlanPago:
     abonado_nombre: str
     abonado_dni: str
     barrio_nombre: str = ""
-    tipo_plan: str = "MESES_PENDIENTES"
-    concepto_financiado: str = "MESES_PENDIENTES"
+    tipo_plan: str = "RECONEXION"
+    concepto_financiado: str = "RECONEXION"
     prima_centavos: int = 0
     saldo_financiado_centavos: int = 0
     monto_total_centavos: int = 0
@@ -115,7 +113,7 @@ class OpcionCasaPlanPago:
     def etiqueta(self) -> str:
         return (
             f"{self.casa_codigo} | {self.abonado_nombre} | {self.barrio_nombre} | "
-            f"Pendientes {self.meses_pendientes} | Mora {self.meses_en_mora}"
+            f"Servicio {self.estado_servicio} | Deuda {self.deuda_total_centavos / 100:,.2f}"
         )
 
 

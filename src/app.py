@@ -14,7 +14,7 @@ from comun.base_datos import GestorBaseDatos
 from comun.configuracion.gestor_rutas import GestorRutas
 from comun.logs import obtener_logger_sicap
 from comun.sesion import SesionAplicacion
-from comun.ui import ContenedorApiladoAjustable, VistaPlaceholderModulo
+from comun.ui import ContenedorApiladoAjustable
 from modulos.autenticacion import (
     ControladorAutenticacion,
     SesionIniciada,
@@ -27,6 +27,12 @@ from modulos.mantenimiento import (
     RepositorioMantenimientoSQLite,
     ServicioMantenimiento,
     VistaMantenimiento,
+)
+from modulos.morosidad import (
+    ControladorMorosidad,
+    RepositorioMorosidadSQLite,
+    ServicioMorosidad,
+    VistaMorosidad,
 )
 from modulos.barrios import (
     ControladorBarrios,
@@ -58,11 +64,23 @@ from modulos.planes_pago import (
     ServicioPlanesPago,
     VistaPlanesPago,
 )
+from modulos.pagos import (
+    ControladorPagos,
+    RepositorioPagosSQLite,
+    ServicioPagos,
+    VistaPagos,
+)
 from modulos.principal import (
     ControladorModuloPrincipal,
     RepositorioModuloPrincipalSQLite,
     ServicioModuloPrincipal,
     VistaModuloPrincipal,
+)
+from modulos.reportes import (
+    ControladorReportes,
+    RepositorioReportesSQLite,
+    ServicioReportes,
+    VistaReportes,
 )
 from modulos.usuarios import (
     ControladorUsuarios,
@@ -161,6 +179,12 @@ def crear_ventana_principal(
     servicio_abonados = ServicioAbonados(repositorio_abonados, repositorio_casas)
     repositorio_planes_pago = RepositorioPlanesPagoSQLite(gestor_base_datos)
     servicio_planes_pago = ServicioPlanesPago(repositorio_planes_pago)
+    repositorio_pagos = RepositorioPagosSQLite(gestor_base_datos)
+    servicio_pagos = ServicioPagos(repositorio_pagos, gestor_rutas=gestor_rutas)
+    repositorio_morosidad = RepositorioMorosidadSQLite(gestor_base_datos)
+    servicio_morosidad = ServicioMorosidad(repositorio_morosidad)
+    repositorio_reportes = RepositorioReportesSQLite(gestor_base_datos)
+    servicio_reportes = ServicioReportes(repositorio_reportes)
     repositorio_configuracion = RepositorioConfiguracionSQLite(gestor_base_datos)
     servicio_configuracion = ServicioConfiguracion(repositorio_configuracion, gestor_rutas)
     repositorio_mantenimiento = RepositorioMantenimientoSQLite(gestor_base_datos)
@@ -204,6 +228,9 @@ def crear_ventana_principal(
     ventana_principal.servicio_casas = servicio_casas
     ventana_principal.servicio_abonados = servicio_abonados
     ventana_principal.servicio_planes_pago = servicio_planes_pago
+    ventana_principal.servicio_pagos = servicio_pagos
+    ventana_principal.servicio_morosidad = servicio_morosidad
+    ventana_principal.servicio_reportes = servicio_reportes
     ventana_principal.servicio_configuracion = servicio_configuracion
     ventana_principal.servicio_mantenimiento = servicio_mantenimiento
     ventana_principal.vista_autenticacion = vista_autenticacion
@@ -328,34 +355,33 @@ def _registrar_modulos_operativos(ventana_principal: QMainWindow) -> None:
     )
     vista_modulo_principal.registrar_modulo("planes_pago", vista_planes_pago)
 
+    vista_pagos = VistaPagos()
+    controlador_pagos = ControladorPagos(
+        servicio_pagos=ventana_principal.servicio_pagos,
+        vista_pagos=vista_pagos,
+    )
+    vista_modulo_principal.registrar_modulo("pagos", vista_pagos)
+
+    vista_morosidad = VistaMorosidad()
+    controlador_morosidad = ControladorMorosidad(
+        servicio_morosidad=ventana_principal.servicio_morosidad,
+        vista_morosidad=vista_morosidad,
+    )
+    vista_modulo_principal.registrar_modulo("morosidad", vista_morosidad)
+
+    vista_reportes = VistaReportes()
+    controlador_reportes = ControladorReportes(
+        servicio_reportes=ventana_principal.servicio_reportes,
+        vista_reportes=vista_reportes,
+    )
+    vista_modulo_principal.registrar_modulo("reportes", vista_reportes)
+
     vista_usuarios = VistaUsuarios()
     controlador_usuarios = ControladorUsuarios(
         servicio_usuarios=ventana_principal.servicio_usuarios,
         vista_usuarios=vista_usuarios,
     )
     vista_modulo_principal.registrar_modulo("usuarios", vista_usuarios)
-
-    for codigo, titulo, descripcion in (
-        (
-            "pagos",
-            "Pagos",
-            "Registro de pagos y aplicacion desde deuda mas antigua se integraran con cargos y casas.",
-        ),
-        (
-            "morosidad",
-            "Morosidad",
-            "Consulta de deuda, meses pendientes y contexto de cobro se habilitara tras pagos.",
-        ),
-        (
-            "reportes",
-            "Reportes",
-            "Reportes operativos se activaran cuando existan datos confiables de pagos y deuda.",
-        ),
-    ):
-        vista_modulo_principal.registrar_modulo(
-            codigo,
-            VistaPlaceholderModulo(titulo, descripcion),
-        )
 
     vista_configuracion = VistaConfiguracion()
     controlador_configuracion = ControladorConfiguracion(
@@ -372,6 +398,12 @@ def _registrar_modulos_operativos(ventana_principal: QMainWindow) -> None:
     ventana_principal.controlador_casas = controlador_casas
     ventana_principal.vista_planes_pago = vista_planes_pago
     ventana_principal.controlador_planes_pago = controlador_planes_pago
+    ventana_principal.vista_pagos = vista_pagos
+    ventana_principal.controlador_pagos = controlador_pagos
+    ventana_principal.vista_morosidad = vista_morosidad
+    ventana_principal.controlador_morosidad = controlador_morosidad
+    ventana_principal.vista_reportes = vista_reportes
+    ventana_principal.controlador_reportes = controlador_reportes
     ventana_principal.vista_usuarios = vista_usuarios
     ventana_principal.controlador_usuarios = controlador_usuarios
     ventana_principal.vista_configuracion = vista_configuracion
@@ -391,6 +423,12 @@ def _refrescar_modulos_operativos(
         ventana_principal.controlador_casas.mostrar_para_actor(usuario)
     if hasattr(ventana_principal, "controlador_planes_pago"):
         ventana_principal.controlador_planes_pago.mostrar_para_actor(usuario)
+    if hasattr(ventana_principal, "controlador_pagos"):
+        ventana_principal.controlador_pagos.mostrar_para_actor(usuario)
+    if hasattr(ventana_principal, "controlador_morosidad"):
+        ventana_principal.controlador_morosidad.mostrar()
+    if hasattr(ventana_principal, "controlador_reportes"):
+        ventana_principal.controlador_reportes.mostrar()
     if hasattr(ventana_principal, "controlador_usuarios"):
         ventana_principal.controlador_usuarios.mostrar_para_actor(usuario)
     if hasattr(ventana_principal, "controlador_configuracion"):

@@ -7,6 +7,7 @@ from typing import Callable
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -54,7 +55,9 @@ class VistaConfiguracion(QWidget):
     """Pantalla operativa del modulo de configuracion."""
 
     guardar_datos_junta_solicitado = Signal(str, str, str, str)
-    guardar_parametros_cobro_solicitado = Signal(int, bool, int, bool)
+    guardar_parametros_factura_solicitado = Signal(str, str)
+    guardar_parametros_cobro_solicitado = Signal(int, bool, int, bool, int, bool, int)
+    guardar_operacion_respaldo_solicitado = Signal(bool)
 
     DURACION_MENSAJE_MS = 3200
 
@@ -76,25 +79,42 @@ class VistaConfiguracion(QWidget):
     ) -> None:
         self._tarjeta_precio.actualizar(
             formateador_moneda(estado.parametros_cobro.precio_mensual_centavos),
-            "Costo base por cada mes de servicio adeudado.",
+            "Afecta cargos mensuales nuevos en pagos, morosidad y reportes.",
         )
-        self._tarjeta_mora.actualizar(
-            "Visible",
-            "Los meses vencidos no pagados siguen formando la mora operativa.",
+        self._tarjeta_correlativo.actualizar(
+            estado.factura.correlativo_actual,
+            f"Proximo recibo: {estado.factura.proximo_correlativo}.",
         )
-        self._tarjeta_recargo.actualizar(
-            "Activa" if estado.parametros_cobro.multa_mora_automatica_activa else "Inactiva",
-            "Recargo adicional por mes vencido solo si esta habilitado.",
+        self._tarjeta_adelantos.actualizar(
+            "Activos" if estado.parametros_cobro.permitir_pago_adelantado else "Bloqueados",
+            (
+                f"Hasta {estado.parametros_cobro.meses_adelanto_maximo} meses."
+                if estado.parametros_cobro.permitir_pago_adelantado
+                else "Pagos adelantados deshabilitados desde configuracion."
+            ),
         )
-        self._tarjeta_corte.actualizar(
-            "Activo" if estado.parametros_cobro.corte_automatico_activo else "Inactivo",
-            "Control global del corte automatico por deuda.",
+        self._tarjeta_respaldo.actualizar(
+            "Activo" if estado.operacion.respaldo_automatico else "Inactivo",
+            (
+                f"Ultimo: {estado.operacion.ultimo_respaldo_en}."
+                if estado.operacion.ultimo_respaldo_en
+                else "Sin respaldos registrados."
+            ),
         )
 
         self._campo_junta_nombre.setText(estado.datos_junta.nombre)
         self._campo_junta_telefono.setText(estado.datos_junta.telefono)
         self._campo_junta_correo.setText(estado.datos_junta.correo)
         self._campo_junta_direccion.setPlainText(estado.datos_junta.direccion)
+
+        self._campo_factura_nombre.setText(estado.datos_junta.nombre)
+        self._campo_factura_datos.setText(self._componer_datos_factura(estado))
+        self._valor_correlativo_actual.setText(estado.factura.correlativo_actual)
+        self._valor_ultimo_comprobante.setText(estado.factura.ultimo_comprobante_emitido)
+        self._campo_texto_pie.setPlainText(estado.factura.texto_pie)
+        self._combo_formato_salida.setCurrentText(estado.factura.formato_salida)
+        self._valor_total_comprobantes.setText(str(estado.factura.total_comprobantes_emitidos))
+        self._valor_proximo_correlativo.setText(estado.factura.proximo_correlativo)
 
         self._campo_precio_mensual.setText(str(estado.parametros_cobro.precio_mensual_centavos))
         self._check_multa_automatica.blockSignals(True)
@@ -103,18 +123,54 @@ class VistaConfiguracion(QWidget):
         self._campo_multa_automatica.setText(
             str(estado.parametros_cobro.multa_mora_automatica_centavos)
         )
+        self._check_corte_automatico.blockSignals(True)
         self._check_corte_automatico.setChecked(estado.parametros_cobro.corte_automatico_activo)
+        self._check_corte_automatico.blockSignals(False)
+        self._campo_meses_para_corte.setText(str(estado.parametros_cobro.meses_para_corte))
+        self._check_pago_adelantado.blockSignals(True)
+        self._check_pago_adelantado.setChecked(estado.parametros_cobro.permitir_pago_adelantado)
+        self._check_pago_adelantado.blockSignals(False)
+        self._campo_meses_adelanto_maximo.setText(
+            str(estado.parametros_cobro.meses_adelanto_maximo)
+        )
+        self._valor_mora_regla.setText(
+            "La mora sigue visible como meses vencidos no pagados."
+            if estado.parametros_cobro.mora_visible
+            else "No aplica a esta version."
+        )
         self._actualizar_estado_campos_cobro()
+
+        self._check_respaldo_automatico.blockSignals(True)
+        self._check_respaldo_automatico.setChecked(estado.operacion.respaldo_automatico)
+        self._check_respaldo_automatico.blockSignals(False)
+        self._valor_ultimo_respaldo.setText(
+            estado.operacion.ultimo_respaldo_en or "Sin registros"
+        )
+        self._valor_estado_respaldo.setText(estado.operacion.ultimo_respaldo_estado)
+        self._valor_total_respaldos.setText(str(estado.operacion.total_respaldos))
+        self._valor_ruta_comprobantes.setText(estado.operacion.ruta_exportaciones_comprobantes)
+        self._valor_ruta_reportes.setText(estado.operacion.ruta_exportaciones_reportes)
 
         self._valor_autenticacion.setText("Local")
         self._valor_intentos.setText(str(estado.seguridad.maximo_intentos_fallidos))
         self._valor_sesion.setText(f"{estado.seguridad.duracion_sesion_horas} horas")
         self._valor_restablecimiento.setText("Administrativo")
+        self._valor_cambio_clave.setText("Obligatorio cuando hay clave temporal")
+
         self._valor_nombre_sistema.setText(estado.informacion.nombre_sistema)
         self._valor_version_sistema.setText(estado.informacion.version_sistema or "Sin version")
         self._valor_ruta_base.setText(estado.informacion.ruta_base_datos)
         self._valor_modo_operacion.setText(estado.informacion.modo_operacion)
         self._valor_actualizacion.setText(estado.informacion.ultima_actualizacion or "Sin registro")
+
+        self._etiqueta_preview_junta.setText(estado.datos_junta.nombre or "Junta no configurada")
+        self._etiqueta_preview_datos.setText(self._componer_datos_factura(estado))
+        self._etiqueta_preview_codigo.setText(estado.factura.proximo_correlativo)
+        self._etiqueta_preview_formato.setText(estado.factura.formato_salida)
+        self._etiqueta_preview_total.setText(
+            formateador_moneda(estado.parametros_cobro.precio_mensual_centavos)
+        )
+        self._etiqueta_preview_pie.setText(estado.factura.texto_pie)
 
     def mostrar_mensaje(self, mensaje: str, es_error: bool = False) -> None:
         self._mensaje.setText(mensaje)
@@ -142,7 +198,7 @@ class VistaConfiguracion(QWidget):
         titulo = QLabel("Configuracion")
         titulo.setObjectName("tituloModulo")
         descripcion = QLabel(
-            "Ajusta datos institucionales y parametros de cobro segun la operacion real actual de SICAP."
+            "Parametros operativos conectados a pagos, comprobantes, morosidad, reportes y soporte local."
         )
         descripcion.setObjectName("descripcionModulo")
         descripcion.setWordWrap(True)
@@ -166,20 +222,21 @@ class VistaConfiguracion(QWidget):
         tarjetas = QGridLayout()
         tarjetas.setHorizontalSpacing(10)
         tarjetas.setVerticalSpacing(10)
-        self._tarjeta_precio = TarjetaResumenConfiguracion("Precio mensual")
-        self._tarjeta_mora = TarjetaResumenConfiguracion("Mora")
-        self._tarjeta_recargo = TarjetaResumenConfiguracion("Recargo automatico")
-        self._tarjeta_corte = TarjetaResumenConfiguracion("Corte automatico")
+        self._tarjeta_precio = TarjetaResumenConfiguracion("Precio actual servicio")
+        self._tarjeta_correlativo = TarjetaResumenConfiguracion("Correlativo global")
+        self._tarjeta_adelantos = TarjetaResumenConfiguracion("Pago adelantado")
+        self._tarjeta_respaldo = TarjetaResumenConfiguracion("Respaldo automatico")
         tarjetas.addWidget(self._tarjeta_precio, 0, 0)
-        tarjetas.addWidget(self._tarjeta_mora, 0, 1)
-        tarjetas.addWidget(self._tarjeta_recargo, 0, 2)
-        tarjetas.addWidget(self._tarjeta_corte, 0, 3)
+        tarjetas.addWidget(self._tarjeta_correlativo, 0, 1)
+        tarjetas.addWidget(self._tarjeta_adelantos, 0, 2)
+        tarjetas.addWidget(self._tarjeta_respaldo, 0, 3)
 
         self._tabs = QTabWidget()
         self._tabs.setObjectName("tabsConfiguracion")
         self._tabs.addTab(self._crear_tab_datos_junta(), "Datos de la junta")
+        self._tabs.addTab(self._crear_tab_factura(), "Factura y comprobantes")
         self._tabs.addTab(self._crear_tab_parametros_cobro(), "Parametros de cobro")
-        self._tabs.addTab(self._crear_tab_seguridad(), "Seguridad")
+        self._tabs.addTab(self._crear_tab_operacion_respaldo(), "Control y respaldo")
         self._tabs.addTab(self._crear_tab_informacion(), "Informacion")
 
         layout.addLayout(encabezado)
@@ -215,9 +272,94 @@ class VistaConfiguracion(QWidget):
         contenido = self._crear_contenedor_scroll()
         contenido.widget().layout().addWidget(
             self._crear_panel(
-                "Identidad institucional",
-                "Estos datos alimentan el contexto operativo de la junta dentro del sistema local.",
+                "Datos institucionales",
+                "Identidad visible en comprobantes, reportes y cabeceras operativas del sistema.",
                 [grilla],
+            )
+        )
+        contenido.widget().layout().addWidget(
+            self._crear_aviso(
+                "Impacta Pagos, Reportes y la vista previa de comprobantes. "
+                "No crea reglas nuevas: solo cambia los datos visibles de la junta."
+            )
+        )
+        contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
+        return contenido
+
+    def _crear_tab_factura(self) -> QWidget:
+        self._campo_factura_nombre = QLineEdit()
+        self._campo_factura_nombre.setReadOnly(True)
+        self._campo_factura_datos = QLineEdit()
+        self._campo_factura_datos.setReadOnly(True)
+        self._valor_correlativo_actual = self._crear_valor_seguridad()
+        self._valor_ultimo_comprobante = self._crear_valor_seguridad()
+        self._campo_texto_pie = QPlainTextEdit()
+        self._campo_texto_pie.setFixedHeight(88)
+        self._combo_formato_salida = QComboBox()
+        self._combo_formato_salida.addItems(["PDF", "HTML", "TEXTO"])
+        self._valor_total_comprobantes = self._crear_valor_seguridad()
+        self._valor_proximo_correlativo = self._crear_valor_seguridad()
+
+        grilla_superior = QGridLayout()
+        grilla_superior.setHorizontalSpacing(12)
+        grilla_superior.setVerticalSpacing(12)
+        grilla_superior.addWidget(
+            self._crear_bloque_campo("Nombre visible de la junta", self._campo_factura_nombre),
+            0,
+            0,
+            1,
+            2,
+        )
+        grilla_superior.addWidget(
+            self._crear_bloque_campo("Datos de contacto en comprobante", self._campo_factura_datos),
+            1,
+            0,
+            1,
+            2,
+        )
+
+        panel_factura = self._crear_panel(
+            "Factura y comprobantes",
+            "Configuracion operativa del texto y formato de salida que consume el flujo real de pagos.",
+            [
+                grilla_superior,
+                self._crear_fila_resumen("Correlativo actual", self._valor_correlativo_actual),
+                self._crear_fila_resumen("Ultimo comprobante emitido", self._valor_ultimo_comprobante),
+                self._crear_bloque_campo("Texto inferior", self._campo_texto_pie),
+                self._crear_bloque_campo("Formato de salida", self._combo_formato_salida),
+            ],
+        )
+
+        panel_preview = self._crear_panel(
+            "Vista previa operativa",
+            "Referencia visual basada en el flujo de pagos y el correlativo global vigente.",
+            [self._crear_vista_previa_comprobante()],
+        )
+
+        panel_resumen = self._crear_panel(
+            "Resumen de emision",
+            "Datos reales de la base para pagos y reportes.",
+            [
+                self._crear_fila_resumen("Total de comprobantes", self._valor_total_comprobantes),
+                self._crear_fila_resumen("Proximo correlativo", self._valor_proximo_correlativo),
+            ],
+        )
+
+        boton_guardar = crear_boton_operativo("Guardar comprobantes", principal=True)
+        boton_guardar.clicked.connect(
+            lambda: self.guardar_parametros_factura_solicitado.emit(
+                self._campo_texto_pie.toPlainText(),
+                self._combo_formato_salida.currentText(),
+            )
+        )
+
+        contenido = self._crear_contenedor_scroll()
+        contenido.widget().layout().addWidget(panel_factura)
+        contenido.widget().layout().addWidget(panel_preview)
+        contenido.widget().layout().addWidget(panel_resumen)
+        contenido.widget().layout().addWidget(
+            self._crear_aviso(
+                "El numero del comprobante no se edita aqui. Lo gobierna el correlativo global creado en pagos."
             )
         )
         contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
@@ -231,16 +373,24 @@ class VistaConfiguracion(QWidget):
         self._campo_multa_automatica = QLineEdit()
         self._campo_multa_automatica.setPlaceholderText("Centavos del recargo adicional")
         self._check_corte_automatico = QCheckBox("Permitir corte automatico por deuda")
+        self._campo_meses_para_corte = QLineEdit()
+        self._campo_meses_para_corte.setPlaceholderText("Meses de deuda para alerta o corte")
+        self._check_pago_adelantado = QCheckBox("Permitir pago adelantado")
+        self._check_pago_adelantado.toggled.connect(self._actualizar_estado_campos_cobro)
+        self._campo_meses_adelanto_maximo = QLineEdit()
+        self._campo_meses_adelanto_maximo.setPlaceholderText("Maximo de meses adelantados")
+        self._valor_mora_regla = self._crear_valor_seguridad()
 
         panel_precio = self._crear_panel(
             "Precio mensual del servicio",
-            "Este valor representa el costo por cada mes de servicio y se suma a la deuda de la casa cuando el periodo queda pendiente o vencido.",
+            "Segun la regla cerrada, el cambio de tarifa solo afecta cargos nuevos. Nunca recalcula deuda historica.",
             [self._crear_bloque_campo("Precio mensual (centavos)", self._campo_precio_mensual)],
         )
         panel_mora = self._crear_panel(
             "Mora y recargo automatico",
-            "La mora sigue existiendo como meses vencidos no pagados. Lo opcional es el recargo automatico adicional por mes vencido.",
+            "La mora sigue existiendo como meses vencidos no pagados. Aqui solo parametrizas el recargo automatico adicional.",
             [
+                self._crear_fila_resumen("Regla de mora", self._valor_mora_regla),
                 self._check_multa_automatica,
                 self._crear_bloque_campo(
                     "Monto del recargo automatico por mes vencido (centavos)",
@@ -249,9 +399,20 @@ class VistaConfiguracion(QWidget):
             ],
         )
         panel_corte = self._crear_panel(
-            "Corte automatico",
-            "Activa o desactiva globalmente el corte automatico. Conexion y reconexion no se fijan aqui como tarifas globales porque dependen del caso operativo.",
-            [self._check_corte_automatico],
+            "Corte y alertas por deuda",
+            "Control global que afecta diagnostico de casas, morosidad y decision operativa del soporte.",
+            [
+                self._check_corte_automatico,
+                self._crear_bloque_campo("Meses para corte o alerta", self._campo_meses_para_corte),
+            ],
+        )
+        panel_adelantos = self._crear_panel(
+            "Pago adelantado",
+            "Permite controlar si pagos puede registrar meses futuros y hasta donde, sin anular las reglas de deuda vencida.",
+            [
+                self._check_pago_adelantado,
+                self._crear_bloque_campo("Maximo de meses adelantados", self._campo_meses_adelanto_maximo),
+            ],
         )
 
         boton_guardar = crear_boton_operativo("Guardar parametros de cobro", principal=True)
@@ -261,26 +422,72 @@ class VistaConfiguracion(QWidget):
         contenido.widget().layout().addWidget(panel_precio)
         contenido.widget().layout().addWidget(panel_mora)
         contenido.widget().layout().addWidget(panel_corte)
+        contenido.widget().layout().addWidget(panel_adelantos)
+        contenido.widget().layout().addWidget(
+            self._crear_aviso(
+                "Impacta Pagos, Morosidad, Casas y Reportes. "
+                "Conexion y reconexion no se configuran como tarifa global en esta pantalla."
+            )
+        )
         contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
         return contenido
 
-    def _crear_tab_seguridad(self) -> QWidget:
+    def _crear_tab_operacion_respaldo(self) -> QWidget:
+        self._check_respaldo_automatico = QCheckBox("Generar respaldo automatico de la base local")
+        self._valor_ultimo_respaldo = self._crear_valor_seguridad()
+        self._valor_estado_respaldo = self._crear_valor_seguridad()
+        self._valor_total_respaldos = self._crear_valor_seguridad()
+        self._valor_ruta_comprobantes = self._crear_valor_seguridad()
+        self._valor_ruta_reportes = self._crear_valor_seguridad()
         self._valor_autenticacion = self._crear_valor_seguridad()
         self._valor_intentos = self._crear_valor_seguridad()
         self._valor_sesion = self._crear_valor_seguridad()
         self._valor_restablecimiento = self._crear_valor_seguridad()
-        panel = self._crear_panel(
-            "Reglas activas",
-            "Esta pestaña refleja la seguridad vigente de SICAP. En esta version local no se exponen ajustes sensibles que aun dependan de codigo o mantenimiento tecnico.",
+        self._valor_cambio_clave = self._crear_valor_seguridad()
+
+        panel_control = self._crear_panel(
+            "Control y respaldo",
+            "Soporte operativo conectado a mantenimiento y rutas reales del proyecto.",
+            [
+                self._check_respaldo_automatico,
+                self._crear_fila_resumen("Ultimo respaldo", self._valor_ultimo_respaldo),
+                self._crear_fila_resumen("Estado del ultimo respaldo", self._valor_estado_respaldo),
+                self._crear_fila_resumen("Total de respaldos", self._valor_total_respaldos),
+                self._crear_fila_resumen(
+                    "Ruta exportacion comprobantes",
+                    self._valor_ruta_comprobantes,
+                ),
+                self._crear_fila_resumen("Ruta exportacion reportes", self._valor_ruta_reportes),
+            ],
+        )
+        panel_seguridad = self._crear_panel(
+            "Seguridad vigente",
+            "Resumen de reglas cerradas. Los cambios sensibles siguen fuera de esta UI.",
             [
                 self._crear_fila_resumen("Autenticacion", self._valor_autenticacion),
                 self._crear_fila_resumen("Intentos maximos", self._valor_intentos),
                 self._crear_fila_resumen("Duracion de sesion", self._valor_sesion),
                 self._crear_fila_resumen("Restablecimiento", self._valor_restablecimiento),
+                self._crear_fila_resumen("Cambio obligatorio de clave", self._valor_cambio_clave),
             ],
         )
+        boton_guardar = crear_boton_operativo("Guardar control de respaldo", principal=True)
+        boton_guardar.clicked.connect(
+            lambda: self.guardar_operacion_respaldo_solicitado.emit(
+                self._check_respaldo_automatico.isChecked()
+            )
+        )
+
         contenido = self._crear_contenedor_scroll()
-        contenido.widget().layout().addWidget(panel)
+        contenido.widget().layout().addWidget(panel_control)
+        contenido.widget().layout().addWidget(panel_seguridad)
+        contenido.widget().layout().addWidget(
+            self._crear_aviso(
+                "El modulo Mantenimiento sigue reservado para SUPERADMINISTRADOR. "
+                "Aqui solo se controla la bandera operativa de respaldo automatico."
+            )
+        )
+        contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
         return contenido
 
     def _crear_tab_informacion(self) -> QWidget:
@@ -290,8 +497,8 @@ class VistaConfiguracion(QWidget):
         self._valor_modo_operacion = self._crear_valor_seguridad()
         self._valor_actualizacion = self._crear_valor_seguridad()
         panel = self._crear_panel(
-            "Informacion del entorno",
-            "Resumen util para soporte operativo y validacion del despliegue local actual.",
+            "Informacion del sistema",
+            "Resumen tecnico defendible del entorno SQLite local actual.",
             [
                 self._crear_fila_resumen("Sistema", self._valor_nombre_sistema),
                 self._crear_fila_resumen("Version", self._valor_version_sistema),
@@ -302,7 +509,54 @@ class VistaConfiguracion(QWidget):
         )
         contenido = self._crear_contenedor_scroll()
         contenido.widget().layout().addWidget(panel)
+        contenido.widget().layout().addWidget(
+            self._crear_aviso(
+                "Configuracion solo expone parametros respaldados por la base real o por reglas cerradas de negocio."
+            )
+        )
         return contenido
+
+    def _crear_vista_previa_comprobante(self) -> QWidget:
+        marco = QFrame()
+        marco.setObjectName("previewComprobanteConfiguracion")
+        layout = QVBoxLayout(marco)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(8)
+
+        encabezado = QLabel("Vista previa del comprobante")
+        encabezado.setObjectName("tituloPreviewConfiguracion")
+        self._etiqueta_preview_junta = QLabel("")
+        self._etiqueta_preview_junta.setObjectName("tituloPreviewRecibo")
+        self._etiqueta_preview_datos = QLabel("")
+        self._etiqueta_preview_datos.setObjectName("detallePreviewRecibo")
+        self._etiqueta_preview_datos.setWordWrap(True)
+        self._etiqueta_preview_codigo = QLabel("")
+        self._etiqueta_preview_formato = QLabel("")
+        self._etiqueta_preview_total = QLabel("")
+        self._etiqueta_preview_pie = QLabel("")
+        self._etiqueta_preview_pie.setObjectName("detallePreviewRecibo")
+        self._etiqueta_preview_pie.setWordWrap(True)
+
+        layout.addWidget(encabezado)
+        layout.addWidget(self._etiqueta_preview_junta)
+        layout.addWidget(self._etiqueta_preview_datos)
+        layout.addWidget(self._crear_fila_preview("Proximo recibo", self._etiqueta_preview_codigo))
+        layout.addWidget(self._crear_fila_preview("Formato", self._etiqueta_preview_formato))
+        layout.addWidget(self._crear_fila_preview("Mensualidad base", self._etiqueta_preview_total))
+        layout.addWidget(self._etiqueta_preview_pie)
+        return marco
+
+    def _crear_fila_preview(self, etiqueta: str, valor: QLabel) -> QWidget:
+        fila = QWidget()
+        layout = QHBoxLayout(fila)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+        label = QLabel(etiqueta)
+        label.setObjectName("etiquetaPreviewConfiguracion")
+        valor.setObjectName("valorPreviewConfiguracion")
+        layout.addWidget(label, 1)
+        layout.addWidget(valor, 1)
+        return fila
 
     def _emitir_guardado_parametros_cobro(self) -> None:
         self.guardar_parametros_cobro_solicitado.emit(
@@ -310,10 +564,14 @@ class VistaConfiguracion(QWidget):
             self._check_multa_automatica.isChecked(),
             self._leer_entero(self._campo_multa_automatica.text()),
             self._check_corte_automatico.isChecked(),
+            self._leer_entero(self._campo_meses_para_corte.text()),
+            self._check_pago_adelantado.isChecked(),
+            self._leer_entero(self._campo_meses_adelanto_maximo.text()),
         )
 
     def _actualizar_estado_campos_cobro(self) -> None:
         self._campo_multa_automatica.setEnabled(self._check_multa_automatica.isChecked())
+        self._campo_meses_adelanto_maximo.setEnabled(self._check_pago_adelantado.isChecked())
 
     def _mostrar_ayuda(self) -> None:
         from comun.ui import DialogoMensajeSicap
@@ -321,9 +579,9 @@ class VistaConfiguracion(QWidget):
         dialogo = DialogoMensajeSicap(
             titulo="Ayuda de configuracion",
             mensaje=(
-                "La mora sigue existiendo como meses vencidos no pagados. "
-                "Lo que puedes activar o desactivar aqui es el recargo automatico adicional por mora. "
-                "Conexion y reconexion se manejan en sus flujos operativos y no como tarifas globales fijas."
+                "Esta pantalla solo administra parametros reales del sistema. "
+                "Precio mensual, recargo automatico, pago adelantado, comprobantes y respaldo afectan modulos operativos. "
+                "Las reglas sensibles de seguridad y los procesos tecnicos siguen fuera de esta vista."
             ),
             parent=self,
         )
@@ -364,6 +622,18 @@ class VistaConfiguracion(QWidget):
                 layout.addWidget(elemento)
         return panel
 
+    def _crear_aviso(self, texto: str) -> QFrame:
+        panel = QFrame()
+        panel.setObjectName("avisoConfiguracion")
+        layout = QHBoxLayout(panel)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+        etiqueta = QLabel(texto)
+        etiqueta.setObjectName("textoAvisoConfiguracion")
+        etiqueta.setWordWrap(True)
+        layout.addWidget(etiqueta)
+        return panel
+
     def _crear_contenedor_scroll(self) -> QScrollArea:
         scroll = QScrollArea()
         scroll.setObjectName("scrollConfiguracion")
@@ -401,6 +671,13 @@ class VistaConfiguracion(QWidget):
         except ValueError:
             return -1
 
+    @staticmethod
+    def _componer_datos_factura(estado: EstadoConfiguracion) -> str:
+        partes = [valor for valor in (estado.datos_junta.telefono, estado.datos_junta.correo) if valor]
+        if estado.datos_junta.direccion:
+            partes.append(estado.datos_junta.direccion)
+        return " | ".join(partes) if partes else "Sin datos complementarios"
+
     def _aplicar_estilos(self) -> None:
         paleta = self._paleta_tema
         oscuro = self._tema_actual != "claro"
@@ -425,7 +702,9 @@ class VistaConfiguracion(QWidget):
             }}
             QLabel#descripcionModulo,
             QLabel#descripcionPanelConfiguracion,
-            QLabel#detalleTarjetaResumenConfiguracion {{
+            QLabel#detalleTarjetaResumenConfiguracion,
+            QLabel#detallePreviewRecibo,
+            QLabel#textoAvisoConfiguracion {{
                 color: {texto_secundario};
                 font-size: 11px;
                 font-weight: 600;
@@ -445,7 +724,9 @@ class VistaConfiguracion(QWidget):
                 border: 1px solid {'rgba(255, 205, 199, 0.28)' if oscuro else paleta['borde_error']};
             }}
             QFrame#tarjetaResumenConfiguracion,
-            QFrame#panelConfiguracion {{
+            QFrame#panelConfiguracion,
+            QFrame#avisoConfiguracion,
+            QFrame#previewComprobanteConfiguracion {{
                 background: {fondo_panel};
                 border: 1px solid {borde_panel};
                 border-radius: 18px;
@@ -455,28 +736,32 @@ class VistaConfiguracion(QWidget):
                 font-size: 11px;
                 font-weight: 700;
             }}
-            QLabel#valorTarjetaResumenConfiguracion {{
+            QLabel#valorTarjetaResumenConfiguracion,
+            QLabel#tituloPreviewRecibo {{
                 color: {texto_principal};
                 font-size: 20px;
                 font-weight: 900;
             }}
-            QLabel#tituloPanelConfiguracion {{
+            QLabel#tituloPanelConfiguracion,
+            QLabel#tituloPreviewConfiguracion {{
                 color: {texto_principal};
                 font-size: 14px;
                 font-weight: 800;
             }}
             QLabel#etiquetaConfiguracion,
-            QLabel#etiquetaResumenConfiguracion {{
+            QLabel#etiquetaResumenConfiguracion,
+            QLabel#etiquetaPreviewConfiguracion {{
                 color: {texto_secundario};
                 font-size: 12px;
                 font-weight: 700;
             }}
-            QLabel#valorResumenConfiguracion {{
+            QLabel#valorResumenConfiguracion,
+            QLabel#valorPreviewConfiguracion {{
                 color: {texto_principal};
                 font-size: 13px;
                 font-weight: 800;
             }}
-            QLineEdit, QPlainTextEdit {{
+            QLineEdit, QPlainTextEdit, QComboBox {{
                 border: 1px solid {borde_input};
                 border-radius: 12px;
                 background: {fondo_input};
@@ -484,7 +769,7 @@ class VistaConfiguracion(QWidget):
                 padding: 8px 10px;
                 font-size: 12px;
             }}
-            QLineEdit:disabled {{
+            QLineEdit:disabled, QPlainTextEdit:disabled, QComboBox:disabled {{
                 color: {texto_secundario};
             }}
             QCheckBox {{

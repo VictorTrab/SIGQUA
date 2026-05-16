@@ -14,3 +14,4 @@ logs/*.txt
 .sicap-webengine/
 tests/_tmp*/
 credenciales_desarrollo_temporales.txt
+.tmp_figma_make

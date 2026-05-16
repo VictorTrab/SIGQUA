@@ -22,6 +22,12 @@ class RepositorioConfiguracion(Protocol):
     ) -> None:
         """Actualiza varios parametros editables en una sola transaccion."""
 
+    def obtener_resumen_comprobantes(self) -> tuple[int, str, int]:
+        """Retorna correlativo global, ultimo comprobante y total emitido."""
+
+    def obtener_resumen_respaldos(self) -> tuple[str, str, int]:
+        """Retorna ultima fecha, ultimo estado y total de respaldos."""
+
 
 class RepositorioConfiguracionSQLite:
     """Implementacion SQLite del acceso a configuracion_sistema."""
@@ -85,3 +91,50 @@ class RepositorioConfiguracionSQLite:
                         """,
                         (valor, actor_id, clave),
                     )
+
+    def obtener_resumen_comprobantes(self) -> tuple[int, str, int]:
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            fila_correlativo = conexion.execute(
+                """
+                SELECT ultimo_numero, COALESCE(actualizado_en, '') AS actualizado_en
+                FROM correlativos_comprobantes
+                WHERE clave = 'RECIBO_GLOBAL';
+                """
+            ).fetchone()
+            fila_total = conexion.execute(
+                "SELECT COUNT(*) AS total FROM comprobantes;"
+            ).fetchone()
+            fila_ultimo = conexion.execute(
+                """
+                SELECT COALESCE(numero_comprobante, '') AS numero_comprobante
+                FROM comprobantes
+                ORDER BY id DESC
+                LIMIT 1;
+                """
+            ).fetchone()
+        return (
+            int(fila_correlativo["ultimo_numero"] or 0) if fila_correlativo else 0,
+            str(fila_ultimo["numero_comprobante"] or "") if fila_ultimo else "",
+            int(fila_total["total"] or 0) if fila_total else 0,
+        )
+
+    def obtener_resumen_respaldos(self) -> tuple[str, str, int]:
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            fila_ultimo = conexion.execute(
+                """
+                SELECT
+                    COALESCE(generado_en, '') AS generado_en,
+                    COALESCE(estado, '') AS estado
+                FROM historial_respaldos
+                ORDER BY generado_en DESC, id DESC
+                LIMIT 1;
+                """
+            ).fetchone()
+            fila_total = conexion.execute(
+                "SELECT COUNT(*) AS total FROM historial_respaldos;"
+            ).fetchone()
+        return (
+            str(fila_ultimo["generado_en"] or "") if fila_ultimo else "",
+            str(fila_ultimo["estado"] or "") if fila_ultimo else "",
+            int(fila_total["total"] or 0) if fila_total else 0,
+        )

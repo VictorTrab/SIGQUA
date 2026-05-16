@@ -185,7 +185,7 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
         titulo = QLabel("Editar plan de pago" if self._plan else "Nuevo plan de pago")
         titulo.setObjectName("tituloDialogoSicap")
         descripcion = QLabel(
-            "Crea o ajusta planes asociados a meses pendientes, mora, conexion o reconexion."
+            "Crea o ajusta planes asociados solo a conexion o reconexion segun la regla cerrada vigente."
         )
         descripcion.setObjectName("descripcionDialogoSicap")
         descripcion.setWordWrap(True)
@@ -238,7 +238,7 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
 
         panel_principal = self._crear_panel(
             "Estructura del plan",
-            "No registra pagos de cuotas desde este modulo; solo crea o ajusta la estructura del plan y su relacion con la casa.",
+            "Define el acuerdo de servicio y su estructura base. El prototipo cierra primero tipos de plan de conexion o reconexion.",
         )
         panel_principal.layout().addLayout(grilla)
 
@@ -668,7 +668,7 @@ class VistaPlanesPago(QWidget):
         titulo = QLabel("Planes de pago")
         titulo.setObjectName("tituloModulo")
         descripcion = QLabel(
-            "Consulta y crea acuerdos vinculados a casas, abonados, deuda, mora, conexion o reconexion."
+            "Consulta y crea acuerdos vinculados al servicio de conexion o reconexion."
         )
         descripcion.setObjectName("descripcionModulo")
         descripcion.setWordWrap(True)
@@ -722,7 +722,7 @@ class VistaPlanesPago(QWidget):
         for codigo, texto in (
             (FILTRO_PLANES_TODOS, "Todos"),
             (FILTRO_PLANES_ACTIVOS, "Activos"),
-            (FILTRO_PLANES_CON_MORA, "Con mora"),
+            (FILTRO_PLANES_CON_MORA, "Cuotas vencidas"),
             (FILTRO_PLANES_SERVICIO, "Conexion / reconexion"),
         ):
             boton = QPushButton(texto)
@@ -841,9 +841,9 @@ class VistaPlanesPago(QWidget):
         dialogo = DialogoMensajeSicap(
             titulo="Ayuda del modulo",
             mensaje=(
-                "Este modulo sirve para consultar, crear y editar planes de pago. "
-                "No registra pagos de cuota ni genera reportes desde aqui. "
-                "La mora sigue siendo deuda vencida real; el recargo automatico, si existe, depende de Configuracion."
+                "Este modulo sirve para consultar, crear y editar planes de pago del servicio. "
+                "La regla vigente del prototipo solo admite conexion o reconexion como concepto financiado. "
+                "Las cuotas vencidas del plan se muestran aqui como seguimiento operativo."
             ),
             parent=self,
         )

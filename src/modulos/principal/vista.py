@@ -41,7 +41,6 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -68,6 +67,7 @@ from modulos.principal.entidades import (
     CategoriaDashboard,
     EstadoModuloPrincipal,
     InsightDashboard,
+    MensajeCabeceraPrincipal,
     ModuloNavegacion,
     PuntoSerieDashboard,
 )
@@ -215,7 +215,7 @@ class TarjetaInsight(QWidget):
 
 
 class SeccionSidebarDesplegable(QFrame):
-    """Agrupa modulos del sidebar en una lista plegable."""
+    """Agrupa modulos del sidebar en bloques compactos."""
 
     def __init__(self, titulo: str) -> None:
         super().__init__()
@@ -226,16 +226,11 @@ class SeccionSidebarDesplegable(QFrame):
         self.setObjectName("seccionSidebarCard")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        self._boton_toggle = QToolButton()
-        self._boton_toggle.setObjectName("botonToggleSidebar")
-        self._boton_toggle.setText(titulo.upper())
-        self._boton_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self._boton_toggle.setArrowType(Qt.ArrowType.DownArrow)
-        self._boton_toggle.setCheckable(False)
-        self._boton_toggle.clicked.connect(self._alternar)
+        self._etiqueta_titulo = QLabel(titulo.upper())
+        self._etiqueta_titulo.setObjectName("tituloSeccionSidebar")
 
         self._contenedor_items = QWidget()
         self._contenedor_items.setObjectName("contenedorItemsSidebar")
@@ -243,7 +238,7 @@ class SeccionSidebarDesplegable(QFrame):
         self._layout_items.setContentsMargins(0, 0, 0, 0)
         self._layout_items.setSpacing(6)
 
-        layout.addWidget(self._boton_toggle)
+        layout.addWidget(self._etiqueta_titulo)
         layout.addWidget(self._contenedor_items)
 
     def agregar_boton(self, codigo_modulo: str, boton: QPushButton) -> None:
@@ -253,9 +248,9 @@ class SeccionSidebarDesplegable(QFrame):
     def marcar_modulo_activo(self, codigo_modulo: str) -> None:
         self._modulo_activo = codigo_modulo if codigo_modulo in self._modulos else None
         tiene_activo = self._modulo_activo is not None
-        self._boton_toggle.setProperty("activa", tiene_activo)
-        self._boton_toggle.style().unpolish(self._boton_toggle)
-        self._boton_toggle.style().polish(self._boton_toggle)
+        self._etiqueta_titulo.setProperty("activa", tiene_activo)
+        self._etiqueta_titulo.style().unpolish(self._etiqueta_titulo)
+        self._etiqueta_titulo.style().polish(self._etiqueta_titulo)
         if tiene_activo:
             self.establecer_expandida(True, forzar=True)
 
@@ -264,18 +259,247 @@ class SeccionSidebarDesplegable(QFrame):
             return
         self._expandida = expandida
         self._contenedor_items.setVisible(expandida)
-        self._boton_toggle.setArrowType(
-            Qt.ArrowType.DownArrow if expandida else Qt.ArrowType.RightArrow
-        )
-        self._boton_toggle.setProperty("expandida", expandida)
-        self._boton_toggle.style().unpolish(self._boton_toggle)
-        self._boton_toggle.style().polish(self._boton_toggle)
+        self._etiqueta_titulo.setProperty("expandida", expandida)
+        self._etiqueta_titulo.style().unpolish(self._etiqueta_titulo)
+        self._etiqueta_titulo.style().polish(self._etiqueta_titulo)
 
     def esta_expandida(self) -> bool:
         return self._expandida
 
-    def _alternar(self) -> None:
-        self.establecer_expandida(not self.esta_expandida())
+
+class TarjetaEstadoCabecera(QFrame):
+    """Tarjeta compacta para mensajes rapidos del encabezado principal."""
+
+    def __init__(self, *, destacada: bool = False) -> None:
+        super().__init__()
+        self.setObjectName("tarjetaEstadoCabecera")
+        self.setProperty("destacada", destacada)
+        self.setProperty("tipoEstado", "INFORMACION")
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(8)
+
+        self._icono = QLabel()
+        self._icono.setObjectName("iconoEstadoCabecera")
+        self._icono.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._icono.setFixedSize(18, 18)
+
+        self._mensaje = QLabel("")
+        self._mensaje.setObjectName("mensajeEstadoCabecera")
+        self._mensaje.setWordWrap(True)
+
+        layout.addWidget(self._icono, alignment=Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(self._mensaje, 1)
+
+    def actualizar(self, mensaje: MensajeCabeceraPrincipal, paleta_tema: dict[str, str]) -> None:
+        self._mensaje_estado_actual = mensaje
+        self.setProperty("tipoEstado", mensaje.tipo)
+        self._mensaje.setText(mensaje.mensaje)
+        color_icono = self._resolver_color_icono(mensaje.tipo, paleta_tema)
+        self._icono.setPixmap(
+            obtener_icono_tabler_coloreado(
+                mensaje.icono,
+                color_icono,
+                tamano=16,
+            ).pixmap(16, 16)
+        )
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+    @staticmethod
+    def _resolver_color_icono(tipo: str, paleta_tema: dict[str, str]) -> str:
+        return {
+            "CORRECTO": "#9be7d3",
+            "ADVERTENCIA": "#f7cc7a",
+            "ERROR": "#ff8a8a",
+            "INFORMACION": str(paleta_tema["icono_tema_activo"]),
+        }.get(tipo, str(paleta_tema["icono_tema_activo"]))
+
+
+class TarjetaNotificacionSistema(QFrame):
+    """Elemento visual de una notificacion critica dentro del desplegable."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("tarjetaNotificacionSistema")
+        self.setProperty("tipoEstado", "INFORMACION")
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 9, 10, 9)
+        layout.setSpacing(10)
+
+        self._icono = QLabel()
+        self._icono.setObjectName("iconoNotificacionSistema")
+        self._icono.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._icono.setFixedSize(20, 20)
+
+        self._mensaje = QLabel("")
+        self._mensaje.setObjectName("mensajeNotificacionSistema")
+        self._mensaje.setWordWrap(True)
+
+        layout.addWidget(self._icono, alignment=Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(self._mensaje, 1)
+
+    def actualizar(
+        self,
+        mensaje: MensajeCabeceraPrincipal,
+        paleta_tema: dict[str, str],
+    ) -> None:
+        self.setProperty("tipoEstado", mensaje.tipo)
+        self._mensaje.setText(mensaje.mensaje)
+        color_icono = TarjetaEstadoCabecera._resolver_color_icono(mensaje.tipo, paleta_tema)
+        self._icono.setPixmap(
+            obtener_icono_tabler_coloreado(mensaje.icono, color_icono, tamano=16).pixmap(16, 16)
+        )
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+
+class BotonNotificacionesHeader(QPushButton):
+    """Disparador compacto para abrir notificaciones criticas del sistema."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("botonNotificacionesHeader")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setCheckable(False)
+        self.setMinimumSize(48, 48)
+        self.setMaximumSize(48, 48)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setToolTip("Notificaciones del sistema")
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self._icono = QLabel()
+        self._icono.setObjectName("iconoBotonNotificaciones")
+        self._icono.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._icono.setFixedSize(48, 48)
+
+        self._badge = QLabel("", self)
+        self._badge.setObjectName("badgeNotificacionesHeader")
+        self._badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._badge.setFixedSize(18, 18)
+        self._badge.hide()
+
+        layout.addWidget(self._icono)
+
+    def actualizar(self, total_alertas: int, paleta_tema: dict[str, str]) -> None:
+        color_icono = "#ff9d9d" if total_alertas > 0 else str(paleta_tema["texto_principal"])
+        self._icono.setPixmap(
+            obtener_icono_tabler_coloreado("bell.svg", color_icono, tamano=18).pixmap(18, 18)
+        )
+        if total_alertas > 0:
+            self._badge.setText(str(min(total_alertas, 99)))
+            self._badge.show()
+            self._badge.raise_()
+            self._badge.move(self.width() - 18, 2)
+        else:
+            self._badge.hide()
+        self.setToolTip(
+            "Notificaciones del sistema"
+            if total_alertas <= 0
+            else f"{total_alertas} alerta(s) critica(s) del sistema"
+        )
+
+    def resizeEvent(self, evento: QResizeEvent) -> None:
+        super().resizeEvent(evento)
+        self._badge.move(self.width() - 18, 2)
+
+
+class PanelNotificacionesSistema(QFrame):
+    """Panel flotante con notificaciones criticas del sistema."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("panelNotificacionesSistema")
+        self.setWindowFlags(
+            Qt.WindowType.Popup
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.NoDropShadowWindowHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setMinimumWidth(360)
+        self.setMaximumWidth(420)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+
+        encabezado = QHBoxLayout()
+        encabezado.setContentsMargins(0, 0, 0, 0)
+        encabezado.setSpacing(10)
+
+        self._titulo = QLabel("Notificaciones")
+        self._titulo.setObjectName("tituloPanelNotificaciones")
+        self._contador = QLabel("Sin alertas")
+        self._contador.setObjectName("contadorPanelNotificaciones")
+        encabezado.addWidget(self._titulo)
+        encabezado.addStretch(1)
+        encabezado.addWidget(self._contador)
+
+        self._descripcion = QLabel(
+            "Solo se muestran advertencias y errores criticos del sistema."
+        )
+        self._descripcion.setObjectName("descripcionPanelNotificaciones")
+        self._descripcion.setWordWrap(True)
+
+        self._scroll = QScrollArea()
+        self._scroll.setObjectName("scrollNotificacionesSistema")
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        self._contenedor = QWidget()
+        self._contenedor.setObjectName("contenedorNotificacionesSistema")
+        self._layout_notificaciones = QVBoxLayout(self._contenedor)
+        self._layout_notificaciones.setContentsMargins(0, 0, 0, 0)
+        self._layout_notificaciones.setSpacing(8)
+        self._scroll.setWidget(self._contenedor)
+
+        self._estado_vacio = QLabel("No hay alertas criticas del sistema.")
+        self._estado_vacio.setObjectName("estadoVacioNotificaciones")
+        self._estado_vacio.setWordWrap(True)
+
+        layout.addLayout(encabezado)
+        layout.addWidget(self._descripcion)
+        layout.addWidget(self._scroll, 1)
+
+    def actualizar(
+        self,
+        notificaciones: tuple[MensajeCabeceraPrincipal, ...],
+        paleta_tema: dict[str, str],
+    ) -> None:
+        while self._layout_notificaciones.count():
+            item = self._layout_notificaciones.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()
+
+        total = len(notificaciones)
+        self._contador.setText("Sin alertas" if total == 0 else f"{total} alerta(s)")
+
+        if total == 0:
+            self._layout_notificaciones.addWidget(self._estado_vacio)
+            self._layout_notificaciones.addStretch(1)
+            return
+
+        for notificacion in notificaciones:
+            tarjeta = TarjetaNotificacionSistema()
+            tarjeta.actualizar(notificacion, paleta_tema)
+            self._layout_notificaciones.addWidget(tarjeta)
+        self._layout_notificaciones.addStretch(1)
+
+    def mostrar_desde(self, disparador: QWidget) -> None:
+        self.adjustSize()
+        posicion = disparador.mapToGlobal(disparador.rect().bottomRight())
+        destino_x = posicion.x() - self.width()
+        destino_y = posicion.y() + 10
+        self.move(QPoint(destino_x, destino_y))
+        self.show()
+        self.raise_()
 
 
 class BotonPerfilUsuario(QPushButton):
@@ -286,62 +510,33 @@ class BotonPerfilUsuario(QPushButton):
         self.setObjectName("botonPerfilHeader")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setCheckable(False)
-        self.setMinimumSize(238, 60)
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.setMinimumSize(48, 48)
+        self.setMaximumSize(48, 48)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setToolTip("Perfil de usuario")
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(0)
 
         self._avatar = QLabel("A")
         self._avatar.setObjectName("avatarPerfilHeader")
         self._avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._avatar.setFixedSize(38, 38)
+        self._avatar.setFixedSize(40, 40)
 
-        bloque_texto = QVBoxLayout()
-        bloque_texto.setContentsMargins(0, 0, 0, 0)
-        bloque_texto.setSpacing(2)
-
-        self._periodo = QLabel("Hoy")
-        self._periodo.setObjectName("periodoHeader")
-        self._periodo.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self._usuario = QLabel("")
-        self._usuario.setObjectName("usuarioActivo")
-        self._usuario.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self._perfil = QLabel("")
-        self._perfil.setObjectName("perfilActivo")
-        self._perfil.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        bloque_texto.addWidget(self._periodo)
-        bloque_texto.addWidget(self._usuario)
-        bloque_texto.addWidget(self._perfil)
-
-        layout.addWidget(self._avatar, alignment=Qt.AlignmentFlag.AlignVCenter)
-        layout.addLayout(bloque_texto, 1)
-
-    @property
-    def label_periodo(self) -> QLabel:
-        return self._periodo
-
-    @property
-    def label_usuario(self) -> QLabel:
-        return self._usuario
-
-    @property
-    def label_perfil(self) -> QLabel:
-        return self._perfil
+        layout.addWidget(self._avatar, alignment=Qt.AlignmentFlag.AlignCenter)
 
     def actualizar(self, nombre_completo: str, perfil: str) -> None:
-        self._usuario.setText(nombre_completo)
-        self._perfil.setText(perfil)
         self._avatar.setText(self._resolver_iniciales(nombre_completo))
+        self.setToolTip(f"{nombre_completo} · {perfil}")
         self.updateGeometry()
         self.adjustSize()
 
     def sizeHint(self) -> QSize:
-        return QSize(246, 60)
+        return QSize(48, 48)
 
     def minimumSizeHint(self) -> QSize:
-        return QSize(232, 60)
+        return QSize(48, 48)
 
     @staticmethod
     def _resolver_iniciales(nombre_completo: str) -> str:
@@ -832,16 +1027,17 @@ class VistaModuloPrincipal(QWidget):
         self._estado_secciones_sidebar: dict[str, bool] = {
             "Vista general": True,
             "Registro y control": True,
-            "Cobranza": False,
-            "Administración": False,
-            "Soporte": False,
-            "Otros": False,
+            "Cobranza": True,
+            "Administración": True,
+            "Soporte": True,
+            "Otros": True,
         }
         self._paginas_modulos: dict[str, QWidget] = {}
         self._tarjetas_metricas: dict[str, TarjetaMetricaEjecutiva] = {}
         self._orden_metricas: list[str] = []
         self._filas_ranking: list[FilaRanking] = []
         self._tarjetas_insight: list[TarjetaInsight] = []
+        self._tarjetas_estado_header: list[TarjetaEstadoCabecera] = []
         self._animaciones_activas: list[object] = []
         self._modo_dashboard_actual = "amplio"
         self._ultimo_ancho_dashboard = -1
@@ -899,13 +1095,19 @@ class VistaModuloPrincipal(QWidget):
     def mostrar_estado(self, estado: EstadoModuloPrincipal) -> None:
         self._ultimo_estado_mostrado = estado
         primer_nombre = estado.nombre_completo.split()[0] if estado.nombre_completo else estado.nombre_usuario
-        self._label_bienvenida.setText(f"Resumen general, {primer_nombre}")
+        saludo = self._resolver_saludo()
+        perfil_legible = estado.perfil.replace("_", " ").title()
+        self._label_bienvenida.setText(f"{saludo}, {primer_nombre}")
         self._label_subresumen.setText(
-            "Monitorea ingresos, deuda pendiente y estabilidad operativa desde un solo tablero."
+            (
+                f"{perfil_legible} en sesion. Monitorea ingresos, pagos pendientes "
+                "y estabilidad operativa desde un solo tablero."
+            )
         )
+        self._mostrar_mensajes_cabecera(estado.mensajes_cabecera)
+        self._mostrar_evento_cabecera(estado.evento_reciente)
         self._boton_perfil_header.actualizar(estado.nombre_completo, estado.perfil)
         momento_actual = datetime.now().strftime("%d/%m/%Y %I:%M %p")
-        self._label_periodo.setText("Sesi\u00f3n actual")
         self._panel_perfil_usuario.actualizar(
             nombre_completo=estado.nombre_completo,
             rol=estado.perfil,
@@ -922,37 +1124,36 @@ class VistaModuloPrincipal(QWidget):
         self._actualizar_disposicion_dashboard()
         self._animar_aparicion_dashboard()
 
+    @staticmethod
+    def _resolver_saludo(momento: datetime | None = None) -> str:
+        referencia = momento or datetime.now()
+        hora = referencia.hour
+        if 5 <= hora <= 11:
+            return "Buenos dias"
+        if 12 <= hora <= 17:
+            return "Buenas tardes"
+        return "Buenas noches"
+
     def aplicar_tema(self, nombre_tema: str) -> None:
-        self._tema_actual = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SICAP_PREDETERMINADO
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         establecer_tema_actual(self._tema_actual)
         self._aplicar_estilos()
-        self._actualizar_boton_tema()
         self._aplicar_tema_a_descendientes()
         if self._ultimo_estado_mostrado is not None:
+            self._mostrar_mensajes_cabecera(self._ultimo_estado_mostrado.mensajes_cabecera)
+            self._mostrar_evento_cabecera(self._ultimo_estado_mostrado.evento_reciente)
             self._mostrar_metricas(self._ultimo_estado_mostrado)
             self._mostrar_analitica(self._ultimo_estado_mostrado.analitica)
         self.update()
 
-    def _alternar_tema(self) -> None:
-        self.aplicar_tema("claro" if self._tema_actual == "oscuro" else "oscuro")
-
-    def _actualizar_boton_tema(self) -> None:
-        if not hasattr(self, "_boton_tema"):
-            return
-        if self._tema_actual == "oscuro":
-            self._boton_tema.setText("Modo claro")
-            self._boton_tema.setIcon(obtener_icono_tabler_coloreado("sun.svg", str(self._paleta_tema["icono_tema_activo"]), tamano=18))
-        else:
-            self._boton_tema.setText("Modo oscuro")
-            self._boton_tema.setIcon(obtener_icono_tabler_coloreado("moon-stars.svg", str(self._paleta_tema["icono_tema_inactivo"]), tamano=18))
-        self._boton_tema.setProperty("temaActivo", self._tema_actual)
-        self._boton_tema.style().unpolish(self._boton_tema)
-        self._boton_tema.style().polish(self._boton_tema)
-
     def _aplicar_tema_a_descendientes(self) -> None:
         for tarjeta in self._tarjetas_metricas.values():
             tarjeta.aplicar_tema(self._tema_actual)
+        for tarjeta_estado in self._tarjetas_estado_header:
+            mensaje = getattr(tarjeta_estado, "_mensaje_estado_actual", None)
+            if isinstance(mensaje, MensajeCabeceraPrincipal):
+                tarjeta_estado.actualizar(mensaje, self._paleta_tema)
         for boton in self.findChildren(BotonAccionContextual):
             boton.aplicar_tema(self._tema_actual)
         for boton in self.findChildren(QPushButton):
@@ -997,24 +1198,19 @@ class VistaModuloPrincipal(QWidget):
 
     def _construir_ui(self) -> None:
         layout_raiz = QHBoxLayout(self)
-        layout_raiz.setContentsMargins(18, 18, 18, 18)
-        layout_raiz.setSpacing(14)
+        layout_raiz.setContentsMargins(14, 14, 14, 14)
+        layout_raiz.setSpacing(12)
 
         self._sidebar = QFrame()
         self._sidebar.setObjectName("sidebarPrincipal")
-        self._sidebar.setMinimumWidth(204)
-        self._sidebar.setMaximumWidth(212)
+        self._sidebar.setMinimumWidth(192)
+        self._sidebar.setMaximumWidth(198)
         self._sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         layout_sidebar = QVBoxLayout(self._sidebar)
-        layout_sidebar.setContentsMargins(14, 14, 14, 14)
-        layout_sidebar.setSpacing(12)
+        layout_sidebar.setContentsMargins(12, 12, 12, 12)
+        layout_sidebar.setSpacing(10)
 
         layout_sidebar.addWidget(self._crear_encabezado_sidebar())
-
-        separador_superior = QFrame()
-        separador_superior.setObjectName("separadorSidebar")
-        separador_superior.setFrameShape(QFrame.Shape.HLine)
-        layout_sidebar.addWidget(separador_superior)
 
         self._scroll_navegacion = QScrollArea()
         self._scroll_navegacion.setObjectName("scrollNavegacionSidebar")
@@ -1027,15 +1223,15 @@ class VistaModuloPrincipal(QWidget):
         contenedor_navegacion.setObjectName("contenedorNavegacionSidebar")
         self._contenedor_botones = QVBoxLayout(contenedor_navegacion)
         self._contenedor_botones.setContentsMargins(0, 0, 0, 0)
-        self._contenedor_botones.setSpacing(10)
+        self._contenedor_botones.setSpacing(12)
         self._scroll_navegacion.setWidget(contenedor_navegacion)
         layout_sidebar.addWidget(self._scroll_navegacion, 1)
 
         self._panel_acciones_sidebar = QFrame()
         self._panel_acciones_sidebar.setObjectName("panelAccionesSidebar")
         layout_acciones_sidebar = QVBoxLayout(self._panel_acciones_sidebar)
-        layout_acciones_sidebar.setContentsMargins(10, 10, 10, 10)
-        layout_acciones_sidebar.setSpacing(8)
+        layout_acciones_sidebar.setContentsMargins(0, 0, 0, 0)
+        layout_acciones_sidebar.setSpacing(6)
 
         self._boton_mantenimiento = self._crear_boton_sidebar(
             ModuloNavegacion("mantenimiento", "Mantenimiento", "", "lock.svg"),
@@ -1056,36 +1252,57 @@ class VistaModuloPrincipal(QWidget):
         header = QFrame()
         header.setObjectName("headerPrincipal")
         layout_header = QHBoxLayout(header)
-        layout_header.setContentsMargins(14, 14, 14, 14)
-        layout_header.setSpacing(12)
+        layout_header.setContentsMargins(16, 14, 16, 14)
+        layout_header.setSpacing(14)
 
         bloque_titulo = QVBoxLayout()
-        bloque_titulo.setSpacing(3)
-        self._label_bienvenida = QLabel("Resumen general")
+        bloque_titulo.setSpacing(4)
+        self._label_bienvenida = QLabel("Buenas noches")
         self._label_bienvenida.setObjectName("tituloPrincipal")
         self._label_subresumen = QLabel("")
         self._label_subresumen.setObjectName("descripcionPrincipal")
         self._label_subresumen.setWordWrap(True)
+        self._label_evento_cabecera = QLabel("")
+        self._label_evento_cabecera.setObjectName("eventoCabecera")
+        self._label_evento_cabecera.setWordWrap(True)
         bloque_titulo.addWidget(self._label_bienvenida)
         bloque_titulo.addWidget(self._label_subresumen)
+        bloque_titulo.addWidget(self._label_evento_cabecera)
+
+        self._panel_estado_header = QFrame()
+        self._panel_estado_header.setObjectName("panelEstadoHeader")
+        self._panel_estado_header.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._panel_estado_header.setMaximumWidth(460)
+        layout_estado_header = QVBoxLayout(self._panel_estado_header)
+        layout_estado_header.setContentsMargins(12, 10, 12, 10)
+        layout_estado_header.setSpacing(8)
+
+        self._tarjeta_estado_principal = TarjetaEstadoCabecera(destacada=True)
+        self._tarjetas_estado_header = [self._tarjeta_estado_principal]
+        layout_estado_header.addWidget(self._tarjeta_estado_principal)
+
+        fila_secundaria = QWidget()
+        fila_secundaria.setObjectName("filaEstadoSecundariaHeader")
+        self._layout_estado_secundario = QHBoxLayout(fila_secundaria)
+        self._layout_estado_secundario.setContentsMargins(0, 0, 0, 0)
+        self._layout_estado_secundario.setSpacing(8)
+        layout_estado_header.addWidget(fila_secundaria)
 
         self._boton_perfil_header = BotonPerfilUsuario()
         self._boton_perfil_header.clicked.connect(self._alternar_panel_perfil_usuario)
-        self._label_periodo = self._boton_perfil_header.label_periodo
-        self._label_usuario = self._boton_perfil_header.label_usuario
-        self._label_perfil = self._boton_perfil_header.label_perfil
-        self._boton_tema = QPushButton()
-        self._boton_tema.setObjectName("botonTemaHeader")
-        self._boton_tema.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._boton_tema.setToolTip("Alternar entre modo oscuro y modo claro")
-        self._boton_tema.setMinimumHeight(42)
-        self._boton_tema.setIconSize(QSize(18, 18))
-        self._boton_tema.clicked.connect(self._alternar_tema)
-        self._actualizar_boton_tema()
 
-        layout_header.addLayout(bloque_titulo, 1)
-        layout_header.addWidget(self._boton_tema, alignment=Qt.AlignmentFlag.AlignTop)
-        layout_header.addWidget(self._boton_perfil_header, alignment=Qt.AlignmentFlag.AlignTop)
+        contenedor_perfil = QVBoxLayout()
+        contenedor_perfil.setContentsMargins(0, 0, 0, 0)
+        contenedor_perfil.setSpacing(0)
+        contenedor_perfil.addWidget(
+            self._boton_perfil_header,
+            alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight,
+        )
+        contenedor_perfil.addStretch(1)
+
+        layout_header.addLayout(bloque_titulo, 3)
+        layout_header.addWidget(self._panel_estado_header, 2)
+        layout_header.addLayout(contenedor_perfil)
 
         self._stack_contenido = QStackedWidget()
         self._stack_contenido.setObjectName("stackPrincipal")
@@ -1231,6 +1448,52 @@ class VistaModuloPrincipal(QWidget):
         layout_pagina.addWidget(self._scroll_dashboard)
         self._actualizar_disposicion_dashboard()
         return pagina
+
+    def _mostrar_mensajes_cabecera(
+        self,
+        mensajes: tuple[MensajeCabeceraPrincipal, ...],
+    ) -> None:
+        mensajes_visibles = mensajes or (
+            MensajeCabeceraPrincipal(
+                "CORRECTO",
+                "Sistema funcionando correctamente.",
+                "circle-check.svg",
+            ),
+        )
+
+        self._tarjeta_estado_principal.actualizar(mensajes_visibles[0], self._paleta_tema)
+        self._tarjetas_estado_header = [self._tarjeta_estado_principal]
+
+        while self._layout_estado_secundario.count():
+            item = self._layout_estado_secundario.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()
+
+        for mensaje in mensajes_visibles[1:3]:
+            tarjeta = TarjetaEstadoCabecera()
+            tarjeta.actualizar(mensaje, self._paleta_tema)
+            self._tarjetas_estado_header.append(tarjeta)
+            self._layout_estado_secundario.addWidget(tarjeta)
+
+        self._layout_estado_secundario.addStretch(1)
+
+    def _mostrar_evento_cabecera(
+        self,
+        mensaje: MensajeCabeceraPrincipal | None,
+    ) -> None:
+        if mensaje is None:
+            self._label_evento_cabecera.clear()
+            return
+        prefijo = {
+            "CORRECTO": "Sistema",
+            "ADVERTENCIA": "Advertencia",
+            "ERROR": "Error",
+            "INFORMACION": "Actividad",
+        }.get(mensaje.tipo, "Actividad")
+        self._label_evento_cabecera.setText(f"{prefijo}: {mensaje.mensaje}")
+        self._label_evento_cabecera.setProperty("tipoEstado", mensaje.tipo)
+        self._label_evento_cabecera.style().unpolish(self._label_evento_cabecera)
+        self._label_evento_cabecera.style().polish(self._label_evento_cabecera)
 
     def _mostrar_metricas(self, estado: EstadoModuloPrincipal) -> None:
         colores = ("#e9eeff", "#e8f1ff", "#eef0ff", "#eaf3ff", "#edf3ff")
@@ -1421,15 +1684,9 @@ class VistaModuloPrincipal(QWidget):
                 widget_seccion.agregar_boton(modulo.codigo, boton)
                 self._botones_modulos[modulo.codigo] = boton
 
-            expandida = self._estado_secciones_sidebar.get(titulo_seccion, False)
+            expandida = self._estado_secciones_sidebar.get(titulo_seccion, True)
             widget_seccion.establecer_expandida(expandida, forzar=True)
             widget_seccion.marcar_modulo_activo(self._modulo_activo)
-            widget_seccion._boton_toggle.clicked.connect(
-                lambda checked=False, titulo=titulo_seccion, seccion=widget_seccion: self._registrar_estado_seccion_sidebar(
-                    titulo,
-                    seccion.esta_expandida(),
-                )
-            )
             self._contenedor_botones.addWidget(widget_seccion)
 
         self._contenedor_botones.addStretch(1)
@@ -1472,7 +1729,7 @@ class VistaModuloPrincipal(QWidget):
 
         label_logo = QLabel()
         label_logo.setObjectName("logoSidebar")
-        label_logo.setFixedSize(48, 48)
+        label_logo.setFixedSize(42, 42)
         label_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ruta_logo = self._gestor_rutas.obtener_ruta_logo_marca()
         if ruta_logo.exists():
@@ -1480,8 +1737,8 @@ class VistaModuloPrincipal(QWidget):
             if not pixmap_logo.isNull():
                 label_logo.setPixmap(
                     pixmap_logo.scaled(
-                        40,
-                        40,
+                        34,
+                        34,
                         Qt.AspectRatioMode.KeepAspectRatio,
                         Qt.TransformationMode.SmoothTransformation,
                     )
@@ -1733,10 +1990,14 @@ class VistaModuloPrincipal(QWidget):
             QScrollArea#scrollDashboard {
                 border: none;
             }
-            QFrame#sidebarPrincipal,
+            QFrame#sidebarPrincipal {
+                background: #393379;
+                border: 1px solid rgba(255, 255, 255, 0.10);
+                border-radius: 22px;
+            }
             QFrame#headerPrincipal {
-                background: rgba(255, 255, 255, 0.10);
-                border: 1px solid rgba(255, 255, 255, 0.16);
+                background: rgba(255, 255, 255, 0.12);
+                border: 1px solid rgba(255, 255, 255, 0.18);
                 border-radius: 22px;
             }
             QFrame#tarjetaPanel {
@@ -1759,52 +2020,54 @@ class VistaModuloPrincipal(QWidget):
             QFrame#seccionSidebarCard,
             QFrame#panelAccionesSidebar,
             QFrame#panelUsuarioHeader {
+                background: transparent;
+                border: none;
+                border-radius: 0;
+            }
+            QFrame#panelEstadoHeader {
                 background: rgba(255, 255, 255, 0.05);
                 border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 16px;
+                border-radius: 18px;
+            }
+            QFrame#tarjetaEstadoCabecera {
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 14px;
+            }
+            QFrame#tarjetaEstadoCabecera[destacada="true"] {
+                background: rgba(255, 255, 255, 0.08);
+            }
+            QFrame#tarjetaEstadoCabecera[tipoEstado="CORRECTO"] {
+                border-color: rgba(109, 241, 220, 0.28);
+            }
+            QFrame#tarjetaEstadoCabecera[tipoEstado="ADVERTENCIA"] {
+                border-color: rgba(247, 204, 122, 0.34);
+            }
+            QFrame#tarjetaEstadoCabecera[tipoEstado="ERROR"] {
+                border-color: rgba(255, 138, 138, 0.36);
+            }
+            QFrame#tarjetaEstadoCabecera[tipoEstado="INFORMACION"] {
+                border-color: rgba(123, 194, 255, 0.30);
             }
             QPushButton#botonPerfilHeader {
-                min-width: 232px;
-                min-height: 60px;
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 16px;
-                text-align: left;
+                min-width: 48px;
+                max-width: 48px;
+                min-height: 48px;
+                max-height: 48px;
+                background: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 24px;
             }
             QPushButton#botonPerfilHeader:hover {
-                background: rgba(255, 255, 255, 0.09);
-                border-color: rgba(255, 255, 255, 0.16);
-            }
-            QPushButton#botonTemaHeader {
-                min-height: 42px;
-                min-width: 148px;
-                border-radius: 14px;
-                padding: 0 14px;
-                background: rgba(255, 255, 255, 0.06);
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                color: #f5fbff;
-                font-size: 12px;
-                font-weight: 800;
-                text-align: left;
-            }
-            QPushButton#botonTemaHeader:hover {
-                background: rgba(255, 255, 255, 0.10);
-                border-color: rgba(255, 255, 255, 0.18);
-            }
-            QPushButton#botonTemaHeader:pressed {
-                background: rgba(255, 255, 255, 0.14);
-                border-color: rgba(255, 255, 255, 0.24);
-            }
-            QPushButton#botonTemaHeader:focus {
                 background: rgba(255, 255, 255, 0.12);
-                border-color: rgba(247, 204, 122, 0.44);
+                border-color: rgba(109, 241, 220, 0.24);
             }
             QLabel#avatarPerfilHeader {
-                background: rgba(109, 241, 220, 0.16);
+                background: rgba(109, 241, 220, 0.18);
                 border: 1px solid rgba(109, 241, 220, 0.24);
-                border-radius: 19px;
+                border-radius: 20px;
                 color: #ffffff;
-                font-size: 14px;
+                font-size: 13px;
                 font-weight: 900;
             }
             QWidget#contenedorItemsSidebar {
@@ -1812,27 +2075,36 @@ class VistaModuloPrincipal(QWidget):
             }
             QLabel#logoSidebar {
                 background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 12px;
-            }
-            QFrame#separadorSidebar {
-                color: rgba(255, 255, 255, 0.10);
-                background: rgba(255, 255, 255, 0.10);
-                max-height: 1px;
                 border: none;
+                border-radius: 12px;
             }
             QLabel#marcaPrincipal {
                 color: #ffffff;
-                font-size: 19px;
+                font-size: 17px;
                 font-weight: 900;
             }
             QLabel#subtituloMarca,
             QLabel#descripcionPrincipal,
-            QLabel#perfilActivo,
-            QLabel#periodoHeader {
+            QLabel#eventoCabecera {
                 color: rgba(235, 242, 248, 0.76);
-                font-size: 11px;
+                font-size: 10px;
                 font-weight: 600;
+            }
+            QLabel#descripcionPrincipal {
+                font-size: 11px;
+            }
+            QLabel#eventoCabecera {
+                color: rgba(198, 225, 240, 0.94);
+                padding-top: 2px;
+            }
+            QLabel#eventoCabecera[tipoEstado="ADVERTENCIA"] {
+                color: #f7cc7a;
+            }
+            QLabel#eventoCabecera[tipoEstado="ERROR"] {
+                color: #ff9d9d;
+            }
+            QLabel#eventoCabecera[tipoEstado="CORRECTO"] {
+                color: #9be7d3;
             }
             QLabel#descripcionPanel,
             QLabel#tabsSuaves {
@@ -1841,28 +2113,21 @@ class VistaModuloPrincipal(QWidget):
                 font-weight: 600;
             }
             QLabel#tituloPrincipal,
-            QLabel#usuarioActivo {
+            QLabel#mensajeEstadoCabecera {
                 color: #ffffff;
             }
-            QToolButton#botonToggleSidebar {
-                min-height: 28px;
-                border: none;
-                border-radius: 10px;
-                background: transparent;
-                color: rgba(245, 251, 255, 0.72);
+            QLabel#tituloSeccionSidebar {
+                color: rgba(235, 242, 248, 0.62);
                 font-size: 10px;
                 font-weight: 900;
-                text-align: left;
-                padding: 0 2px;
+                letter-spacing: 0.8px;
+                padding: 2px 6px 4px 6px;
             }
-            QToolButton#botonToggleSidebar:hover {
-                background: rgba(255, 255, 255, 0.05);
-            }
-            QToolButton#botonToggleSidebar[activa="true"] {
+            QLabel#tituloSeccionSidebar[activa="true"] {
                 color: #ffffff;
             }
             QLabel#tituloPrincipal {
-                font-size: 18px;
+                font-size: 21px;
                 font-weight: 900;
             }
             QLabel#tituloPanel {
@@ -1870,35 +2135,36 @@ class VistaModuloPrincipal(QWidget):
                 font-size: 14px;
                 font-weight: 800;
             }
-            QLabel#usuarioActivo {
-                font-size: 13px;
-                font-weight: 800;
+            QLabel#mensajeEstadoCabecera {
+                font-size: 10px;
+                font-weight: 700;
+                line-height: 1.25em;
             }
             QPushButton#botonSidebar {
-                min-height: 38px;
-                border: 1px solid transparent;
-                border-radius: 14px;
-                background: rgba(255, 255, 255, 0.04);
+                min-height: 34px;
+                border: 1px solid rgba(255, 255, 255, 0.03);
+                border-radius: 12px;
+                background: rgba(255, 255, 255, 0.05);
                 color: rgba(245, 251, 255, 0.94);
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 800;
                 text-align: left;
-                padding: 0 13px;
+                padding: 0 11px;
             }
             QPushButton#botonSidebar[tipoSidebar="modulo"] {
-                margin-left: 8px;
-                padding-left: 14px;
+                margin-left: 0;
+                padding-left: 12px;
             }
             QPushButton#botonSidebar[tipoSidebar="accion"] {
                 background: rgba(255, 255, 255, 0.06);
             }
             QPushButton#botonSidebar:hover {
                 background: rgba(255, 255, 255, 0.10);
-                border-color: rgba(255, 255, 255, 0.14);
+                border-color: rgba(255, 255, 255, 0.12);
             }
             QPushButton#botonSidebar[activo="true"] {
-                background: rgba(109, 241, 220, 0.16);
-                border-color: rgba(109, 241, 220, 0.30);
+                background: rgba(123, 194, 255, 0.30);
+                border-color: rgba(146, 209, 255, 0.36);
                 color: #ffffff;
             }
             QWidget#tarjetaInsight {
@@ -2025,24 +2291,14 @@ class VistaModuloPrincipal(QWidget):
                     background: {paleta["fondo_superficie_suave"]};
                     border: 1px solid {paleta["borde_suave"]};
                 }}
-                QPushButton#botonPerfilHeader,
-                QPushButton#botonTemaHeader {{
+                QPushButton#botonPerfilHeader {{
                     background: {paleta["fondo_superficie_suave"]};
                     border: 1px solid {paleta["borde_suave"]};
                     color: {paleta["texto_input"]};
                 }}
-                QPushButton#botonPerfilHeader:hover,
-                QPushButton#botonTemaHeader:hover {{
+                QPushButton#botonPerfilHeader:hover {{
                     background: {paleta["fondo_superficie"]};
                     border-color: {paleta["borde_principal"]};
-                }}
-                QPushButton#botonTemaHeader:pressed {{
-                    background: {paleta["fondo_superficie"]};
-                    border-color: {paleta["borde_principal"]};
-                }}
-                QPushButton#botonTemaHeader:focus {{
-                    background: {paleta["fondo_superficie_suave"]};
-                    border-color: {paleta["icono_tema_activo"]};
                 }}
                 QLabel#avatarPerfilHeader,
                 QLabel#avatarPanelPerfil {{
@@ -2072,13 +2328,10 @@ class VistaModuloPrincipal(QWidget):
                 QLabel#sistemaPanelPerfil {{
                     color: {paleta["texto_panel_principal"]};
                 }}
-                QToolButton#botonToggleSidebar {{
+                QLabel#tituloSeccionSidebar {{
                     color: {paleta["texto_secundario"]};
                 }}
-                QToolButton#botonToggleSidebar:hover {{
-                    background: {paleta["fondo_superficie_suave"]};
-                }}
-                QToolButton#botonToggleSidebar[activa="true"] {{
+                QLabel#tituloSeccionSidebar[activa="true"] {{
                     color: {paleta["texto_principal"]};
                 }}
                 QPushButton#botonSidebar {{

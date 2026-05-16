@@ -176,8 +176,8 @@ class RepositorioPlanesPagoSQLite:
                 a.nombre_completo AS abonado_nombre,
                 a.dni AS abonado_dni,
                 COALESCE(b.nombre, '') AS barrio_nombre,
-                COALESCE(pp.tipo_plan, 'MESES_PENDIENTES') AS tipo_plan,
-                COALESCE(pp.concepto_financiado, 'MESES_PENDIENTES') AS concepto_financiado,
+                COALESCE(pp.tipo_plan, 'RECONEXION') AS tipo_plan,
+                COALESCE(pp.concepto_financiado, 'RECONEXION') AS concepto_financiado,
                 COALESCE(pp.prima_centavos, 0) AS prima_centavos,
                 MAX(pp.monto_total_centavos - COALESCE(pp.prima_centavos, 0), 0) AS saldo_financiado_centavos,
                 pp.monto_total_centavos,
@@ -245,8 +245,8 @@ class RepositorioPlanesPagoSQLite:
                 a.nombre_completo AS abonado_nombre,
                 a.dni AS abonado_dni,
                 COALESCE(b.nombre, '') AS barrio_nombre,
-                COALESCE(pp.tipo_plan, 'MESES_PENDIENTES') AS tipo_plan,
-                COALESCE(pp.concepto_financiado, 'MESES_PENDIENTES') AS concepto_financiado,
+                COALESCE(pp.tipo_plan, 'RECONEXION') AS tipo_plan,
+                COALESCE(pp.concepto_financiado, 'RECONEXION') AS concepto_financiado,
                 COALESCE(pp.prima_centavos, 0) AS prima_centavos,
                 MAX(pp.monto_total_centavos - COALESCE(pp.prima_centavos, 0), 0) AS saldo_financiado_centavos,
                 pp.monto_total_centavos,
@@ -479,11 +479,7 @@ class RepositorioPlanesPagoSQLite:
             "saldo_pendiente_centavos > 0",
         ]
         parametros: list[object] = [casa_id]
-        if concepto_financiado == "MORA":
-            condiciones.append("estado = 'VENCIDO'")
-        elif concepto_financiado == "MESES_PENDIENTES":
-            condiciones.append("estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')")
-        elif concepto_financiado == "RECONEXION":
+        if concepto_financiado == "RECONEXION":
             condiciones.append(
                 "concepto_id IN (SELECT id FROM conceptos_cobro WHERE codigo = 'RECONEXION')"
             )
@@ -491,6 +487,8 @@ class RepositorioPlanesPagoSQLite:
             condiciones.append(
                 "concepto_id IN (SELECT id FROM conceptos_cobro WHERE codigo IN ('CONEXION', 'PRIMA'))"
             )
+        else:
+            return ()
         consulta = f"""
             SELECT id
             FROM cargos

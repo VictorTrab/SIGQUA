@@ -43,6 +43,12 @@ class TestConfiguracion(unittest.TestCase):
         self.assertTrue(estado.parametros_cobro.mora_visible)
         self.assertFalse(estado.parametros_cobro.multa_mora_automatica_activa)
         self.assertFalse(estado.parametros_cobro.corte_automatico_activo)
+        self.assertEqual(estado.parametros_cobro.meses_para_corte, 5)
+        self.assertTrue(estado.parametros_cobro.permitir_pago_adelantado)
+        self.assertEqual(estado.parametros_cobro.meses_adelanto_maximo, 12)
+        self.assertEqual(estado.factura.formato_salida, "PDF")
+        self.assertTrue(estado.factura.correlativo_actual.startswith("REC-"))
+        self.assertEqual(estado.operacion.total_respaldos, 0)
         self.assertEqual(estado.informacion.version_sistema, "2.2.0")
         self.assertEqual(estado.seguridad.maximo_intentos_fallidos, 5)
 
@@ -59,6 +65,9 @@ class TestConfiguracion(unittest.TestCase):
             multa_mora_automatica_activa=True,
             multa_mora_automatica_centavos=450,
             corte_automatico_activo=True,
+            meses_para_corte=3,
+            permitir_pago_adelantado=True,
+            meses_adelanto_maximo=6,
             actor_id=1,
         )
 
@@ -71,6 +80,58 @@ class TestConfiguracion(unittest.TestCase):
         self.assertTrue(estado.parametros_cobro.multa_mora_automatica_activa)
         self.assertEqual(estado.parametros_cobro.multa_mora_automatica_centavos, 450)
         self.assertTrue(estado.parametros_cobro.corte_automatico_activo)
+        self.assertEqual(estado.parametros_cobro.meses_para_corte, 3)
+        self.assertTrue(estado.parametros_cobro.permitir_pago_adelantado)
+        self.assertEqual(estado.parametros_cobro.meses_adelanto_maximo, 6)
+
+    def test_guardado_factura_y_respaldo_actualiza_base(self) -> None:
+        resultado_factura = self.servicio.guardar_parametros_factura(
+            texto_pie="Conserve este comprobante.",
+            formato_salida="html",
+            actor_id=1,
+        )
+        resultado_respaldo = self.servicio.guardar_operacion_respaldo(
+            respaldo_automatico=True,
+            actor_id=1,
+        )
+
+        self.assertTrue(resultado_factura.exito)
+        self.assertTrue(resultado_respaldo.exito)
+
+        estado = self.servicio.obtener_estado()
+        self.assertEqual(estado.factura.texto_pie, "Conserve este comprobante.")
+        self.assertEqual(estado.factura.formato_salida, "HTML")
+        self.assertTrue(estado.operacion.respaldo_automatico)
+
+    def test_no_permite_meses_corte_invalido(self) -> None:
+        resultado = self.servicio.guardar_parametros_cobro(
+            precio_mensual_centavos=2500,
+            multa_mora_automatica_activa=False,
+            multa_mora_automatica_centavos=0,
+            corte_automatico_activo=False,
+            meses_para_corte=0,
+            permitir_pago_adelantado=False,
+            meses_adelanto_maximo=0,
+            actor_id=1,
+        )
+
+        self.assertFalse(resultado.exito)
+        self.assertEqual(resultado.codigo, "VALIDACION")
+
+    def test_no_permite_adelantos_sin_limite_valido(self) -> None:
+        resultado = self.servicio.guardar_parametros_cobro(
+            precio_mensual_centavos=2500,
+            multa_mora_automatica_activa=False,
+            multa_mora_automatica_centavos=0,
+            corte_automatico_activo=False,
+            meses_para_corte=5,
+            permitir_pago_adelantado=True,
+            meses_adelanto_maximo=0,
+            actor_id=1,
+        )
+
+        self.assertFalse(resultado.exito)
+        self.assertEqual(resultado.codigo, "VALIDACION")
 
 
 if __name__ == "__main__":

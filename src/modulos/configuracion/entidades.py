@@ -31,13 +31,40 @@ class DatosJunta:
 
 @dataclass(slots=True)
 class ParametrosCobro:
-    """Configuracion vigente para el cobro operativo."""
+    """Configuracion vigente para cobro, mora visual y adelantos."""
 
     precio_mensual_centavos: int
     mora_visible: bool
     multa_mora_automatica_activa: bool
     multa_mora_automatica_centavos: int
     corte_automatico_activo: bool
+    meses_para_corte: int
+    permitir_pago_adelantado: bool
+    meses_adelanto_maximo: int
+
+
+@dataclass(slots=True)
+class FacturaConfiguracion:
+    """Configuracion operativa de comprobantes y formato de salida."""
+
+    texto_pie: str
+    formato_salida: str
+    correlativo_actual: str
+    proximo_correlativo: str
+    ultimo_comprobante_emitido: str
+    total_comprobantes_emitidos: int
+
+
+@dataclass(slots=True)
+class OperacionConfiguracion:
+    """Resumen operativo conectado a respaldo y soporte."""
+
+    respaldo_automatico: bool
+    ultimo_respaldo_en: str
+    ultimo_respaldo_estado: str
+    total_respaldos: int
+    ruta_exportaciones_comprobantes: str
+    ruta_exportaciones_reportes: str
 
 
 @dataclass(slots=True)
@@ -68,6 +95,8 @@ class EstadoConfiguracion:
 
     datos_junta: DatosJunta
     parametros_cobro: ParametrosCobro
+    factura: FacturaConfiguracion
+    operacion: OperacionConfiguracion
     seguridad: SeguridadConfiguracion
     informacion: InformacionConfiguracion
 

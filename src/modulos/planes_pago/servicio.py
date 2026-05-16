@@ -75,6 +75,12 @@ class ServicioPlanesPago:
             return ResultadoGestionPlanesPago(False, "El tipo de plan no es valido.", "VALIDACION")
         if formulario.concepto_financiado not in TIPOS_PLAN_VALIDOS:
             return ResultadoGestionPlanesPago(False, "El concepto financiado no es valido.", "VALIDACION")
+        if formulario.tipo_plan != formulario.concepto_financiado:
+            return ResultadoGestionPlanesPago(
+                False,
+                "El tipo de plan y el concepto financiado deben coincidir en conexion o reconexion.",
+                "VALIDACION",
+            )
         if formulario.estado not in ESTADOS_PLAN_VALIDOS:
             return ResultadoGestionPlanesPago(False, "El estado del plan no es valido.", "VALIDACION")
         if formulario.prima_centavos < 0:

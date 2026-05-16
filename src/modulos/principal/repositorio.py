@@ -12,6 +12,7 @@ from modulos.principal.entidades import (
     InsightDashboard,
     MetricaDashboard,
     PuntoSerieDashboard,
+    ResumenOperativoCabecera,
 )
 
 
@@ -23,6 +24,12 @@ class RepositorioModuloPrincipal(Protocol):
 
     def obtener_analitica_dashboard(self) -> AnaliticaDashboard:
         """Obtiene series y paneles analiticos para la pantalla de inicio."""
+
+    def obtener_resumen_operativo_cabecera(self) -> ResumenOperativoCabecera:
+        """Obtiene datos compactos para el encabezado operativo del shell."""
+
+    def listar_eventos_criticos_sistema(self, limite: int = 10) -> tuple[tuple[str, str], ...]:
+        """Lista advertencias y errores tecnicos pendientes para notificaciones."""
 
 
 class RepositorioModuloPrincipalSQLite:
@@ -45,8 +52,14 @@ class RepositorioModuloPrincipalSQLite:
                 conexion,
                 """
                 SELECT COALESCE(SUM(saldo_pendiente_centavos), 0)
-                FROM cargos
-                WHERE estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO');
+                FROM cargos c
+                INNER JOIN casas ca ON ca.id = c.casa_id
+                INNER JOIN conceptos_cobro cc ON cc.id = c.concepto_id
+                WHERE ca.estado_servicio = 'ACTIVO'
+                  AND c.estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
+                  AND c.saldo_pendiente_centavos > 0
+                  AND c.anulado_en IS NULL
+                  AND cc.tipo <> 'MORA';
                 """,
             )
             pagos_mes_centavos = self._sumar(
@@ -62,8 +75,12 @@ class RepositorioModuloPrincipalSQLite:
                 conexion,
                 """
                 SELECT COUNT(DISTINCT casa_id)
-                FROM cargos
-                WHERE estado = 'VENCIDO' AND saldo_pendiente_centavos > 0;
+                FROM cargos c
+                INNER JOIN casas ca ON ca.id = c.casa_id
+                WHERE ca.estado_servicio = 'ACTIVO'
+                  AND c.estado = 'VENCIDO'
+                  AND c.saldo_pendiente_centavos > 0
+                  AND c.anulado_en IS NULL;
                 """,
             )
 
@@ -110,7 +127,12 @@ class RepositorioModuloPrincipalSQLite:
                     FROM cargos cg
                     JOIN casas c ON c.id = cg.casa_id
                     JOIN barrios b ON b.id = c.barrio_id
-                    WHERE cg.estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
+                    INNER JOIN conceptos_cobro cc ON cc.id = cg.concepto_id
+                    WHERE c.estado_servicio = 'ACTIVO'
+                      AND cg.estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
+                      AND cg.saldo_pendiente_centavos > 0
+                      AND cg.anulado_en IS NULL
+                      AND cc.tipo <> 'MORA'
                     GROUP BY b.id, b.nombre
                     HAVING valor > 0
                     ORDER BY valor DESC, b.nombre ASC
@@ -151,10 +173,13 @@ class RepositorioModuloPrincipalSQLite:
             abonados_con_deuda = self._contar(
                 conexion,
                 """
-                SELECT COUNT(DISTINCT abonado_id)
-                FROM cargos
-                WHERE estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
-                  AND saldo_pendiente_centavos > 0;
+                SELECT COUNT(DISTINCT c.abonado_id)
+                FROM cargos c
+                INNER JOIN casas ca ON ca.id = c.casa_id
+                WHERE ca.estado_servicio = 'ACTIVO'
+                  AND c.estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
+                  AND c.saldo_pendiente_centavos > 0
+                  AND c.anulado_en IS NULL;
                 """,
             )
             total_ingresos = self._sumar(
@@ -195,13 +220,143 @@ class RepositorioModuloPrincipalSQLite:
             insights=insights,
         )
 
+    def obtener_resumen_operativo_cabecera(self) -> ResumenOperativoCabecera:
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            pagos_registrados_hoy = self._contar(
+                conexion,
+                """
+                SELECT COUNT(*)
+                FROM pagos
+                WHERE date(fecha_pago, 'localtime') = date('now', 'localtime')
+                  AND estado = 'CONFIRMADO';
+                """,
+            )
+            meses_alerta_corte = self._obtener_entero_configuracion(
+                conexion,
+                "cobro.meses_para_corte",
+                predeterminado=5,
+            )
+            casas_con_deuda_critica = self._contar(
+                conexion,
+                """
+                SELECT COUNT(*)
+                FROM (
+                    SELECT c.casa_id
+                    FROM cargos c
+                    INNER JOIN casas ca ON ca.id = c.casa_id
+                    INNER JOIN conceptos_cobro cc ON cc.id = c.concepto_id
+                    WHERE ca.estado_servicio = 'ACTIVO'
+                      AND c.estado = 'VENCIDO'
+                      AND c.saldo_pendiente_centavos > 0
+                      AND c.anulado_en IS NULL
+                      AND c.periodo_id IS NOT NULL
+                      AND cc.tipo <> 'MORA'
+                    GROUP BY c.casa_id
+                    HAVING COUNT(DISTINCT c.periodo_id) >= ?
+                ) resumen;
+                """,
+                (meses_alerta_corte,),
+            )
+            respaldo_automatico = bool(
+                self._obtener_entero_configuracion(
+                    conexion,
+                    "sistema.respaldo_automatico",
+                    predeterminado=0,
+                )
+            )
+            fila_respaldo = conexion.execute(
+                """
+                SELECT
+                    COALESCE(generado_en, '') AS generado_en,
+                    COALESCE(estado, '') AS estado
+                FROM historial_respaldos
+                ORDER BY generado_en DESC, id DESC
+                LIMIT 1;
+                """
+            ).fetchone()
+            fila_eventos = conexion.execute(
+                """
+                SELECT
+                    COALESCE(SUM(CASE WHEN severidad = 'ADVERTENCIA' AND resuelto_en IS NULL THEN 1 ELSE 0 END), 0) AS advertencias,
+                    COALESCE(SUM(CASE WHEN severidad IN ('ERROR', 'CRITICO') AND resuelto_en IS NULL THEN 1 ELSE 0 END), 0) AS errores
+                FROM eventos_tecnicos;
+                """
+            ).fetchone()
+            fila_ultimo_evento = conexion.execute(
+                """
+                SELECT
+                    COALESCE(severidad, 'INFO') AS severidad,
+                    COALESCE(mensaje, '') AS mensaje
+                FROM eventos_tecnicos
+                ORDER BY registrado_en DESC, id DESC
+                LIMIT 1;
+                """
+            ).fetchone()
+
+        return ResumenOperativoCabecera(
+            pagos_registrados_hoy=pagos_registrados_hoy,
+            casas_con_deuda_critica=casas_con_deuda_critica,
+            meses_alerta_corte=meses_alerta_corte,
+            respaldo_automatico=respaldo_automatico,
+            ultimo_respaldo_en=str(fila_respaldo["generado_en"] or "") if fila_respaldo else "",
+            ultimo_respaldo_estado=str(fila_respaldo["estado"] or "") if fila_respaldo else "",
+            eventos_advertencia=int(fila_eventos["advertencias"] or 0) if fila_eventos else 0,
+            eventos_error=int(fila_eventos["errores"] or 0) if fila_eventos else 0,
+            ultimo_evento_mensaje=str(fila_ultimo_evento["mensaje"] or "") if fila_ultimo_evento else "",
+            ultimo_evento_severidad=str(fila_ultimo_evento["severidad"] or "INFO")
+            if fila_ultimo_evento
+            else "INFO",
+        )
+
+    def listar_eventos_criticos_sistema(self, limite: int = 10) -> tuple[tuple[str, str], ...]:
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            filas = conexion.execute(
+                """
+                SELECT
+                    COALESCE(severidad, 'INFO') AS severidad,
+                    COALESCE(mensaje, '') AS mensaje
+                FROM eventos_tecnicos
+                WHERE severidad IN ('ADVERTENCIA', 'ERROR', 'CRITICO')
+                  AND resuelto_en IS NULL
+                ORDER BY registrado_en DESC, id DESC
+                LIMIT ?;
+                """,
+                (limite,),
+            ).fetchall()
+        return tuple(
+            (str(fila["severidad"] or "INFO"), str(fila["mensaje"] or ""))
+            for fila in filas
+            if str(fila["mensaje"] or "").strip()
+        )
+
     @staticmethod
-    def _contar(conexion: object, consulta: str) -> int:
-        return int(conexion.execute(consulta).fetchone()[0] or 0)
+    def _contar(conexion: object, consulta: str, parametros: tuple[object, ...] = ()) -> int:
+        return int(conexion.execute(consulta, parametros).fetchone()[0] or 0)
 
     @staticmethod
     def _sumar(conexion: object, consulta: str) -> int:
         return int(conexion.execute(consulta).fetchone()[0] or 0)
+
+    @staticmethod
+    def _obtener_entero_configuracion(
+        conexion: object,
+        clave: str,
+        *,
+        predeterminado: int,
+    ) -> int:
+        fila = conexion.execute(
+            """
+            SELECT COALESCE(valor, ?) AS valor
+            FROM configuracion_sistema
+            WHERE clave = ?
+            LIMIT 1;
+            """,
+            (str(predeterminado), clave),
+        ).fetchone()
+        try:
+            return int((fila["valor"] if fila else predeterminado) or predeterminado)
+        except (TypeError, ValueError):
+            return predeterminado
 
     @staticmethod
     def _formatear_lps(valor_centavos: int) -> str:
@@ -232,3 +387,20 @@ class RepositorioModuloPrincipalMemoria:
                 InsightDashboard("Ingresos acumulados", "L 0.00", "Sin historial financiero."),
             ),
         )
+
+    def obtener_resumen_operativo_cabecera(self) -> ResumenOperativoCabecera:
+        return ResumenOperativoCabecera(
+            pagos_registrados_hoy=0,
+            casas_con_deuda_critica=0,
+            meses_alerta_corte=5,
+            respaldo_automatico=False,
+            ultimo_respaldo_en="",
+            ultimo_respaldo_estado="",
+            eventos_advertencia=0,
+            eventos_error=0,
+            ultimo_evento_mensaje="",
+            ultimo_evento_severidad="INFO",
+        )
+
+    def listar_eventos_criticos_sistema(self, limite: int = 10) -> tuple[tuple[str, str], ...]:
+        return ()

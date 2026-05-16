@@ -54,7 +54,7 @@ class TestPlanesPago(unittest.TestCase):
         detalle = self.servicio.obtener_detalle(pagina.items[0].identificador or 0)
         self.assertIsNotNone(detalle)
         assert detalle is not None
-        self.assertEqual(detalle.plan.tipo_plan, "MESES_PENDIENTES")
+        self.assertEqual(detalle.plan.tipo_plan, "RECONEXION")
         self.assertEqual(detalle.plan.cuotas_pendientes, 2)
         self.assertEqual(len(detalle.cuotas), 2)
         self.assertGreaterEqual(len(detalle.cargos_vinculados), 1)
