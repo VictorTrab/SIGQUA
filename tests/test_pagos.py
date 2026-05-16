@@ -6,6 +6,7 @@ import sqlite3
 import sys
 import unittest
 import uuid
+from contextlib import closing
 from pathlib import Path
 
 
@@ -22,6 +23,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
 from modulos.pagos.entidades import FormularioPago, ResumenConfirmacionPago  # noqa: E402
+from modulos.pagos.controlador import ControladorPagos  # noqa: E402
 from modulos.pagos.repositorio import RepositorioPagosSQLite  # noqa: E402
 from modulos.pagos.servicio import ServicioPagos  # noqa: E402
 from modulos.pagos.vista import VistaPagos  # noqa: E402
@@ -46,7 +48,7 @@ class TestPagos(unittest.TestCase):
         shutil.rmtree(self.raiz_temporal, ignore_errors=True)
 
     def test_migraciones_007_y_008_agregan_campos_y_catalogos_de_pago(self) -> None:
-        with sqlite3.connect(self.ruta_db) as conexion:
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
             columnas_pagos = {
                 fila[1] for fila in conexion.execute("PRAGMA table_info(pagos);").fetchall()
             }
@@ -112,7 +114,7 @@ class TestPagos(unittest.TestCase):
         self.assertIsNotNone(resultado.comprobante)
         assert resultado.comprobante is not None
         self.assertTrue(resultado.comprobante.numero_comprobante.startswith("REC-"))
-        with sqlite3.connect(self.ruta_db) as conexion:
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
             pendientes = conexion.execute(
                 """
                 SELECT estado, saldo_pendiente_centavos
@@ -156,7 +158,7 @@ class TestPagos(unittest.TestCase):
     def test_abonado_inactivo_no_puede_registrar_pago(self) -> None:
         casa_id = self._obtener_casa_por_dni("0801199000022")
         metodo_id = self._obtener_metodo("EFECTIVO")
-        with sqlite3.connect(self.ruta_db) as conexion:
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
             conexion.execute(
                 """
                 UPDATE abonados
@@ -213,7 +215,7 @@ class TestPagos(unittest.TestCase):
 
         self.assertTrue(resultado.exito, resultado.mensaje)
         self.assertFalse(segundo_resultado.exito)
-        with sqlite3.connect(self.ruta_db) as conexion:
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
             adelantos = conexion.execute(
                 "SELECT COUNT(*) FROM pagos_adelantados WHERE casa_id = ?;",
                 (casa_id,),
@@ -225,9 +227,85 @@ class TestPagos(unittest.TestCase):
         _app = QApplication.instance() or QApplication([])
         vista = VistaPagos()
         self.assertEqual(vista.objectName(), "vistaPagos")
+        self.assertEqual(vista._tabs.count(), 4)
+        self.assertEqual(vista._tabs.tabText(0), "Pago mensual")
+        self.assertEqual(vista._tabs.currentIndex(), 0)
+        self.assertEqual(vista._flujo_mensual._stack.count(), 4)
+        self.assertEqual(vista._flujo_mensual._stack.currentIndex(), vista._flujo_mensual.PASO_BUSQUEDA)
+        textos = [label.text() for label in vista.findChildren(type(vista.label_mensaje))]
+        self.assertNotIn("Historial reciente de comprobantes", textos)
+
+    def test_controlador_avanza_flujo_mensual_con_datos_reales(self) -> None:
+        app = QApplication.instance() or QApplication([])
+        vista = VistaPagos()
+        controlador = ControladorPagos(self.servicio, vista)
+        flujo = vista._flujo_mensual
+
+        controlador._refrescar("0801199000022")
+        app.processEvents()
+
+        self.assertGreaterEqual(flujo._tabla_casas.rowCount(), 1)
+        flujo._seleccionar_casa(0)
+        app.processEvents()
+
+        self.assertEqual(flujo._stack.currentIndex(), flujo.PASO_DIAGNOSTICO)
+        self.assertIsNotNone(vista.obtener_casa_seleccionada_id())
+        self.assertGreaterEqual(flujo._tabla_cargos.rowCount(), 1)
+
+        flujo._ir_a_paso(flujo.PASO_DATOS)
+
+        indice_metodo = flujo._combo_metodo.findData(self._obtener_metodo("EFECTIVO"))
+        self.assertGreaterEqual(indice_metodo, 0)
+        flujo._combo_metodo.setCurrentIndex(indice_metodo)
+        flujo._solicitar_preparacion_resumen()
+        app.processEvents()
+
+        self.assertEqual(flujo._stack.currentIndex(), flujo.PASO_RESUMEN)
+        self.assertEqual(flujo._metricas_resumen["Método"].text(), "Efectivo")
+        self.assertNotEqual(flujo._metricas_resumen["Total"].text(), "-")
+        self.assertTrue(flujo._boton_confirmar.isEnabled())
+
+    def test_registro_desde_resumen_persiste_y_abre_comprobante(self) -> None:
+        app = QApplication.instance() or QApplication([])
+        vista = VistaPagos()
+        controlador = ControladorPagos(self.servicio, vista)
+        flujo = vista._flujo_mensual
+        controlador._actor = type("ActorPrueba", (), {"identificador": 1})()
+        comprobante_abierto: dict[str, bool] = {"ok": False}
+
+        def _confirmar(*_args, **_kwargs):
+            return True
+
+        def _mostrar_comprobante(**_kwargs):
+            comprobante_abierto["ok"] = True
+
+        vista.confirmar_pago = _confirmar  # type: ignore[method-assign]
+        vista.mostrar_comprobante = _mostrar_comprobante  # type: ignore[method-assign]
+
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            total_antes = conexion.execute("SELECT COUNT(*) FROM pagos;").fetchone()[0]
+
+        controlador._refrescar("0801199000022")
+        flujo._seleccionar_casa(0)
+        flujo._ir_a_paso(flujo.PASO_DATOS)
+        indice_metodo = flujo._combo_metodo.findData(self._obtener_metodo("EFECTIVO"))
+        flujo._combo_metodo.setCurrentIndex(indice_metodo)
+        flujo._solicitar_preparacion_resumen()
+        app.processEvents()
+
+        self.assertEqual(flujo._stack.currentIndex(), flujo.PASO_RESUMEN)
+        flujo._emitir_registro()
+        app.processEvents()
+
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            total_despues = conexion.execute("SELECT COUNT(*) FROM pagos;").fetchone()[0]
+
+        self.assertEqual(total_despues, total_antes + 1)
+        self.assertTrue(comprobante_abierto["ok"])
+        self.assertEqual(flujo._stack.currentIndex(), flujo.PASO_BUSQUEDA)
 
     def _obtener_casa_por_dni(self, dni: str) -> int:
-        with sqlite3.connect(self.ruta_db) as conexion:
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
             fila = conexion.execute(
                 """
                 SELECT c.id
@@ -242,7 +320,7 @@ class TestPagos(unittest.TestCase):
         return int(fila[0])
 
     def _obtener_metodo(self, codigo: str) -> int:
-        with sqlite3.connect(self.ruta_db) as conexion:
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
             fila = conexion.execute(
                 "SELECT id FROM metodos_pago WHERE codigo = ? LIMIT 1;",
                 (codigo,),
@@ -251,7 +329,7 @@ class TestPagos(unittest.TestCase):
         return int(fila[0])
 
     def _crear_casa_activa_sin_cargos(self) -> int:
-        with sqlite3.connect(self.ruta_db) as conexion:
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
             barrio_id = conexion.execute("SELECT id FROM barrios LIMIT 1;").fetchone()[0]
             cursor_abonado = conexion.execute(
                 """
@@ -271,7 +349,7 @@ class TestPagos(unittest.TestCase):
         return int(cursor_casa.lastrowid)
 
     def _crear_cargo_mora_vencido(self, casa_id: int) -> None:
-        with sqlite3.connect(self.ruta_db) as conexion:
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
             fila = conexion.execute(
                 """
                 SELECT c.abonado_id, cc.id

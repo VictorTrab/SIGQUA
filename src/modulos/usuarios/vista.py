@@ -1723,17 +1723,7 @@ class VistaUsuarios(QWidget):
         layout.setSpacing(12)
 
         encabezado = QHBoxLayout()
-        bloque = QVBoxLayout()
-        titulo = QLabel("Roles del sistema")
-        titulo.setObjectName("subtituloModuloUsuarios")
-        descripcion = QLabel(
-            "Gestiona roles visibles, sus permisos reales y el estado operativo de cada uno."
-        )
-        descripcion.setObjectName("descripcionModulo")
-        descripcion.setWordWrap(True)
-        bloque.addWidget(titulo)
-        bloque.addWidget(descripcion)
-        encabezado.addLayout(bloque, 1)
+        encabezado.addStretch(1)
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(8)

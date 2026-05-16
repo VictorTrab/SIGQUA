@@ -23,6 +23,8 @@ class ControladorPagos:
 
     def _conectar_senales(self) -> None:
         self.vista_pagos.buscar_solicitado.connect(self._refrescar)
+        self.vista_pagos.casa_mensual_solicitada.connect(self._cargar_cargos_mensuales)
+        self.vista_pagos.previsualizacion_pago_solicitada.connect(self._previsualizar_pago_mensual)
         self.vista_pagos.registrar_pago_solicitado.connect(self._registrar_pago)
         self.vista_pagos.comprobante_solicitado.connect(self._mostrar_comprobante)
 
@@ -33,11 +35,35 @@ class ControladorPagos:
             self.servicio_pagos.formatear_moneda,
             self.servicio_pagos.formatear_fecha,
         )
+        casa_id = self.vista_pagos.obtener_casa_seleccionada_id()
+        if casa_id is not None:
+            self._cargar_cargos_mensuales(casa_id)
+
+    def _cargar_cargos_mensuales(self, casa_id: int) -> None:
+        cargos = self.servicio_pagos.obtener_cargos_mensuales(casa_id)
+        self.vista_pagos.mostrar_cargos_mensuales(casa_id, cargos)
+
+    def _previsualizar_pago_mensual(self, formulario: FormularioPago) -> None:
+        confirmacion = self.servicio_pagos.previsualizar_pago_mensual(formulario)
+        if isinstance(confirmacion, ResultadoPago):
+            self.vista_pagos.mostrar_previsualizacion_pago(None, confirmacion)
+            return
+        if not isinstance(confirmacion, ResumenConfirmacionPago):
+            self.vista_pagos.mostrar_previsualizacion_pago(
+                None,
+                ResultadoPago(False, "No fue posible preparar la previsualizacion.", "ERROR"),
+            )
+            return
+        self.vista_pagos.mostrar_previsualizacion_pago(
+            confirmacion,
+            None,
+            self.servicio_pagos.formatear_moneda,
+        )
 
     def _registrar_pago(self, formulario: FormularioPago) -> None:
         confirmacion = self.servicio_pagos.preparar_confirmacion(formulario)
         if isinstance(confirmacion, ResultadoPago):
-            self.vista_pagos.mostrar_mensaje(confirmacion.mensaje, es_error=True)
+            self.vista_pagos.mostrar_previsualizacion_pago(None, confirmacion)
             return
         if not isinstance(confirmacion, ResumenConfirmacionPago):
             self.vista_pagos.mostrar_mensaje("No fue posible preparar la confirmacion.", es_error=True)
@@ -51,9 +77,11 @@ class ControladorPagos:
         resultado = self.servicio_pagos.registrar_pago(formulario, actor_id=actor_id)
         self.vista_pagos.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
+            comprobante_id = resultado.comprobante.pago_id if resultado.comprobante is not None else None
+            self.vista_pagos.reiniciar_flujo_mensual()
             self._refrescar()
-            if resultado.comprobante is not None:
-                self._abrir_dialogo_comprobante(resultado.comprobante.pago_id)
+            if comprobante_id is not None:
+                self._abrir_dialogo_comprobante(comprobante_id)
 
     def _mostrar_comprobante(self, pago_id: int) -> None:
         self._abrir_dialogo_comprobante(pago_id)

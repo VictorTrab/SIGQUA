@@ -65,14 +65,9 @@ class VistaReportes(QWidget):
         layout.setSpacing(16)
 
         fila_superior = QHBoxLayout()
-        descripcion = QLabel(
-            "Reportes basicos conectados a datos reales: abonados, casas, deuda y pagos."
-        )
-        descripcion.setObjectName("descripcionModulo")
-        descripcion.setWordWrap(True)
         self._boton_recargar = crear_boton_operativo("Actualizar")
         self._boton_recargar.clicked.connect(self.recargar_solicitado.emit)
-        fila_superior.addWidget(descripcion, 1)
+        fila_superior.addStretch(1)
         fila_superior.addWidget(self._boton_recargar, alignment=Qt.AlignmentFlag.AlignTop)
         layout.addLayout(fila_superior)
 

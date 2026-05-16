@@ -664,17 +664,6 @@ class VistaPlanesPago(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
         encabezado = QHBoxLayout()
-        bloque_titulo = QVBoxLayout()
-        titulo = QLabel("Planes de pago")
-        titulo.setObjectName("tituloModulo")
-        descripcion = QLabel(
-            "Consulta y crea acuerdos vinculados al servicio de conexion o reconexion."
-        )
-        descripcion.setObjectName("descripcionModulo")
-        descripcion.setWordWrap(True)
-        bloque_titulo.addWidget(titulo)
-        bloque_titulo.addWidget(descripcion)
-
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(8)
         boton_info = BotonAccionContextual("Informacion", variante="ayuda", centrado=True, mostrar_icono=False)
@@ -687,7 +676,7 @@ class VistaPlanesPago(QWidget):
         fila_acciones.addWidget(boton_exportar)
         fila_acciones.addWidget(boton_nuevo)
 
-        encabezado.addLayout(bloque_titulo, 1)
+        encabezado.addStretch(1)
         encabezado.addLayout(fila_acciones)
 
         self._mensaje = QLabel("")

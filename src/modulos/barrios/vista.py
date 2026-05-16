@@ -825,15 +825,6 @@ class VistaBarrios(QWidget):
 
         encabezado = QHBoxLayout()
         encabezado.setSpacing(10)
-        bloque_titulo = QVBoxLayout()
-        bloque_titulo.setSpacing(2)
-        titulo = QLabel("Barrios")
-        titulo.setObjectName("tituloModulo")
-        descripcion = QLabel("Gestion de barrios y organizacion territorial")
-        descripcion.setObjectName("descripcionModulo")
-        descripcion.setWordWrap(True)
-        bloque_titulo.addWidget(titulo)
-        bloque_titulo.addWidget(descripcion)
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(8)
@@ -845,7 +836,7 @@ class VistaBarrios(QWidget):
         fila_acciones.addWidget(boton_exportar)
         fila_acciones.addWidget(boton_nuevo)
 
-        encabezado.addLayout(bloque_titulo, 1)
+        encabezado.addStretch(1)
         encabezado.addLayout(fila_acciones)
 
         self._mensaje = QLabel("")

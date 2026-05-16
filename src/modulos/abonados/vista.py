@@ -851,15 +851,6 @@ class VistaAbonados(QWidget):
 
         encabezado = QHBoxLayout()
         encabezado.setSpacing(10)
-        bloque_titulo = QVBoxLayout()
-        bloque_titulo.setSpacing(2)
-        titulo = QLabel("Abonados")
-        titulo.setObjectName("tituloModulo")
-        descripcion = QLabel("Gestion de abonados, mora y contexto operativo por barrio")
-        descripcion.setObjectName("descripcionModulo")
-        descripcion.setWordWrap(True)
-        bloque_titulo.addWidget(titulo)
-        bloque_titulo.addWidget(descripcion)
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(8)
@@ -871,7 +862,7 @@ class VistaAbonados(QWidget):
         fila_acciones.addWidget(boton_exportar)
         fila_acciones.addWidget(boton_nuevo)
 
-        encabezado.addLayout(bloque_titulo, 1)
+        encabezado.addStretch(1)
         encabezado.addLayout(fila_acciones)
 
         self._mensaje = QLabel("")

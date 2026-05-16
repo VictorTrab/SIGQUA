@@ -167,4 +167,3 @@ class EstadoModuloPagos:
 
     casas: tuple[CasaPago, ...]
     metodos_pago: tuple[MetodoPago, ...]
-    historial: tuple[HistorialPago, ...]

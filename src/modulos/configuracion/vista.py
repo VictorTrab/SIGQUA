@@ -193,18 +193,7 @@ class VistaConfiguracion(QWidget):
 
         encabezado = QHBoxLayout()
         encabezado.setSpacing(12)
-        bloque_titulo = QVBoxLayout()
-        bloque_titulo.setSpacing(3)
-        titulo = QLabel("Configuracion")
-        titulo.setObjectName("tituloModulo")
-        descripcion = QLabel(
-            "Parametros operativos conectados a pagos, comprobantes, morosidad, reportes y soporte local."
-        )
-        descripcion.setObjectName("descripcionModulo")
-        descripcion.setWordWrap(True)
-        bloque_titulo.addWidget(titulo)
-        bloque_titulo.addWidget(descripcion)
-        encabezado.addLayout(bloque_titulo, 1)
+        encabezado.addStretch(1)
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(8)
@@ -687,9 +676,12 @@ class VistaConfiguracion(QWidget):
         texto_secundario = "rgba(235, 242, 248, 0.76)" if oscuro else paleta["texto_secundario"]
         fondo_input = "rgba(255,255,255,0.11)" if oscuro else paleta["fondo_input"]
         borde_input = "rgba(255,255,255,0.18)" if oscuro else paleta["borde_medio"]
-        fondo_tabs = "rgba(255,255,255,0.08)" if oscuro else paleta["fondo_superficie_suave"]
+        fondo_tabs = "rgba(255,255,255,0.06)" if oscuro else paleta["fondo_superficie_suave"]
+        fondo_tab_barra = "rgba(255,255,255,0.04)" if oscuro else paleta["fondo_superficie_muy_suave"]
+        fondo_tab_hover = "rgba(255,255,255,0.10)" if oscuro else paleta["fondo_superficie"]
         fondo_tab_activo = "#d2f4f2" if oscuro else paleta["fondo_chip_activo"]
         texto_tab_activo = "#0f2d43" if oscuro else paleta["texto_chip_activo"]
+        borde_tab_activo = "rgba(157, 239, 228, 0.34)" if oscuro else paleta["borde_chip_activo"]
         self.setStyleSheet(
             f"""
             QWidget#vistaConfiguracion {{
@@ -777,26 +769,45 @@ class VistaConfiguracion(QWidget):
                 font-size: 12px;
                 font-weight: 700;
             }}
+            QTabWidget#tabsConfiguracion {{
+                background: transparent;
+            }}
             QTabWidget#tabsConfiguracion::pane {{
                 border: 1px solid {borde_panel};
                 border-radius: 18px;
                 background: {fondo_panel};
-                margin-top: 8px;
+                margin-top: 14px;
+                padding: 10px 10px 12px 10px;
+            }}
+            QTabWidget#tabsConfiguracion QTabBar {{
+                background: {fondo_tab_barra};
+                border: 1px solid {borde_panel};
+                border-radius: 16px;
+                padding: 6px;
+                left: 0px;
             }}
             QTabWidget#tabsConfiguracion QTabBar::tab {{
                 background: {fondo_tabs};
-                border: 1px solid {borde_panel};
-                color: {texto_principal};
-                padding: 9px 14px;
-                border-top-left-radius: 12px;
-                border-top-right-radius: 12px;
+                border: 1px solid transparent;
+                color: {texto_secundario};
+                padding: 10px 16px;
+                border-radius: 12px;
                 font-size: 12px;
                 font-weight: 700;
                 margin-right: 6px;
+                min-height: 18px;
+            }}
+            QTabWidget#tabsConfiguracion QTabBar::tab:hover {{
+                background: {fondo_tab_hover};
+                color: {texto_principal};
             }}
             QTabWidget#tabsConfiguracion QTabBar::tab:selected {{
                 background: {fondo_tab_activo};
                 color: {texto_tab_activo};
+                border-color: {borde_tab_activo};
+            }}
+            QTabWidget#tabsConfiguracion QTabBar::tab:!selected {{
+                margin-top: 2px;
             }}
             QScrollArea#scrollConfiguracion {{
                 background: transparent;

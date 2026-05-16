@@ -18,7 +18,7 @@ if str(RUTA_SRC) not in sys.path:
     sys.path.insert(0, str(RUTA_SRC))
 
 from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtWidgets import QApplication, QScrollArea, QTableWidget, QToolButton, QWidget  # noqa: E402
+from PySide6.QtWidgets import QApplication, QLabel, QScrollArea, QTableWidget, QToolButton, QWidget  # noqa: E402
 
 from app import (  # noqa: E402
     ALTO_VENTANA_AUTENTICACION,
@@ -67,7 +67,7 @@ from modulos.casas.entidades import (  # noqa: E402
 )
 from modulos.planes_pago.vista import VistaPlanesPago  # noqa: E402
 from modulos.principal.vista import VistaModuloPrincipal  # noqa: E402
-from modulos.principal.entidades import AnaliticaDashboard, EstadoModuloPrincipal, MensajeCabeceraPrincipal, ModuloNavegacion  # noqa: E402
+from modulos.principal.entidades import AnaliticaDashboard, EstadoModuloPrincipal, ModuloNavegacion  # noqa: E402
 from modulos.usuarios.entidades import PermisoSistema, ResumenUsuarios, RolSistema, UsuarioSistema  # noqa: E402
 from modulos.usuarios.vista import VistaUsuarios  # noqa: E402
 
@@ -540,7 +540,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             "Buenas noches",
         )
 
-    def test_shell_principal_muestra_estado_rapido_en_encabezado(self) -> None:
+    def test_shell_principal_muestra_saludo_basico_en_encabezado(self) -> None:
         vista_principal = VistaModuloPrincipal()
         estado = EstadoModuloPrincipal(
             nombre_usuario="admin",
@@ -548,31 +548,14 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             perfil="ADMINISTRADOR",
             metricas=(),
             analitica=AnaliticaDashboard((), (), (), ()),
-            mensajes_cabecera=(
-                MensajeCabeceraPrincipal(
-                    "CORRECTO",
-                    "Sistema funcionando correctamente.",
-                    "circle-check.svg",
-                ),
-                MensajeCabeceraPrincipal(
-                    "ADVERTENCIA",
-                    "Hay casas con deuda mayor a 5 meses.",
-                    "alert-triangle.svg",
-                ),
-                MensajeCabeceraPrincipal(
-                    "INFORMACION",
-                    "17 pagos registrados hoy.",
-                    "info-circle.svg",
-                ),
+            modulos=(
+                ModuloNavegacion("dashboard", "Inicio", "Resumen operativo del sistema.", "home.svg"),
+                ModuloNavegacion("barrios", "Barrios", "Gestion de barrios y organizacion territorial.", "map-2.svg"),
             ),
-            evento_reciente=MensajeCabeceraPrincipal(
-                "INFORMACION",
-                "Ultimo respaldo realizado hoy.",
-                "clock.svg",
-            ),
-            modulos=(ModuloNavegacion("dashboard", "Inicio", "", "circle-check.svg"),),
             puede_abrir_mantenimiento=False,
         )
+        vista_barrios = VistaBarrios()
+        vista_principal.registrar_modulo("barrios", vista_barrios)
 
         vista_principal.mostrar_estado(estado)
         vista_principal.show()
@@ -580,11 +563,17 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
         self.assertIn("Admin", vista_principal._label_bienvenida.text())
         self.assertIn("Monitorea ingresos", vista_principal._label_subresumen.text())
-        self.assertIn("Actividad:", vista_principal._label_evento_cabecera.text())
         self.assertGreaterEqual(vista_principal._boton_perfil_header.minimumWidth(), 48)
-        self.assertEqual(len(vista_principal._tarjetas_estado_header), 3)
-        self.assertEqual(vista_principal._tarjeta_estado_principal.property("tipoEstado"), "CORRECTO")
-        self.assertEqual(vista_principal._panel_estado_header.maximumWidth(), 460)
+
+        vista_principal.mostrar_modulo("barrios")
+        self.aplicacion.processEvents()
+
+        self.assertEqual(vista_principal._label_bienvenida.text(), "Barrios")
+        self.assertEqual(
+            vista_principal._label_subresumen.text(),
+            "Gestion de barrios y organizacion territorial.",
+        )
+        vista_barrios.close()
         vista_principal.close()
 
     def test_notificacion_casas_desaparece_tras_temporizador(self) -> None:
@@ -836,9 +825,33 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertEqual(vista_configuracion._tabs.tabText(2), "Parametros de cobro")
         self.assertEqual(vista_configuracion._tabs.tabText(3), "Control y respaldo")
         self.assertEqual(vista_configuracion._tabs.tabText(4), "Informacion")
+        self.assertIn("QTabWidget#tabsConfiguracion QTabBar::tab:hover", vista_configuracion.styleSheet())
+        self.assertIn("QTabWidget#tabsConfiguracion QTabBar::tab:selected", vista_configuracion.styleSheet())
+        self.assertIn("QTabWidget#tabsConfiguracion QTabBar {", vista_configuracion.styleSheet())
 
         vista_planes.close()
         vista_configuracion.close()
+
+    def test_modulos_base_no_replican_titulo_en_contenido(self) -> None:
+        vistas = (
+            VistaBarrios(),
+            VistaAbonados(),
+            VistaCasas(),
+            VistaPlanesPago(),
+            VistaConfiguracion(),
+        )
+
+        try:
+            for vista in vistas:
+                titulos = [
+                    label.text()
+                    for label in vista.findChildren(QLabel)
+                    if label.objectName() == "tituloModulo"
+                ]
+                self.assertEqual(titulos, [])
+        finally:
+            for vista in vistas:
+                vista.close()
 
     def test_vista_usuarios_copia_patron_visual_con_pestanas_filtros_y_acciones(self) -> None:
         vista = VistaUsuarios()

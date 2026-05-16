@@ -8,6 +8,7 @@ from pathlib import Path
 
 from comun.configuracion.gestor_rutas import GestorRutas
 from modulos.pagos.entidades import (
+    CargoPago,
     ComprobantePago,
     DetalleAplicacionPago,
     EstadoModuloPagos,
@@ -35,8 +36,19 @@ class ServicioPagos:
         return EstadoModuloPagos(
             casas=tuple(self.repositorio_pagos.listar_casas(filtro=filtro)),
             metodos_pago=tuple(self.repositorio_pagos.listar_metodos_pago_activos()),
-            historial=tuple(self.repositorio_pagos.listar_historial()),
         )
+
+    def obtener_cargos_mensuales(self, casa_id: int) -> tuple[CargoPago, ...]:
+        return tuple(self.repositorio_pagos.listar_cargos_mensuales(casa_id))
+
+    def obtener_casa(self, casa_id: int):
+        return self.repositorio_pagos.obtener_casa(casa_id)
+
+    def previsualizar_pago_mensual(
+        self,
+        formulario: FormularioPago,
+    ) -> ResumenConfirmacionPago | ResultadoPago:
+        return self.preparar_confirmacion(formulario)
 
     def preparar_confirmacion(self, formulario: FormularioPago) -> ResumenConfirmacionPago | ResultadoPago:
         if formulario.tipo_pago not in TIPOS_PAGO_VALIDOS:
