@@ -1095,6 +1095,10 @@ class DialogoFormularioRol(DialogoBaseSicap):
                 border: 1px solid rgba(255, 255, 255, 0.12);
                 border-radius: 14px;
             }
+            QTableWidget#tablaFormularioRolUsuarios QTableCornerButton::section {
+                background: rgba(255, 255, 255, 0.08);
+                border: none;
+            }
             QWidget#viewportTablaFormularioRolUsuarios {
                 background: transparent;
                 border: none;
@@ -1283,6 +1287,10 @@ class DialogoMatrizPermisosUsuarios(DialogoBaseSicap):
                 background: rgba(255, 255, 255, 0.06);
                 border: 1px solid rgba(255, 255, 255, 0.12);
                 border-radius: 18px;
+            }
+            QTableWidget#tablaMatrizPermisosUsuarios QTableCornerButton::section {
+                background: rgba(255, 255, 255, 0.08);
+                border: none;
             }
             QWidget#viewportTablaMatrizPermisosUsuarios {
                 background: transparent;
@@ -2269,6 +2277,9 @@ class VistaUsuarios(QWidget):
             QTabWidget#tabsUsuarios {
                 background: transparent;
             }
+            QTabWidget#tabsUsuarios QWidget {
+                background: transparent;
+            }
             QTabWidget#tabsUsuarios::pane {
                 border: 1px solid rgba(255, 255, 255, 0.10);
                 border-radius: 18px;
@@ -2279,6 +2290,9 @@ class VistaUsuarios(QWidget):
             QScrollArea#scrollRolesUsuarios {
                 background: transparent;
                 border: none;
+            }
+            QScrollArea#scrollRolesUsuarios > QWidget > QWidget {
+                background: transparent;
             }
             QTabWidget#tabsUsuarios QTabBar {
                 background: rgba(255, 255, 255, 0.04);

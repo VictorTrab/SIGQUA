@@ -62,7 +62,7 @@ class ControladorConfiguracion:
             self._refrescar()
             bus_actualizaciones_modulos.emitir(
                 modulo_origen="configuracion",
-                modulos_afectados=("reportes",),
+                modulos_afectados=("pagos", "morosidad", "reportes"),
             )
 
     def _guardar_parametros_factura(
@@ -78,6 +78,11 @@ class ControladorConfiguracion:
         mostrar_telefono: bool,
         mostrar_direccion: bool,
         mostrar_identificador_fiscal: bool,
+        firma_habilitada: bool,
+        firma_nombre: str,
+        firma_cargo: str,
+        firma_identificador: str,
+        firma_texto_apoyo: str,
     ) -> None:
         resultado = self._servicio_configuracion.guardar_parametros_factura(
             titulo_documento=titulo_documento,
@@ -91,6 +96,11 @@ class ControladorConfiguracion:
             mostrar_telefono=mostrar_telefono,
             mostrar_direccion=mostrar_direccion,
             mostrar_identificador_fiscal=mostrar_identificador_fiscal,
+            firma_habilitada=firma_habilitada,
+            firma_nombre=firma_nombre,
+            firma_cargo=firma_cargo,
+            firma_identificador=firma_identificador,
+            firma_texto_apoyo=firma_texto_apoyo,
             actor_id=None if self._actor is None else self._actor.identificador,
         )
         self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)

@@ -121,6 +121,15 @@ class TestBarrios(unittest.TestCase):
         self.assertEqual(filas[1][0], "BR-001")
         self.assertEqual(filas[1][1], "Centro")
 
+    def test_no_permite_desactivar_barrio_con_relaciones(self) -> None:
+        barrio = self.servicio.listar().items[0]
+
+        resultado = self.servicio.cambiar_estado(barrio.identificador or 0, "ACTIVO")
+
+        self.assertFalse(resultado.exito)
+        self.assertEqual(resultado.codigo, "VALIDACION")
+        self.assertIn("abonados o casas", resultado.mensaje)
+
 
 if __name__ == "__main__":
     unittest.main()

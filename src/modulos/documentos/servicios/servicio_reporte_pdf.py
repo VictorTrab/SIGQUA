@@ -32,7 +32,8 @@ class ServicioReportePdf:
         lineas_encabezado: tuple[str, ...],
         generado_en: str | None = None,
     ) -> DTOReporteTabular:
-        marca_tiempo = generado_en or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        marca_tiempo = generado_en or self._fecha_emision_actual()
+        self._validar_fecha_emision_actual(marca_tiempo)
         return DTOReporteTabular(
             codigo_reporte=tabla.codigo,
             titulo=tabla.titulo,
@@ -68,3 +69,13 @@ class ServicioReportePdf:
             self._gestor_rutas.obtener_ruta_exportaciones_reportes()
             / f"{codigo_reporte}_{marca}.pdf"
         )
+
+    @staticmethod
+    def _fecha_emision_actual() -> str:
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    @staticmethod
+    def _validar_fecha_emision_actual(valor: str) -> None:
+        fecha_emision = datetime.strptime(valor, "%Y-%m-%d %H:%M:%S").date()
+        if fecha_emision != datetime.now().date():
+            raise ValueError("La fecha de emisión del reporte debe coincidir con la fecha actual.")

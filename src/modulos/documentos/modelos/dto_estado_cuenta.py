@@ -23,6 +23,8 @@ class CasaEstadoCuenta:
     direccion_casa: str
     estado_servicio: str
     meses_vencidos: int
+    dias_en_mora: int
+    prioridad: str
     vencimiento_mas_antiguo: str
     deuda_base: str
     recargo_mora: str
@@ -45,3 +47,8 @@ class DTOEstadoCuenta:
     total_deuda_base: str
     total_recargo_mora: str
     total_general: str
+    firma_habilitada: bool
+    firma_nombre: str
+    firma_cargo: str
+    firma_identificador: str
+    firma_texto_apoyo: str

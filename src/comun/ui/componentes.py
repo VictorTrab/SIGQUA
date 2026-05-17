@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -57,6 +58,13 @@ def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> 
         background: transparent;
         border: none;
     }}
+    QScrollArea,
+    QScrollArea > QWidget > QWidget,
+    QAbstractScrollArea,
+    QAbstractScrollArea > QWidget > QWidget {{
+        background: transparent;
+        border: none;
+    }}
     QFrame#bloqueDialogoSicap {{
         background: {color_fondo};
         border: 1px solid {paleta["borde_suave"]};
@@ -90,7 +98,7 @@ def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> 
         font-size: 13px;
         font-weight: 800;
     }}
-    QLineEdit, QComboBox, QPlainTextEdit {{
+    QLineEdit, QComboBox, QPlainTextEdit, QTextEdit, QTableWidget {{
         border: 1px solid {paleta["borde_medio"]};
         border-radius: 4px;
         background: {paleta["fondo_input"]};
@@ -98,9 +106,24 @@ def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> 
         padding: 8px 10px;
         font-size: 13px;
     }}
-    QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus {{
+    QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus {{
         border-color: {paleta["borde_foco_input"]};
         background: {paleta["fondo_input_focus"]};
+    }}
+    QTableWidget {{
+        padding: 0px;
+        gridline-color: {paleta["borde_suave"]};
+    }}
+    QTableWidget::item {{
+        padding: 6px 8px;
+    }}
+    QHeaderView::section {{
+        background: {paleta["fondo_tabla_header"]};
+        color: {paleta["texto_input"]};
+        border: none;
+        padding: 8px;
+        font-size: 12px;
+        font-weight: 800;
     }}
     QComboBox::drop-down {{
         border: none;

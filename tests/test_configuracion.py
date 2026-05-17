@@ -51,6 +51,8 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.factura.formato_salida, "HTML")
         self.assertEqual(estado.factura.titulo_documento, "RECIBO DE PAGO")
         self.assertEqual(estado.factura.etiqueta_copia, "ORIGINAL")
+        self.assertFalse(estado.factura.firma_habilitada)
+        self.assertEqual(estado.factura.firma_nombre, "")
         self.assertTrue(estado.factura.correlativo_actual.startswith("REC-"))
         self.assertEqual(estado.operacion.total_respaldos, 0)
         self.assertEqual(estado.informacion.version_sistema, "2.2.0")
@@ -110,6 +112,11 @@ class TestConfiguracion(unittest.TestCase):
             mostrar_telefono=True,
             mostrar_direccion=True,
             mostrar_identificador_fiscal=True,
+            firma_habilitada=True,
+            firma_nombre="Administracion SICAP",
+            firma_cargo="Encargado de caja",
+            firma_identificador="0801-01-0001",
+            firma_texto_apoyo="Documento validado para uso interno.",
             actor_id=1,
         )
         resultado_respaldo = self.servicio.guardar_operacion_respaldo(
@@ -125,7 +132,33 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.factura.texto_pie, "Conserve este comprobante.")
         self.assertEqual(estado.factura.formato_salida, "HTML")
         self.assertTrue(estado.factura.mostrar_identificador_fiscal)
+        self.assertTrue(estado.factura.firma_habilitada)
+        self.assertEqual(estado.factura.firma_nombre, "Administracion SICAP")
         self.assertTrue(estado.operacion.respaldo_automatico)
+
+    def test_no_permite_firma_habilitada_sin_nombre(self) -> None:
+        resultado = self.servicio.guardar_parametros_factura(
+            titulo_documento="RECIBO",
+            subtitulo_documento="",
+            texto_legal_superior="",
+            texto_pie="Pie",
+            texto_legal_inferior="",
+            etiqueta_copia="ORIGINAL",
+            formato_salida="pdf",
+            mostrar_correo=True,
+            mostrar_telefono=True,
+            mostrar_direccion=True,
+            mostrar_identificador_fiscal=False,
+            firma_habilitada=True,
+            firma_nombre="",
+            firma_cargo="Caja",
+            firma_identificador="",
+            firma_texto_apoyo="",
+            actor_id=1,
+        )
+
+        self.assertFalse(resultado.exito)
+        self.assertEqual(resultado.codigo, "VALIDACION")
 
     def test_no_permite_meses_corte_invalido(self) -> None:
         resultado = self.servicio.guardar_parametros_cobro(

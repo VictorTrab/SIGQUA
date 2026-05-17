@@ -980,30 +980,30 @@ class FlujoPagoMensual(QWidget):
                 font-weight: 800;
             }}
             QLabel#textoEstadoPasoPago {{
-                background-color: rgba(45, 59, 95, 0.42);
-                border: 1px solid rgba(96, 165, 250, 0.24);
+                background-color: rgba(44, 58, 92, 0.54);
+                border: 1px solid rgba(125, 170, 236, 0.28);
                 border-radius: 12px;
                 color: {paleta["texto_principal"]};
                 font-size: 12px;
                 padding: 10px 12px;
             }}
             QLabel#textoEstadoPasoPago[estado="error"] {{
-                background-color: {paleta["fondo_error"]};
-                border: 1px solid {paleta["borde_error"]};
+                background-color: rgba(166, 40, 40, 0.18);
+                border: 1px solid rgba(248, 113, 113, 0.36);
                 color: {paleta["texto_error"]};
             }}
             QLabel#textoEstadoPasoPago[estado="exito"] {{
-                background-color: {paleta["fondo_exito"]};
-                border: 1px solid {paleta["borde_exito"]};
+                background-color: rgba(18, 119, 97, 0.18);
+                border: 1px solid rgba(109, 241, 220, 0.34);
                 color: {paleta["texto_exito"]};
             }}
             QFrame#panelDiagnosticoPago[estadoVisual="error"] {{
-                background-color: rgba(180, 35, 24, 0.12);
-                border: 1px solid {paleta["borde_error"]};
+                background-color: rgba(144, 32, 32, 0.14);
+                border: 1px solid rgba(248, 113, 113, 0.30);
             }}
             QFrame#panelDiagnosticoPago[estadoVisual="exito"] {{
-                background-color: rgba(16, 120, 98, 0.12);
-                border: 1px solid {paleta["borde_exito"]};
+                background-color: rgba(16, 120, 98, 0.16);
+                border: 1px solid rgba(109, 241, 220, 0.28);
             }}
             QLabel#etiquetaMetricaPago,
             QLabel#labelCampoPago {{
@@ -1041,6 +1041,11 @@ class FlujoPagoMensual(QWidget):
                 color: {paleta["texto_principal"]};
                 gridline-color: transparent;
             }}
+            QTableWidget#tablaCasasPagoMensual QTableCornerButton::section,
+            QTableWidget#tablaCargosPagoMensual QTableCornerButton::section {{
+                background-color: {paleta["fondo_tabla_header"]};
+                border: none;
+            }}
             QTableWidget#tablaCasasPagoMensual::item,
             QTableWidget#tablaCargosPagoMensual::item {{
                 padding: 9px 12px;
@@ -1061,8 +1066,11 @@ class FlujoPagoMensual(QWidget):
                 background: transparent;
                 border: none;
             }}
+            QScrollArea > QWidget > QWidget {{
+                background: transparent;
+            }}
             QScrollBar:vertical {{
-                background: rgba(255, 255, 255, 0.04);
+                background: rgba(255, 255, 255, 0.06);
                 width: 10px;
                 border-radius: 5px;
                 margin: 2px;

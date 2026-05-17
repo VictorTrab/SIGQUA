@@ -58,6 +58,8 @@ class TestMorosidadReportes(unittest.TestCase):
         self.assertGreaterEqual(estado.resumen.deuda_total_centavos, estado.resumen.deuda_base_centavos)
         self.assertTrue(all(fila.deuda_total_centavos > 0 for fila in estado.pagina.items))
         self.assertTrue(all(fila.severidad in {"LEVE", "MEDIA", "SEVERA"} for fila in estado.pagina.items))
+        self.assertTrue(all(fila.prioridad in {"Baja", "Media", "Critica"} for fila in estado.pagina.items))
+        self.assertTrue(all(fila.dias_en_mora >= 0 for fila in estado.pagina.items))
 
     def test_morosidad_respeta_umbral_visual_configurable(self) -> None:
         with sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos()) as conexion:
@@ -136,6 +138,8 @@ class TestMorosidadReportes(unittest.TestCase):
         abonado_id = estado.pagina.items[0].abonado_id
         detalle = servicio.obtener_detalle(abonado_id)
         assert detalle is not None
+        self.assertGreaterEqual(detalle.casas[0].dias_en_mora, 0)
+        self.assertIn(detalle.casas[0].prioridad, {"Baja", "Media", "Critica"})
 
         resultado = servicio.emitir_documento_deuda(
             abonado_id=abonado_id,

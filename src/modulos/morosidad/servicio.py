@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from comun.configuracion.gestor_rutas import GestorRutas
 from modulos.documentos import ServicioEstadoCuenta
@@ -38,6 +38,11 @@ class ServicioMorosidad:
         "factura.mostrar_telefono",
         "factura.mostrar_direccion",
         "factura.mostrar_identificador_fiscal",
+        "documentos.firma_habilitada",
+        "documentos.firma_nombre",
+        "documentos.firma_cargo",
+        "documentos.firma_identificador",
+        "documentos.firma_texto_apoyo",
     )
     CLAVES_MORA_VISUAL = (
         "cobro.mora_leve_hasta_meses",
@@ -89,7 +94,18 @@ class ServicioMorosidad:
         return EstadoMorosidad(resumen=resumen, pagina=pagina_resultado, filtros=filtros)
 
     def obtener_detalle(self, abonado_id: int) -> DetalleMorosidad | None:
-        return self._repositorio_morosidad.obtener_detalle_abonado(abonado_id)
+        detalle = self._repositorio_morosidad.obtener_detalle_abonado(abonado_id)
+        if detalle is None:
+            return None
+        rangos = self.obtener_parametros_mora_visual()
+        casas = []
+        for casa in detalle.casas:
+            severidad = self._resolver_severidad(casa.meses_vencidos, rangos)
+            casa.prioridad = self.etiqueta_severidad(severidad)
+            casa.dias_en_mora = self._calcular_dias_en_mora(casa.vencimiento_mas_antiguo)
+            casas.append(casa)
+        detalle.casas = tuple(casas)
+        return detalle
 
     def emitir_documento_deuda(
         self,
@@ -116,6 +132,7 @@ class ServicioMorosidad:
                 lineas_encabezado=self._obtener_lineas_encabezado_documental(),
                 formateador_moneda=self.formatear_moneda,
                 formateador_fecha=self.formatear_fecha,
+                firma=self._obtener_configuracion_documental(),
             )
         except OSError as error:
             return ResultadoMorosidad(
@@ -161,23 +178,27 @@ class ServicioMorosidad:
     @staticmethod
     def etiqueta_severidad(severidad: str) -> str:
         etiquetas = {
-            FILTRO_MOROSIDAD_LEVE: "Mora leve",
-            FILTRO_MOROSIDAD_MEDIA: "Mora media",
-            FILTRO_MOROSIDAD_SEVERA: "Mora severa",
+            FILTRO_MOROSIDAD_LEVE: "Baja",
+            FILTRO_MOROSIDAD_MEDIA: "Media",
+            FILTRO_MOROSIDAD_SEVERA: "Critica",
         }
         return etiquetas.get(severidad, "Mora")
 
     def _aplicar_severidad(self, fila: FilaMorosidad, rangos: tuple[int, int]) -> FilaMorosidad:
-        leve, media = rangos
-        severidad = FILTRO_MOROSIDAD_SEVERA
-        if fila.meses_vencidos <= leve:
-            severidad = FILTRO_MOROSIDAD_LEVE
-        elif fila.meses_vencidos <= media:
-            severidad = FILTRO_MOROSIDAD_MEDIA
+        severidad = self._resolver_severidad(fila.meses_vencidos, rangos)
         fila.severidad = severidad
+        fila.prioridad = self.etiqueta_severidad(severidad)
+        fila.dias_en_mora = self._calcular_dias_en_mora(fila.vencimiento_mas_antiguo)
         return fila
 
     def _obtener_lineas_encabezado_documental(self) -> tuple[str, ...]:
+        return tuple(
+            ServicioComprobantePago.lineas_encabezado_desde_configuracion(
+                self._obtener_configuracion_documental()
+            )
+        )
+
+    def _obtener_configuracion_documental(self) -> object:
         valores = self._repositorio_morosidad.listar_parametros_configuracion(
             self.CLAVES_IDENTIDAD_DOCUMENTAL
         )
@@ -218,8 +239,33 @@ class ServicioMorosidad:
                 if valores.get("factura.mostrar_identificador_fiscal")
                 else "0"
             )
+            firma_habilitada = ServicioMorosidad._a_booleano(
+                valores.get("documentos.firma_habilitada").valor
+                if valores.get("documentos.firma_habilitada")
+                else "0"
+            )
+            firma_nombre = (
+                valores.get("documentos.firma_nombre").valor
+                if valores.get("documentos.firma_nombre")
+                else ""
+            )
+            firma_cargo = (
+                valores.get("documentos.firma_cargo").valor
+                if valores.get("documentos.firma_cargo")
+                else ""
+            )
+            firma_identificador = (
+                valores.get("documentos.firma_identificador").valor
+                if valores.get("documentos.firma_identificador")
+                else ""
+            )
+            firma_texto_apoyo = (
+                valores.get("documentos.firma_texto_apoyo").valor
+                if valores.get("documentos.firma_texto_apoyo")
+                else ""
+            )
 
-        return tuple(ServicioComprobantePago.lineas_encabezado_desde_configuracion(_ConfiguracionTemporal()))
+        return _ConfiguracionTemporal()
 
     @staticmethod
     def _a_booleano(valor: str) -> bool:
@@ -237,3 +283,22 @@ class ServicioMorosidad:
     @staticmethod
     def _extraer_nombre_archivo(ruta: str) -> str:
         return ruta.replace("\\", "/").split("/")[-1]
+
+    @staticmethod
+    def _calcular_dias_en_mora(vencimiento_mas_antiguo: str) -> int:
+        if not vencimiento_mas_antiguo:
+            return 0
+        try:
+            fecha_vencimiento = datetime.fromisoformat(vencimiento_mas_antiguo).date()
+        except ValueError:
+            return 0
+        return max(0, (date.today() - fecha_vencimiento).days)
+
+    @staticmethod
+    def _resolver_severidad(meses_vencidos: int, rangos: tuple[int, int]) -> str:
+        leve, media = rangos
+        if meses_vencidos <= leve:
+            return FILTRO_MOROSIDAD_LEVE
+        if meses_vencidos <= media:
+            return FILTRO_MOROSIDAD_MEDIA
+        return FILTRO_MOROSIDAD_SEVERA

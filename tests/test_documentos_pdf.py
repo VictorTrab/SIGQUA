@@ -90,6 +90,20 @@ class TestDocumentosPdf(unittest.TestCase):
         self.assertTrue(Path(ruta_pdf).exists())
         self.assertTrue(Path(ruta_pdf).read_bytes().startswith(b"%PDF"))
 
+    def test_servicio_reporte_pdf_rechaza_fecha_emision_fuera_del_dia_actual(self) -> None:
+        servicio_reportes = RepositorioReportesSQLite(self.gestor_base_datos)
+        estado = servicio_reportes.obtener_estado(fecha_desde="2026-01-01", fecha_hasta="2026-12-31")
+        tabla = next(tabla for tabla in estado.tablas if tabla.codigo == "casas_estado")
+
+        with self.assertRaises(ValueError):
+            self.servicio_reporte_pdf.construir_dto(
+                tabla=tabla,
+                fecha_desde="2026-01-01",
+                fecha_hasta="2026-12-31",
+                lineas_encabezado=("SICAP",),
+                generado_en="2020-01-01 08:00:00",
+            )
+
     def _obtener_casa_por_dni(self, dni: str) -> int:
         with closing(sqlite3.connect(self.ruta_db)) as conexion:
             fila = conexion.execute(

@@ -47,6 +47,11 @@ class ConfiguracionDocumentoRecibo:
     texto_pie: str = ""
     texto_legal_inferior: str = ""
     etiqueta_copia: str = ""
+    firma_habilitada: bool = False
+    firma_nombre: str = ""
+    firma_cargo: str = ""
+    firma_identificador: str = ""
+    firma_texto_apoyo: str = ""
 
 
 @dataclass(slots=True)
@@ -81,6 +86,7 @@ def crear_documento_recibo_termico(datos: DatosDocumentoRecibo) -> QTextDocument
     _insertar_texto_centrado(cursor, datos.configuracion.texto_pie, 10, False, 2.5)
     _insertar_texto_centrado(cursor, datos.configuracion.texto_legal_inferior, 8.8, False, 1.8)
     _insertar_texto_centrado(cursor, datos.configuracion.etiqueta_copia, 10, True, 1.5, Qt.AlignmentFlag.AlignRight)
+    _insertar_firma(cursor, datos.configuracion)
 
     documento.adjustSize()
     return documento
@@ -257,6 +263,23 @@ def _insertar_separador(cursor: QTextCursor) -> None:
     formato_texto.setFontPointSize(8)
     subcursor.insertText("─" * 32, formato_texto)
     cursor.movePosition(QTextCursor.MoveOperation.End)
+
+
+def _insertar_firma(cursor: QTextCursor, configuracion: ConfiguracionDocumentoRecibo) -> None:
+    if not configuracion.firma_habilitada:
+        return
+    _insertar_bloque(cursor, "______________________________", 9, False, 0.8, Qt.AlignmentFlag.AlignCenter)
+    _insertar_texto_centrado(cursor, configuracion.firma_nombre, 9, True, 0.4)
+    _insertar_texto_centrado(cursor, configuracion.firma_cargo, 8.5, False, 0.4)
+    if configuracion.firma_identificador.strip():
+        _insertar_texto_centrado(
+            cursor,
+            f"Identificador: {configuracion.firma_identificador}",
+            8.3,
+            False,
+            0.4,
+        )
+    _insertar_texto_centrado(cursor, configuracion.firma_texto_apoyo, 8.2, False, 0.8)
 
 
 def _escribir_celda(tabla, fila: int, columna: int, texto: str, *, negrita: bool, alineacion: Qt.AlignmentFlag) -> None:  # type: ignore[no-untyped-def]

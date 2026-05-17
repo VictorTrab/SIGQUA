@@ -164,6 +164,11 @@ class ConfiguracionReciboPago:
     mostrar_telefono: bool
     mostrar_direccion: bool
     mostrar_identificador_fiscal: bool
+    firma_habilitada: bool
+    firma_nombre: str
+    firma_cargo: str
+    firma_identificador: str
+    firma_texto_apoyo: str
 
 
 @dataclass(slots=True)

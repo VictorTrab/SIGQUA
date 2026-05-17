@@ -554,6 +554,11 @@ class RepositorioPagosSQLite:
             "factura.mostrar_telefono",
             "factura.mostrar_direccion",
             "factura.mostrar_identificador_fiscal",
+            "documentos.firma_habilitada",
+            "documentos.firma_nombre",
+            "documentos.firma_cargo",
+            "documentos.firma_identificador",
+            "documentos.firma_texto_apoyo",
         )
         marcadores = ", ".join("?" for _ in claves)
         consulta = f"""
@@ -584,6 +589,11 @@ class RepositorioPagosSQLite:
             mostrar_identificador_fiscal=self._a_booleano(
                 valores.get("factura.mostrar_identificador_fiscal", "0")
             ),
+            firma_habilitada=self._a_booleano(valores.get("documentos.firma_habilitada", "0")),
+            firma_nombre=valores.get("documentos.firma_nombre", ""),
+            firma_cargo=valores.get("documentos.firma_cargo", ""),
+            firma_identificador=valores.get("documentos.firma_identificador", ""),
+            firma_texto_apoyo=valores.get("documentos.firma_texto_apoyo", ""),
         )
 
     def actualizar_documento_comprobante(

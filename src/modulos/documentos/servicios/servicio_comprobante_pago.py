@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from comun.configuracion.gestor_rutas import GestorRutas
@@ -35,6 +36,8 @@ class ServicioComprobantePago:
         formateador_hora: callable,
         etiqueta_tipo_pago: callable,
     ) -> DTOComprobantePago:
+        marca_emision = self._fecha_emision_actual()
+        self._validar_fecha_emision_actual(marca_emision)
         return DTOComprobantePago(
             numero_comprobante=comprobante.numero_comprobante,
             lineas_encabezado=tuple(self.lineas_encabezado_desde_configuracion(configuracion)),
@@ -44,8 +47,8 @@ class ServicioComprobantePago:
             texto_pie=configuracion.texto_pie,
             texto_legal_inferior=configuracion.texto_legal_inferior,
             etiqueta_copia=configuracion.etiqueta_copia,
-            fecha=formateador_fecha(comprobante.generado_en),
-            hora=formateador_hora(comprobante.generado_en),
+            fecha=formateador_fecha(marca_emision),
+            hora=formateador_hora(marca_emision),
             tipo_comprobante=etiqueta_tipo_pago(comprobante.tipo_comprobante),
             casa_codigo=comprobante.casa_codigo,
             abonado_nombre=comprobante.abonado_nombre,
@@ -64,6 +67,11 @@ class ServicioComprobantePago:
             ),
             total_pagado=formateador_moneda(comprobante.total_pagado_centavos),
             saldo_posterior=formateador_moneda(comprobante.saldo_posterior_centavos),
+            firma_habilitada=configuracion.firma_habilitada,
+            firma_nombre=configuracion.firma_nombre,
+            firma_cargo=configuracion.firma_cargo,
+            firma_identificador=configuracion.firma_identificador,
+            firma_texto_apoyo=configuracion.firma_texto_apoyo,
         )
 
     def generar_pdf(
@@ -124,3 +132,13 @@ class ServicioComprobantePago:
             else:
                 resultado.append((detalle.strip(), ""))
         return tuple(resultado)
+
+    @staticmethod
+    def _fecha_emision_actual() -> str:
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    @staticmethod
+    def _validar_fecha_emision_actual(valor: str) -> None:
+        fecha_emision = datetime.strptime(valor, "%Y-%m-%d %H:%M:%S").date()
+        if fecha_emision != datetime.now().date():
+            raise ValueError("La fecha de emisión del comprobante debe coincidir con la fecha actual.")

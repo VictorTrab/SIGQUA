@@ -73,6 +73,11 @@ class VistaConfiguracion(QWidget):
         bool,
         bool,
         bool,
+        bool,
+        str,
+        str,
+        str,
+        str,
     )
     guardar_parametros_cobro_solicitado = Signal(int, bool, int, bool, int, bool, int, int, int)
     guardar_operacion_respaldo_solicitado = Signal(bool)
@@ -143,6 +148,11 @@ class VistaConfiguracion(QWidget):
         self._check_mostrar_telefono.setChecked(estado.factura.mostrar_telefono)
         self._check_mostrar_direccion.setChecked(estado.factura.mostrar_direccion)
         self._check_mostrar_identificador.setChecked(estado.factura.mostrar_identificador_fiscal)
+        self._check_firma_habilitada.setChecked(estado.factura.firma_habilitada)
+        self._campo_firma_nombre.setText(estado.factura.firma_nombre)
+        self._campo_firma_cargo.setText(estado.factura.firma_cargo)
+        self._campo_firma_identificador.setText(estado.factura.firma_identificador)
+        self._campo_firma_texto_apoyo.setPlainText(estado.factura.firma_texto_apoyo)
         self._valor_total_comprobantes.setText(str(estado.factura.total_comprobantes_emitidos))
         self._valor_proximo_correlativo.setText(estado.factura.proximo_correlativo)
 
@@ -343,6 +353,12 @@ class VistaConfiguracion(QWidget):
         self._check_mostrar_telefono = QCheckBox("Mostrar telefono institucional")
         self._check_mostrar_direccion = QCheckBox("Mostrar direccion institucional")
         self._check_mostrar_identificador = QCheckBox("Mostrar identificador fiscal")
+        self._check_firma_habilitada = QCheckBox("Habilitar firma compartida en documentos")
+        self._campo_firma_nombre = QLineEdit()
+        self._campo_firma_cargo = QLineEdit()
+        self._campo_firma_identificador = QLineEdit()
+        self._campo_firma_texto_apoyo = QPlainTextEdit()
+        self._campo_firma_texto_apoyo.setFixedHeight(70)
         self._valor_total_comprobantes = self._crear_valor_seguridad()
         self._valor_proximo_correlativo = self._crear_valor_seguridad()
 
@@ -384,6 +400,17 @@ class VistaConfiguracion(QWidget):
                 self._crear_bloque_campo("Formato de salida", self._combo_formato_salida),
             ],
         )
+        panel_firma = self._crear_panel(
+            "Firma compartida",
+            "Se reutiliza en recibos de pago y documentos de deuda generados desde el backend documental.",
+            [
+                self._check_firma_habilitada,
+                self._crear_bloque_campo("Nombre visible", self._campo_firma_nombre),
+                self._crear_bloque_campo("Cargo", self._campo_firma_cargo),
+                self._crear_bloque_campo("Identificador", self._campo_firma_identificador),
+                self._crear_bloque_campo("Texto de apoyo", self._campo_firma_texto_apoyo),
+            ],
+        )
 
         panel_preview = self._crear_panel(
             "Vista previa operativa",
@@ -414,11 +441,17 @@ class VistaConfiguracion(QWidget):
                 self._check_mostrar_telefono.isChecked(),
                 self._check_mostrar_direccion.isChecked(),
                 self._check_mostrar_identificador.isChecked(),
+                self._check_firma_habilitada.isChecked(),
+                self._campo_firma_nombre.text(),
+                self._campo_firma_cargo.text(),
+                self._campo_firma_identificador.text(),
+                self._campo_firma_texto_apoyo.toPlainText(),
             )
         )
 
         contenido = self._crear_contenedor_scroll()
         contenido.widget().layout().addWidget(panel_factura)
+        contenido.widget().layout().addWidget(panel_firma)
         contenido.widget().layout().addWidget(panel_preview)
         contenido.widget().layout().addWidget(panel_resumen)
         contenido.widget().layout().addWidget(
@@ -630,6 +663,11 @@ class VistaConfiguracion(QWidget):
                     texto_pie=estado.factura.texto_pie or "",
                     texto_legal_inferior=estado.factura.texto_legal_inferior or "",
                     etiqueta_copia=estado.factura.etiqueta_copia or "ORIGINAL",
+                    firma_habilitada=estado.factura.firma_habilitada,
+                    firma_nombre=estado.factura.firma_nombre,
+                    firma_cargo=estado.factura.firma_cargo,
+                    firma_identificador=estado.factura.firma_identificador,
+                    firma_texto_apoyo=estado.factura.firma_texto_apoyo,
                 ),
                 bloque_comprobante=(
                     ("Proximo recibo", estado.factura.proximo_correlativo),

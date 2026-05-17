@@ -267,6 +267,15 @@ class GeneradorPdfReportLab:
             elementos.append(Spacer(1, 1.5 * mm))
         if dto.etiqueta_copia.strip():
             elementos.append(Paragraph(self._escapar(dto.etiqueta_copia), self._estilos["SicapPieTicket"]))
+        elementos.extend(
+            self._construir_bloque_firma(
+                dto.firma_habilitada,
+                dto.firma_nombre,
+                dto.firma_cargo,
+                dto.firma_identificador,
+                dto.firma_texto_apoyo,
+            )
+        )
         return elementos
 
     def _construir_elementos_reporte(self, dto: DTOReporteTabular) -> list[object]:
@@ -322,6 +331,15 @@ class GeneradorPdfReportLab:
         )
         elementos.append(Spacer(1, 4 * mm))
         elementos.append(Paragraph(self._escapar(dto.observacion), self._estilos["SicapMetaReporte"]))
+        elementos.extend(
+            self._construir_bloque_firma(
+                dto.firma_habilitada,
+                dto.firma_nombre,
+                dto.firma_cargo,
+                dto.firma_identificador,
+                dto.firma_texto_apoyo,
+            )
+        )
         return elementos
 
     def _construir_bloque_casa_estado_cuenta(self, casa: object) -> list[object]:
@@ -339,7 +357,8 @@ class GeneradorPdfReportLab:
                     Paragraph(self._escapar(casa.direccion_casa), self._estilos["SicapTextoTicket"]),
                     Paragraph(
                         self._escapar(
-                            f"Meses vencidos: {casa.meses_vencidos} | Más antiguo: {casa.vencimiento_mas_antiguo}"
+                            f"Meses vencidos: {casa.meses_vencidos} | Días en mora: {casa.dias_en_mora} | "
+                            f"Prioridad: {casa.prioridad} | Más antiguo: {casa.vencimiento_mas_antiguo}"
                         ),
                         self._estilos["SicapTextoTicket"],
                     ),
@@ -419,6 +438,43 @@ class GeneradorPdfReportLab:
             )
         )
         return tabla
+
+    def _construir_bloque_firma(
+        self,
+        habilitada: bool,
+        nombre: str,
+        cargo: str,
+        identificador: str,
+        texto_apoyo: str,
+    ) -> list[object]:
+        if not habilitada:
+            return []
+        elementos: list[object] = [Spacer(1, 6 * mm)]
+        linea = Table([[""]], colWidths=[70 * mm], hAlign="CENTER")
+        linea.setStyle(
+            TableStyle(
+                [
+                    ("LINEABOVE", (0, 0), (0, 0), 0.8, colors.black),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        elementos.append(linea)
+        if nombre.strip():
+            elementos.append(Paragraph(self._escapar(nombre), self._estilos["SicapMetaReporte"]))
+        if cargo.strip():
+            elementos.append(Paragraph(self._escapar(cargo), self._estilos["SicapMetaReporte"]))
+        if identificador.strip():
+            elementos.append(
+                Paragraph(
+                    self._escapar(f"Identificador: {identificador}"),
+                    self._estilos["SicapMetaReporte"],
+                )
+            )
+        if texto_apoyo.strip():
+            elementos.append(Paragraph(self._escapar(texto_apoyo), self._estilos["SicapMetaReporte"]))
+        return elementos
 
     def _crear_tabla_detalle(self, lineas: tuple[LineaDetalleComprobantePago, ...]) -> Table:
         data = [

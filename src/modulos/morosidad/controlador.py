@@ -102,5 +102,4 @@ class ControladorMorosidad:
             pagina=estado.pagina,
             formatear_moneda=self._servicio_morosidad.formatear_moneda,
             formatear_fecha=self._servicio_morosidad.formatear_fecha,
-            etiqueta_severidad=self._servicio_morosidad.etiqueta_severidad,
         )

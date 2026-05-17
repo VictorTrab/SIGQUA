@@ -59,6 +59,9 @@ class RepositorioBarrios(Protocol):
     def cambiar_estado(self, barrio_id: int, estado: str) -> None:
         """Activa o inactiva un barrio."""
 
+    def contar_relaciones_activas(self, barrio_id: int) -> tuple[int, int]:
+        """Cuenta abonados y casas visibles vinculadas al barrio."""
+
 
 class RepositorioBarriosSQLite:
     """Repositorio SQLite para barrios."""
@@ -205,6 +208,26 @@ class RepositorioBarriosSQLite:
                     """,
                     (estado, barrio_id),
                 )
+
+    def contar_relaciones_activas(self, barrio_id: int) -> tuple[int, int]:
+        consulta = """
+            SELECT
+                (
+                    SELECT COUNT(*)
+                    FROM abonados
+                    WHERE barrio_id = ? AND eliminado_en IS NULL
+                ) AS total_abonados,
+                (
+                    SELECT COUNT(*)
+                    FROM casas
+                    WHERE barrio_id = ? AND eliminado_en IS NULL
+                ) AS total_casas;
+        """
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            fila = conexion.execute(consulta, (barrio_id, barrio_id)).fetchone()
+        if fila is None:
+            return 0, 0
+        return int(fila["total_abonados"] or 0), int(fila["total_casas"] or 0)
 
     def _construir_filtros(
         self,

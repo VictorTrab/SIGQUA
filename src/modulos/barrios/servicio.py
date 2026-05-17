@@ -87,6 +87,14 @@ class ServicioBarrios:
 
     def cambiar_estado(self, barrio_id: int, estado_actual: str) -> ResultadoGestionBarrios:
         nuevo_estado = "INACTIVO" if estado_actual == "ACTIVO" else "ACTIVO"
+        if nuevo_estado == "INACTIVO":
+            total_abonados, total_casas = self.repositorio_barrios.contar_relaciones_activas(barrio_id)
+            if total_abonados > 0 or total_casas > 0:
+                return ResultadoGestionBarrios(
+                    False,
+                    "No se puede desactivar el barrio mientras existan abonados o casas vinculadas.",
+                    "VALIDACION",
+                )
         self.repositorio_barrios.cambiar_estado(barrio_id, nuevo_estado)
         return ResultadoGestionBarrios(True, f"Barrio marcado como {nuevo_estado.lower()}.", "OK")
 

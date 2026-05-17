@@ -63,6 +63,11 @@ class FacturaConfiguracion:
     mostrar_direccion: bool
     mostrar_identificador_fiscal: bool
     formato_salida: str
+    firma_habilitada: bool
+    firma_nombre: str
+    firma_cargo: str
+    firma_identificador: str
+    firma_texto_apoyo: str
     correlativo_actual: str
     proximo_correlativo: str
     ultimo_comprobante_emitido: str

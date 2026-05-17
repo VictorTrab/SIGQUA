@@ -50,6 +50,11 @@ CLAVES_FACTURA = (
     "factura.mostrar_direccion",
     "factura.mostrar_identificador_fiscal",
     "factura.formato_salida",
+    "documentos.firma_habilitada",
+    "documentos.firma_nombre",
+    "documentos.firma_cargo",
+    "documentos.firma_identificador",
+    "documentos.firma_texto_apoyo",
 )
 CLAVES_SISTEMA = (
     "sistema.nombre",
@@ -203,6 +208,31 @@ class ServicioConfiguracion:
                 if "factura.formato_salida" in parametros
                 else "HTML"
             ),
+            firma_habilitada=self._a_booleano(
+                parametros.get("documentos.firma_habilitada").valor
+                if "documentos.firma_habilitada" in parametros
+                else "0"
+            ),
+            firma_nombre=(
+                parametros.get("documentos.firma_nombre").valor
+                if "documentos.firma_nombre" in parametros
+                else ""
+            ),
+            firma_cargo=(
+                parametros.get("documentos.firma_cargo").valor
+                if "documentos.firma_cargo" in parametros
+                else ""
+            ),
+            firma_identificador=(
+                parametros.get("documentos.firma_identificador").valor
+                if "documentos.firma_identificador" in parametros
+                else ""
+            ),
+            firma_texto_apoyo=(
+                parametros.get("documentos.firma_texto_apoyo").valor
+                if "documentos.firma_texto_apoyo" in parametros
+                else ""
+            ),
             correlativo_actual=self._formatear_correlativo(correlativo_actual),
             proximo_correlativo=self._formatear_correlativo(correlativo_actual + 1),
             ultimo_comprobante_emitido=(
@@ -321,6 +351,11 @@ class ServicioConfiguracion:
         mostrar_telefono: bool,
         mostrar_direccion: bool,
         mostrar_identificador_fiscal: bool,
+        firma_habilitada: bool,
+        firma_nombre: str,
+        firma_cargo: str,
+        firma_identificador: str,
+        firma_texto_apoyo: str,
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
         titulo_documento = titulo_documento.strip()
@@ -330,6 +365,10 @@ class ServicioConfiguracion:
         texto_legal_inferior = texto_legal_inferior.strip()
         etiqueta_copia = etiqueta_copia.strip()
         formato_salida = formato_salida.strip().upper()
+        firma_nombre = firma_nombre.strip()
+        firma_cargo = firma_cargo.strip()
+        firma_identificador = firma_identificador.strip()
+        firma_texto_apoyo = firma_texto_apoyo.strip()
 
         if not titulo_documento:
             return ResultadoGestionConfiguracion(
@@ -355,6 +394,12 @@ class ServicioConfiguracion:
                 "Selecciona un formato de salida valido.",
                 "VALIDACION",
             )
+        if firma_habilitada and not firma_nombre:
+            return ResultadoGestionConfiguracion(
+                False,
+                "Indica el nombre visible de la firma compartida.",
+                "VALIDACION",
+            )
         try:
             self._repositorio_configuracion.actualizar_valores(
                 {
@@ -371,6 +416,11 @@ class ServicioConfiguracion:
                     "factura.mostrar_identificador_fiscal": (
                         "1" if mostrar_identificador_fiscal else "0"
                     ),
+                    "documentos.firma_habilitada": "1" if firma_habilitada else "0",
+                    "documentos.firma_nombre": firma_nombre,
+                    "documentos.firma_cargo": firma_cargo,
+                    "documentos.firma_identificador": firma_identificador,
+                    "documentos.firma_texto_apoyo": firma_texto_apoyo,
                 },
                 actor_id=actor_id,
             )

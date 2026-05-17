@@ -37,6 +37,8 @@ class FilaMorosidad:
     recargo_mora_centavos: int
     deuda_total_centavos: int
     vencimiento_mas_antiguo: str
+    dias_en_mora: int = 0
+    prioridad: str = "Baja"
     severidad: str = FILTRO_MOROSIDAD_LEVE
 
 
@@ -104,7 +106,9 @@ class CasaDetalleMorosidad:
     recargo_mora_centavos: int
     deuda_total_centavos: int
     vencimiento_mas_antiguo: str
-    lineas_detalle: tuple[LineaDetalleMorosidad, ...]
+    dias_en_mora: int = 0
+    prioridad: str = "Baja"
+    lineas_detalle: tuple[LineaDetalleMorosidad, ...] = ()
 
 
 @dataclass(slots=True)

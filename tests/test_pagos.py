@@ -71,6 +71,9 @@ class TestPagos(unittest.TestCase):
             version_009 = conexion.execute(
                 "SELECT 1 FROM esquema_migraciones WHERE version = '009' LIMIT 1;"
             ).fetchone()
+            version_011 = conexion.execute(
+                "SELECT 1 FROM esquema_migraciones WHERE version = '011' LIMIT 1;"
+            ).fetchone()
             deposito = conexion.execute(
                 """
                 SELECT requiere_referencia
@@ -104,10 +107,40 @@ class TestPagos(unittest.TestCase):
         self.assertIsNotNone(version)
         self.assertIsNotNone(version_008)
         self.assertIsNotNone(version_009)
+        self.assertIsNotNone(version_011)
         self.assertIsNotNone(deposito)
         self.assertEqual(deposito[0], 1)
         self.assertIsNotNone(correlativo)
         self.assertEqual(titulo_documento[0], "RECIBO DE PAGO")
+
+    def test_configuracion_recibo_expone_firma_compartida(self) -> None:
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            conexion.execute(
+                """
+                UPDATE configuracion_sistema
+                SET valor = CASE clave
+                    WHEN 'documentos.firma_habilitada' THEN '1'
+                    WHEN 'documentos.firma_nombre' THEN 'Tesoreria SICAP'
+                    WHEN 'documentos.firma_cargo' THEN 'Encargado'
+                    WHEN 'documentos.firma_identificador' THEN 'ID-01'
+                    WHEN 'documentos.firma_texto_apoyo' THEN 'Firma operativa'
+                    ELSE valor
+                END
+                WHERE clave IN (
+                    'documentos.firma_habilitada',
+                    'documentos.firma_nombre',
+                    'documentos.firma_cargo',
+                    'documentos.firma_identificador',
+                    'documentos.firma_texto_apoyo'
+                );
+                """
+            )
+            conexion.commit()
+
+        configuracion = self.servicio.obtener_configuracion_recibo()
+
+        self.assertTrue(configuracion.firma_habilitada)
+        self.assertEqual(configuracion.firma_nombre, "Tesoreria SICAP")
 
     def test_mensualidad_cubre_primero_el_cargo_mas_antiguo(self) -> None:
         casa_id = self._obtener_casa_por_dni("0801199000022")

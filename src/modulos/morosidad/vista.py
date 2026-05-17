@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Callable
 
 from PySide6.QtCore import QDate, QElapsedTimer, QEvent, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
@@ -246,7 +245,8 @@ class DialogoDetalleMorosidad(DialogoBaseSicap):
         titulo.setObjectName("tituloSeccionMorosidad")
         detalle = QLabel(
             f"{casa.direccion_casa or 'Sin referencia'} | Estado {casa.estado_servicio} | "
-            f"Vencido desde {self._formateador_fecha(casa.vencimiento_mas_antiguo)}"
+            f"Vencido desde {self._formateador_fecha(casa.vencimiento_mas_antiguo)} | "
+            f"{casa.dias_en_mora} dia(s) en mora | Prioridad {casa.prioridad}"
         )
         detalle.setObjectName("descripcionSeccionMorosidad")
         detalle.setWordWrap(True)
@@ -268,6 +268,8 @@ class DialogoDetalleMorosidad(DialogoBaseSicap):
             "Totales de la casa",
             (
                 ("Meses vencidos", str(casa.meses_vencidos)),
+                ("Dias en mora", str(casa.dias_en_mora)),
+                ("Prioridad", casa.prioridad),
                 ("Deuda base", self._formateador_moneda(casa.deuda_base_centavos)),
                 ("Recargo mora", self._formateador_moneda(casa.recargo_mora_centavos)),
                 ("Total casa", self._formateador_moneda(casa.deuda_total_centavos)),
@@ -464,7 +466,6 @@ class VistaMorosidad(QWidget):
         pagina: PaginaMorosidad,
         formatear_moneda: Callable[[int], str],
         formatear_fecha: Callable[[str], str],
-        etiqueta_severidad: Callable[[str], str],
     ) -> None:
         self._tabla.setRowCount(len(pagina.items))
         self._fila_por_abonado.clear()
@@ -475,7 +476,8 @@ class VistaMorosidad(QWidget):
                 item.abonado_nombre,
                 item.barrio_nombre,
                 item.meses_vencidos,
-                etiqueta_severidad(item.severidad),
+                item.dias_en_mora,
+                item.prioridad,
                 formatear_moneda(item.deuda_total_centavos),
                 formatear_fecha(item.vencimiento_mas_antiguo),
             )
@@ -483,8 +485,7 @@ class VistaMorosidad(QWidget):
                 tabla_item = crear_item_tabla(valor)
                 tabla_item.setData(Qt.ItemDataRole.UserRole, item.abonado_id)
                 self._tabla.setItem(fila, columna, tabla_item)
-            self._tabla.setCellWidget(fila, 7, self._crear_acciones_fila(item.abonado_id))
-            self._aplicar_tinte_fila(fila, item.severidad)
+            self._tabla.setCellWidget(fila, 8, self._crear_acciones_fila(item.abonado_id))
         self._tabla.resizeRowsToContents()
         self._label_paginacion.setText(
             f"Mostrando {pagina.indice_inicio}-{pagina.indice_fin} de {pagina.total_registros} registros"
@@ -573,9 +574,9 @@ class VistaMorosidad(QWidget):
         self._botones_filtro: dict[str, QPushButton] = {}
         for codigo, etiqueta in (
             (FILTRO_MOROSIDAD_TODOS, "Todos"),
-            (FILTRO_MOROSIDAD_LEVE, "Leve"),
+            (FILTRO_MOROSIDAD_LEVE, "Baja"),
             (FILTRO_MOROSIDAD_MEDIA, "Media"),
-            (FILTRO_MOROSIDAD_SEVERA, "Severa"),
+            (FILTRO_MOROSIDAD_SEVERA, "Critica"),
         ):
             boton = QPushButton(etiqueta)
             boton.setCheckable(True)
@@ -599,14 +600,14 @@ class VistaMorosidad(QWidget):
         self._tabla = QTableWidget()
         configurar_tabla_operativa(
             self._tabla,
-            ["Casa", "Abonado", "Barrio", "Meses", "Severidad", "Total", "Mas antiguo", "Acciones"],
+            ["Casa", "Abonado", "Barrio", "Meses", "Dias", "Prioridad", "Total", "Mas antiguo", "Acciones"],
         )
         self._tabla.setObjectName("tablaMorosidad")
         self._tabla.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._tabla.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._tabla.verticalHeader().setDefaultSectionSize(52)
         self._tabla.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self._tabla.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
+        self._tabla.horizontalHeader().setSectionResizeMode(8, QHeaderView.ResizeMode.ResizeToContents)
         layout_tabla.addWidget(self._tabla)
 
         fila_pie = QHBoxLayout()
@@ -638,17 +639,6 @@ class VistaMorosidad(QWidget):
         layout.addWidget(boton_emitir)
         layout.addStretch(1)
         return contenedor
-
-    def _aplicar_tinte_fila(self, fila: int, severidad: str) -> None:
-        color = QColor(255, 246, 190, 70)
-        if severidad == FILTRO_MOROSIDAD_MEDIA:
-            color = QColor(251, 191, 36, 70)
-        elif severidad == FILTRO_MOROSIDAD_SEVERA:
-            color = QColor(248, 113, 113, 70)
-        for columna in range(7):
-            item = self._tabla.item(fila, columna)
-            if item is not None:
-                item.setBackground(QBrush(color))
 
     def _emitir_filtro_texto(self) -> None:
         self.filtro_texto_cambiado.emit(self._input_busqueda.text().strip())

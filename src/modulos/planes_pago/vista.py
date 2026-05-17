@@ -142,8 +142,8 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
         super().__init__(parent)
         self._casas = list(casas)
         self._plan = plan
-        self.setMinimumWidth(680)
-        self.setMinimumHeight(620)
+        self.setMinimumWidth(620)
+        self.setMinimumHeight(520)
         self._construir_ui()
 
     def obtener_formulario(self) -> FormularioPlanPago:
@@ -209,7 +209,7 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
         self._campo_cantidad = QLineEdit()
         self._campo_cantidad.setPlaceholderText("2")
         self._campo_observaciones = QPlainTextEdit()
-        self._campo_observaciones.setFixedHeight(90)
+        self._campo_observaciones.setFixedHeight(66)
 
         if self._plan is not None:
             indice_casa = self._combo_casa.findData(self._plan.casa_id)
@@ -226,7 +226,7 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
 
         grilla = QGridLayout()
         grilla.setHorizontalSpacing(10)
-        grilla.setVerticalSpacing(10)
+        grilla.setVerticalSpacing(8)
         grilla.addWidget(self._crear_bloque("Casa asociada", self._combo_casa), 0, 0, 1, 2)
         grilla.addWidget(self._crear_bloque("Tipo de plan", self._combo_tipo_plan), 1, 0)
         grilla.addWidget(self._crear_bloque("Concepto financiado", self._combo_concepto), 1, 1)
@@ -286,8 +286,8 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
         panel = QFrame()
         panel.setObjectName("bloqueDialogoSicap")
         layout_panel = QVBoxLayout(panel)
-        layout_panel.setContentsMargins(14, 14, 14, 14)
-        layout_panel.setSpacing(10)
+        layout_panel.setContentsMargins(12, 12, 12, 12)
+        layout_panel.setSpacing(8)
         label_titulo = QLabel(titulo)
         label_titulo.setObjectName("etiquetaDatoDialogoSicap")
         label_descripcion = QLabel(descripcion)

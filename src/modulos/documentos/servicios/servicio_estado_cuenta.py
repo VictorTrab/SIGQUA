@@ -32,6 +32,7 @@ class ServicioEstadoCuenta:
         lineas_encabezado: tuple[str, ...],
         formateador_moneda: callable,
         formateador_fecha: callable,
+        firma: object | None = None,
         ruta_destino: str | None = None,
     ) -> str:
         dto = self.construir_dto(
@@ -40,6 +41,7 @@ class ServicioEstadoCuenta:
             lineas_encabezado=lineas_encabezado,
             formateador_moneda=formateador_moneda,
             formateador_fecha=formateador_fecha,
+            firma=firma,
         )
         ruta = ruta_destino or self.ruta_sugerida(dto.abonado_nombre)
         return self._generador_pdf.generar_estado_cuenta_operativo(dto, ruta)
@@ -51,6 +53,7 @@ class ServicioEstadoCuenta:
         lineas_encabezado: tuple[str, ...],
         formateador_moneda: callable,
         formateador_fecha: callable,
+        firma: object | None = None,
     ) -> DTOEstadoCuenta:
         casas_fuente = tuple(
             casa
@@ -60,14 +63,15 @@ class ServicioEstadoCuenta:
         deuda_base = sum(casa.deuda_base_centavos for casa in casas_fuente)
         recargo = sum(casa.recargo_mora_centavos for casa in casas_fuente)
         total = sum(casa.deuda_total_centavos for casa in casas_fuente)
-        generado_en = datetime.now().strftime("%d/%m/%Y %H:%M")
+        marca_emision = self._fecha_emision_actual()
+        self._validar_fecha_emision_actual(marca_emision)
         return DTOEstadoCuenta(
             titulo="DOCUMENTO DE DEUDA",
             subtitulo="Detalle operativo generado desde morosidad",
             lineas_encabezado=lineas_encabezado,
             abonado_nombre=getattr(detalle, "abonado_nombre", ""),
             abonado_dni=getattr(detalle, "abonado_dni", ""),
-            generado_en=generado_en,
+            generado_en=datetime.strptime(marca_emision, "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M"),
             observacion=(
                 "Documento de consulta operativa. Los montos reflejan cargos vencidos y recargos "
                 "vigentes al momento de la emision."
@@ -79,6 +83,8 @@ class ServicioEstadoCuenta:
                     direccion_casa=casa.direccion_casa or "Sin referencia",
                     estado_servicio=casa.estado_servicio,
                     meses_vencidos=casa.meses_vencidos,
+                    dias_en_mora=getattr(casa, "dias_en_mora", 0),
+                    prioridad=getattr(casa, "prioridad", "Baja"),
                     vencimiento_mas_antiguo=formateador_fecha(casa.vencimiento_mas_antiguo),
                     deuda_base=formateador_moneda(casa.deuda_base_centavos),
                     recargo_mora=formateador_moneda(casa.recargo_mora_centavos),
@@ -97,6 +103,11 @@ class ServicioEstadoCuenta:
             total_deuda_base=formateador_moneda(deuda_base),
             total_recargo_mora=formateador_moneda(recargo),
             total_general=formateador_moneda(total),
+            firma_habilitada=bool(getattr(firma, "firma_habilitada", False)),
+            firma_nombre=str(getattr(firma, "firma_nombre", "")),
+            firma_cargo=str(getattr(firma, "firma_cargo", "")),
+            firma_identificador=str(getattr(firma, "firma_identificador", "")),
+            firma_texto_apoyo=str(getattr(firma, "firma_texto_apoyo", "")),
         )
 
     def ruta_sugerida(self, abonado_nombre: str) -> str:
@@ -114,3 +125,13 @@ class ServicioEstadoCuenta:
     @staticmethod
     def lineas_encabezado_desde_configuracion(configuracion: object) -> tuple[str, ...]:
         return tuple(ServicioComprobantePago.lineas_encabezado_desde_configuracion(configuracion))
+
+    @staticmethod
+    def _fecha_emision_actual() -> str:
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    @staticmethod
+    def _validar_fecha_emision_actual(valor: str) -> None:
+        fecha_emision = datetime.strptime(valor, "%Y-%m-%d %H:%M:%S").date()
+        if fecha_emision != datetime.now().date():
+            raise ValueError("La fecha de emisión del documento de deuda debe coincidir con la fecha actual.")
