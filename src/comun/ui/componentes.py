@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, QSize, Qt
-from PySide6.QtGui import QIcon, QPaintEvent, QPainter, QPainterPath, QRegion, QResizeEvent
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from comun.ui.iconos import obtener_icono_tabler_coloreado
+from comun.ui.qt_mensajes import configurar_filtro_mensajes_qt
 from comun.ui.temas import (
     TEMA_SICAP_PREDETERMINADO,
     obtener_paleta_tema,
@@ -39,9 +40,16 @@ PADDING_BLOQUE_DIALOGO = 12
 ALTURA_BOTON_DIALOGO = 34
 
 
+configurar_filtro_mensajes_qt()
+
+
 def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> str:
     return f"""
-    QDialog#dialogoBaseSicap,
+    QDialog#dialogoBaseSicap {{
+        background: {color_fondo};
+        border: 1px solid {paleta["borde_suave"]};
+        border-radius: 4px;
+    }}
     QWidget#tarjetaDialogoSicap,
     QFrame#cabeceraDialogoSicap,
     QFrame#cuerpoDialogoSicap,
@@ -347,7 +355,6 @@ class DialogoBaseSicap(QDialog):
         self.setObjectName("dialogoBaseSicap")
         self.setModal(True)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
-        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setMinimumWidth(420)
         self._nombre_tema = obtener_tema_actual()
@@ -395,18 +402,6 @@ class DialogoBaseSicap(QDialog):
         layout.addWidget(self._tarjeta)
         self.setStyleSheet(_crear_estilo_dialogo_sicap(self._color_fondo_dialogo, self._paleta_tema))
 
-    def resizeEvent(self, evento: QResizeEvent) -> None:
-        self._actualizar_mascara_dialogo()
-        super().resizeEvent(evento)
-
-    def paintEvent(self, evento: QPaintEvent) -> None:
-        painter = QPainter(self)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(self._color_fondo_dialogo)
-        painter.drawRect(self.rect())
-        painter.end()
-        super().paintEvent(evento)
-
     @property
     def layout_cabecera(self) -> QVBoxLayout:
         return self._layout_cabecera
@@ -425,23 +420,13 @@ class DialogoBaseSicap(QDialog):
 
     def aplicar_color_fondo_personalizado(self, color_fondo: str) -> None:
         self._color_fondo_dialogo = color_fondo
-        self.update()
         self.setStyleSheet(_crear_estilo_dialogo_sicap(color_fondo, self._paleta_tema))
 
     def aplicar_tema(self, nombre_tema: str) -> None:
         self._nombre_tema = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
         self._paleta_tema = obtener_paleta_tema(self._nombre_tema)
         self._color_fondo_dialogo = str(self._paleta_tema["fondo_dialogo"])
-        self.update()
         self.setStyleSheet(_crear_estilo_dialogo_sicap(self._color_fondo_dialogo, self._paleta_tema))
-
-    def _actualizar_mascara_dialogo(self) -> None:
-        if self.width() <= 0 or self.height() <= 0:
-            self.clearMask()
-            return
-        ruta = QPainterPath()
-        ruta.addRoundedRect(QRectF(self.rect()), RADIO_TARJETA_DIALOGO, RADIO_TARJETA_DIALOGO)
-        self.setMask(QRegion(ruta.toFillPolygon().toPolygon()))
 
 
 class BotonAccionContextual(QPushButton):

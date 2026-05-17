@@ -14,7 +14,7 @@ RUTA_SRC = RAIZ_PROYECTO / "src"
 if str(RUTA_SRC) not in sys.path:
     sys.path.insert(0, str(RUTA_SRC))
 
-from PySide6.QtCore import QPoint  # noqa: E402
+from PySide6.QtCore import QPoint, Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication, QPushButton  # noqa: E402
 
 from modulos.abonados.entidades import OpcionBarrio  # noqa: E402
@@ -46,7 +46,7 @@ class TestDialogosSicap(unittest.TestCase):
         for boton in botones:
             self.assertTrue(boton.icon().isNull(), boton.text())
 
-    def test_dialogo_mensaje_recorta_esquinas_y_conserva_transparencia(self) -> None:
+    def test_dialogo_mensaje_usa_fondo_opaco_y_tarjeta_alineada(self) -> None:
         dialogo, _ = self._capturar_dialogo(
             DialogoMensajeSicap(
                 "Aviso",
@@ -55,20 +55,14 @@ class TestDialogosSicap(unittest.TestCase):
         )
         tarjeta = dialogo._tarjeta
         origen_tarjeta = tarjeta.mapTo(dialogo, QPoint(0, 0))
-        mascara = dialogo.mask()
 
-        self.assertFalse(mascara.isEmpty())
         self.assertEqual(origen_tarjeta.x(), MARGEN_EXTERNO_DIALOGO)
         self.assertEqual(origen_tarjeta.y(), MARGEN_EXTERNO_DIALOGO)
-        self.assertFalse(mascara.contains(QPoint(0, 0)))
-        if RADIO_TARJETA_DIALOGO > 4:
-            self.assertFalse(mascara.contains(QPoint(1, 1)))
-            self.assertFalse(mascara.contains(QPoint(3, 3)))
-        self.assertTrue(mascara.contains(QPoint(RADIO_TARJETA_DIALOGO, 1)))
-        self.assertTrue(mascara.contains(QPoint(1, RADIO_TARJETA_DIALOGO)))
+        self.assertFalse(dialogo.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground))
+        self.assertTrue(dialogo.mask().isEmpty())
         dialogo.close()
 
-    def test_dialogo_formulario_y_confirmacion_reutilizan_tarjeta_recortada(self) -> None:
+    def test_dialogo_formulario_y_confirmacion_reutilizan_tarjeta_opaca_sin_mascara_top_level(self) -> None:
         dialogo_formulario, _ = self._capturar_dialogo(DialogoFormularioBarrio())
         dialogo_confirmacion, _ = self._capturar_dialogo(
             DialogoConfirmacionSicap(
@@ -81,12 +75,10 @@ class TestDialogosSicap(unittest.TestCase):
         for dialogo in (dialogo_formulario, dialogo_confirmacion):
             tarjeta = dialogo._tarjeta
             origen_tarjeta = tarjeta.mapTo(dialogo, QPoint(0, 0))
-            mascara = dialogo.mask()
 
-            self.assertFalse(mascara.isEmpty())
             self.assertEqual(origen_tarjeta, QPoint(0, 0))
-            self.assertFalse(mascara.contains(QPoint(0, 0)))
-            self.assertTrue(mascara.contains(QPoint(RADIO_TARJETA_DIALOGO, 1)))
+            self.assertTrue(dialogo.mask().isEmpty())
+            self.assertFalse(dialogo.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground))
             self._assert_botones_solo_texto(dialogo)
             dialogo.close()
 

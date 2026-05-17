@@ -22,6 +22,9 @@ CLAVES_DATOS_JUNTA = (
     "junta.telefono",
     "junta.correo",
     "junta.direccion",
+    "junta.identificador_fiscal",
+    "junta.sitio_web",
+    "junta.mensaje_contacto",
 )
 CLAVES_COBRO = (
     "cobro.precio_mensual_centavos",
@@ -32,9 +35,20 @@ CLAVES_COBRO = (
     "cobro.meses_para_corte",
     "cobro.permitir_pago_adelantado",
     "cobro.meses_adelanto_maximo",
+    "cobro.mora_leve_hasta_meses",
+    "cobro.mora_media_hasta_meses",
 )
 CLAVES_FACTURA = (
+    "factura.titulo_documento",
+    "factura.subtitulo_documento",
+    "factura.texto_legal_superior",
     "factura.texto_pie",
+    "factura.texto_legal_inferior",
+    "factura.etiqueta_copia",
+    "factura.mostrar_correo",
+    "factura.mostrar_telefono",
+    "factura.mostrar_direccion",
+    "factura.mostrar_identificador_fiscal",
     "factura.formato_salida",
 )
 CLAVES_SISTEMA = (
@@ -73,6 +87,17 @@ class ServicioConfiguracion:
             telefono=parametros.get("junta.telefono").valor if "junta.telefono" in parametros else "",
             correo=parametros.get("junta.correo").valor if "junta.correo" in parametros else "",
             direccion=parametros.get("junta.direccion").valor if "junta.direccion" in parametros else "",
+            identificador_fiscal=(
+                parametros.get("junta.identificador_fiscal").valor
+                if "junta.identificador_fiscal" in parametros
+                else ""
+            ),
+            sitio_web=parametros.get("junta.sitio_web").valor if "junta.sitio_web" in parametros else "",
+            mensaje_contacto=(
+                parametros.get("junta.mensaje_contacto").valor
+                if "junta.mensaje_contacto" in parametros
+                else ""
+            ),
         )
         parametros_cobro = ParametrosCobro(
             precio_mensual_centavos=self._a_entero(
@@ -115,13 +140,68 @@ class ServicioConfiguracion:
                 if "cobro.meses_adelanto_maximo" in parametros
                 else "0"
             ),
+            mora_leve_hasta_meses=self._a_entero(
+                parametros.get("cobro.mora_leve_hasta_meses").valor
+                if "cobro.mora_leve_hasta_meses" in parametros
+                else "2"
+            ),
+            mora_media_hasta_meses=self._a_entero(
+                parametros.get("cobro.mora_media_hasta_meses").valor
+                if "cobro.mora_media_hasta_meses" in parametros
+                else "5"
+            ),
         )
         factura = FacturaConfiguracion(
+            titulo_documento=(
+                parametros.get("factura.titulo_documento").valor
+                if "factura.titulo_documento" in parametros
+                else "RECIBO DE PAGO"
+            ),
+            subtitulo_documento=(
+                parametros.get("factura.subtitulo_documento").valor
+                if "factura.subtitulo_documento" in parametros
+                else ""
+            ),
+            texto_legal_superior=(
+                parametros.get("factura.texto_legal_superior").valor
+                if "factura.texto_legal_superior" in parametros
+                else ""
+            ),
             texto_pie=parametros.get("factura.texto_pie").valor if "factura.texto_pie" in parametros else "",
+            texto_legal_inferior=(
+                parametros.get("factura.texto_legal_inferior").valor
+                if "factura.texto_legal_inferior" in parametros
+                else ""
+            ),
+            etiqueta_copia=(
+                parametros.get("factura.etiqueta_copia").valor
+                if "factura.etiqueta_copia" in parametros
+                else "ORIGINAL"
+            ),
+            mostrar_correo=self._a_booleano(
+                parametros.get("factura.mostrar_correo").valor
+                if "factura.mostrar_correo" in parametros
+                else "1"
+            ),
+            mostrar_telefono=self._a_booleano(
+                parametros.get("factura.mostrar_telefono").valor
+                if "factura.mostrar_telefono" in parametros
+                else "1"
+            ),
+            mostrar_direccion=self._a_booleano(
+                parametros.get("factura.mostrar_direccion").valor
+                if "factura.mostrar_direccion" in parametros
+                else "1"
+            ),
+            mostrar_identificador_fiscal=self._a_booleano(
+                parametros.get("factura.mostrar_identificador_fiscal").valor
+                if "factura.mostrar_identificador_fiscal" in parametros
+                else "0"
+            ),
             formato_salida=(
                 parametros.get("factura.formato_salida").valor.upper()
                 if "factura.formato_salida" in parametros
-                else "PDF"
+                else "HTML"
             ),
             correlativo_actual=self._formatear_correlativo(correlativo_actual),
             proximo_correlativo=self._formatear_correlativo(correlativo_actual + 1),
@@ -182,12 +262,18 @@ class ServicioConfiguracion:
         telefono: str,
         correo: str,
         direccion: str,
+        identificador_fiscal: str,
+        sitio_web: str,
+        mensaje_contacto: str,
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
         nombre = nombre.strip()
         telefono = telefono.strip()
         correo = correo.strip()
         direccion = direccion.strip()
+        identificador_fiscal = identificador_fiscal.strip()
+        sitio_web = sitio_web.strip()
+        mensaje_contacto = mensaje_contacto.strip()
 
         if not nombre:
             return ResultadoGestionConfiguracion(
@@ -208,6 +294,9 @@ class ServicioConfiguracion:
                     "junta.telefono": telefono,
                     "junta.correo": correo,
                     "junta.direccion": direccion,
+                    "junta.identificador_fiscal": identificador_fiscal,
+                    "junta.sitio_web": sitio_web,
+                    "junta.mensaje_contacto": mensaje_contacto,
                 },
                 actor_id=actor_id,
             )
@@ -221,17 +310,43 @@ class ServicioConfiguracion:
 
     def guardar_parametros_factura(
         self,
+        titulo_documento: str,
+        subtitulo_documento: str,
+        texto_legal_superior: str,
         texto_pie: str,
+        texto_legal_inferior: str,
+        etiqueta_copia: str,
         formato_salida: str,
+        mostrar_correo: bool,
+        mostrar_telefono: bool,
+        mostrar_direccion: bool,
+        mostrar_identificador_fiscal: bool,
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
+        titulo_documento = titulo_documento.strip()
+        subtitulo_documento = subtitulo_documento.strip()
+        texto_legal_superior = texto_legal_superior.strip()
         texto_pie = texto_pie.strip()
+        texto_legal_inferior = texto_legal_inferior.strip()
+        etiqueta_copia = etiqueta_copia.strip()
         formato_salida = formato_salida.strip().upper()
 
+        if not titulo_documento:
+            return ResultadoGestionConfiguracion(
+                False,
+                "Indica el titulo principal del recibo.",
+                "VALIDACION",
+            )
         if not texto_pie:
             return ResultadoGestionConfiguracion(
                 False,
                 "Indica el texto inferior del comprobante.",
+                "VALIDACION",
+            )
+        if not etiqueta_copia:
+            return ResultadoGestionConfiguracion(
+                False,
+                "Indica la etiqueta visible del recibo.",
                 "VALIDACION",
             )
         if formato_salida not in FORMATOS_SALIDA_FACTURA_VALIDOS:
@@ -243,8 +358,19 @@ class ServicioConfiguracion:
         try:
             self._repositorio_configuracion.actualizar_valores(
                 {
+                    "factura.titulo_documento": titulo_documento,
+                    "factura.subtitulo_documento": subtitulo_documento,
+                    "factura.texto_legal_superior": texto_legal_superior,
                     "factura.texto_pie": texto_pie,
+                    "factura.texto_legal_inferior": texto_legal_inferior,
+                    "factura.etiqueta_copia": etiqueta_copia,
                     "factura.formato_salida": formato_salida,
+                    "factura.mostrar_correo": "1" if mostrar_correo else "0",
+                    "factura.mostrar_telefono": "1" if mostrar_telefono else "0",
+                    "factura.mostrar_direccion": "1" if mostrar_direccion else "0",
+                    "factura.mostrar_identificador_fiscal": (
+                        "1" if mostrar_identificador_fiscal else "0"
+                    ),
                 },
                 actor_id=actor_id,
             )
@@ -269,6 +395,8 @@ class ServicioConfiguracion:
         meses_para_corte: int,
         permitir_pago_adelantado: bool,
         meses_adelanto_maximo: int,
+        mora_leve_hasta_meses: int,
+        mora_media_hasta_meses: int,
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
         if precio_mensual_centavos < 0:
@@ -295,6 +423,18 @@ class ServicioConfiguracion:
                 "Indica el maximo de meses adelantados permitidos.",
                 "VALIDACION",
             )
+        if mora_leve_hasta_meses < 1:
+            return ResultadoGestionConfiguracion(
+                False,
+                "El rango de mora leve debe iniciar al menos en 1 mes.",
+                "VALIDACION",
+            )
+        if mora_media_hasta_meses <= mora_leve_hasta_meses:
+            return ResultadoGestionConfiguracion(
+                False,
+                "La mora media debe terminar despues del rango de mora leve.",
+                "VALIDACION",
+            )
         if not multa_mora_automatica_activa:
             multa_mora_automatica_centavos = 0
         if not permitir_pago_adelantado:
@@ -309,6 +449,8 @@ class ServicioConfiguracion:
                     "cobro.meses_para_corte": str(meses_para_corte),
                     "cobro.permitir_pago_adelantado": "1" if permitir_pago_adelantado else "0",
                     "cobro.meses_adelanto_maximo": str(meses_adelanto_maximo),
+                    "cobro.mora_leve_hasta_meses": str(mora_leve_hasta_meses),
+                    "cobro.mora_media_hasta_meses": str(mora_media_hasta_meses),
                 },
                 actor_id=actor_id,
             )

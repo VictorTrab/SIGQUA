@@ -18,7 +18,7 @@ if str(RUTA_SRC) not in sys.path:
     sys.path.insert(0, str(RUTA_SRC))
 
 from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtWidgets import QApplication, QLabel, QScrollArea, QTableWidget, QToolButton, QWidget  # noqa: E402
+from PySide6.QtWidgets import QApplication, QLabel, QScrollArea, QTableWidget, QTextEdit, QToolButton, QWidget  # noqa: E402
 
 from app import (  # noqa: E402
     ALTO_VENTANA_AUTENTICACION,
@@ -65,6 +65,7 @@ from modulos.casas.entidades import (  # noqa: E402
     OpcionAbonado,
     OpcionBarrio as OpcionBarrioCasa,
 )
+from modulos.historial_pagos.vista import VistaHistorialPagos  # noqa: E402
 from modulos.planes_pago.vista import VistaPlanesPago  # noqa: E402
 from modulos.principal.vista import VistaModuloPrincipal  # noqa: E402
 from modulos.principal.entidades import AnaliticaDashboard, EstadoModuloPrincipal, ModuloNavegacion  # noqa: E402
@@ -219,6 +220,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertFalse(ventana_principal.vista_modulo_principal._boton_mantenimiento.isVisible())
             self.assertIsInstance(ventana_principal.vista_casas, VistaCasas)
             self.assertIsInstance(ventana_principal.vista_planes_pago, VistaPlanesPago)
+            self.assertIsInstance(ventana_principal.vista_historial_pagos, VistaHistorialPagos)
             self.assertIsInstance(ventana_principal.vista_configuracion, VistaConfiguracion)
             self.assertTrue(
                 bool(ventana_principal.windowFlags() & Qt.WindowType.WindowMaximizeButtonHint)
@@ -551,11 +553,19 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             modulos=(
                 ModuloNavegacion("dashboard", "Inicio", "Resumen operativo del sistema.", "home.svg"),
                 ModuloNavegacion("barrios", "Barrios", "Gestion de barrios y organizacion territorial.", "map-2.svg"),
+                ModuloNavegacion(
+                    "historial_pagos",
+                    "Historial de pagos",
+                    "Consulta comprobantes emitidos y reimpresion operativa.",
+                    "clock.svg",
+                ),
             ),
             puede_abrir_mantenimiento=False,
         )
         vista_barrios = VistaBarrios()
+        vista_historial = VistaHistorialPagos()
         vista_principal.registrar_modulo("barrios", vista_barrios)
+        vista_principal.registrar_modulo("historial_pagos", vista_historial)
 
         vista_principal.mostrar_estado(estado)
         vista_principal.show()
@@ -573,7 +583,16 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             vista_principal._label_subresumen.text(),
             "Gestion de barrios y organizacion territorial.",
         )
+        vista_principal.mostrar_modulo("historial_pagos")
+        self.aplicacion.processEvents()
+
+        self.assertEqual(vista_principal._label_bienvenida.text(), "Historial de pagos")
+        self.assertEqual(
+            vista_principal._label_subresumen.text(),
+            "Consulta comprobantes emitidos y reimpresion operativa.",
+        )
         vista_barrios.close()
+        vista_historial.close()
         vista_principal.close()
 
     def test_notificacion_casas_desaparece_tras_temporizador(self) -> None:
@@ -828,6 +847,9 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertIn("QTabWidget#tabsConfiguracion QTabBar::tab:hover", vista_configuracion.styleSheet())
         self.assertIn("QTabWidget#tabsConfiguracion QTabBar::tab:selected", vista_configuracion.styleSheet())
         self.assertIn("QTabWidget#tabsConfiguracion QTabBar {", vista_configuracion.styleSheet())
+        self.assertIsNotNone(
+            vista_configuracion.findChild(QTextEdit, "documentoPreviewComprobanteConfiguracion")
+        )
 
         vista_planes.close()
         vista_configuracion.close()
@@ -838,6 +860,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             VistaAbonados(),
             VistaCasas(),
             VistaPlanesPago(),
+            VistaHistorialPagos(),
             VistaConfiguracion(),
         )
 

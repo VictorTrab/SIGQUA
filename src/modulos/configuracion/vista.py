@@ -17,11 +17,17 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QTabWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
 from comun.ui import BotonAccionContextual, crear_boton_operativo
+from comun.ui.comprobante_termico import (
+    ConfiguracionDocumentoRecibo,
+    DatosDocumentoRecibo,
+    crear_documento_recibo_termico,
+)
 from comun.ui.temas import TEMA_SICAP_PREDETERMINADO, obtener_paleta_tema, obtener_tema_actual
 from modulos.configuracion.entidades import EstadoConfiguracion
 
@@ -54,9 +60,21 @@ class TarjetaResumenConfiguracion(QFrame):
 class VistaConfiguracion(QWidget):
     """Pantalla operativa del modulo de configuracion."""
 
-    guardar_datos_junta_solicitado = Signal(str, str, str, str)
-    guardar_parametros_factura_solicitado = Signal(str, str)
-    guardar_parametros_cobro_solicitado = Signal(int, bool, int, bool, int, bool, int)
+    guardar_datos_junta_solicitado = Signal(str, str, str, str, str, str, str)
+    guardar_parametros_factura_solicitado = Signal(
+        str,
+        str,
+        str,
+        str,
+        str,
+        str,
+        str,
+        bool,
+        bool,
+        bool,
+        bool,
+    )
+    guardar_parametros_cobro_solicitado = Signal(int, bool, int, bool, int, bool, int, int, int)
     guardar_operacion_respaldo_solicitado = Signal(bool)
 
     DURACION_MENSAJE_MS = 3200
@@ -106,13 +124,25 @@ class VistaConfiguracion(QWidget):
         self._campo_junta_telefono.setText(estado.datos_junta.telefono)
         self._campo_junta_correo.setText(estado.datos_junta.correo)
         self._campo_junta_direccion.setPlainText(estado.datos_junta.direccion)
+        self._campo_junta_identificador.setText(estado.datos_junta.identificador_fiscal)
+        self._campo_junta_sitio_web.setText(estado.datos_junta.sitio_web)
+        self._campo_junta_mensaje_contacto.setPlainText(estado.datos_junta.mensaje_contacto)
 
         self._campo_factura_nombre.setText(estado.datos_junta.nombre)
-        self._campo_factura_datos.setText(self._componer_datos_factura(estado))
+        self._campo_factura_datos.setText(self._componer_datos_recibo(estado))
         self._valor_correlativo_actual.setText(estado.factura.correlativo_actual)
         self._valor_ultimo_comprobante.setText(estado.factura.ultimo_comprobante_emitido)
+        self._campo_titulo_documento.setText(estado.factura.titulo_documento)
+        self._campo_subtitulo_documento.setText(estado.factura.subtitulo_documento)
+        self._campo_texto_legal_superior.setPlainText(estado.factura.texto_legal_superior)
         self._campo_texto_pie.setPlainText(estado.factura.texto_pie)
+        self._campo_texto_legal_inferior.setPlainText(estado.factura.texto_legal_inferior)
+        self._campo_etiqueta_copia.setText(estado.factura.etiqueta_copia)
         self._combo_formato_salida.setCurrentText(estado.factura.formato_salida)
+        self._check_mostrar_correo.setChecked(estado.factura.mostrar_correo)
+        self._check_mostrar_telefono.setChecked(estado.factura.mostrar_telefono)
+        self._check_mostrar_direccion.setChecked(estado.factura.mostrar_direccion)
+        self._check_mostrar_identificador.setChecked(estado.factura.mostrar_identificador_fiscal)
         self._valor_total_comprobantes.setText(str(estado.factura.total_comprobantes_emitidos))
         self._valor_proximo_correlativo.setText(estado.factura.proximo_correlativo)
 
@@ -133,10 +163,17 @@ class VistaConfiguracion(QWidget):
         self._campo_meses_adelanto_maximo.setText(
             str(estado.parametros_cobro.meses_adelanto_maximo)
         )
+        self._campo_mora_leve_hasta.setText(str(estado.parametros_cobro.mora_leve_hasta_meses))
+        self._campo_mora_media_hasta.setText(str(estado.parametros_cobro.mora_media_hasta_meses))
         self._valor_mora_regla.setText(
             "La mora sigue visible como meses vencidos no pagados."
             if estado.parametros_cobro.mora_visible
             else "No aplica a esta version."
+        )
+        self._valor_rangos_mora.setText(
+            f"Leve: 1-{estado.parametros_cobro.mora_leve_hasta_meses} | "
+            f"Media: {estado.parametros_cobro.mora_leve_hasta_meses + 1}-{estado.parametros_cobro.mora_media_hasta_meses} | "
+            f"Severa: {estado.parametros_cobro.mora_media_hasta_meses + 1}+"
         )
         self._actualizar_estado_campos_cobro()
 
@@ -163,14 +200,7 @@ class VistaConfiguracion(QWidget):
         self._valor_modo_operacion.setText(estado.informacion.modo_operacion)
         self._valor_actualizacion.setText(estado.informacion.ultima_actualizacion or "Sin registro")
 
-        self._etiqueta_preview_junta.setText(estado.datos_junta.nombre or "Junta no configurada")
-        self._etiqueta_preview_datos.setText(self._componer_datos_factura(estado))
-        self._etiqueta_preview_codigo.setText(estado.factura.proximo_correlativo)
-        self._etiqueta_preview_formato.setText(estado.factura.formato_salida)
-        self._etiqueta_preview_total.setText(
-            formateador_moneda(estado.parametros_cobro.precio_mensual_centavos)
-        )
-        self._etiqueta_preview_pie.setText(estado.factura.texto_pie)
+        self._actualizar_preview_comprobante(estado, formateador_moneda)
 
     def mostrar_mensaje(self, mensaje: str, es_error: bool = False) -> None:
         self._mensaje.setText(mensaje)
@@ -237,8 +267,12 @@ class VistaConfiguracion(QWidget):
         self._campo_junta_nombre = QLineEdit()
         self._campo_junta_telefono = QLineEdit()
         self._campo_junta_correo = QLineEdit()
+        self._campo_junta_identificador = QLineEdit()
+        self._campo_junta_sitio_web = QLineEdit()
         self._campo_junta_direccion = QPlainTextEdit()
         self._campo_junta_direccion.setFixedHeight(90)
+        self._campo_junta_mensaje_contacto = QPlainTextEdit()
+        self._campo_junta_mensaje_contacto.setFixedHeight(76)
 
         grilla = QGridLayout()
         grilla.setHorizontalSpacing(12)
@@ -246,7 +280,16 @@ class VistaConfiguracion(QWidget):
         grilla.addWidget(self._crear_bloque_campo("Nombre de la junta", self._campo_junta_nombre), 0, 0, 1, 2)
         grilla.addWidget(self._crear_bloque_campo("Telefono", self._campo_junta_telefono), 1, 0)
         grilla.addWidget(self._crear_bloque_campo("Correo", self._campo_junta_correo), 1, 1)
-        grilla.addWidget(self._crear_bloque_campo("Direccion", self._campo_junta_direccion), 2, 0, 1, 2)
+        grilla.addWidget(self._crear_bloque_campo("Identificador fiscal", self._campo_junta_identificador), 2, 0)
+        grilla.addWidget(self._crear_bloque_campo("Sitio web", self._campo_junta_sitio_web), 2, 1)
+        grilla.addWidget(self._crear_bloque_campo("Direccion", self._campo_junta_direccion), 3, 0, 1, 2)
+        grilla.addWidget(
+            self._crear_bloque_campo("Mensaje de contacto", self._campo_junta_mensaje_contacto),
+            4,
+            0,
+            1,
+            2,
+        )
 
         boton_guardar = crear_boton_operativo("Guardar datos de la junta", principal=True)
         boton_guardar.clicked.connect(
@@ -255,6 +298,9 @@ class VistaConfiguracion(QWidget):
                 self._campo_junta_telefono.text(),
                 self._campo_junta_correo.text(),
                 self._campo_junta_direccion.toPlainText(),
+                self._campo_junta_identificador.text(),
+                self._campo_junta_sitio_web.text(),
+                self._campo_junta_mensaje_contacto.toPlainText(),
             )
         )
 
@@ -282,10 +328,21 @@ class VistaConfiguracion(QWidget):
         self._campo_factura_datos.setReadOnly(True)
         self._valor_correlativo_actual = self._crear_valor_seguridad()
         self._valor_ultimo_comprobante = self._crear_valor_seguridad()
+        self._campo_titulo_documento = QLineEdit()
+        self._campo_subtitulo_documento = QLineEdit()
+        self._campo_texto_legal_superior = QPlainTextEdit()
+        self._campo_texto_legal_superior.setFixedHeight(64)
         self._campo_texto_pie = QPlainTextEdit()
-        self._campo_texto_pie.setFixedHeight(88)
+        self._campo_texto_pie.setFixedHeight(76)
+        self._campo_texto_legal_inferior = QPlainTextEdit()
+        self._campo_texto_legal_inferior.setFixedHeight(64)
+        self._campo_etiqueta_copia = QLineEdit()
         self._combo_formato_salida = QComboBox()
-        self._combo_formato_salida.addItems(["PDF", "HTML", "TEXTO"])
+        self._combo_formato_salida.addItems(["HTML", "TEXTO", "PDF"])
+        self._check_mostrar_correo = QCheckBox("Mostrar correo institucional")
+        self._check_mostrar_telefono = QCheckBox("Mostrar telefono institucional")
+        self._check_mostrar_direccion = QCheckBox("Mostrar direccion institucional")
+        self._check_mostrar_identificador = QCheckBox("Mostrar identificador fiscal")
         self._valor_total_comprobantes = self._crear_valor_seguridad()
         self._valor_proximo_correlativo = self._crear_valor_seguridad()
 
@@ -308,13 +365,22 @@ class VistaConfiguracion(QWidget):
         )
 
         panel_factura = self._crear_panel(
-            "Factura y comprobantes",
-            "Configuracion operativa del texto y formato de salida que consume el flujo real de pagos.",
+            "Recibo y comprobantes",
+            "Configuracion operativa del recibo termico monocromatico usado por el flujo real de pagos.",
             [
                 grilla_superior,
                 self._crear_fila_resumen("Correlativo actual", self._valor_correlativo_actual),
                 self._crear_fila_resumen("Ultimo comprobante emitido", self._valor_ultimo_comprobante),
+                self._crear_bloque_campo("Titulo del documento", self._campo_titulo_documento),
+                self._crear_bloque_campo("Subtitulo del documento", self._campo_subtitulo_documento),
+                self._crear_bloque_campo("Texto legal superior", self._campo_texto_legal_superior),
                 self._crear_bloque_campo("Texto inferior", self._campo_texto_pie),
+                self._crear_bloque_campo("Texto legal inferior", self._campo_texto_legal_inferior),
+                self._crear_bloque_campo("Etiqueta de copia", self._campo_etiqueta_copia),
+                self._check_mostrar_correo,
+                self._check_mostrar_telefono,
+                self._check_mostrar_direccion,
+                self._check_mostrar_identificador,
                 self._crear_bloque_campo("Formato de salida", self._combo_formato_salida),
             ],
         )
@@ -337,8 +403,17 @@ class VistaConfiguracion(QWidget):
         boton_guardar = crear_boton_operativo("Guardar comprobantes", principal=True)
         boton_guardar.clicked.connect(
             lambda: self.guardar_parametros_factura_solicitado.emit(
+                self._campo_titulo_documento.text(),
+                self._campo_subtitulo_documento.text(),
+                self._campo_texto_legal_superior.toPlainText(),
                 self._campo_texto_pie.toPlainText(),
+                self._campo_texto_legal_inferior.toPlainText(),
+                self._campo_etiqueta_copia.text(),
                 self._combo_formato_salida.currentText(),
+                self._check_mostrar_correo.isChecked(),
+                self._check_mostrar_telefono.isChecked(),
+                self._check_mostrar_direccion.isChecked(),
+                self._check_mostrar_identificador.isChecked(),
             )
         )
 
@@ -369,6 +444,11 @@ class VistaConfiguracion(QWidget):
         self._campo_meses_adelanto_maximo = QLineEdit()
         self._campo_meses_adelanto_maximo.setPlaceholderText("Maximo de meses adelantados")
         self._valor_mora_regla = self._crear_valor_seguridad()
+        self._valor_rangos_mora = self._crear_valor_seguridad()
+        self._campo_mora_leve_hasta = QLineEdit()
+        self._campo_mora_leve_hasta.setPlaceholderText("Hasta cuantos meses sigue siendo leve")
+        self._campo_mora_media_hasta = QLineEdit()
+        self._campo_mora_media_hasta.setPlaceholderText("Hasta cuantos meses sigue siendo media")
 
         panel_precio = self._crear_panel(
             "Precio mensual del servicio",
@@ -380,10 +460,19 @@ class VistaConfiguracion(QWidget):
             "La mora sigue existiendo como meses vencidos no pagados. Aqui solo parametrizas el recargo automatico adicional.",
             [
                 self._crear_fila_resumen("Regla de mora", self._valor_mora_regla),
+                self._crear_fila_resumen("Rangos visuales vigentes", self._valor_rangos_mora),
                 self._check_multa_automatica,
                 self._crear_bloque_campo(
                     "Monto del recargo automatico por mes vencido (centavos)",
                     self._campo_multa_automatica,
+                ),
+                self._crear_bloque_campo(
+                    "Mora leve hasta (meses)",
+                    self._campo_mora_leve_hasta,
+                ),
+                self._crear_bloque_campo(
+                    "Mora media hasta (meses)",
+                    self._campo_mora_media_hasta,
                 ),
             ],
         )
@@ -510,42 +599,84 @@ class VistaConfiguracion(QWidget):
         marco.setObjectName("previewComprobanteConfiguracion")
         layout = QVBoxLayout(marco)
         layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
-        encabezado = QLabel("Vista previa del comprobante")
+        encabezado = QLabel("Vista previa del recibo termico")
         encabezado.setObjectName("tituloPreviewConfiguracion")
-        self._etiqueta_preview_junta = QLabel("")
-        self._etiqueta_preview_junta.setObjectName("tituloPreviewRecibo")
-        self._etiqueta_preview_datos = QLabel("")
-        self._etiqueta_preview_datos.setObjectName("detallePreviewRecibo")
-        self._etiqueta_preview_datos.setWordWrap(True)
-        self._etiqueta_preview_codigo = QLabel("")
-        self._etiqueta_preview_formato = QLabel("")
-        self._etiqueta_preview_total = QLabel("")
-        self._etiqueta_preview_pie = QLabel("")
-        self._etiqueta_preview_pie.setObjectName("detallePreviewRecibo")
-        self._etiqueta_preview_pie.setWordWrap(True)
+        self._preview_documento = QTextEdit()
+        self._preview_documento.setObjectName("documentoPreviewComprobanteConfiguracion")
+        self._preview_documento.setReadOnly(True)
+        self._preview_documento.setMinimumHeight(500)
+        self._preview_documento.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._preview_documento.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         layout.addWidget(encabezado)
-        layout.addWidget(self._etiqueta_preview_junta)
-        layout.addWidget(self._etiqueta_preview_datos)
-        layout.addWidget(self._crear_fila_preview("Proximo recibo", self._etiqueta_preview_codigo))
-        layout.addWidget(self._crear_fila_preview("Formato", self._etiqueta_preview_formato))
-        layout.addWidget(self._crear_fila_preview("Mensualidad base", self._etiqueta_preview_total))
-        layout.addWidget(self._etiqueta_preview_pie)
+        layout.addWidget(self._preview_documento)
         return marco
 
-    def _crear_fila_preview(self, etiqueta: str, valor: QLabel) -> QWidget:
-        fila = QWidget()
-        layout = QHBoxLayout(fila)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
-        label = QLabel(etiqueta)
-        label.setObjectName("etiquetaPreviewConfiguracion")
-        valor.setObjectName("valorPreviewConfiguracion")
-        layout.addWidget(label, 1)
-        layout.addWidget(valor, 1)
-        return fila
+    def _actualizar_preview_comprobante(
+        self,
+        estado: EstadoConfiguracion,
+        formateador_moneda: Callable[[int], str],
+    ) -> None:
+        documento = crear_documento_recibo_termico(
+            DatosDocumentoRecibo(
+                numero_comprobante=estado.factura.proximo_correlativo,
+                configuracion=ConfiguracionDocumentoRecibo(
+                    lineas_encabezado=tuple(self._componer_lineas_encabezado_recibo(estado)),
+                    titulo_documento=estado.factura.titulo_documento or "RECIBO DE PAGO",
+                    subtitulo_documento=estado.factura.subtitulo_documento or "",
+                    texto_legal_superior=estado.factura.texto_legal_superior or "",
+                    texto_pie=estado.factura.texto_pie or "",
+                    texto_legal_inferior=estado.factura.texto_legal_inferior or "",
+                    etiqueta_copia=estado.factura.etiqueta_copia or "ORIGINAL",
+                ),
+                bloque_comprobante=(
+                    ("Proximo recibo", estado.factura.proximo_correlativo),
+                    ("Formato", estado.factura.formato_salida),
+                    ("Tipo", "Mensualidad"),
+                ),
+                bloque_servicio=(
+                    ("Casa", "CA-000"),
+                    ("Abonado", "Vista previa"),
+                    ("DNI", "0000000000000"),
+                    ("Barrio", "Sin barrio"),
+                    ("Direccion", "Configuracion de comprobante"),
+                ),
+                bloque_operativo=(
+                    ("Metodo", "Catalogo activo"),
+                    ("Referencia", "No aplica"),
+                    ("Registrado por", "Sistema"),
+                ),
+                detalles=(
+                    f"Mensualidad base configurada - {formateador_moneda(estado.parametros_cobro.precio_mensual_centavos)}",
+                ),
+                total_pagado=formateador_moneda(estado.parametros_cobro.precio_mensual_centavos),
+                saldo_posterior=formateador_moneda(0),
+            )
+        )
+        self._preview_documento.setDocument(documento)
+
+    def _componer_lineas_encabezado_recibo(self, estado: EstadoConfiguracion) -> list[str]:
+        lineas: list[str] = []
+        if estado.datos_junta.nombre.strip():
+            lineas.append(estado.datos_junta.nombre.strip())
+        if (
+            estado.factura.mostrar_identificador_fiscal
+            and estado.datos_junta.identificador_fiscal.strip()
+        ):
+            lineas.append(f"ID fiscal: {estado.datos_junta.identificador_fiscal.strip()}")
+        if estado.factura.mostrar_telefono and estado.datos_junta.telefono.strip():
+            lineas.append(estado.datos_junta.telefono.strip())
+        if estado.factura.mostrar_correo and estado.datos_junta.correo.strip():
+            lineas.append(estado.datos_junta.correo.strip())
+        if estado.factura.mostrar_direccion and estado.datos_junta.direccion.strip():
+            lineas.append(estado.datos_junta.direccion.strip())
+        if estado.datos_junta.sitio_web.strip():
+            lineas.append(estado.datos_junta.sitio_web.strip())
+        if estado.datos_junta.mensaje_contacto.strip():
+            lineas.append(estado.datos_junta.mensaje_contacto.strip())
+        return lineas or ["Junta no configurada"]
 
     def _emitir_guardado_parametros_cobro(self) -> None:
         self.guardar_parametros_cobro_solicitado.emit(
@@ -556,6 +687,8 @@ class VistaConfiguracion(QWidget):
             self._leer_entero(self._campo_meses_para_corte.text()),
             self._check_pago_adelantado.isChecked(),
             self._leer_entero(self._campo_meses_adelanto_maximo.text()),
+            self._leer_entero(self._campo_mora_leve_hasta.text()),
+            self._leer_entero(self._campo_mora_media_hasta.text()),
         )
 
     def _actualizar_estado_campos_cobro(self) -> None:
@@ -661,10 +794,20 @@ class VistaConfiguracion(QWidget):
             return -1
 
     @staticmethod
-    def _componer_datos_factura(estado: EstadoConfiguracion) -> str:
-        partes = [valor for valor in (estado.datos_junta.telefono, estado.datos_junta.correo) if valor]
-        if estado.datos_junta.direccion:
+    def _componer_datos_recibo(estado: EstadoConfiguracion) -> str:
+        partes: list[str] = []
+        if estado.factura.mostrar_telefono and estado.datos_junta.telefono:
+            partes.append(estado.datos_junta.telefono)
+        if estado.factura.mostrar_correo and estado.datos_junta.correo:
+            partes.append(estado.datos_junta.correo)
+        if estado.factura.mostrar_direccion and estado.datos_junta.direccion:
             partes.append(estado.datos_junta.direccion)
+        if estado.factura.mostrar_identificador_fiscal and estado.datos_junta.identificador_fiscal:
+            partes.append(f"ID fiscal: {estado.datos_junta.identificador_fiscal}")
+        if estado.datos_junta.sitio_web:
+            partes.append(estado.datos_junta.sitio_web)
+        if estado.datos_junta.mensaje_contacto:
+            partes.append(estado.datos_junta.mensaje_contacto)
         return " | ".join(partes) if partes else "Sin datos complementarios"
 
     def _aplicar_estilos(self) -> None:
@@ -717,11 +860,22 @@ class VistaConfiguracion(QWidget):
             }}
             QFrame#tarjetaResumenConfiguracion,
             QFrame#panelConfiguracion,
-            QFrame#avisoConfiguracion,
-            QFrame#previewComprobanteConfiguracion {{
+            QFrame#avisoConfiguracion {{
                 background: {fondo_panel};
                 border: 1px solid {borde_panel};
                 border-radius: 18px;
+            }}
+            QFrame#previewComprobanteConfiguracion {{
+                background: #ffffff;
+                border: 1px solid #1a1a1a;
+                border-radius: 8px;
+            }}
+            QTextEdit#documentoPreviewComprobanteConfiguracion {{
+                background: #ffffff;
+                color: #111111;
+                border: none;
+                padding: 0;
+                selection-background-color: #d9d9d9;
             }}
             QLabel#tituloTarjetaResumenConfiguracion {{
                 color: {texto_secundario};
@@ -732,6 +886,11 @@ class VistaConfiguracion(QWidget):
             QLabel#tituloPreviewRecibo {{
                 color: {texto_principal};
                 font-size: 20px;
+                font-weight: 900;
+            }}
+            QLabel#tituloDocumentoPreviewRecibo {{
+                color: #111111;
+                font-size: 16px;
                 font-weight: 900;
             }}
             QLabel#tituloPanelConfiguracion,
@@ -752,6 +911,11 @@ class VistaConfiguracion(QWidget):
                 color: {texto_principal};
                 font-size: 13px;
                 font-weight: 800;
+            }}
+            QLabel#etiquetaCopiaPreviewRecibo {{
+                font-size: 11px;
+                font-weight: 900;
+                letter-spacing: 0.8px;
             }}
             QLineEdit, QPlainTextEdit, QComboBox {{
                 border: 1px solid {borde_input};

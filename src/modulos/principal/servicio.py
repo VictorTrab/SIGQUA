@@ -14,6 +14,7 @@ MODULOS_OPERATIVOS = (
     ModuloNavegacion("abonados", "Abonados", "Registro de abonados y seguimiento administrativo.", "id.svg"),
     ModuloNavegacion("casas", "Casas", "Control de viviendas, servicio y relacion con abonados.", "home-2.svg"),
     ModuloNavegacion("pagos", "Pagos", "Cobro mensual, conceptos operativos y comprobantes.", "receipt-2.svg"),
+    ModuloNavegacion("historial_pagos", "Historial de pagos", "Consulta comprobantes emitidos y reimpresion operativa.", "clock.svg"),
     ModuloNavegacion("morosidad", "Morosidad", "Seguimiento de deuda vencida y riesgo de cobro.", "urgent.svg"),
     ModuloNavegacion("planes_pago", "Planes de pago", "Acuerdos, cuotas y saldos financiados.", "calendar-stats.svg"),
     ModuloNavegacion("reportes", "Reportes", "Consultas administrativas, indicadores y exportaciones.", "chart-bar.svg"),

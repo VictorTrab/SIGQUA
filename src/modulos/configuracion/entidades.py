@@ -27,6 +27,9 @@ class DatosJunta:
     telefono: str
     correo: str
     direccion: str
+    identificador_fiscal: str = ""
+    sitio_web: str = ""
+    mensaje_contacto: str = ""
 
 
 @dataclass(slots=True)
@@ -41,13 +44,24 @@ class ParametrosCobro:
     meses_para_corte: int
     permitir_pago_adelantado: bool
     meses_adelanto_maximo: int
+    mora_leve_hasta_meses: int
+    mora_media_hasta_meses: int
 
 
 @dataclass(slots=True)
 class FacturaConfiguracion:
     """Configuracion operativa de comprobantes y formato de salida."""
 
+    titulo_documento: str
+    subtitulo_documento: str
+    texto_legal_superior: str
     texto_pie: str
+    texto_legal_inferior: str
+    etiqueta_copia: str
+    mostrar_correo: bool
+    mostrar_telefono: bool
+    mostrar_direccion: bool
+    mostrar_identificador_fiscal: bool
     formato_salida: str
     correlativo_actual: str
     proximo_correlativo: str

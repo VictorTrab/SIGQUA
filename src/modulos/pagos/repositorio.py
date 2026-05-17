@@ -11,6 +11,7 @@ from modulos.pagos.entidades import (
     CargoPago,
     CasaPago,
     ComprobantePago,
+    ConfiguracionReciboPago,
     DetalleAplicacionPago,
     HistorialPago,
     MetodoPago,
@@ -100,6 +101,9 @@ class RepositorioPagos(Protocol):
 
     def obtener_comprobante(self, pago_id: int) -> ComprobantePago | None:
         """Obtiene el comprobante completo de un pago confirmado."""
+
+    def obtener_configuracion_recibo(self) -> ConfiguracionReciboPago:
+        """Obtiene la configuracion visible del recibo de pago."""
 
     def actualizar_documento_comprobante(
         self,
@@ -452,7 +456,7 @@ class RepositorioPagosSQLite:
                         saldo_posterior_centavos,
                         generado_por
                     )
-                    VALUES (?, ?, ?, 'PDF', ?, ?);
+                    VALUES (?, ?, ?, 'HTML', ?, ?);
                     """,
                     (
                         pago_id,
@@ -473,20 +477,26 @@ class RepositorioPagosSQLite:
                 p.id AS pago_id,
                 co.numero_comprobante,
                 COALESCE(co.tipo_comprobante, 'MENSUALIDAD') AS tipo_comprobante,
-                COALESCE(co.formato_salida, 'PDF') AS formato_salida,
+                COALESCE(co.formato_salida, 'HTML') AS formato_salida,
                 COALESCE(co.ruta_archivo, '') AS ruta_archivo,
                 COALESCE(co.saldo_posterior_centavos, 0) AS saldo_posterior_centavos,
                 co.generado_en,
                 printf('CA-%03d', p.casa_id) AS casa_codigo,
                 a.nombre_completo AS abonado_nombre,
                 a.dni AS abonado_dni,
+                COALESCE(b.nombre, '') AS barrio_nombre,
+                COALESCE(c.direccion_referencia, '') AS direccion_casa,
                 mp.nombre AS metodo_pago,
                 COALESCE(p.referencia_externa, '') AS referencia,
+                COALESCE(u.nombre_completo, u.nombre_usuario, '') AS usuario_registro,
                 p.total_pagado_centavos
             FROM comprobantes co
             INNER JOIN pagos p ON p.id = co.pago_id
             INNER JOIN abonados a ON a.id = p.abonado_id
+            INNER JOIN casas c ON c.id = p.casa_id
+            LEFT JOIN barrios b ON b.id = c.barrio_id
             INNER JOIN metodos_pago mp ON mp.id = p.metodo_pago_id
+            LEFT JOIN usuarios u ON u.id = p.usuario_cobrador_id
             WHERE p.id = ?
             LIMIT 1;
         """
@@ -513,13 +523,67 @@ class RepositorioPagosSQLite:
             casa_codigo=str(fila["casa_codigo"] or ""),
             abonado_nombre=str(fila["abonado_nombre"] or ""),
             abonado_dni=str(fila["abonado_dni"] or ""),
+            barrio_nombre=str(fila["barrio_nombre"] or ""),
+            direccion_casa=str(fila["direccion_casa"] or ""),
             metodo_pago=str(fila["metodo_pago"] or ""),
             referencia=str(fila["referencia"] or ""),
+            usuario_registro=str(fila["usuario_registro"] or ""),
             total_pagado_centavos=int(fila["total_pagado_centavos"] or 0),
             saldo_posterior_centavos=int(fila["saldo_posterior_centavos"] or 0),
             detalles=detalles,
-            formato_salida=str(fila["formato_salida"] or "PDF"),
+            formato_salida=str(fila["formato_salida"] or "HTML"),
             ruta_archivo=str(fila["ruta_archivo"] or ""),
+        )
+
+    def obtener_configuracion_recibo(self) -> ConfiguracionReciboPago:
+        claves = (
+            "junta.nombre",
+            "junta.telefono",
+            "junta.correo",
+            "junta.direccion",
+            "junta.identificador_fiscal",
+            "junta.sitio_web",
+            "junta.mensaje_contacto",
+            "factura.titulo_documento",
+            "factura.subtitulo_documento",
+            "factura.texto_legal_superior",
+            "factura.texto_pie",
+            "factura.texto_legal_inferior",
+            "factura.etiqueta_copia",
+            "factura.mostrar_correo",
+            "factura.mostrar_telefono",
+            "factura.mostrar_direccion",
+            "factura.mostrar_identificador_fiscal",
+        )
+        marcadores = ", ".join("?" for _ in claves)
+        consulta = f"""
+            SELECT clave, COALESCE(valor, '') AS valor
+            FROM configuracion_sistema
+            WHERE clave IN ({marcadores});
+        """
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            filas = conexion.execute(consulta, claves).fetchall()
+        valores = {str(fila["clave"]): str(fila["valor"] or "") for fila in filas}
+        return ConfiguracionReciboPago(
+            nombre_junta=valores.get("junta.nombre", "Junta de Agua"),
+            telefono_junta=valores.get("junta.telefono", ""),
+            correo_junta=valores.get("junta.correo", ""),
+            direccion_junta=valores.get("junta.direccion", ""),
+            identificador_fiscal=valores.get("junta.identificador_fiscal", ""),
+            sitio_web=valores.get("junta.sitio_web", ""),
+            mensaje_contacto=valores.get("junta.mensaje_contacto", ""),
+            titulo_documento=valores.get("factura.titulo_documento", "RECIBO DE PAGO") or "RECIBO DE PAGO",
+            subtitulo_documento=valores.get("factura.subtitulo_documento", ""),
+            texto_legal_superior=valores.get("factura.texto_legal_superior", ""),
+            texto_pie=valores.get("factura.texto_pie", ""),
+            texto_legal_inferior=valores.get("factura.texto_legal_inferior", ""),
+            etiqueta_copia=valores.get("factura.etiqueta_copia", "ORIGINAL") or "ORIGINAL",
+            mostrar_correo=self._a_booleano(valores.get("factura.mostrar_correo", "1")),
+            mostrar_telefono=self._a_booleano(valores.get("factura.mostrar_telefono", "1")),
+            mostrar_direccion=self._a_booleano(valores.get("factura.mostrar_direccion", "1")),
+            mostrar_identificador_fiscal=self._a_booleano(
+                valores.get("factura.mostrar_identificador_fiscal", "0")
+            ),
         )
 
     def actualizar_documento_comprobante(
@@ -747,3 +811,7 @@ class RepositorioPagosSQLite:
             nombre=str(fila["nombre"] or ""),
             requiere_referencia=bool(int(fila["requiere_referencia"] or 0)),
         )
+
+    @staticmethod
+    def _a_booleano(valor: str) -> bool:
+        return valor.strip().upper() in {"1", "TRUE", "SI", "S", "YES", "ON"}

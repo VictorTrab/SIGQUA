@@ -27,7 +27,7 @@ from PySide6.QtCore import (
     Qt,
     Signal,
 )
-from PySide6.QtGui import QColor, QPaintEvent, QPainter, QPainterPath, QPen, QPixmap, QResizeEvent
+from PySide6.QtGui import QColor, QPaintEvent, QPainter, QPen, QPixmap, QResizeEvent
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -718,12 +718,6 @@ class DialogoPruebaModalMascara(DialogoPruebaModalBase):
             "rgba(255, 255, 255, 0.14)",
         )
         self._layout_raiz.addWidget(panel)
-
-    def resizeEvent(self, evento: QResizeEvent) -> None:
-        ruta = QPainterPath()
-        ruta.addRoundedRect(self.rect(), self._radio, self._radio)
-        self.setMask(ruta.toFillPolygon().toPolygon())
-        super().resizeEvent(evento)
 
     def paintEvent(self, evento: QPaintEvent) -> None:
         painter = QPainter(self)
@@ -1431,11 +1425,11 @@ class VistaModuloPrincipal(QWidget):
         encabezado.setObjectName("encabezadoSidebar")
         layout = QHBoxLayout(encabezado)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(10)
 
         label_logo = QLabel()
         label_logo.setObjectName("logoSidebar")
-        label_logo.setFixedSize(42, 42)
+        label_logo.setFixedSize(56, 56)
         label_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         ruta_logo = self._gestor_rutas.obtener_ruta_logo_marca()
         if ruta_logo.exists():
@@ -1443,8 +1437,8 @@ class VistaModuloPrincipal(QWidget):
             if not pixmap_logo.isNull():
                 label_logo.setPixmap(
                     pixmap_logo.scaled(
-                        34,
-                        34,
+                        44,
+                        44,
                         Qt.AspectRatioMode.KeepAspectRatio,
                         Qt.TransformationMode.SmoothTransformation,
                     )
@@ -1452,16 +1446,14 @@ class VistaModuloPrincipal(QWidget):
 
         bloque_texto = QVBoxLayout()
         bloque_texto.setContentsMargins(0, 0, 0, 0)
-        bloque_texto.setSpacing(2)
+        bloque_texto.setSpacing(0)
 
         titulo = QLabel("SICAP")
         titulo.setObjectName("marcaPrincipal")
-        subtitulo = QLabel("Sistema de Control")
-        subtitulo.setObjectName("subtituloMarca")
         bloque_texto.addWidget(titulo)
-        bloque_texto.addWidget(subtitulo)
+        bloque_texto.addStretch(1)
 
-        layout.addWidget(label_logo, alignment=Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(label_logo, alignment=Qt.AlignmentFlag.AlignVCenter)
         layout.addLayout(bloque_texto, 1)
         return encabezado
 
@@ -1757,11 +1749,11 @@ class VistaModuloPrincipal(QWidget):
             QLabel#logoSidebar {
                 background: rgba(255, 255, 255, 0.08);
                 border: none;
-                border-radius: 12px;
+                border-radius: 16px;
             }
             QLabel#marcaPrincipal {
                 color: #ffffff;
-                font-size: 17px;
+                font-size: 22px;
                 font-weight: 900;
             }
             QLabel#subtituloMarca,

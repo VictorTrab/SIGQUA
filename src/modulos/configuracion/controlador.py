@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from comun.actualizaciones import bus_actualizaciones_modulos
 from modulos.autenticacion.entidades import UsuarioAutenticado
 from modulos.configuracion.servicio import ServicioConfiguracion
 from modulos.configuracion.vista import VistaConfiguracion
@@ -36,27 +37,69 @@ class ControladorConfiguracion:
             self._guardar_operacion_respaldo
         )
 
-    def _guardar_datos_junta(self, nombre: str, telefono: str, correo: str, direccion: str) -> None:
+    def _guardar_datos_junta(
+        self,
+        nombre: str,
+        telefono: str,
+        correo: str,
+        direccion: str,
+        identificador_fiscal: str,
+        sitio_web: str,
+        mensaje_contacto: str,
+    ) -> None:
         resultado = self._servicio_configuracion.guardar_datos_junta(
             nombre=nombre,
             telefono=telefono,
             correo=correo,
             direccion=direccion,
+            identificador_fiscal=identificador_fiscal,
+            sitio_web=sitio_web,
+            mensaje_contacto=mensaje_contacto,
             actor_id=None if self._actor is None else self._actor.identificador,
         )
         self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
             self._refrescar()
+            bus_actualizaciones_modulos.emitir(
+                modulo_origen="configuracion",
+                modulos_afectados=("reportes",),
+            )
 
-    def _guardar_parametros_factura(self, texto_pie: str, formato_salida: str) -> None:
+    def _guardar_parametros_factura(
+        self,
+        titulo_documento: str,
+        subtitulo_documento: str,
+        texto_legal_superior: str,
+        texto_pie: str,
+        texto_legal_inferior: str,
+        etiqueta_copia: str,
+        formato_salida: str,
+        mostrar_correo: bool,
+        mostrar_telefono: bool,
+        mostrar_direccion: bool,
+        mostrar_identificador_fiscal: bool,
+    ) -> None:
         resultado = self._servicio_configuracion.guardar_parametros_factura(
+            titulo_documento=titulo_documento,
+            subtitulo_documento=subtitulo_documento,
+            texto_legal_superior=texto_legal_superior,
             texto_pie=texto_pie,
+            texto_legal_inferior=texto_legal_inferior,
+            etiqueta_copia=etiqueta_copia,
             formato_salida=formato_salida,
+            mostrar_correo=mostrar_correo,
+            mostrar_telefono=mostrar_telefono,
+            mostrar_direccion=mostrar_direccion,
+            mostrar_identificador_fiscal=mostrar_identificador_fiscal,
             actor_id=None if self._actor is None else self._actor.identificador,
         )
         self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
             self._refrescar()
+            bus_actualizaciones_modulos.emitir(
+                modulo_origen="configuracion",
+                modulos_afectados=("reportes",),
+            )
 
     def _guardar_parametros_cobro(
         self,
@@ -67,6 +110,8 @@ class ControladorConfiguracion:
         meses_para_corte: int,
         permitir_pago_adelantado: bool,
         meses_adelanto_maximo: int,
+        mora_leve_hasta_meses: int,
+        mora_media_hasta_meses: int,
     ) -> None:
         resultado = self._servicio_configuracion.guardar_parametros_cobro(
             precio_mensual_centavos=precio_mensual_centavos,
@@ -76,11 +121,17 @@ class ControladorConfiguracion:
             meses_para_corte=meses_para_corte,
             permitir_pago_adelantado=permitir_pago_adelantado,
             meses_adelanto_maximo=meses_adelanto_maximo,
+            mora_leve_hasta_meses=mora_leve_hasta_meses,
+            mora_media_hasta_meses=mora_media_hasta_meses,
             actor_id=None if self._actor is None else self._actor.identificador,
         )
         self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
             self._refrescar()
+            bus_actualizaciones_modulos.emitir(
+                modulo_origen="configuracion",
+                modulos_afectados=("pagos", "morosidad", "reportes"),
+            )
 
     def _guardar_operacion_respaldo(self, respaldo_automatico: bool) -> None:
         resultado = self._servicio_configuracion.guardar_operacion_respaldo(

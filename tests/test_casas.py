@@ -5,6 +5,7 @@ import shutil
 import sys
 import unittest
 import uuid
+from contextlib import closing
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, Signal
@@ -102,7 +103,7 @@ class TestCasas(unittest.TestCase):
         self.assertEqual(detalle.casa.abonado_nombre, "Ana Martinez")
         self.assertIsNotNone(detalle.plan_activo)
 
-        with self.gestor_base_datos.obtener_conexion() as conexion:
+        with closing(self.gestor_base_datos.obtener_conexion()) as conexion:
             cargos = conexion.execute(
                 """
                 SELECT DISTINCT abonado_id
@@ -123,7 +124,7 @@ class TestCasas(unittest.TestCase):
         self.assertEqual(historial[0].abonado_nuevo_nombre, "Ana Martinez")
 
     def test_guardar_rechaza_abonado_inactivo(self) -> None:
-        with self.gestor_base_datos.obtener_conexion() as conexion:
+        with closing(self.gestor_base_datos.obtener_conexion()) as conexion:
             with conexion:
                 conexion.execute("UPDATE abonados SET estado = 'INACTIVO' WHERE id = 1;")
 
@@ -140,7 +141,7 @@ class TestCasas(unittest.TestCase):
         self.assertIn("abonados activos", resultado.mensaje)
 
     def test_guardar_permite_editar_casa_con_abonado_actual_inactivo(self) -> None:
-        with self.gestor_base_datos.obtener_conexion() as conexion:
+        with closing(self.gestor_base_datos.obtener_conexion()) as conexion:
             with conexion:
                 conexion.execute("UPDATE abonados SET estado = 'INACTIVO' WHERE id = 2;")
 

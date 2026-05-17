@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-import hashlib
 from datetime import date, datetime
-from pathlib import Path
 
 from comun.configuracion.gestor_rutas import GestorRutas
+from modulos.documentos import ServicioComprobantePago
 from modulos.pagos.entidades import (
     CargoPago,
     ComprobantePago,
+    ConfiguracionReciboPago,
+    DiagnosticoPagoMensual,
     DetalleAplicacionPago,
+    ESTADO_VISUAL_PAGO_BLOQUEADO,
+    ESTADO_VISUAL_PAGO_OK,
     EstadoModuloPagos,
     FormularioPago,
     ResumenConfirmacionPago,
@@ -28,9 +31,13 @@ class ServicioPagos:
         self,
         repositorio_pagos: RepositorioPagos,
         gestor_rutas: GestorRutas | None = None,
+        servicio_comprobante_pago: ServicioComprobantePago | None = None,
     ):
         self.repositorio_pagos = repositorio_pagos
         self._gestor_rutas = gestor_rutas or GestorRutas()
+        self._servicio_comprobante_pago = servicio_comprobante_pago or ServicioComprobantePago(
+            gestor_rutas=self._gestor_rutas,
+        )
 
     def obtener_estado(self, filtro: str = "") -> EstadoModuloPagos:
         return EstadoModuloPagos(
@@ -43,6 +50,33 @@ class ServicioPagos:
 
     def obtener_casa(self, casa_id: int):
         return self.repositorio_pagos.obtener_casa(casa_id)
+
+    def obtener_diagnostico_pago_mensual(self, casa_id: int) -> DiagnosticoPagoMensual | None:
+        casa = self.repositorio_pagos.obtener_casa(casa_id)
+        if casa is None:
+            return None
+        alertas: list[str] = []
+        resultado = self._validar_estado_operativo_mensual(casa.abonado_estado, casa.estado_servicio)
+        permite_continuar = resultado is None
+        if resultado is not None:
+            alertas.append(resultado.mensaje)
+        if casa.meses_vencidos > 0:
+            alertas.append(
+                f"La casa tiene {casa.meses_vencidos} mes(es) vencido(s) y se cobrarán primero."
+            )
+        if casa.deuda_total_centavos <= 0:
+            alertas.append(
+                "La casa no tiene deuda mensual pendiente; cualquier pago se tratará como adelanto si la regla vigente lo permite."
+            )
+        if not alertas:
+            alertas.append("La casa cumple las reglas vigentes para continuar con el pago mensual.")
+        return DiagnosticoPagoMensual(
+            casa_id=casa.casa_id,
+            permite_continuar=permite_continuar,
+            estado_visual=ESTADO_VISUAL_PAGO_OK if permite_continuar else ESTADO_VISUAL_PAGO_BLOQUEADO,
+            mensaje_diagnostico=alertas[0],
+            alertas=tuple(alertas),
+        )
 
     def previsualizar_pago_mensual(
         self,
@@ -69,18 +103,9 @@ class ServicioPagos:
         casa = self.repositorio_pagos.obtener_casa(formulario.casa_id)
         if casa is None:
             return ResultadoPago(False, "La casa seleccionada ya no existe.", "NO_ENCONTRADO")
-        if casa.abonado_estado != "ACTIVO":
-            return ResultadoPago(
-                False,
-                "La casa no tiene un abonado responsable activo para registrar pagos.",
-                "VALIDACION",
-            )
-        if casa.estado_servicio in {"SUSPENDIDO", "INACTIVO"}:
-            return ResultadoPago(
-                False,
-                "La casa debe tener un abonado responsable activo antes de registrar pagos.",
-                "VALIDACION",
-            )
+        validacion_estado = self._validar_estado_operativo_mensual(casa.abonado_estado, casa.estado_servicio)
+        if validacion_estado is not None:
+            return validacion_estado
 
         metodo = self.repositorio_pagos.obtener_metodo_pago(formulario.metodo_pago_id)
         if metodo is None:
@@ -193,129 +218,65 @@ class ServicioPagos:
             comprobante,
         )
 
+    def _validar_estado_operativo_mensual(
+        self,
+        abonado_estado: str,
+        estado_servicio: str,
+    ) -> ResultadoPago | None:
+        if abonado_estado != "ACTIVO":
+            return ResultadoPago(
+                False,
+                "Solo se puede registrar pago mensual cuando el abonado responsable está ACTIVO.",
+                "VALIDACION",
+            )
+        if estado_servicio == "SUSPENDIDO":
+            return ResultadoPago(
+                False,
+                "No se puede registrar pago mensual para una casa suspendida. Reactiva o reasigna primero un abonado activo responsable.",
+                "VALIDACION",
+            )
+        if estado_servicio == "CORTADO":
+            return ResultadoPago(
+                False,
+                "La casa está cortada. El pago mensual directo no aplica en este flujo; primero debe resolverse mediante reconexión.",
+                "VALIDACION",
+            )
+        if estado_servicio == "INACTIVO":
+            return ResultadoPago(
+                False,
+                "No se puede registrar pago mensual para una casa inactiva.",
+                "VALIDACION",
+            )
+        if estado_servicio != "ACTIVO":
+            return ResultadoPago(
+                False,
+                f"La casa debe estar ACTIVA para registrar pago mensual. Estado actual: {estado_servicio}.",
+                "VALIDACION",
+            )
+        return None
+
     def obtener_comprobante(self, pago_id: int) -> ComprobantePago | None:
         return self.repositorio_pagos.obtener_comprobante(pago_id)
 
-    def generar_html_comprobante(self, comprobante: ComprobantePago) -> str:
-        detalles = "".join(
-            f"<li>{self._escapar_html(detalle)}</li>"
-            for detalle in comprobante.detalles
-        ) or "<li>Sin detalle registrado.</li>"
-        referencia = comprobante.referencia or "No aplica"
-        return f"""
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <title>{self._escapar_html(comprobante.numero_comprobante)}</title>
-  <style>
-    body {{
-      background: #2c2966;
-      color: #f7fbff;
-      font-family: Segoe UI, Arial, sans-serif;
-      margin: 0;
-      padding: 24px;
-    }}
-    .tarjeta {{
-      max-width: 720px;
-      margin: 0 auto;
-      background: rgba(65, 62, 130, 0.95);
-      border: 1px solid rgba(148, 161, 194, 0.28);
-      border-radius: 18px;
-      padding: 28px;
-    }}
-    .encabezado {{
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 18px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-      padding-bottom: 16px;
-      margin-bottom: 18px;
-    }}
-    .marca {{ font-size: 28px; font-weight: 800; }}
-    .subtitulo {{ color: #c7d4e5; margin-top: 6px; }}
-    .numero {{ color: #73f2db; font-size: 22px; font-weight: 800; }}
-    .fila {{
-      display: grid;
-      grid-template-columns: 180px 1fr;
-      gap: 12px;
-      padding: 8px 0;
-    }}
-    .etiqueta {{ color: #c7d4e5; }}
-    .valor {{ color: #ffffff; font-weight: 700; }}
-    .totales {{ margin-top: 14px; }}
-    ul {{ margin: 10px 0 0 18px; padding: 0; }}
-    li {{ margin: 6px 0; }}
-  </style>
-</head>
-<body>
-  <div class="tarjeta">
-    <div class="encabezado">
-      <div>
-        <div class="marca">SICAP</div>
-        <div class="subtitulo">Comprobante de pago</div>
-      </div>
-      <div class="numero">{self._escapar_html(comprobante.numero_comprobante)}</div>
-    </div>
-    <div class="fila"><div class="etiqueta">Tipo</div><div class="valor">{self._escapar_html(self._etiqueta_tipo_pago(comprobante.tipo_comprobante))}</div></div>
-    <div class="fila"><div class="etiqueta">Casa</div><div class="valor">{self._escapar_html(comprobante.casa_codigo)}</div></div>
-    <div class="fila"><div class="etiqueta">Abonado</div><div class="valor">{self._escapar_html(comprobante.abonado_nombre)}</div></div>
-    <div class="fila"><div class="etiqueta">DNI</div><div class="valor">{self._escapar_html(comprobante.abonado_dni)}</div></div>
-    <div class="fila"><div class="etiqueta">Metodo</div><div class="valor">{self._escapar_html(comprobante.metodo_pago)}</div></div>
-    <div class="fila"><div class="etiqueta">Referencia</div><div class="valor">{self._escapar_html(referencia)}</div></div>
-    <div class="fila"><div class="etiqueta">Detalle</div><div class="valor"><ul>{detalles}</ul></div></div>
-    <div class="fila totales"><div class="etiqueta">Total pagado</div><div class="valor">{self.formatear_moneda(comprobante.total_pagado_centavos)}</div></div>
-    <div class="fila"><div class="etiqueta">Saldo posterior</div><div class="valor">{self.formatear_moneda(comprobante.saldo_posterior_centavos)}</div></div>
-    <div class="fila"><div class="etiqueta">Generado</div><div class="valor">{self.formatear_fecha(comprobante.generado_en)}</div></div>
-  </div>
-</body>
-</html>
-""".strip()
+    def obtener_configuracion_recibo(self) -> ConfiguracionReciboPago:
+        return self.repositorio_pagos.obtener_configuracion_recibo()
 
-    def generar_texto_comprobante(self, comprobante: ComprobantePago) -> str:
-        detalle = "\n".join(f"- {item}" for item in comprobante.detalles) or "- Sin detalle registrado."
-        referencia = comprobante.referencia or "No aplica"
-        return (
-            f"SICAP\n"
-            f"Comprobante de pago {comprobante.numero_comprobante}\n\n"
-            f"Tipo: {self._etiqueta_tipo_pago(comprobante.tipo_comprobante)}\n"
-            f"Casa: {comprobante.casa_codigo}\n"
-            f"Abonado: {comprobante.abonado_nombre}\n"
-            f"DNI: {comprobante.abonado_dni}\n"
-            f"Metodo: {comprobante.metodo_pago}\n"
-            f"Referencia: {referencia}\n"
-            f"Detalle:\n{detalle}\n\n"
-            f"Total pagado: {self.formatear_moneda(comprobante.total_pagado_centavos)}\n"
-            f"Saldo posterior: {self.formatear_moneda(comprobante.saldo_posterior_centavos)}\n"
-            f"Fecha: {self.formatear_fecha(comprobante.generado_en)}\n"
+    def generar_comprobante_pdf(self, pago_id: int, ruta_destino: str | None = None) -> str:
+        comprobante = self.obtener_comprobante(pago_id)
+        if comprobante is None:
+            raise ValueError("No fue posible recuperar el comprobante solicitado.")
+        configuracion = self.obtener_configuracion_recibo()
+        return self._servicio_comprobante_pago.generar_pdf(
+            comprobante=comprobante,
+            configuracion=configuracion,
+            formateador_moneda=self.formatear_moneda,
+            formateador_fecha=self.formatear_fecha,
+            formateador_hora=self.formatear_hora,
+            etiqueta_tipo_pago=self._etiqueta_tipo_pago,
+            ruta_destino=ruta_destino,
         )
 
-    def exportar_comprobante(
-        self,
-        comprobante: ComprobantePago,
-        ruta_destino: str,
-    ) -> str:
-        ruta = Path(ruta_destino).expanduser()
-        ruta.parent.mkdir(parents=True, exist_ok=True)
-        sufijo = ruta.suffix.lower()
-        if sufijo == ".txt":
-            contenido = self.generar_texto_comprobante(comprobante)
-            formato = "TEXTO"
-        else:
-            contenido = self.generar_html_comprobante(comprobante)
-            formato = "HTML"
-        ruta.write_text(contenido, encoding="utf-8")
-        hash_documento = hashlib.sha256(contenido.encode("utf-8")).hexdigest()
-        self.repositorio_pagos.actualizar_documento_comprobante(
-            pago_id=comprobante.pago_id,
-            ruta_archivo=str(ruta),
-            formato_salida=formato,
-            hash_documento=hash_documento,
-        )
-        return str(ruta)
-
-    def ruta_sugerida_comprobante(self, comprobante: ComprobantePago, extension: str = ".html") -> str:
+    def ruta_sugerida_comprobante(self, comprobante: ComprobantePago, extension: str = ".pdf") -> str:
         base = self._gestor_rutas.obtener_ruta_exportaciones_comprobantes()
         return str(base / f"{comprobante.numero_comprobante}{extension}")
 
@@ -332,6 +293,19 @@ class ServicioPagos:
         except ValueError:
             return valor
         return fecha.strftime("%d/%m/%Y")
+
+    @staticmethod
+    def formatear_hora(valor: str) -> str:
+        if not valor:
+            return "Sin registro"
+        try:
+            fecha = datetime.fromisoformat(valor)
+        except ValueError:
+            return valor
+        return fecha.strftime("%H:%M")
+
+    def _separar_fecha_hora(self, valor: str) -> tuple[str, str]:
+        return self.formatear_fecha(valor), self.formatear_hora(valor)
 
     @staticmethod
     def _resolver_ultimo_periodo(cargos: list[object]) -> tuple[int, int]:
@@ -361,12 +335,3 @@ class ServicioPagos:
             "RECONEXION": "Reconexion",
         }
         return etiquetas.get(tipo_pago, tipo_pago)
-
-    @staticmethod
-    def _escapar_html(valor: str) -> str:
-        return (
-            valor.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace('"', "&quot;")
-        )

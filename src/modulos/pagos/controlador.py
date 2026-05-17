@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from comun.actualizaciones import EventoModuloActualizado, bus_actualizaciones_modulos
 from modulos.autenticacion.entidades import UsuarioAutenticado
 from modulos.pagos.entidades import FormularioPago, ResumenConfirmacionPago, ResultadoPago
 from modulos.pagos.servicio import ServicioPagos
@@ -16,6 +17,7 @@ class ControladorPagos:
         self.vista_pagos = vista_pagos
         self._actor: UsuarioAutenticado | None = None
         self._conectar_senales()
+        bus_actualizaciones_modulos.actualizacion_emitida.connect(self._manejar_actualizacion_modulo)
 
     def mostrar_para_actor(self, actor: UsuarioAutenticado) -> None:
         self._actor = actor
@@ -34,6 +36,7 @@ class ControladorPagos:
             estado,
             self.servicio_pagos.formatear_moneda,
             self.servicio_pagos.formatear_fecha,
+            mostrar_casas=bool(filtro.strip()),
         )
         casa_id = self.vista_pagos.obtener_casa_seleccionada_id()
         if casa_id is not None:
@@ -41,7 +44,8 @@ class ControladorPagos:
 
     def _cargar_cargos_mensuales(self, casa_id: int) -> None:
         cargos = self.servicio_pagos.obtener_cargos_mensuales(casa_id)
-        self.vista_pagos.mostrar_cargos_mensuales(casa_id, cargos)
+        diagnostico = self.servicio_pagos.obtener_diagnostico_pago_mensual(casa_id)
+        self.vista_pagos.mostrar_cargos_mensuales(casa_id, cargos, diagnostico)
 
     def _previsualizar_pago_mensual(self, formulario: FormularioPago) -> None:
         confirmacion = self.servicio_pagos.previsualizar_pago_mensual(formulario)
@@ -80,6 +84,10 @@ class ControladorPagos:
             comprobante_id = resultado.comprobante.pago_id if resultado.comprobante is not None else None
             self.vista_pagos.reiniciar_flujo_mensual()
             self._refrescar()
+            bus_actualizaciones_modulos.emitir(
+                modulo_origen="pagos",
+                modulos_afectados=("historial_pagos", "morosidad", "reportes"),
+            )
             if comprobante_id is not None:
                 self._abrir_dialogo_comprobante(comprobante_id)
 
@@ -87,22 +95,20 @@ class ControladorPagos:
         self._abrir_dialogo_comprobante(pago_id)
 
     def _abrir_dialogo_comprobante(self, pago_id: int) -> None:
-        comprobante = self.servicio_pagos.obtener_comprobante(pago_id)
-        if comprobante is None:
+        try:
+            ruta_documento = self.servicio_pagos.generar_comprobante_pdf(pago_id)
+        except (OSError, ValueError) as error:
             self.vista_pagos.mostrar_mensaje(
-                "No fue posible cargar el comprobante solicitado.",
+                f"No fue posible generar el comprobante PDF. {error}",
                 es_error=True,
             )
             return
-        html = self.servicio_pagos.generar_html_comprobante(comprobante)
-        texto = self.servicio_pagos.generar_texto_comprobante(comprobante)
-        ruta_sugerida = self.servicio_pagos.ruta_sugerida_comprobante(comprobante)
-        self.vista_pagos.mostrar_comprobante(
-            comprobante=comprobante,
-            html=html,
-            texto=texto,
-            ruta_sugerida=ruta_sugerida,
-            exportador=lambda ruta: self.servicio_pagos.exportar_comprobante(comprobante, ruta),
-            formatear_moneda=self.servicio_pagos.formatear_moneda,
-            formatear_fecha=self.servicio_pagos.formatear_fecha,
-        )
+        self.vista_pagos.mostrar_comprobante(ruta_documento=ruta_documento)
+
+    def _manejar_actualizacion_modulo(self, evento: object) -> None:
+        if not isinstance(evento, EventoModuloActualizado):
+            return
+        if "pagos" not in evento.modulos_afectados:
+            return
+        self._refrescar()
+        self.vista_pagos.mostrar_mensaje(evento.mensaje, es_error=False)

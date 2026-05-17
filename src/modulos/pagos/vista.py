@@ -3,22 +3,20 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QTextDocument
-from PySide6.QtPrintSupport import QPrintDialog, QPrinter
+from PySide6.QtPrintSupport import QPrintDialog, QPrinterInfo
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QDialog,
     QFrame,
-    QFileDialog,
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
-    QProgressBar,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -38,11 +36,19 @@ from comun.ui import (
     crear_boton_operativo,
     crear_item_tabla,
 )
+from comun.ui.comprobante_termico import (
+    DatosDocumentoRecibo,
+    crear_documento_recibo_termico,
+    crear_impresora_recibo_termico,
+    preparar_documento_para_printer,
+)
 from comun.ui.temas import TEMA_SICAP_PREDETERMINADO, obtener_paleta_tema
 from modulos.pagos.entidades import (
     CargoPago,
     CasaPago,
-    ComprobantePago,
+    DiagnosticoPagoMensual,
+    ESTADO_VISUAL_PAGO_BLOQUEADO,
+    ESTADO_VISUAL_PAGO_OK,
     EstadoModuloPagos,
     FormularioPago,
     MetodoPago,
@@ -55,158 +61,82 @@ from modulos.pagos.entidades import (
 )
 
 
-class DialogoVistaDocumentoComprobante(DialogoBaseSicap):
-    """Previsualizacion ampliada del comprobante."""
+class DialogoVistaPreviaImpresionComprobante(QWidget):
+    """Compatibilidad temporal: el backend documental ya no renderiza comprobantes en UI."""
 
-    def __init__(self, titulo: str, html: str, parent: QWidget | None = None) -> None:
+    def __init__(self, datos_documento: DatosDocumentoRecibo, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setMinimumWidth(760)
-        self.setMinimumHeight(720)
-
-        encabezado = QLabel(titulo)
-        encabezado.setObjectName("tituloDialogoSicap")
-        descripcion = QLabel("Vista ampliada lista para revisar antes de imprimir o exportar.")
-        descripcion.setObjectName("descripcionDialogoSicap")
-        descripcion.setWordWrap(True)
-
-        visor = QTextBrowser()
-        visor.setObjectName("visorComprobantePago")
-        visor.setHtml(html)
-        visor.setOpenExternalLinks(False)
-
-        fila_acciones = QHBoxLayout()
-        boton_cerrar = BotonAccionContextual(
-            "Cerrar",
-            variante="neutro",
-            centrado=True,
-            mostrar_icono=False,
-        )
-        boton_cerrar.clicked.connect(self.accept)
-        fila_acciones.addStretch(1)
-        fila_acciones.addWidget(boton_cerrar)
-
-        self.layout_cabecera.addWidget(encabezado)
-        self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(visor)
-        self.layout_pie.addLayout(fila_acciones)
-
-
-class DialogoComprobantePago(DialogoBaseSicap):
-    """Dialogo compacto del comprobante con acciones operativas reales."""
-
-    def __init__(
-        self,
-        comprobante: ComprobantePago,
-        html: str,
-        texto: str,
-        ruta_sugerida: str,
-        exportador: Callable[[str], str],
-        formatear_moneda: Callable[[int], str],
-        formatear_fecha: Callable[[str], str],
-        parent: QWidget | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self._comprobante = comprobante
-        self._html = html
-        self._texto = texto
-        self._ruta_sugerida = ruta_sugerida
-        self._exportador = exportador
-        self._formatear_moneda = formatear_moneda
-        self._formatear_fecha = formatear_fecha
+        self._documento_base = crear_documento_recibo_termico(datos_documento)
+        self.setWindowTitle(f"{datos_documento.numero_comprobante} | Comprobante de pago")
+        self.setMinimumWidth(860)
+        self.setMinimumHeight(760)
         self._mensaje = QLabel("")
         self._mensaje.setObjectName("mensajeComprobantePago")
         self._mensaje.setVisible(False)
-        self.setMinimumWidth(560)
-        self._construir_ui()
 
-    def _construir_ui(self) -> None:
-        titulo = QLabel("Comprobante generado")
+        titulo = QLabel(datos_documento.numero_comprobante)
         titulo.setObjectName("tituloDialogoSicap")
-        descripcion = QLabel("El pago quedo registrado y ya puedes revisar, imprimir o exportar el comprobante.")
+        descripcion = QLabel("Vista previa final del comprobante. Esta misma versión es la que se enviará a impresión.")
         descripcion.setObjectName("descripcionDialogoSicap")
         descripcion.setWordWrap(True)
 
-        datos = (
-            ("Recibo", self._comprobante.numero_comprobante),
-            ("Tipo", VistaPagos._etiqueta_tipo_pago(self._comprobante.tipo_comprobante)),
-            ("Casa", self._comprobante.casa_codigo),
-            ("Abonado", self._comprobante.abonado_nombre),
-            ("Metodo", self._comprobante.metodo_pago),
-            ("Referencia", self._comprobante.referencia or "No aplica"),
-            ("Detalle", "\n".join(self._comprobante.detalles) or "Sin detalle registrado."),
-            ("Total pagado", self._formatear_moneda(self._comprobante.total_pagado_centavos)),
-            ("Saldo posterior", self._formatear_moneda(self._comprobante.saldo_posterior_centavos)),
-            ("Fecha", self._formatear_fecha(self._comprobante.generado_en)),
-        )
-        panel = QFrame()
-        panel.setObjectName("panelComprobantePago")
-        layout_panel = QVBoxLayout(panel)
-        layout_panel.setContentsMargins(16, 16, 16, 16)
-        layout_panel.setSpacing(10)
-        for etiqueta, valor in datos:
-            fila = QHBoxLayout()
-            fila.setSpacing(10)
-            label = QLabel(etiqueta)
-            label.setObjectName("etiquetaComprobantePago")
-            contenido = QLabel(valor)
-            contenido.setObjectName("valorComprobantePago")
-            contenido.setWordWrap(True)
-            fila.addWidget(label, 1)
-            fila.addWidget(contenido, 2)
-            layout_panel.addLayout(fila)
+        panel_ticket = QFrame()
+        panel_ticket.setObjectName("panelTicketComprobante")
+        layout_ticket = QVBoxLayout(panel_ticket)
+        layout_ticket.setContentsMargins(10, 10, 10, 10)
+        layout_ticket.setSpacing(0)
+
+        self._visor = QTextBrowser()
+        self._visor.setObjectName("visorComprobantePago")
+        self._visor.setOpenExternalLinks(False)
+        self._visor.setMinimumWidth(330)
+        self._visor.setMaximumWidth(330)
+        self._visor.setDocument(self._documento_base.clone())
+        layout_ticket.addWidget(self._visor)
+
+        contenedor_ticket = QHBoxLayout()
+        contenedor_ticket.setContentsMargins(0, 0, 0, 0)
+        contenedor_ticket.addStretch(1)
+        contenedor_ticket.addWidget(panel_ticket, 0, Qt.AlignmentFlag.AlignTop)
+        contenedor_ticket.addStretch(1)
 
         fila_acciones = QHBoxLayout()
-        fila_acciones.setSpacing(10)
-        boton_ver = BotonAccionContextual("Ver", variante="neutro", centrado=True, mostrar_icono=False)
+        boton_cerrar = BotonAccionContextual("Cerrar", variante="neutro", centrado=True, mostrar_icono=False)
         boton_imprimir = BotonAccionContextual("Imprimir", variante="primario", centrado=True, mostrar_icono=False)
-        boton_exportar = BotonAccionContextual("Exportar", variante="edicion", centrado=True, mostrar_icono=False)
-        boton_ver.clicked.connect(self._ver)
+        boton_cerrar.clicked.connect(self.accept)
         boton_imprimir.clicked.connect(self._imprimir)
-        boton_exportar.clicked.connect(self._exportar)
-        fila_acciones.addWidget(boton_ver)
         fila_acciones.addWidget(boton_imprimir)
         fila_acciones.addStretch(1)
-        fila_acciones.addWidget(boton_exportar)
+        fila_acciones.addWidget(boton_cerrar)
 
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(panel)
+        self.layout_cuerpo.addLayout(contenedor_ticket)
         self.layout_cuerpo.addWidget(self._mensaje)
         self.layout_pie.addLayout(fila_acciones)
-        self._aplicar_estilos_comprobante()
+        self._aplicar_estilos()
 
-    def _ver(self) -> None:
-        DialogoVistaDocumentoComprobante(
-            titulo=self._comprobante.numero_comprobante,
-            html=self._html,
-            parent=self,
-        ).exec()
+        if not QPrinterInfo.availablePrinters():
+            self._mostrar_mensaje(
+                "No se detectó una impresora instalada. Puedes revisar el comprobante, pero la impresión no estará disponible hasta configurar una.",
+                es_error=True,
+            )
 
     def _imprimir(self) -> None:
-        impresora = QPrinter(QPrinter.PrinterMode.HighResolution)
+        if not QPrinterInfo.availablePrinters():
+            self._mostrar_mensaje(
+                "No hay impresoras disponibles para enviar el comprobante.",
+                es_error=True,
+            )
+            return
+        impresora = crear_impresora_recibo_termico()
         dialogo = QPrintDialog(impresora, self)
+        dialogo.setWindowTitle("Imprimir comprobante")
         if dialogo.exec() != QDialog.DialogCode.Accepted:
             return
-        documento = QTextDocument()
-        documento.setHtml(self._html)
+        documento = preparar_documento_para_printer(self._documento_base, impresora)
         documento.print_(impresora)
-        self._mostrar_mensaje("Se envio el comprobante al dialogo de impresion.", es_error=False)
-
-    def _exportar(self) -> None:
-        ruta, _ = QFileDialog.getSaveFileName(
-            self,
-            "Exportar comprobante",
-            self._ruta_sugerida,
-            "HTML (*.html);;Texto (*.txt)",
-        )
-        if not ruta:
-            return
-        try:
-            ruta_guardada = self._exportador(ruta)
-        except OSError as error:
-            self._mostrar_mensaje(f"No fue posible exportar el comprobante. {error}", es_error=True)
-            return
-        self._mostrar_mensaje(f"Comprobante exportado en {ruta_guardada}.", es_error=False)
+        self._mostrar_mensaje("Comprobante enviado a impresión.", es_error=False)
 
     def _mostrar_mensaje(self, mensaje: str, es_error: bool) -> None:
         self._mensaje.setText(mensaje)
@@ -215,25 +145,22 @@ class DialogoComprobantePago(DialogoBaseSicap):
         self._mensaje.style().polish(self._mensaje)
         self._mensaje.setVisible(True)
 
-    def _aplicar_estilos_comprobante(self) -> None:
+    def _aplicar_estilos(self) -> None:
         paleta = obtener_paleta_tema(TEMA_SICAP_PREDETERMINADO)
         self.setStyleSheet(
             self.styleSheet()
             + f"""
-            QFrame#panelComprobantePago {{
-                background-color: {paleta["fondo_superficie_suave"]};
-                border: 1px solid {paleta["borde_suave"]};
-                border-radius: 16px;
+            QFrame#panelTicketComprobante {{
+                background-color: #ffffff;
+                border: 1px solid #d4d4d8;
+                border-radius: 10px;
             }}
-            QLabel#etiquetaComprobantePago {{
-                color: {paleta["texto_secundario"]};
-                font-size: 11px;
-                font-weight: 700;
-            }}
-            QLabel#valorComprobantePago {{
-                color: #ffffff;
-                font-size: 13px;
-                font-weight: 700;
+            QTextBrowser#visorComprobantePago {{
+                background-color: #ffffff;
+                border: none;
+                border-radius: 0px;
+                color: #111111;
+                padding: 0px;
             }}
             QLabel#mensajeComprobantePago {{
                 border-radius: 12px;
@@ -250,13 +177,6 @@ class DialogoComprobantePago(DialogoBaseSicap):
                 background-color: {paleta["fondo_error"]};
                 border: 1px solid {paleta["borde_error"]};
                 color: {paleta["texto_error"]};
-            }}
-            QTextBrowser#visorComprobantePago {{
-                background-color: {paleta["fondo_superficie_muy_suave"]};
-                border: 1px solid {paleta["borde_suave"]};
-                border-radius: 14px;
-                color: {paleta["texto_principal"]};
-                padding: 12px;
             }}
             """
         )
@@ -316,6 +236,7 @@ class FlujoPagoMensual(QWidget):
     casa_solicitada = Signal(int)
     preparar_resumen_solicitado = Signal(object)
     registrar_pago_solicitado = Signal(object)
+    estado_visual_cambiado = Signal(str)
 
     PASO_BUSQUEDA = 0
     PASO_DIAGNOSTICO = 1
@@ -331,6 +252,8 @@ class FlujoPagoMensual(QWidget):
         self._cargos: tuple[CargoPago, ...] = ()
         self._casa_seleccionada: CasaPago | None = None
         self._resumen_actual: ResumenConfirmacionPago | None = None
+        self._diagnostico_actual: DiagnosticoPagoMensual | None = None
+        self._mostrar_resultados_busqueda = False
         self._formatear_moneda: Callable[[int], str] = lambda valor: f"L {valor / 100:,.2f}"
         self._formatear_fecha: Callable[[str], str] = lambda valor: valor
         self._construir_ui()
@@ -357,11 +280,6 @@ class FlujoPagoMensual(QWidget):
         fila_superior.addStretch(1)
         fila_superior.addWidget(self._boton_reiniciar)
 
-        self._barra_progreso = QProgressBar()
-        self._barra_progreso.setObjectName("barraProgresoPago")
-        self._barra_progreso.setRange(1, 4)
-        self._barra_progreso.setTextVisible(False)
-
         self._fila_pasos = QHBoxLayout()
         self._fila_pasos.setSpacing(12)
         self._chips_paso: list[QLabel] = []
@@ -372,7 +290,6 @@ class FlujoPagoMensual(QWidget):
             self._fila_pasos.addWidget(chip)
 
         layout_progreso.addLayout(fila_superior)
-        layout_progreso.addWidget(self._barra_progreso)
         layout_progreso.addLayout(self._fila_pasos)
 
         self._stack = QStackedWidget()
@@ -661,9 +578,11 @@ class FlujoPagoMensual(QWidget):
         estado: EstadoModuloPagos,
         formatear_moneda: Callable[[int], str],
         formatear_fecha: Callable[[str], str],
+        mostrar_casas: bool = False,
     ) -> None:
         self._casas = estado.casas
         self._metodos = estado.metodos_pago
+        self._mostrar_resultados_busqueda = mostrar_casas
         self._formatear_moneda = formatear_moneda
         self._formatear_fecha = formatear_fecha
         self._llenar_casas()
@@ -678,10 +597,16 @@ class FlujoPagoMensual(QWidget):
                 self.reiniciar_flujo()
         self._actualizar_estado_flujo()
 
-    def mostrar_cargos_mensuales(self, casa_id: int, cargos: tuple[CargoPago, ...]) -> None:
+    def mostrar_cargos_mensuales(
+        self,
+        casa_id: int,
+        cargos: tuple[CargoPago, ...],
+        diagnostico: DiagnosticoPagoMensual | None = None,
+    ) -> None:
         if self._casa_seleccionada is None or self._casa_seleccionada.casa_id != casa_id:
             return
         self._cargos = cargos
+        self._diagnostico_actual = diagnostico
         self._tabla_cargos.setRowCount(len(cargos))
         if not cargos:
             self._label_estado_cargos.setText("No hay cargos mensuales pendientes para esta casa.")
@@ -699,6 +624,7 @@ class FlujoPagoMensual(QWidget):
             )
             for columna, valor in enumerate(valores):
                 self._tabla_cargos.setItem(fila, columna, crear_item_tabla(valor))
+        self._actualizar_contexto_casa()
         self._actualizar_estado_flujo()
 
     def mostrar_previsualizacion_pago(
@@ -750,7 +676,10 @@ class FlujoPagoMensual(QWidget):
         self._combo_metodo.setCurrentIndex(0)
         self._input_referencia.clear()
         self._input_observaciones.clear()
+        self._mostrar_resultados_busqueda = False
+        self._diagnostico_actual = None
         self._tabla_casas.clearSelection()
+        self._tabla_casas.setRowCount(0)
         self._tabla_cargos.setRowCount(0)
         self._label_resultados.setText("Busca una casa para iniciar el pago mensual.")
         self._mensaje_formulario.setText("Completa los datos y continúa para revisar el resumen.")
@@ -759,7 +688,12 @@ class FlujoPagoMensual(QWidget):
         self._ir_a_paso(self.PASO_BUSQUEDA)
 
     def _emitir_busqueda(self) -> None:
-        self.buscar_solicitado.emit(self._input_busqueda.text().strip())
+        texto = self._input_busqueda.text().strip()
+        self._mostrar_resultados_busqueda = bool(texto)
+        if not texto:
+            self._tabla_casas.setRowCount(0)
+            self._label_resultados.setText("Busca una casa para iniciar el pago mensual.")
+        self.buscar_solicitado.emit(texto)
 
     def _seleccionar_casa(self, fila: int, _columna: int = 0) -> None:
         item = self._tabla_casas.item(fila, 0)
@@ -772,17 +706,28 @@ class FlujoPagoMensual(QWidget):
         self._casa_seleccionada = casa
         self._cargos = ()
         self._resumen_actual = None
+        self._diagnostico_actual = None
         self._actualizar_contexto_casa()
         self.casa_solicitada.emit(casa_id)
         self._ir_a_paso(self.PASO_DIAGNOSTICO)
 
     def _solicitar_preparacion_resumen(self) -> None:
+        if not self._permite_pago_mensual_directo():
+            self._mostrar_error_formulario(
+                "El pago mensual directo solo está disponible para casas ACTIVAS con abonado responsable ACTIVO."
+            )
+            return
         formulario = self._construir_formulario()
         if formulario is None:
             return
         self.preparar_resumen_solicitado.emit(formulario)
 
     def _emitir_registro(self) -> None:
+        if not self._permite_pago_mensual_directo():
+            self._mostrar_error_formulario(
+                "El pago mensual directo solo está disponible para casas ACTIVAS con abonado responsable ACTIVO."
+            )
+            return
         formulario = self._construir_formulario()
         if formulario is None or self._resumen_actual is None:
             return
@@ -812,6 +757,10 @@ class FlujoPagoMensual(QWidget):
         self._mensaje_formulario.style().polish(self._mensaje_formulario)
 
     def _llenar_casas(self) -> None:
+        if not self._mostrar_resultados_busqueda:
+            self._tabla_casas.setRowCount(0)
+            self._label_resultados.setText("Busca una casa para iniciar el pago mensual.")
+            return
         self._tabla_casas.setRowCount(len(self._casas))
         for fila, casa in enumerate(self._casas):
             valores = (
@@ -865,19 +814,17 @@ class FlujoPagoMensual(QWidget):
             self._label_contexto_datos.setText("Sin casa seleccionada.")
             for valor in self._metricas_diagnostico.values():
                 valor.setText("-")
+            self._aplicar_estado_visual_diagnostico(None)
             return
         self._label_casa_diagnostico.setText(casa.casa_codigo)
         self._label_abonado_diagnostico.setText(
             f"{casa.abonado_nombre} | DNI {casa.abonado_dni}"
         )
-        alertas: list[str] = []
-        if casa.estado_servicio in {"SUSPENDIDO", "INACTIVO"}:
-            alertas.append("La casa tiene restricción operativa para registrar pago directo.")
-        if casa.meses_vencidos > 0:
-            alertas.append(f"La casa tiene {casa.meses_vencidos} mes(es) vencido(s) que deben cubrirse primero.")
-        if casa.deuda_total_centavos <= 0:
-            alertas.append("La casa no tiene deuda mensual pendiente; cualquier pago se tratará como adelanto si la regla lo permite.")
-        self._label_alerta_diagnostico.setText(" ".join(alertas) or "No hay alertas críticas visibles para esta casa.")
+        self._label_alerta_diagnostico.setText(
+            self._diagnostico_actual.mensaje_diagnostico
+            if self._diagnostico_actual is not None
+            else "Aquí aparecerán alertas y validaciones relevantes antes del cobro mensual."
+        )
         self._metricas_diagnostico["Barrio"].setText(casa.barrio_nombre or "Sin barrio")
         self._metricas_diagnostico["Estado del servicio"].setText(casa.estado_servicio)
         self._metricas_diagnostico["Meses pendientes"].setText(str(casa.meses_pendientes))
@@ -888,6 +835,7 @@ class FlujoPagoMensual(QWidget):
         self._label_contexto_datos.setText(
             f"Casa {casa.casa_codigo} · {casa.abonado_nombre} · Estado {casa.estado_servicio}"
         )
+        self._aplicar_estado_visual_diagnostico(self._diagnostico_actual)
 
     def _ir_a_paso(self, paso: int) -> None:
         self._stack.setCurrentIndex(paso)
@@ -895,17 +843,54 @@ class FlujoPagoMensual(QWidget):
 
     def _actualizar_estado_flujo(self) -> None:
         paso = self._stack.currentIndex()
-        self._barra_progreso.setValue(paso + 1)
         self._label_breadcrumb.setText(f"Paso {paso + 1} de 4")
         self._boton_reiniciar.setVisible(paso > self.PASO_BUSQUEDA or self._casa_seleccionada is not None)
         for indice, chip in enumerate(self._chips_paso):
             chip.setProperty("activo", indice == paso)
             chip.setProperty("completado", indice < paso)
+            if indice == self.PASO_DIAGNOSTICO and self._diagnostico_actual is not None:
+                chip.setProperty(
+                    "bloqueado",
+                    self._diagnostico_actual.estado_visual == ESTADO_VISUAL_PAGO_BLOQUEADO,
+                )
+                chip.setProperty(
+                    "habilitado",
+                    self._diagnostico_actual.estado_visual == ESTADO_VISUAL_PAGO_OK,
+                )
+            else:
+                chip.setProperty("bloqueado", False)
+                chip.setProperty("habilitado", False)
             chip.style().unpolish(chip)
             chip.style().polish(chip)
-        self._boton_diagnostico_siguiente.setEnabled(self._casa_seleccionada is not None)
-        self._boton_datos_siguiente.setEnabled(self._casa_seleccionada is not None)
+        permite_mensualidad = self._permite_pago_mensual_directo()
+        self._boton_diagnostico_siguiente.setEnabled(permite_mensualidad)
+        self._boton_datos_siguiente.setEnabled(permite_mensualidad)
         self._boton_confirmar.setEnabled(self._resumen_actual is not None)
+        self.estado_visual_cambiado.emit(
+            self._diagnostico_actual.estado_visual if self._diagnostico_actual is not None else ""
+        )
+
+    def _permite_pago_mensual_directo(self) -> bool:
+        return bool(self._diagnostico_actual is not None and self._diagnostico_actual.permite_continuar)
+
+    def _aplicar_estado_visual_diagnostico(
+        self,
+        diagnostico: DiagnosticoPagoMensual | None,
+    ) -> None:
+        estado = ""
+        if diagnostico is not None:
+            estado = "error" if diagnostico.estado_visual == ESTADO_VISUAL_PAGO_BLOQUEADO else "exito"
+        for widget in (
+            self._label_alerta_diagnostico,
+            self._label_estado_cargos,
+            self._label_contexto_datos,
+        ):
+            widget.setProperty("estado", estado)
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+        self._panel_diagnostico.setProperty("estadoVisual", estado)
+        self._panel_diagnostico.style().unpolish(self._panel_diagnostico)
+        self._panel_diagnostico.style().polish(self._panel_diagnostico)
 
     @staticmethod
     def _resolver_etiqueta_cargo(cargo: CargoPago) -> str:
@@ -973,20 +958,20 @@ class FlujoPagoMensual(QWidget):
                 border: 1px solid {paleta["borde_principal"]};
                 color: #ffffff;
             }}
+            QLabel#chipPasoPago[habilitado="true"] {{
+                background-color: rgba(16, 120, 98, 0.22);
+                border: 1px solid {paleta["borde_exito"]};
+                color: {paleta["texto_exito"]};
+            }}
+            QLabel#chipPasoPago[bloqueado="true"] {{
+                background-color: rgba(180, 35, 24, 0.18);
+                border: 1px solid {paleta["borde_error"]};
+                color: {paleta["texto_error"]};
+            }}
             QLabel#chipPasoPago[completado="true"] {{
                 background-color: rgba(34, 197, 94, 0.16);
                 border: 1px solid {paleta["borde_exito"]};
                 color: {paleta["texto_exito"]};
-            }}
-            QProgressBar#barraProgresoPago {{
-                background-color: rgba(71, 85, 105, 0.24);
-                border: 1px solid {paleta["borde_suave"]};
-                border-radius: 8px;
-                min-height: 12px;
-            }}
-            QProgressBar#barraProgresoPago::chunk {{
-                background-color: {paleta["borde_principal"]};
-                border-radius: 8px;
             }}
             QLabel#tituloPasoPago,
             QLabel#tituloDiagnosticoPago {{
@@ -1011,6 +996,14 @@ class FlujoPagoMensual(QWidget):
                 background-color: {paleta["fondo_exito"]};
                 border: 1px solid {paleta["borde_exito"]};
                 color: {paleta["texto_exito"]};
+            }}
+            QFrame#panelDiagnosticoPago[estadoVisual="error"] {{
+                background-color: rgba(180, 35, 24, 0.12);
+                border: 1px solid {paleta["borde_error"]};
+            }}
+            QFrame#panelDiagnosticoPago[estadoVisual="exito"] {{
+                background-color: rgba(16, 120, 98, 0.12);
+                border: 1px solid {paleta["borde_exito"]};
             }}
             QLabel#etiquetaMetricaPago,
             QLabel#labelCampoPago {{
@@ -1048,6 +1041,11 @@ class FlujoPagoMensual(QWidget):
                 color: {paleta["texto_principal"]};
                 gridline-color: transparent;
             }}
+            QTableWidget#tablaCasasPagoMensual::item,
+            QTableWidget#tablaCargosPagoMensual::item {{
+                padding: 9px 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            }}
             QHeaderView::section {{
                 background-color: {paleta["fondo_tabla_header"]};
                 border: 0;
@@ -1058,6 +1056,32 @@ class FlujoPagoMensual(QWidget):
             QTableWidget::item:selected {{
                 background-color: rgba(45, 212, 191, 0.24);
                 color: #ffffff;
+            }}
+            QScrollArea {{
+                background: transparent;
+                border: none;
+            }}
+            QScrollBar:vertical {{
+                background: rgba(255, 255, 255, 0.04);
+                width: 10px;
+                border-radius: 5px;
+                margin: 2px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: rgba(210, 244, 242, 0.42);
+                border-radius: 5px;
+                min-height: 28px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: rgba(210, 244, 242, 0.62);
+            }}
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical,
+            QScrollBar::add-page:vertical,
+            QScrollBar::sub-page:vertical {{
+                background: transparent;
+                border: none;
+                height: 0px;
             }}
             QTextBrowser#visorResumenPago {{
                 background-color: {paleta["fondo_superficie_muy_suave"]};
@@ -1103,6 +1127,7 @@ class VistaPagos(QWidget):
         self._flujo_mensual.casa_solicitada.connect(self.casa_mensual_solicitada)
         self._flujo_mensual.preparar_resumen_solicitado.connect(self.previsualizacion_pago_solicitada)
         self._flujo_mensual.registrar_pago_solicitado.connect(self.registrar_pago_solicitado)
+        self._flujo_mensual.estado_visual_cambiado.connect(self._actualizar_tinte_tab_mensual)
 
         self._tabs.addTab(self._flujo_mensual, "Pago mensual")
         self._tabs.addTab(
@@ -1132,17 +1157,29 @@ class VistaPagos(QWidget):
 
         layout.addWidget(self.label_mensaje)
         layout.addWidget(self._tabs, 1)
+        self._tabs.currentChanged.connect(lambda _indice: self._actualizar_tinte_tab_mensual())
 
     def mostrar_estado(
         self,
         estado: EstadoModuloPagos,
         formatear_moneda: Callable[[int], str],
         formatear_fecha: Callable[[str], str],
+        mostrar_casas: bool = False,
     ) -> None:
-        self._flujo_mensual.mostrar_estado(estado, formatear_moneda, formatear_fecha)
+        self._flujo_mensual.mostrar_estado(
+            estado,
+            formatear_moneda,
+            formatear_fecha,
+            mostrar_casas=mostrar_casas,
+        )
 
-    def mostrar_cargos_mensuales(self, casa_id: int, cargos: tuple[CargoPago, ...]) -> None:
-        self._flujo_mensual.mostrar_cargos_mensuales(casa_id, cargos)
+    def mostrar_cargos_mensuales(
+        self,
+        casa_id: int,
+        cargos: tuple[CargoPago, ...],
+        diagnostico: DiagnosticoPagoMensual | None = None,
+    ) -> None:
+        self._flujo_mensual.mostrar_cargos_mensuales(casa_id, cargos, diagnostico)
 
     def mostrar_previsualizacion_pago(
         self,
@@ -1192,24 +1229,13 @@ class VistaPagos(QWidget):
 
     def mostrar_comprobante(
         self,
-        comprobante: ComprobantePago,
-        html: str,
-        texto: str,
-        ruta_sugerida: str,
-        exportador: Callable[[str], str],
-        formatear_moneda: Callable[[int], str],
-        formatear_fecha: Callable[[str], str],
+        ruta_documento: str,
     ) -> None:
-        DialogoComprobantePago(
-            comprobante=comprobante,
-            html=html,
-            texto=texto,
-            ruta_sugerida=ruta_sugerida,
-            exportador=exportador,
-            formatear_moneda=formatear_moneda,
-            formatear_fecha=formatear_fecha,
-            parent=self,
-        ).exec()
+        nombre_archivo = Path(ruta_documento).name
+        self.mostrar_mensaje(
+            f"Comprobante PDF generado correctamente: {nombre_archivo}",
+            es_error=False,
+        )
 
     def mostrar_mensaje(self, mensaje: str, es_error: bool = False) -> None:
         self.label_mensaje.setText(mensaje)
@@ -1218,6 +1244,14 @@ class VistaPagos(QWidget):
         self.label_mensaje.style().polish(self.label_mensaje)
         self.label_mensaje.setVisible(True)
         QTimer.singleShot(6500, self.label_mensaje.hide)
+
+    def _actualizar_tinte_tab_mensual(self, estado_visual: str | None = None) -> None:
+        estado = estado_visual if isinstance(estado_visual, str) else ""
+        if self._tabs.currentIndex() != 0:
+            estado = ""
+        self._tabs.setProperty("estadoMensual", estado)
+        self._tabs.style().unpolish(self._tabs)
+        self._tabs.style().polish(self._tabs)
 
     @staticmethod
     def _etiqueta_tipo_pago(tipo_pago: str) -> str:
@@ -1277,6 +1311,16 @@ class VistaPagos(QWidget):
             QTabWidget#tabsPagos QTabBar::tab:selected {{
                 background-color: {paleta["fondo_superficie_suave"]};
                 color: #ffffff;
+            }}
+            QTabWidget#tabsPagos[estadoMensual="OK"] QTabBar::tab:selected {{
+                background-color: rgba(16, 120, 98, 0.30);
+                border-color: {paleta["borde_exito"]};
+                color: {paleta["texto_exito"]};
+            }}
+            QTabWidget#tabsPagos[estadoMensual="BLOQUEADO"] QTabBar::tab:selected {{
+                background-color: rgba(180, 35, 24, 0.24);
+                border-color: {paleta["borde_error"]};
+                color: {paleta["texto_error"]};
             }}
             QTabWidget#tabsPagos QTabBar::tab:hover {{
                 color: #ffffff;

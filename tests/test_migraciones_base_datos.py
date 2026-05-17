@@ -5,6 +5,7 @@ import sqlite3
 import sys
 import unittest
 import uuid
+from contextlib import closing
 from pathlib import Path
 
 
@@ -42,7 +43,7 @@ class TestMigracionesBaseDatos(unittest.TestCase):
         gestor = GestorBaseDatos(gestor_rutas)
         ruta_db = gestor.inicializar_base_datos()
 
-        with sqlite3.connect(ruta_db) as conexion:
+        with closing(sqlite3.connect(ruta_db)) as conexion:
             conexion.executescript(
                 """
                 DROP TRIGGER IF EXISTS trg_auditoria_pago_anulado;
@@ -107,7 +108,7 @@ class TestMigracionesBaseDatos(unittest.TestCase):
 
         gestor.inicializar_base_datos()
 
-        with sqlite3.connect(ruta_db) as conexion:
+        with closing(sqlite3.connect(ruta_db)) as conexion:
             triggers_rotos = conexion.execute(
                 """
                 SELECT name

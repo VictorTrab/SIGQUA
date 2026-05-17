@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import sys
-from typing import Any
 
 from dotenv import load_dotenv
-from PySide6.QtCore import Qt, QtMsgType, qInstallMessageHandler
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import QApplication, QMainWindow, QSizePolicy
 
@@ -15,6 +14,7 @@ from comun.configuracion.gestor_rutas import GestorRutas
 from comun.logs import obtener_logger_sicap
 from comun.sesion import SesionAplicacion
 from comun.ui import ContenedorApiladoAjustable
+from comun.ui.qt_mensajes import configurar_filtro_mensajes_qt
 from modulos.autenticacion import (
     ControladorAutenticacion,
     SesionIniciada,
@@ -70,6 +70,12 @@ from modulos.pagos import (
     ServicioPagos,
     VistaPagos,
 )
+from modulos.historial_pagos import (
+    ControladorHistorialPagos,
+    RepositorioHistorialPagosSQLite,
+    ServicioHistorialPagos,
+    VistaHistorialPagos,
+)
 from modulos.principal import (
     ControladorModuloPrincipal,
     RepositorioModuloPrincipalSQLite,
@@ -111,39 +117,13 @@ FLAGS_VENTANA_PRINCIPAL = (
     | Qt.WindowType.WindowMaximizeButtonHint
     | Qt.WindowType.WindowCloseButtonHint
 )
-PATRONES_QT_RUIDOSOS = (
-    "QPropertyAnimation::updateState (opacity): Changing state of an animation without target",
-    "QWindowsWindow::setGeometry: Unable to set geometry",
-    "QFont::setPointSize: Point size <= 0",
-)
-_filtro_qt_configurado = False
-
-
-def _filtrar_mensajes_qt(
-    _tipo: QtMsgType,
-    _contexto: Any,
-    mensaje: str,
-) -> None:
-    if any(patron in mensaje for patron in PATRONES_QT_RUIDOSOS):
-        return
-    sys.stderr.write(f"{mensaje}\n")
-
-
-def _configurar_filtro_mensajes_qt() -> None:
-    global _filtro_qt_configurado
-    if _filtro_qt_configurado:
-        return
-    qInstallMessageHandler(_filtrar_mensajes_qt)
-    _filtro_qt_configurado = True
-
-
 def crear_ventana_principal(
     gestor_rutas: GestorRutas | None = None,
 ) -> tuple[QApplication, QMainWindow, VistaAutenticacion]:
     """Construye la aplicacion y la ventana principal sin iniciar el loop."""
     gestor_rutas = gestor_rutas or GestorRutas()
     load_dotenv(gestor_rutas.obtener_ruta_env(), override=False)
-    _configurar_filtro_mensajes_qt()
+    configurar_filtro_mensajes_qt()
     logger.info("Iniciando composition root de SICAP.")
 
     aplicacion = QApplication.instance() or QApplication(sys.argv)
@@ -181,11 +161,23 @@ def crear_ventana_principal(
     servicio_planes_pago = ServicioPlanesPago(repositorio_planes_pago)
     repositorio_pagos = RepositorioPagosSQLite(gestor_base_datos)
     servicio_pagos = ServicioPagos(repositorio_pagos, gestor_rutas=gestor_rutas)
+    repositorio_historial_pagos = RepositorioHistorialPagosSQLite(gestor_base_datos)
+    servicio_historial_pagos = ServicioHistorialPagos(
+        repositorio_historial_pagos,
+        gestor_rutas=gestor_rutas,
+    )
     repositorio_morosidad = RepositorioMorosidadSQLite(gestor_base_datos)
-    servicio_morosidad = ServicioMorosidad(repositorio_morosidad)
+    servicio_morosidad = ServicioMorosidad(
+        repositorio_morosidad,
+        gestor_rutas=gestor_rutas,
+    )
     repositorio_reportes = RepositorioReportesSQLite(gestor_base_datos)
-    servicio_reportes = ServicioReportes(repositorio_reportes)
     repositorio_configuracion = RepositorioConfiguracionSQLite(gestor_base_datos)
+    servicio_reportes = ServicioReportes(
+        repositorio_reportes,
+        repositorio_configuracion=repositorio_configuracion,
+        gestor_rutas=gestor_rutas,
+    )
     servicio_configuracion = ServicioConfiguracion(repositorio_configuracion, gestor_rutas)
     repositorio_mantenimiento = RepositorioMantenimientoSQLite(gestor_base_datos)
     servicio_mantenimiento = ServicioMantenimiento(repositorio_mantenimiento)
@@ -229,6 +221,7 @@ def crear_ventana_principal(
     ventana_principal.servicio_abonados = servicio_abonados
     ventana_principal.servicio_planes_pago = servicio_planes_pago
     ventana_principal.servicio_pagos = servicio_pagos
+    ventana_principal.servicio_historial_pagos = servicio_historial_pagos
     ventana_principal.servicio_morosidad = servicio_morosidad
     ventana_principal.servicio_reportes = servicio_reportes
     ventana_principal.servicio_configuracion = servicio_configuracion
@@ -362,6 +355,13 @@ def _registrar_modulos_operativos(ventana_principal: QMainWindow) -> None:
     )
     vista_modulo_principal.registrar_modulo("pagos", vista_pagos)
 
+    vista_historial_pagos = VistaHistorialPagos()
+    controlador_historial_pagos = ControladorHistorialPagos(
+        servicio_historial=ventana_principal.servicio_historial_pagos,
+        vista_historial=vista_historial_pagos,
+    )
+    vista_modulo_principal.registrar_modulo("historial_pagos", vista_historial_pagos)
+
     vista_morosidad = VistaMorosidad()
     controlador_morosidad = ControladorMorosidad(
         servicio_morosidad=ventana_principal.servicio_morosidad,
@@ -400,6 +400,8 @@ def _registrar_modulos_operativos(ventana_principal: QMainWindow) -> None:
     ventana_principal.controlador_planes_pago = controlador_planes_pago
     ventana_principal.vista_pagos = vista_pagos
     ventana_principal.controlador_pagos = controlador_pagos
+    ventana_principal.vista_historial_pagos = vista_historial_pagos
+    ventana_principal.controlador_historial_pagos = controlador_historial_pagos
     ventana_principal.vista_morosidad = vista_morosidad
     ventana_principal.controlador_morosidad = controlador_morosidad
     ventana_principal.vista_reportes = vista_reportes
@@ -425,6 +427,8 @@ def _refrescar_modulos_operativos(
         ventana_principal.controlador_planes_pago.mostrar_para_actor(usuario)
     if hasattr(ventana_principal, "controlador_pagos"):
         ventana_principal.controlador_pagos.mostrar_para_actor(usuario)
+    if hasattr(ventana_principal, "controlador_historial_pagos"):
+        ventana_principal.controlador_historial_pagos.mostrar()
     if hasattr(ventana_principal, "controlador_morosidad"):
         ventana_principal.controlador_morosidad.mostrar()
     if hasattr(ventana_principal, "controlador_reportes"):

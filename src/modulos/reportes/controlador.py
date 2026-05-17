@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from comun.actualizaciones import EventoModuloActualizado, bus_actualizaciones_modulos
 from modulos.reportes.servicio import ServicioReportes
 from modulos.reportes.vista import VistaReportes
 
@@ -18,9 +19,9 @@ class ControladorReportes:
         self.vista_reportes = vista_reportes
         self._fecha_desde = ""
         self._fecha_hasta = ""
-        self.vista_reportes.recargar_solicitado.connect(self.mostrar)
         self.vista_reportes.filtros_aplicados.connect(self._aplicar_filtros)
         self.vista_reportes.exportar_solicitado.connect(self._exportar)
+        bus_actualizaciones_modulos.actualizacion_emitida.connect(self._manejar_actualizacion_modulo)
 
     def mostrar(self) -> None:
         try:
@@ -38,6 +39,14 @@ class ControladorReportes:
         self._fecha_hasta = fecha_hasta
         self.mostrar()
 
+    def _manejar_actualizacion_modulo(self, evento: object) -> None:
+        if not isinstance(evento, EventoModuloActualizado):
+            return
+        if "reportes" not in evento.modulos_afectados:
+            return
+        self.mostrar()
+        self.vista_reportes.mostrar_mensaje(evento.mensaje, es_error=False)
+
     def _exportar(self) -> None:
         codigo_reporte = self.vista_reportes.obtener_reporte_actual_codigo()
         if not codigo_reporte:
@@ -50,7 +59,7 @@ class ControladorReportes:
         if not ruta:
             return
         try:
-            self.servicio_reportes.exportar_csv(
+            self.servicio_reportes.exportar_pdf(
                 ruta_destino=ruta,
                 codigo_reporte=codigo_reporte,
                 fecha_desde=self._fecha_desde,

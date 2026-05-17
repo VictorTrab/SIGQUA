@@ -30,6 +30,10 @@ from modulos.pagos.vista import VistaPagos  # noqa: E402
 
 
 class TestPagos(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.aplicacion = QApplication.instance() or QApplication([])
+
     def setUp(self) -> None:
         self.raiz_temporal = RAIZ_PROYECTO / "tests" / f"_tmp_pagos_{uuid.uuid4().hex}"
         (self.raiz_temporal / "database" / "migrations").mkdir(parents=True, exist_ok=True)
@@ -47,7 +51,7 @@ class TestPagos(unittest.TestCase):
     def tearDown(self) -> None:
         shutil.rmtree(self.raiz_temporal, ignore_errors=True)
 
-    def test_migraciones_007_y_008_agregan_campos_y_catalogos_de_pago(self) -> None:
+    def test_migraciones_007_008_y_009_agregan_campos_y_catalogos_de_pago(self) -> None:
         with closing(sqlite3.connect(self.ruta_db)) as conexion:
             columnas_pagos = {
                 fila[1] for fila in conexion.execute("PRAGMA table_info(pagos);").fetchall()
@@ -63,6 +67,9 @@ class TestPagos(unittest.TestCase):
             ).fetchone()
             version_008 = conexion.execute(
                 "SELECT 1 FROM esquema_migraciones WHERE version = '008' LIMIT 1;"
+            ).fetchone()
+            version_009 = conexion.execute(
+                "SELECT 1 FROM esquema_migraciones WHERE version = '009' LIMIT 1;"
             ).fetchone()
             deposito = conexion.execute(
                 """
@@ -80,6 +87,14 @@ class TestPagos(unittest.TestCase):
                 LIMIT 1;
                 """
             ).fetchone()
+            titulo_documento = conexion.execute(
+                """
+                SELECT valor
+                FROM configuracion_sistema
+                WHERE clave = 'factura.titulo_documento'
+                LIMIT 1;
+                """
+            ).fetchone()
 
         self.assertIn("tipo_pago", columnas_pagos)
         self.assertIn("plan_pago_id", columnas_pagos)
@@ -88,9 +103,11 @@ class TestPagos(unittest.TestCase):
         self.assertIn("requiere_referencia", columnas_metodos)
         self.assertIsNotNone(version)
         self.assertIsNotNone(version_008)
+        self.assertIsNotNone(version_009)
         self.assertIsNotNone(deposito)
         self.assertEqual(deposito[0], 1)
         self.assertIsNotNone(correlativo)
+        self.assertEqual(titulo_documento[0], "RECIBO DE PAGO")
 
     def test_mensualidad_cubre_primero_el_cargo_mas_antiguo(self) -> None:
         casa_id = self._obtener_casa_por_dni("0801199000022")
@@ -180,7 +197,67 @@ class TestPagos(unittest.TestCase):
 
         self.assertNotIsInstance(resultado, ResumenConfirmacionPago)
         self.assertEqual(resultado.codigo, "VALIDACION")
-        self.assertIn("abonado responsable activo", resultado.mensaje)
+        self.assertIn("abonado responsable", resultado.mensaje)
+        self.assertIn("ACTIVO", resultado.mensaje)
+
+    def test_casa_suspendida_no_puede_registrar_pago_mensual(self) -> None:
+        casa_id = self._obtener_casa_por_dni("0801199000022")
+        metodo_id = self._obtener_metodo("EFECTIVO")
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            conexion.execute(
+                """
+                UPDATE casas
+                SET estado_servicio = 'SUSPENDIDO'
+                WHERE id = ?;
+                """,
+                (casa_id,),
+            )
+            conexion.commit()
+
+        resultado = self.servicio.preparar_confirmacion(
+            FormularioPago(
+                casa_id=casa_id,
+                tipo_pago="MENSUALIDAD",
+                cantidad_meses=1,
+                metodo_pago_id=metodo_id,
+            )
+        )
+
+        self.assertNotIsInstance(resultado, ResumenConfirmacionPago)
+        self.assertEqual(resultado.codigo, "VALIDACION")
+        self.assertIn("suspendida", resultado.mensaje.lower())
+
+    def test_comprobante_pdf_backend_genera_archivo_real_sin_tocar_metadata(self) -> None:
+        casa_id = self._obtener_casa_por_dni("0801199000022")
+        metodo_id = self._obtener_metodo("EFECTIVO")
+        resultado = self.servicio.registrar_pago(
+            FormularioPago(
+                casa_id=casa_id,
+                tipo_pago="MENSUALIDAD",
+                cantidad_meses=1,
+                metodo_pago_id=metodo_id,
+            ),
+            actor_id=1,
+        )
+
+        self.assertTrue(resultado.exito, resultado.mensaje)
+        assert resultado.comprobante is not None
+        ruta_pdf = self.servicio.generar_comprobante_pdf(resultado.comprobante.pago_id)
+
+        self.assertTrue(Path(ruta_pdf).exists())
+        self.assertEqual(Path(ruta_pdf).suffix.lower(), ".pdf")
+        self.assertTrue(Path(ruta_pdf).read_bytes().startswith(b"%PDF"))
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            fila = conexion.execute(
+                """
+                SELECT COALESCE(ruta_archivo, ''), COALESCE(formato_salida, '')
+                FROM comprobantes
+                WHERE pago_id = ?;
+                """,
+                (resultado.comprobante.pago_id,),
+            ).fetchone()
+        self.assertEqual(fila[0], "")
+        self.assertEqual(fila[1], "HTML")
 
     def test_adelanto_rechaza_deuda_vencida_no_mensual(self) -> None:
         casa_id = self._crear_casa_activa_sin_cargos()
@@ -234,6 +311,16 @@ class TestPagos(unittest.TestCase):
         self.assertEqual(vista._flujo_mensual._stack.currentIndex(), vista._flujo_mensual.PASO_BUSQUEDA)
         textos = [label.text() for label in vista.findChildren(type(vista.label_mensaje))]
         self.assertNotIn("Historial reciente de comprobantes", textos)
+        self.assertFalse(hasattr(vista._flujo_mensual, "_barra_progreso"))
+        self.assertEqual(vista._flujo_mensual._tabla_casas.rowCount(), 0)
+        self.assertEqual(vista._tabs.property("estadoMensual"), None)
+
+    def test_vista_notifica_comprobante_pdf_generado(self) -> None:
+        _app = QApplication.instance() or QApplication([])
+        vista = VistaPagos()
+        vista.mostrar_comprobante(str(self.raiz_temporal / "exportaciones" / "comprobantes" / "REC-000001.pdf"))
+        self.assertIn("REC-000001.pdf", vista.label_mensaje.text())
+        vista.close()
 
     def test_controlador_avanza_flujo_mensual_con_datos_reales(self) -> None:
         app = QApplication.instance() or QApplication([])
@@ -251,6 +338,7 @@ class TestPagos(unittest.TestCase):
         self.assertEqual(flujo._stack.currentIndex(), flujo.PASO_DIAGNOSTICO)
         self.assertIsNotNone(vista.obtener_casa_seleccionada_id())
         self.assertGreaterEqual(flujo._tabla_cargos.rowCount(), 1)
+        self.assertEqual(vista._tabs.property("estadoMensual"), "OK")
 
         flujo._ir_a_paso(flujo.PASO_DATOS)
 
@@ -264,6 +352,35 @@ class TestPagos(unittest.TestCase):
         self.assertEqual(flujo._metricas_resumen["Método"].text(), "Efectivo")
         self.assertNotEqual(flujo._metricas_resumen["Total"].text(), "-")
         self.assertTrue(flujo._boton_confirmar.isEnabled())
+
+    def test_vista_bloquea_avance_si_casa_no_esta_activa(self) -> None:
+        app = QApplication.instance() or QApplication([])
+        vista = VistaPagos()
+        controlador = ControladorPagos(self.servicio, vista)
+        flujo = vista._flujo_mensual
+        casa_id = self._obtener_casa_por_dni("0801199000022")
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            conexion.execute(
+                """
+                UPDATE casas
+                SET estado_servicio = 'SUSPENDIDO'
+                WHERE id = ?;
+                """,
+                (casa_id,),
+            )
+            conexion.commit()
+
+        controlador._refrescar("0801199000022")
+        app.processEvents()
+
+        self.assertGreaterEqual(flujo._tabla_casas.rowCount(), 1)
+        flujo._seleccionar_casa(0)
+        app.processEvents()
+
+        self.assertEqual(flujo._stack.currentIndex(), flujo.PASO_DIAGNOSTICO)
+        self.assertFalse(flujo._boton_diagnostico_siguiente.isEnabled())
+        self.assertIn("suspendida", flujo._label_alerta_diagnostico.text().lower())
+        self.assertEqual(vista._tabs.property("estadoMensual"), "BLOQUEADO")
 
     def test_registro_desde_resumen_persiste_y_abre_comprobante(self) -> None:
         app = QApplication.instance() or QApplication([])

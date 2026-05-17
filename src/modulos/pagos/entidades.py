@@ -17,6 +17,9 @@ TIPOS_PAGO_VALIDOS = (
     TIPO_PAGO_RECONEXION,
 )
 
+ESTADO_VISUAL_PAGO_OK = "OK"
+ESTADO_VISUAL_PAGO_BLOQUEADO = "BLOQUEADO"
+
 
 @dataclass(slots=True)
 class MetodoPago:
@@ -128,13 +131,50 @@ class ComprobantePago:
     casa_codigo: str = ""
     abonado_nombre: str = ""
     abonado_dni: str = ""
+    barrio_nombre: str = ""
+    direccion_casa: str = ""
     metodo_pago: str = ""
     referencia: str = ""
+    usuario_registro: str = ""
     total_pagado_centavos: int = 0
     saldo_posterior_centavos: int = 0
     detalles: tuple[str, ...] = ()
-    formato_salida: str = "PDF"
+    formato_salida: str = "HTML"
     ruta_archivo: str = ""
+
+
+@dataclass(slots=True)
+class ConfiguracionReciboPago:
+    """Configuracion visible del recibo termico tomada desde parametros reales."""
+
+    nombre_junta: str
+    telefono_junta: str
+    correo_junta: str
+    direccion_junta: str
+    identificador_fiscal: str
+    sitio_web: str
+    mensaje_contacto: str
+    titulo_documento: str
+    subtitulo_documento: str
+    texto_legal_superior: str
+    texto_pie: str
+    texto_legal_inferior: str
+    etiqueta_copia: str
+    mostrar_correo: bool
+    mostrar_telefono: bool
+    mostrar_direccion: bool
+    mostrar_identificador_fiscal: bool
+
+
+@dataclass(slots=True)
+class DiagnosticoPagoMensual:
+    """Estado visual y operativo de una casa dentro del flujo mensual."""
+
+    casa_id: int
+    permite_continuar: bool
+    estado_visual: str
+    mensaje_diagnostico: str
+    alertas: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)

@@ -2073,6 +2073,14 @@ class VistaUsuarios(QWidget):
                 border: 1px solid rgba(255, 255, 255, 0.16);
                 border-radius: 18px;
             }
+            QFrame#panelPermisosUsuarios {
+                background: rgba(79, 163, 255, 0.12);
+                border: 1px solid rgba(138, 194, 255, 0.22);
+            }
+            QFrame#tarjetaRolUsuario {
+                background: rgba(255, 255, 255, 0.12);
+                border-color: rgba(255, 255, 255, 0.18);
+            }
             QFrame#panelTablaUsuarios {
                 background: rgba(255, 255, 255, 0.10);
                 border: 1px solid rgba(255, 255, 255, 0.16);
@@ -2140,6 +2148,21 @@ class VistaUsuarios(QWidget):
             QPlainTextEdit:focus {
                 border-color: rgba(109, 241, 220, 0.42);
                 background: rgba(255, 255, 255, 0.16);
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 24px;
+                background: rgba(255, 255, 255, 0.06);
+                border-top-right-radius: 12px;
+                border-bottom-right-radius: 12px;
+            }
+            QComboBox QAbstractItemView {
+                background: rgba(29, 33, 68, 0.98);
+                color: #f5fbff;
+                border: 1px solid rgba(255, 255, 255, 0.14);
+                selection-background-color: rgba(109, 241, 220, 0.22);
+                selection-color: #ffffff;
+                padding: 6px;
             }
             QPushButton#chipFiltroUsuario {
                 min-height: 30px;
@@ -2243,25 +2266,44 @@ class VistaUsuarios(QWidget):
                 background: rgba(79, 163, 255, 0.12);
                 border: 1px solid rgba(138, 194, 255, 0.20);
             }
-            QTabWidget#tabsUsuarios::pane {
-                border: none;
+            QTabWidget#tabsUsuarios {
                 background: transparent;
+            }
+            QTabWidget#tabsUsuarios::pane {
+                border: 1px solid rgba(255, 255, 255, 0.10);
+                border-radius: 18px;
+                background: rgba(255, 255, 255, 0.05);
+                margin-top: 12px;
+                padding: 10px 10px 12px 10px;
             }
             QScrollArea#scrollRolesUsuarios {
                 background: transparent;
                 border: none;
             }
-            QTabBar::tab {
+            QTabWidget#tabsUsuarios QTabBar {
+                background: rgba(255, 255, 255, 0.04);
+                border: 1px solid rgba(255, 255, 255, 0.10);
+                border-radius: 16px;
+                padding: 6px;
+            }
+            QTabWidget#tabsUsuarios QTabBar::tab {
                 color: rgba(235, 242, 248, 0.74);
                 padding: 10px 18px;
                 margin-right: 6px;
-                border-bottom: 2px solid transparent;
+                border: 1px solid transparent;
+                border-radius: 12px;
                 font-size: 13px;
                 font-weight: 800;
+                background: rgba(255, 255, 255, 0.05);
             }
-            QTabBar::tab:selected {
-                color: #d2f4f2;
-                border-bottom: 2px solid #6df1dc;
+            QTabWidget#tabsUsuarios QTabBar::tab:hover {
+                background: rgba(255, 255, 255, 0.10);
+                color: #ffffff;
+            }
+            QTabWidget#tabsUsuarios QTabBar::tab:selected {
+                color: #0f2d43;
+                background: #d2f4f2;
+                border-color: rgba(109, 241, 220, 0.26);
             }
             QLabel {
                 color: #f4fbff;

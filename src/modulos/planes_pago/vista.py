@@ -318,6 +318,8 @@ class DialogoDetallePlanPago(DialogoBaseSicap):
         self._formateador_moneda = formateador_moneda
         self._formateador_fecha = formateador_fecha
         self._accion_resultado = "cerrar"
+        self._tema_actual = obtener_tema_actual()
+        self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self.setMinimumWidth(840)
         self.setMinimumHeight(640)
         self._construir_ui()

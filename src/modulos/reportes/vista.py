@@ -24,7 +24,6 @@ from modulos.reportes.entidades import EstadoReportes, TablaReporte
 class VistaReportes(QWidget):
     """Tablero de reportes basicos del prototipo."""
 
-    recargar_solicitado = Signal()
     filtros_aplicados = Signal(str, str)
     exportar_solicitado = Signal()
 
@@ -63,13 +62,6 @@ class VistaReportes(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(26, 24, 26, 24)
         layout.setSpacing(16)
-
-        fila_superior = QHBoxLayout()
-        self._boton_recargar = crear_boton_operativo("Actualizar")
-        self._boton_recargar.clicked.connect(self.recargar_solicitado.emit)
-        fila_superior.addStretch(1)
-        fila_superior.addWidget(self._boton_recargar, alignment=Qt.AlignmentFlag.AlignTop)
-        layout.addLayout(fila_superior)
 
         self._mensaje = QLabel("")
         self._mensaje.setObjectName("mensajeReportes")
@@ -141,8 +133,8 @@ class VistaReportes(QWidget):
         ruta, _ = QFileDialog.getSaveFileName(
             self,
             "Exportar reporte",
-            f"{codigo_reporte}.csv",
-            "CSV (*.csv)",
+            f"{codigo_reporte}.pdf",
+            "PDF (*.pdf)",
         )
         return ruta
 
