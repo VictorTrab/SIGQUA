@@ -414,7 +414,7 @@ class PanelPerfilUsuario(QFrame):
         self._boton_acerca.clicked.connect(
             lambda: self._mostrar_informacion(
                 "Acerca del sistema",
-                "SICAP\nVersi\u00f3n 2.0.0\nJunta de Agua de Yarumela",
+                "SICAP\nVersi\u00f3n 2.0.0\nSistema de control administrativo",
                 "info-circle.svg",
                 "informacion",
             )
@@ -435,7 +435,7 @@ class PanelPerfilUsuario(QFrame):
         etiqueta_sistema.setObjectName("sistemaPanelPerfil")
         etiqueta_version = QLabel("Versi\u00f3n 2.0.0")
         etiqueta_version.setObjectName("detallePanelPerfil")
-        etiqueta_institucion = QLabel("Junta de Agua de Yarumela")
+        etiqueta_institucion = QLabel("Sistema de control administrativo")
         etiqueta_institucion.setObjectName("detallePanelPerfil")
         etiqueta_desarrollado = QLabel("Desarrollado por Proyecto SICAP")
         etiqueta_desarrollado.setObjectName("detallePanelPerfil")

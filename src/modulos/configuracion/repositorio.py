@@ -28,6 +28,22 @@ class RepositorioConfiguracion(Protocol):
     def obtener_resumen_respaldos(self) -> tuple[str, str, int]:
         """Retorna ultima fecha, ultimo estado y total de respaldos."""
 
+    def obtener_detalle_ultimo_respaldo(self) -> dict[str, object]:
+        """Retorna metadatos del ultimo respaldo registrado."""
+
+    def registrar_respaldo(
+        self,
+        nombre_archivo: str,
+        ruta_archivo: str,
+        tamano_bytes: int,
+        hash_archivo: str,
+        tipo_respaldo: str,
+        estado: str,
+        observaciones: str,
+        generado_por: int | None = None,
+    ) -> None:
+        """Registra un respaldo generado desde la capa operativa."""
+
 
 class RepositorioConfiguracionSQLite:
     """Implementacion SQLite del acceso a configuracion_sistema."""
@@ -138,3 +154,73 @@ class RepositorioConfiguracionSQLite:
             str(fila_ultimo["estado"] or "") if fila_ultimo else "",
             int(fila_total["total"] or 0) if fila_total else 0,
         )
+
+    def obtener_detalle_ultimo_respaldo(self) -> dict[str, object]:
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            fila = conexion.execute(
+                """
+                SELECT
+                    COALESCE(nombre_archivo, '') AS nombre_archivo,
+                    COALESCE(ruta_archivo, '') AS ruta_archivo,
+                    COALESCE(tamano_bytes, 0) AS tamano_bytes,
+                    COALESCE(hash_archivo, '') AS hash_archivo,
+                    COALESCE(tipo_respaldo, '') AS tipo_respaldo,
+                    COALESCE(estado, '') AS estado,
+                    COALESCE(observaciones, '') AS observaciones,
+                    COALESCE(generado_en, '') AS generado_en
+                FROM historial_respaldos
+                ORDER BY generado_en DESC, id DESC
+                LIMIT 1;
+                """
+            ).fetchone()
+        if fila is None:
+            return {}
+        return {
+            "nombre_archivo": str(fila["nombre_archivo"] or ""),
+            "ruta_archivo": str(fila["ruta_archivo"] or ""),
+            "tamano_bytes": int(fila["tamano_bytes"] or 0),
+            "hash_archivo": str(fila["hash_archivo"] or ""),
+            "tipo_respaldo": str(fila["tipo_respaldo"] or ""),
+            "estado": str(fila["estado"] or ""),
+            "observaciones": str(fila["observaciones"] or ""),
+            "generado_en": str(fila["generado_en"] or ""),
+        }
+
+    def registrar_respaldo(
+        self,
+        nombre_archivo: str,
+        ruta_archivo: str,
+        tamano_bytes: int,
+        hash_archivo: str,
+        tipo_respaldo: str,
+        estado: str,
+        observaciones: str,
+        generado_por: int | None = None,
+    ) -> None:
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            with conexion:
+                conexion.execute(
+                    """
+                    INSERT INTO historial_respaldos(
+                        tipo_respaldo,
+                        nombre_archivo,
+                        ruta_archivo,
+                        tamano_bytes,
+                        hash_archivo,
+                        estado,
+                        observaciones,
+                        generado_por
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        tipo_respaldo,
+                        nombre_archivo,
+                        ruta_archivo,
+                        tamano_bytes,
+                        hash_archivo,
+                        estado,
+                        observaciones,
+                        generado_por,
+                    ),
+                )

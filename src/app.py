@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QSizePolicy
 
 from comun.base_datos import GestorBaseDatos
 from comun.configuracion.gestor_rutas import GestorRutas
+from comun.respaldo import ServicioRespaldoLocal
 from comun.logs import obtener_logger_sicap
 from comun.sesion import SesionAplicacion
 from comun.ui import ContenedorApiladoAjustable
@@ -145,8 +146,14 @@ def crear_ventana_principal(
     logger.info("Base de datos inicializada en %s", gestor_rutas.obtener_ruta_base_datos())
 
     repositorio_autenticacion = RepositorioAutenticacionSQLite(gestor_base_datos)
+    repositorio_configuracion = RepositorioConfiguracionSQLite(gestor_base_datos)
+    servicio_respaldo = ServicioRespaldoLocal(
+        gestor_base_datos=gestor_base_datos,
+        gestor_rutas=gestor_rutas,
+    )
     servicio_autenticacion = ServicioAutenticacion(
         repositorio_autenticacion=repositorio_autenticacion,
+        repositorio_configuracion=repositorio_configuracion,
     )
     servicio_autenticacion.asegurar_usuario_admin_desarrollo()
     repositorio_usuarios = RepositorioUsuariosSQLite(gestor_base_datos)
@@ -172,13 +179,16 @@ def crear_ventana_principal(
         gestor_rutas=gestor_rutas,
     )
     repositorio_reportes = RepositorioReportesSQLite(gestor_base_datos)
-    repositorio_configuracion = RepositorioConfiguracionSQLite(gestor_base_datos)
     servicio_reportes = ServicioReportes(
         repositorio_reportes,
         repositorio_configuracion=repositorio_configuracion,
         gestor_rutas=gestor_rutas,
     )
-    servicio_configuracion = ServicioConfiguracion(repositorio_configuracion, gestor_rutas)
+    servicio_configuracion = ServicioConfiguracion(
+        repositorio_configuracion,
+        gestor_rutas,
+        servicio_respaldo=servicio_respaldo,
+    )
     repositorio_mantenimiento = RepositorioMantenimientoSQLite(gestor_base_datos)
     servicio_mantenimiento = ServicioMantenimiento(repositorio_mantenimiento)
 

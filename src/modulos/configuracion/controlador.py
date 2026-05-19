@@ -36,6 +36,9 @@ class ControladorConfiguracion:
         self._vista_configuracion.guardar_operacion_respaldo_solicitado.connect(
             self._guardar_operacion_respaldo
         )
+        self._vista_configuracion.crear_respaldo_manual_solicitado.connect(
+            self._crear_respaldo_manual
+        )
 
     def _guardar_datos_junta(
         self,
@@ -143,9 +146,40 @@ class ControladorConfiguracion:
                 modulos_afectados=("pagos", "morosidad", "reportes"),
             )
 
-    def _guardar_operacion_respaldo(self, respaldo_automatico: bool) -> None:
+    def _guardar_operacion_respaldo(
+        self,
+        respaldo_automatico: bool,
+        ruta_principal: str,
+        ruta_secundaria: str,
+        secundaria_activa: bool,
+        comprimir_zip: bool,
+        organizar_por_periodo: bool,
+        retencion_dias: int,
+        programacion_tipo: str,
+        programacion_hora: str,
+        programacion_dia_semana: str,
+        duracion_sesion_horas: float,
+    ) -> None:
         resultado = self._servicio_configuracion.guardar_operacion_respaldo(
             respaldo_automatico=respaldo_automatico,
+            ruta_principal=ruta_principal,
+            ruta_secundaria=ruta_secundaria,
+            secundaria_activa=secundaria_activa,
+            comprimir_zip=comprimir_zip,
+            organizar_por_periodo=organizar_por_periodo,
+            retencion_dias=retencion_dias,
+            programacion_tipo=programacion_tipo,
+            programacion_hora=programacion_hora,
+            programacion_dia_semana=programacion_dia_semana,
+            duracion_sesion_horas=duracion_sesion_horas,
+            actor_id=None if self._actor is None else self._actor.identificador,
+        )
+        self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
+        if resultado.exito:
+            self._refrescar()
+
+    def _crear_respaldo_manual(self) -> None:
+        resultado = self._servicio_configuracion.crear_respaldo_manual(
             actor_id=None if self._actor is None else self._actor.identificador,
         )
         self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)

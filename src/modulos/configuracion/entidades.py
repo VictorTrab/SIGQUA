@@ -20,8 +20,8 @@ class ParametroConfiguracion:
 
 
 @dataclass(slots=True)
-class DatosJunta:
-    """Datos operativos basicos de la junta."""
+class IdentidadEmpresa:
+    """Datos operativos visibles de la empresa o institucion."""
 
     nombre: str
     telefono: str
@@ -82,6 +82,19 @@ class OperacionConfiguracion:
     ultimo_respaldo_en: str
     ultimo_respaldo_estado: str
     total_respaldos: int
+    ultimo_respaldo_archivo: str
+    ultimo_respaldo_tamano_bytes: int
+    ultimo_respaldo_hash: str
+    ruta_respaldos_principal: str
+    ruta_respaldos_secundaria: str
+    respaldo_secundario_activo: bool
+    comprimir_zip: bool
+    organizar_por_periodo: bool
+    retencion_dias: int
+    programacion_tipo: str
+    programacion_hora: str
+    programacion_dia_semana: str
+    proxima_ejecucion_programada: str
     ruta_exportaciones_comprobantes: str
     ruta_exportaciones_reportes: str
 
@@ -92,7 +105,7 @@ class SeguridadConfiguracion:
 
     autenticacion_local: bool
     maximo_intentos_fallidos: int
-    duracion_sesion_horas: int
+    duracion_sesion_horas: float
     restablecimiento_administrativo: bool
     cambio_contrasena_obligatorio: bool
 
@@ -112,12 +125,18 @@ class InformacionConfiguracion:
 class EstadoConfiguracion:
     """Estado agregado mostrado en la UI de configuracion."""
 
-    datos_junta: DatosJunta
+    identidad_empresa: IdentidadEmpresa
     parametros_cobro: ParametrosCobro
     factura: FacturaConfiguracion
     operacion: OperacionConfiguracion
     seguridad: SeguridadConfiguracion
     informacion: InformacionConfiguracion
+
+    @property
+    def datos_junta(self) -> IdentidadEmpresa:
+        """Compatibilidad temporal con implementaciones antiguas."""
+
+        return self.identidad_empresa
 
 
 @dataclass(slots=True)
@@ -127,3 +146,6 @@ class ResultadoGestionConfiguracion:
     exito: bool
     mensaje: str
     codigo: str = ""
+
+
+DatosJunta = IdentidadEmpresa

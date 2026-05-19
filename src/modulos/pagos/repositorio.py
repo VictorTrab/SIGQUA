@@ -7,6 +7,11 @@ from contextlib import closing
 from typing import Protocol
 
 from comun.base_datos import GestorBaseDatos
+from comun.configuracion.identidad_empresa import (
+    CLAVES_IDENTIDAD_EMPRESA,
+    CLAVES_IDENTIDAD_LEGADAS_JUNTA,
+    construir_identidad_empresa,
+)
 from modulos.pagos.entidades import (
     CargoPago,
     CasaPago,
@@ -537,13 +542,8 @@ class RepositorioPagosSQLite:
 
     def obtener_configuracion_recibo(self) -> ConfiguracionReciboPago:
         claves = (
-            "junta.nombre",
-            "junta.telefono",
-            "junta.correo",
-            "junta.direccion",
-            "junta.identificador_fiscal",
-            "junta.sitio_web",
-            "junta.mensaje_contacto",
+            *CLAVES_IDENTIDAD_EMPRESA,
+            *CLAVES_IDENTIDAD_LEGADAS_JUNTA,
             "factura.titulo_documento",
             "factura.subtitulo_documento",
             "factura.texto_legal_superior",
@@ -569,14 +569,15 @@ class RepositorioPagosSQLite:
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             filas = conexion.execute(consulta, claves).fetchall()
         valores = {str(fila["clave"]): str(fila["valor"] or "") for fila in filas}
+        identidad = construir_identidad_empresa(valores, nombre_predeterminado="SICAP")
         return ConfiguracionReciboPago(
-            nombre_junta=valores.get("junta.nombre", "Junta de Agua"),
-            telefono_junta=valores.get("junta.telefono", ""),
-            correo_junta=valores.get("junta.correo", ""),
-            direccion_junta=valores.get("junta.direccion", ""),
-            identificador_fiscal=valores.get("junta.identificador_fiscal", ""),
-            sitio_web=valores.get("junta.sitio_web", ""),
-            mensaje_contacto=valores.get("junta.mensaje_contacto", ""),
+            nombre_junta=identidad.nombre,
+            telefono_junta=identidad.telefono,
+            correo_junta=identidad.correo,
+            direccion_junta=identidad.direccion,
+            identificador_fiscal=identidad.identificador_fiscal,
+            sitio_web=identidad.sitio_web,
+            mensaje_contacto=identidad.mensaje_contacto,
             titulo_documento=valores.get("factura.titulo_documento", "RECIBO DE PAGO") or "RECIBO DE PAGO",
             subtitulo_documento=valores.get("factura.subtitulo_documento", ""),
             texto_legal_superior=valores.get("factura.texto_legal_superior", ""),

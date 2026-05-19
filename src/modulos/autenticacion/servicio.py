@@ -9,6 +9,7 @@ from secrets import token_urlsafe
 
 from comun.logs import obtener_logger_sicap
 from comun.seguridad import es_hash_scrypt_valido, generar_hash_contrasena, verificar_contrasena
+from modulos.configuracion.repositorio import RepositorioConfiguracionSQLite
 from modulos.autenticacion.entidades import (
     CredencialesUsuario,
     ResultadoLogin,
@@ -31,9 +32,11 @@ class ServicioAutenticacion:
         self,
         repositorio_autenticacion: RepositorioAutenticacion,
         duracion_sesion_horas: int = 8,
+        repositorio_configuracion: RepositorioConfiguracionSQLite | None = None,
     ) -> None:
         self.repositorio_autenticacion = repositorio_autenticacion
         self.duracion_sesion_horas = duracion_sesion_horas
+        self._repositorio_configuracion = repositorio_configuracion
         self._logger: Logger = obtener_logger_sicap("autenticacion.servicio")
 
     def asegurar_usuario_admin_desarrollo(self) -> None:
@@ -209,7 +212,7 @@ class ServicioAutenticacion:
                 requiere_cambio_contrasena=True,
             )
 
-        expira_en = momento_actual + timedelta(hours=self.duracion_sesion_horas)
+        expira_en = momento_actual + timedelta(hours=self._resolver_duracion_sesion_horas())
         token_sesion = token_urlsafe(32)
         self.repositorio_autenticacion.crear_sesion(
             usuario_id=usuario.identificador,
@@ -333,3 +336,18 @@ class ServicioAutenticacion:
     @staticmethod
     def _generar_hash_token(token_sesion: str) -> str:
         return hashlib.sha256(token_sesion.encode("utf-8")).hexdigest()
+
+    def _resolver_duracion_sesion_horas(self) -> float:
+        if self._repositorio_configuracion is None:
+            return float(self.duracion_sesion_horas)
+        try:
+            parametros = self._repositorio_configuracion.listar_por_claves(
+                ("seguridad.duracion_sesion_horas",)
+            )
+            parametro = parametros.get("seguridad.duracion_sesion_horas")
+            if parametro is None:
+                return float(self.duracion_sesion_horas)
+            valor = float(str(parametro.valor or self.duracion_sesion_horas))
+            return valor if valor > 0 else float(self.duracion_sesion_horas)
+        except Exception:
+            return float(self.duracion_sesion_horas)

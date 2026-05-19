@@ -34,6 +34,9 @@ class GestorRutas:
     def obtener_ruta_exportaciones(self) -> Path:
         return self.raiz_proyecto / "exportaciones"
 
+    def obtener_ruta_respaldos(self) -> Path:
+        return self.raiz_proyecto / "respaldos"
+
     def obtener_ruta_exportaciones_comprobantes(self) -> Path:
         return self.obtener_ruta_exportaciones() / "comprobantes"
 
@@ -67,6 +70,7 @@ class GestorRutas:
         self.obtener_ruta_migraciones_base_datos().mkdir(parents=True, exist_ok=True)
         self.obtener_ruta_logs().mkdir(parents=True, exist_ok=True)
         self.obtener_ruta_exportaciones().mkdir(parents=True, exist_ok=True)
+        self.obtener_ruta_respaldos().mkdir(parents=True, exist_ok=True)
         self.obtener_ruta_exportaciones_comprobantes().mkdir(parents=True, exist_ok=True)
         self.obtener_ruta_exportaciones_reportes().mkdir(parents=True, exist_ok=True)
         self.obtener_ruta_documentacion_tecnica().mkdir(parents=True, exist_ok=True)

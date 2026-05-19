@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import shutil
 import sys
 import unittest
 import uuid
 from pathlib import Path
+import zipfile
 
 
 RAIZ_PROYECTO = Path(__file__).resolve().parents[1]
@@ -15,8 +17,25 @@ if str(RUTA_SRC) not in sys.path:
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from comun.respaldo import ServicioRespaldoLocal  # noqa: E402
 from modulos.configuracion.repositorio import RepositorioConfiguracionSQLite  # noqa: E402
 from modulos.configuracion.servicio import ServicioConfiguracion  # noqa: E402
+
+
+class ProgramadorTareasFalso:
+    def __init__(self) -> None:
+        self.comando = ""
+        self.proxima_ejecucion = ""
+
+    def programar(self, configuracion, comando: str) -> None:
+        self.comando = comando
+        self.proxima_ejecucion = f"{configuracion.tipo}:{configuracion.hora}"
+
+    def quitar(self) -> None:
+        self.proxima_ejecucion = ""
+
+    def obtener_proxima_ejecucion(self) -> str:
+        return self.proxima_ejecucion
 
 
 class TestConfiguracion(unittest.TestCase):
@@ -32,7 +51,17 @@ class TestConfiguracion(unittest.TestCase):
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
         self.gestor_base_datos.inicializar_base_datos()
         self.repositorio = RepositorioConfiguracionSQLite(self.gestor_base_datos)
-        self.servicio = ServicioConfiguracion(self.repositorio, self.gestor_rutas)
+        self.programador_tareas = ProgramadorTareasFalso()
+        self.servicio_respaldo = ServicioRespaldoLocal(
+            gestor_base_datos=self.gestor_base_datos,
+            gestor_rutas=self.gestor_rutas,
+            programador_tareas=self.programador_tareas,
+        )
+        self.servicio = ServicioConfiguracion(
+            self.repositorio,
+            self.gestor_rutas,
+            servicio_respaldo=self.servicio_respaldo,
+        )
 
     def tearDown(self) -> None:
         shutil.rmtree(self.raiz_temporal, ignore_errors=True)
@@ -55,17 +84,19 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.factura.firma_nombre, "")
         self.assertTrue(estado.factura.correlativo_actual.startswith("REC-"))
         self.assertEqual(estado.operacion.total_respaldos, 0)
+        self.assertEqual(estado.operacion.ruta_respaldos_principal, str(self.gestor_rutas.obtener_ruta_respaldos()))
+        self.assertEqual(estado.seguridad.duracion_sesion_horas, 8.0)
         self.assertEqual(estado.informacion.version_sistema, "2.2.0")
         self.assertEqual(estado.seguridad.maximo_intentos_fallidos, 5)
 
     def test_guardado_datos_junta_y_cobro_actualiza_base(self) -> None:
         resultado_junta = self.servicio.guardar_datos_junta(
-            nombre="Junta Nueva",
+            nombre="Empresa Nueva",
             telefono="9999-0000",
-            correo="junta@local.test",
+            correo="empresa@local.test",
             direccion="Centro de Yarumela",
             identificador_fiscal="08011900123456",
-            sitio_web="www.junta.test",
+            sitio_web="www.empresa.test",
             mensaje_contacto="Atencion administrativa de lunes a viernes.",
             actor_id=1,
         )
@@ -86,9 +117,9 @@ class TestConfiguracion(unittest.TestCase):
         self.assertTrue(resultado_cobro.exito)
 
         estado = self.servicio.obtener_estado()
-        self.assertEqual(estado.datos_junta.nombre, "Junta Nueva")
-        self.assertEqual(estado.datos_junta.identificador_fiscal, "08011900123456")
-        self.assertEqual(estado.datos_junta.sitio_web, "www.junta.test")
+        self.assertEqual(estado.identidad_empresa.nombre, "Empresa Nueva")
+        self.assertEqual(estado.identidad_empresa.identificador_fiscal, "08011900123456")
+        self.assertEqual(estado.identidad_empresa.sitio_web, "www.empresa.test")
         self.assertEqual(estado.parametros_cobro.precio_mensual_centavos, 3200)
         self.assertTrue(estado.parametros_cobro.multa_mora_automatica_activa)
         self.assertEqual(estado.parametros_cobro.multa_mora_automatica_centavos, 450)
@@ -102,7 +133,7 @@ class TestConfiguracion(unittest.TestCase):
     def test_guardado_factura_y_respaldo_actualiza_base(self) -> None:
         resultado_factura = self.servicio.guardar_parametros_factura(
             titulo_documento="RECIBO OFICIAL DE PAGO",
-            subtitulo_documento="Junta de Agua",
+            subtitulo_documento="Cobro institucional",
             texto_legal_superior="No es factura de deuda.",
             texto_pie="Conserve este comprobante.",
             texto_legal_inferior="No se aceptan anulaciones desde caja.",
@@ -121,6 +152,16 @@ class TestConfiguracion(unittest.TestCase):
         )
         resultado_respaldo = self.servicio.guardar_operacion_respaldo(
             respaldo_automatico=True,
+            ruta_principal=str(self.gestor_rutas.obtener_ruta_respaldos()),
+            ruta_secundaria=str(self.raiz_temporal / "respaldos_secundarios"),
+            secundaria_activa=True,
+            comprimir_zip=True,
+            organizar_por_periodo=True,
+            retencion_dias=15,
+            programacion_tipo="DIARIO",
+            programacion_hora="18:00",
+            programacion_dia_semana="VIERNES",
+            duracion_sesion_horas=4.0,
             actor_id=1,
         )
 
@@ -135,6 +176,41 @@ class TestConfiguracion(unittest.TestCase):
         self.assertTrue(estado.factura.firma_habilitada)
         self.assertEqual(estado.factura.firma_nombre, "Administracion SICAP")
         self.assertTrue(estado.operacion.respaldo_automatico)
+        self.assertEqual(estado.operacion.programacion_tipo, "DIARIO")
+        self.assertEqual(estado.seguridad.duracion_sesion_horas, 4.0)
+        self.assertEqual(self.programador_tareas.proxima_ejecucion, "DIARIO:18:00")
+
+    def test_crear_respaldo_manual_genera_zip_y_registra_historial(self) -> None:
+        self.servicio.guardar_operacion_respaldo(
+            respaldo_automatico=False,
+            ruta_principal=str(self.gestor_rutas.obtener_ruta_respaldos()),
+            ruta_secundaria=str(self.raiz_temporal / "copias"),
+            secundaria_activa=True,
+            comprimir_zip=True,
+            organizar_por_periodo=True,
+            retencion_dias=30,
+            programacion_tipo="DESACTIVADO",
+            programacion_hora="18:00",
+            programacion_dia_semana="VIERNES",
+            duracion_sesion_horas=8.0,
+            actor_id=1,
+        )
+
+        resultado = self.servicio.crear_respaldo_manual(actor_id=1)
+
+        self.assertTrue(resultado.exito)
+        estado = self.servicio.obtener_estado()
+        ruta_respaldo = Path(estado.operacion.ruta_respaldos_principal)
+        archivos = list(ruta_respaldo.rglob("SICAP_RESPALDO_*.zip"))
+        self.assertTrue(archivos)
+        with zipfile.ZipFile(archivos[0], "r") as archivo_zip:
+            nombres = archivo_zip.namelist()
+            self.assertIn("sicap.db", nombres)
+            self.assertIn("manifiesto.json", nombres)
+            manifiesto = json.loads(archivo_zip.read("manifiesto.json").decode("utf-8"))
+        self.assertEqual(manifiesto["tipo_respaldo"], "MANUAL")
+        self.assertTrue(estado.operacion.total_respaldos >= 1)
+        self.assertTrue(bool(estado.operacion.ultimo_respaldo_hash))
 
     def test_no_permite_firma_habilitada_sin_nombre(self) -> None:
         resultado = self.servicio.guardar_parametros_factura(

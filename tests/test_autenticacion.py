@@ -18,6 +18,7 @@ from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
 from modulos.autenticacion.entidades import CredencialesUsuario  # noqa: E402
 from modulos.autenticacion.repositorio import RepositorioAutenticacionSQLite  # noqa: E402
 from modulos.autenticacion.servicio import ServicioAutenticacion  # noqa: E402
+from modulos.configuracion.repositorio import RepositorioConfiguracionSQLite  # noqa: E402
 
 
 class TestAutenticacion(unittest.TestCase):
@@ -37,8 +38,10 @@ class TestAutenticacion(unittest.TestCase):
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
         self.gestor_base_datos.inicializar_base_datos()
         self.repositorio = RepositorioAutenticacionSQLite(self.gestor_base_datos)
+        self.repositorio_configuracion = RepositorioConfiguracionSQLite(self.gestor_base_datos)
         self.servicio = ServicioAutenticacion(
             repositorio_autenticacion=self.repositorio,
+            repositorio_configuracion=self.repositorio_configuracion,
         )
 
     def tearDown(self) -> None:
@@ -69,6 +72,40 @@ class TestAutenticacion(unittest.TestCase):
         self.assertEqual(total_sesiones, 0)
         self.assertEqual(total_intentos, 1)
         self.assertIsNotNone(ultimo_acceso)
+
+    def test_login_usa_duracion_sesion_configurada(self) -> None:
+        self.repositorio_configuracion.actualizar_valores(
+            {"seguridad.duracion_sesion_horas": "0.5"},
+            actor_id=1,
+        )
+
+        self.servicio.restablecer_contrasena(
+            nombre_usuario="admin",
+            nueva_contrasena="NuevaClave123!",
+            confirmacion_contrasena="NuevaClave123!",
+        )
+        resultado = self.servicio.iniciar_sesion(
+            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="NuevaClave123!")
+        )
+
+        self.assertTrue(resultado.exito)
+        self.assertIsNotNone(resultado.usuario)
+        conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
+        try:
+            expira_en = conexion.execute(
+                """
+                SELECT expira_en
+                FROM sesiones
+                WHERE usuario_id = (
+                    SELECT id FROM usuarios WHERE nombre_usuario = 'admin'
+                )
+                ORDER BY id DESC
+                LIMIT 1;
+                """
+            ).fetchone()[0]
+        finally:
+            conexion.close()
+        self.assertIsNotNone(expira_en)
 
     def test_login_invalido_registra_intento_fallido(self) -> None:
         resultado = self.servicio.iniciar_sesion(

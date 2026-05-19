@@ -5,6 +5,11 @@ from __future__ import annotations
 import csv
 from datetime import datetime
 
+from comun.configuracion.identidad_empresa import (
+    CLAVES_IDENTIDAD_EMPRESA,
+    CLAVES_IDENTIDAD_LEGADAS_JUNTA,
+    construir_identidad_empresa,
+)
 from comun.configuracion.gestor_rutas import GestorRutas
 from modulos.configuracion.repositorio import RepositorioConfiguracionSQLite
 from modulos.documentos import ServicioReportePdf
@@ -17,13 +22,8 @@ class ServicioReportes:
     """Orquesta consultas de reportes basicos."""
 
     CLAVES_IDENTIDAD_DOCUMENTAL = (
-        "junta.nombre",
-        "junta.telefono",
-        "junta.correo",
-        "junta.direccion",
-        "junta.identificador_fiscal",
-        "junta.sitio_web",
-        "junta.mensaje_contacto",
+        *CLAVES_IDENTIDAD_EMPRESA,
+        *CLAVES_IDENTIDAD_LEGADAS_JUNTA,
         "factura.mostrar_correo",
         "factura.mostrar_telefono",
         "factura.mostrar_direccion",
@@ -104,15 +104,16 @@ class ServicioReportes:
             self.CLAVES_IDENTIDAD_DOCUMENTAL
         )
         valores = {clave: parametro.valor for clave, parametro in parametros.items()}
+        identidad = construir_identidad_empresa(valores, nombre_predeterminado="SICAP")
 
         class _ConfiguracionTemporal:
-            nombre_junta = valores.get("junta.nombre", "Junta de Agua")
-            telefono_junta = valores.get("junta.telefono", "")
-            correo_junta = valores.get("junta.correo", "")
-            direccion_junta = valores.get("junta.direccion", "")
-            identificador_fiscal = valores.get("junta.identificador_fiscal", "")
-            sitio_web = valores.get("junta.sitio_web", "")
-            mensaje_contacto = valores.get("junta.mensaje_contacto", "")
+            nombre_junta = identidad.nombre
+            telefono_junta = identidad.telefono
+            correo_junta = identidad.correo
+            direccion_junta = identidad.direccion
+            identificador_fiscal = identidad.identificador_fiscal
+            sitio_web = identidad.sitio_web
+            mensaje_contacto = identidad.mensaje_contacto
             mostrar_correo = ServicioReportes._a_booleano(valores.get("factura.mostrar_correo", "1"))
             mostrar_telefono = ServicioReportes._a_booleano(valores.get("factura.mostrar_telefono", "1"))
             mostrar_direccion = ServicioReportes._a_booleano(valores.get("factura.mostrar_direccion", "1"))

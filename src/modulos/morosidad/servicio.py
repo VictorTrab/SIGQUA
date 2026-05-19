@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
+from comun.configuracion.identidad_empresa import (
+    CLAVES_IDENTIDAD_EMPRESA,
+    CLAVES_IDENTIDAD_LEGADAS_JUNTA,
+    construir_identidad_empresa,
+)
 from comun.configuracion.gestor_rutas import GestorRutas
 from modulos.documentos import ServicioEstadoCuenta
 from modulos.documentos.servicios.servicio_comprobante_pago import ServicioComprobantePago
@@ -27,13 +32,8 @@ class ServicioMorosidad:
     """Orquesta consultas, detalle y emision de documentos de deuda."""
 
     CLAVES_IDENTIDAD_DOCUMENTAL = (
-        "junta.nombre",
-        "junta.telefono",
-        "junta.correo",
-        "junta.direccion",
-        "junta.identificador_fiscal",
-        "junta.sitio_web",
-        "junta.mensaje_contacto",
+        *CLAVES_IDENTIDAD_EMPRESA,
+        *CLAVES_IDENTIDAD_LEGADAS_JUNTA,
         "factura.mostrar_correo",
         "factura.mostrar_telefono",
         "factura.mostrar_direccion",
@@ -202,23 +202,20 @@ class ServicioMorosidad:
         valores = self._repositorio_morosidad.listar_parametros_configuracion(
             self.CLAVES_IDENTIDAD_DOCUMENTAL
         )
+        parametros = {
+            clave: getattr(parametro, "valor", "")
+            for clave, parametro in valores.items()
+        }
+        identidad = construir_identidad_empresa(parametros, nombre_predeterminado="SICAP")
 
         class _ConfiguracionTemporal:
-            nombre_junta = valores.get("junta.nombre").valor if valores.get("junta.nombre") else "Junta de Agua"
-            telefono_junta = valores.get("junta.telefono").valor if valores.get("junta.telefono") else ""
-            correo_junta = valores.get("junta.correo").valor if valores.get("junta.correo") else ""
-            direccion_junta = valores.get("junta.direccion").valor if valores.get("junta.direccion") else ""
-            identificador_fiscal = (
-                valores.get("junta.identificador_fiscal").valor
-                if valores.get("junta.identificador_fiscal")
-                else ""
-            )
-            sitio_web = valores.get("junta.sitio_web").valor if valores.get("junta.sitio_web") else ""
-            mensaje_contacto = (
-                valores.get("junta.mensaje_contacto").valor
-                if valores.get("junta.mensaje_contacto")
-                else ""
-            )
+            nombre_junta = identidad.nombre
+            telefono_junta = identidad.telefono
+            correo_junta = identidad.correo
+            direccion_junta = identidad.direccion
+            identificador_fiscal = identidad.identificador_fiscal
+            sitio_web = identidad.sitio_web
+            mensaje_contacto = identidad.mensaje_contacto
             mostrar_correo = ServicioMorosidad._a_booleano(
                 valores.get("factura.mostrar_correo").valor
                 if valores.get("factura.mostrar_correo")

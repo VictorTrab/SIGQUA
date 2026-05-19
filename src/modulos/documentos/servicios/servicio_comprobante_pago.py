@@ -120,7 +120,7 @@ class ServicioComprobantePago:
             lineas.append(configuracion.sitio_web.strip())
         if configuracion.mensaje_contacto.strip():
             lineas.append(configuracion.mensaje_contacto.strip())
-        return lineas or ["Junta de Agua"]
+        return lineas or ["Empresa no configurada"]
 
     @staticmethod
     def _descomponer_detalles(detalles: tuple[str, ...]) -> tuple[tuple[str, str], ...]:
