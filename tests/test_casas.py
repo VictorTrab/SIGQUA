@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import csv
 import shutil
@@ -26,9 +26,11 @@ from modulos.casas.controlador import ControladorCasas  # noqa: E402
 from modulos.casas.entidades import (  # noqa: E402
     Casa,
     DetalleCasa,
+    ESTADO_ADMINISTRATIVO_SUSPENDIDA,
     FILTRO_CASAS_CON_MORA,
     FILTRO_CASAS_TODAS,
     FILTRO_CASAS_SIN_PROPIETARIO,
+    FormularioCorteServicioCasa,
     FormularioCasa,
     OpcionAbonado,
     OpcionBarrio,
@@ -37,7 +39,7 @@ from modulos.casas.entidades import (  # noqa: E402
 )
 from modulos.casas.repositorio import RepositorioCasasSQLite  # noqa: E402
 from modulos.casas.servicio import ServicioCasas  # noqa: E402
-from modulos.casas.vista import VistaCasas  # noqa: E402
+from modulos.casas.vista import DialogoFormularioCasa, VistaCasas  # noqa: E402
 
 
 class TestCasas(unittest.TestCase):
@@ -53,7 +55,7 @@ class TestCasas(unittest.TestCase):
 
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.gestor_base_datos.inicializar_base_datos()
+        self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
         self.repositorio = RepositorioCasasSQLite(self.gestor_base_datos)
         self.servicio = ServicioCasas(self.repositorio)
 
@@ -135,6 +137,9 @@ class TestCasas(unittest.TestCase):
             direccion_referencia="Casa de prueba",
             observaciones="",
             estado_servicio="ACTIVO",
+            estado_administrativo="OPERATIVA",
+            motivo_estado_administrativo="NINGUNO",
+            ha_tenido_servicio_activo=False,
         )
 
         self.assertFalse(resultado.exito)
@@ -151,7 +156,10 @@ class TestCasas(unittest.TestCase):
             barrio_id=2,
             direccion_referencia="Casa 02 actualizada",
             observaciones="Actualizacion valida con abonado actual inactivo",
-            estado_servicio="SUSPENDIDO",
+            estado_servicio="ACTIVO",
+            estado_administrativo="SUSPENDIDA",
+            motivo_estado_administrativo="REVISION_ADMINISTRATIVA",
+            ha_tenido_servicio_activo=True,
         )
 
         self.assertTrue(resultado.exito)
@@ -159,7 +167,81 @@ class TestCasas(unittest.TestCase):
         self.assertIsNotNone(casa)
         assert casa is not None
         self.assertEqual(casa.direccion_referencia, "Casa 02 actualizada")
-        self.assertEqual(casa.estado_servicio, "SUSPENDIDO")
+        self.assertEqual(casa.estado_servicio, "ACTIVO")
+        self.assertEqual(casa.estado_administrativo, "SUSPENDIDA")
+
+    def test_guardar_rechaza_cambio_fisico_desde_edicion_normal(self) -> None:
+        resultado = self.servicio.guardar(
+            identificador=2,
+            abonado_id=2,
+            barrio_id=2,
+            direccion_referencia="Casa 02 actualizada",
+            observaciones="Intento de corte desde formulario",
+            estado_servicio="CORTADO",
+            estado_administrativo="OPERATIVA",
+            motivo_estado_administrativo="NINGUNO",
+            ha_tenido_servicio_activo=True,
+        )
+
+        self.assertFalse(resultado.exito)
+        self.assertIn("estado fisico del servicio no se edita", resultado.mensaje)
+
+    def test_cortar_servicio_registra_proceso_y_conserva_dimension_administrativa(self) -> None:
+        with closing(self.gestor_base_datos.obtener_conexion()) as conexion:
+            with conexion:
+                conexion.execute(
+                    """
+                    UPDATE casas
+                    SET estado_administrativo = 'SUSPENDIDA',
+                        motivo_estado_administrativo = 'REVISION_ADMINISTRATIVA'
+                    WHERE id = 2;
+                    """
+                )
+
+        resultado = self.servicio.cortar_servicio(
+            casa_id=2,
+            observaciones="Corte operativo manual de prueba",
+            actor_id=1,
+        )
+
+        self.assertTrue(resultado.exito)
+        casa = self.servicio.obtener_por_id(2)
+        self.assertIsNotNone(casa)
+        assert casa is not None
+        self.assertEqual(casa.estado_servicio, "CORTADO")
+        self.assertEqual(casa.estado_administrativo, ESTADO_ADMINISTRATIVO_SUSPENDIDA)
+
+        with closing(self.gestor_base_datos.obtener_conexion()) as conexion:
+            proceso = conexion.execute(
+                """
+                SELECT tipo, estado, observaciones, usuario_id
+                FROM procesos_servicio
+                WHERE casa_id = 2 AND tipo = 'CORTE'
+                ORDER BY id DESC
+                LIMIT 1;
+                """
+            ).fetchone()
+
+        self.assertIsNotNone(proceso)
+        assert proceso is not None
+        self.assertEqual(str(proceso["tipo"]), "CORTE")
+        self.assertEqual(str(proceso["estado"]), "EJECUTADO")
+        self.assertEqual(str(proceso["observaciones"]), "Corte operativo manual de prueba")
+        self.assertEqual(int(proceso["usuario_id"]), 1)
+
+    def test_cortar_servicio_rechaza_casa_ya_cortada(self) -> None:
+        with closing(self.gestor_base_datos.obtener_conexion()) as conexion:
+            with conexion:
+                conexion.execute("UPDATE casas SET estado_servicio = 'CORTADO' WHERE id = 2;")
+
+        resultado = self.servicio.cortar_servicio(
+            casa_id=2,
+            observaciones="No deberia aplicar",
+            actor_id=3,
+        )
+
+        self.assertFalse(resultado.exito)
+        self.assertIn("ya tiene el servicio cortado", resultado.mensaje)
 
     def test_filtros_y_exportacion(self) -> None:
         pagina_con_mora = self.servicio.listar(filtro_rapido=FILTRO_CASAS_CON_MORA)
@@ -190,11 +272,14 @@ class TestCasas(unittest.TestCase):
                 "Meses pendientes",
                 "Meses en mora",
                 "Estado",
+                "Creado",
+                "Ultima actualizacion",
                 "Plan activo",
                 "Deuda pendiente",
             ],
         )
         self.assertEqual(filas[2][0], "CA-002")
+        self.assertTrue(filas[2][8])
 
 
 class VistaCasasStub(QObject):
@@ -206,6 +291,7 @@ class VistaCasasStub(QObject):
     detalle_casa_solicitado = Signal(int)
     editar_casa_solicitado = Signal(int)
     cambio_estado_solicitado = Signal(int)
+    corte_servicio_solicitado = Signal(int)
     historial_casa_solicitado = Signal(int)
     cambio_dueno_solicitado = Signal(int)
 
@@ -216,6 +302,7 @@ class VistaCasasStub(QObject):
         self.pagina = None
         self.formulario = None
         self.formulario_cambio_dueno = None
+        self.formulario_corte = None
         self.detalle_resultado = "cerrar"
         self.confirmacion_estado = True
         self.exportacion = ""
@@ -236,6 +323,9 @@ class VistaCasasStub(QObject):
 
     def solicitar_cambio_dueno(self, casa, abonados):
         return self.formulario_cambio_dueno
+
+    def solicitar_corte_servicio(self, detalle, formateador_moneda):
+        return self.formulario_corte
 
     def mostrar_detalle_casa(self, detalle, formateador_fecha, formateador_moneda):
         self.detalle_mostrado = detalle
@@ -270,10 +360,14 @@ class ServicioCasasStub:
             barrio_nombre="San Jorge",
             direccion_referencia="Casa 02",
             estado_servicio="ACTIVO",
+            estado_administrativo="OPERATIVA",
+            motivo_estado_administrativo="NINGUNO",
+            ha_tenido_servicio_activo=True,
         )
         self.detalle = DetalleCasa(casa=self.casa)
         self.guardados: list[tuple] = []
         self.cambios_estado: list[tuple] = []
+        self.cortes: list[tuple] = []
         self.cambios_dueno: list[tuple] = []
         self.exportaciones: list[tuple] = []
 
@@ -302,9 +396,13 @@ class ServicioCasasStub:
         self.guardados.append(tuple(kwargs.items()))
         return ResultadoGestionCasas(True, "ok", "OK")
 
-    def cambiar_estado(self, casa_id: int, estado_actual: str):
-        self.cambios_estado.append((casa_id, estado_actual))
+    def cambiar_estado(self, casa_id: int, estado_actual: str, motivo_actual: str):
+        self.cambios_estado.append((casa_id, estado_actual, motivo_actual))
         return ResultadoGestionCasas(True, "estado", "OK")
+
+    def cortar_servicio(self, casa_id: int, observaciones: str, actor_id: int | None):
+        self.cortes.append((casa_id, observaciones, actor_id))
+        return ResultadoGestionCasas(True, "corte", "OK")
 
     def cambiar_dueno(self, casa_id: int, nuevo_abonado_id: int | None, motivo: str, actor_id: int | None):
         self.cambios_dueno.append((casa_id, nuevo_abonado_id, motivo, actor_id))
@@ -347,6 +445,9 @@ class TestControladorCasas(unittest.TestCase):
             direccion_referencia="Nueva referencia",
             observaciones="Obs",
             estado_servicio="ACTIVO",
+            estado_administrativo="OPERATIVA",
+            motivo_estado_administrativo="NINGUNO",
+            ha_tenido_servicio_activo=False,
         )
         vista.nueva_casa_solicitada.emit()
         self.assertEqual(len(servicio.guardados), 1)
@@ -357,7 +458,10 @@ class TestControladorCasas(unittest.TestCase):
             barrio_id=1,
             direccion_referencia="Referencia editada",
             observaciones="Obs editada",
-            estado_servicio="SUSPENDIDO",
+            estado_servicio="ACTIVO",
+            estado_administrativo="SUSPENDIDA",
+            motivo_estado_administrativo="REVISION_ADMINISTRATIVA",
+            ha_tenido_servicio_activo=True,
         )
         vista.editar_casa_solicitado.emit(2)
         self.assertEqual(len(servicio.guardados), 2)
@@ -366,9 +470,17 @@ class TestControladorCasas(unittest.TestCase):
         vista.detalle_casa_solicitado.emit(2)
         self.assertEqual(len(servicio.guardados), 3)
 
+        vista.formulario_corte = FormularioCorteServicioCasa(
+            casa_id=2,
+            observaciones="Corte solicitado desde detalle",
+        )
+        vista.detalle_resultado = "cortar_servicio"
+        vista.detalle_casa_solicitado.emit(2)
+        self.assertEqual(servicio.cortes, [(2, "Corte solicitado desde detalle", 9)])
+
         vista.confirmacion_estado = True
         vista.cambio_estado_solicitado.emit(2)
-        self.assertEqual(servicio.cambios_estado, [(2, "ACTIVO")])
+        self.assertEqual(servicio.cambios_estado, [(2, "OPERATIVA", "NINGUNO")])
 
         class CambioDuenoStub:
             nuevo_abonado_id = 1
@@ -396,6 +508,7 @@ class TestVistaCasasAcciones(unittest.TestCase):
         eventos: list[tuple[str, int]] = []
         vista.editar_casa_solicitado.connect(lambda casa_id: eventos.append(("editar", casa_id)))
         vista.cambio_estado_solicitado.connect(lambda casa_id: eventos.append(("estado", casa_id)))
+        vista.corte_servicio_solicitado.connect(lambda casa_id: eventos.append(("corte", casa_id)))
 
         vista.mostrar_casas(
             PaginaCasas(
@@ -405,6 +518,7 @@ class TestVistaCasasAcciones(unittest.TestCase):
                         abonado_nombre="Carlos Ramirez",
                         barrio_nombre="San Jorge",
                         estado_servicio="ACTIVO",
+                        estado_administrativo="OPERATIVA",
                     )
                 ],
                 pagina_actual=1,
@@ -418,16 +532,64 @@ class TestVistaCasasAcciones(unittest.TestCase):
         contenedor_acciones = vista._tabla.cellWidget(0, 7)
         self.assertIsNotNone(contenedor_acciones)
         botones = contenedor_acciones.findChildren(QToolButton, "botonIconoFilaCasa")
-        self.assertEqual(len(botones), 5)
+        self.assertEqual(len(botones), 6)
 
         for boton in botones:
-            if boton.toolTip() in {"Editar", "Suspender"}:
+            if boton.toolTip() in {"Editar", "Suspender", "Cortar servicio"}:
                 QTest.mouseClick(boton, Qt.MouseButton.LeftButton)
                 self.aplicacion.processEvents()
 
-        self.assertEqual(eventos, [("editar", 2), ("estado", 2)])
+        self.assertEqual(eventos, [("editar", 2), ("estado", 2), ("corte", 2)])
         vista.close()
+
+    def test_boton_cortar_no_se_muestra_para_casa_cortada(self) -> None:
+        vista = VistaCasas()
+        vista.mostrar_casas(
+            PaginaCasas(
+                items=[
+                    Casa(
+                        identificador=3,
+                        abonado_nombre="Ana Martinez",
+                        barrio_nombre="Centro",
+                        estado_servicio="CORTADO",
+                        estado_administrativo="OPERATIVA",
+                    )
+                ],
+                pagina_actual=1,
+                tamano_pagina=10,
+                total_registros=1,
+            )
+        )
+        vista.show()
+        self.aplicacion.processEvents()
+
+        contenedor_acciones = vista._tabla.cellWidget(0, 7)
+        self.assertIsNotNone(contenedor_acciones)
+        botones = contenedor_acciones.findChildren(QToolButton, "botonIconoFilaCasa")
+        tooltips = {boton.toolTip() for boton in botones}
+        self.assertNotIn("Cortar servicio", tooltips)
+        vista.close()
+
+    def test_formulario_edicion_bloquea_estado_fisico(self) -> None:
+        dialogo = DialogoFormularioCasa(
+            barrios=[OpcionBarrio(1, "Centro")],
+            abonados=[OpcionAbonado(2, "Carlos Ramirez", "0801199000022", "ACTIVO")],
+            casa=Casa(
+                identificador=2,
+                abonado_id=2,
+                abonado_nombre="Carlos Ramirez",
+                abonado_dni="0801199000022",
+                barrio_id=1,
+                barrio_nombre="Centro",
+                estado_servicio="ACTIVO",
+                estado_administrativo="OPERATIVA",
+                ha_tenido_servicio_activo=True,
+            ),
+        )
+        self.assertFalse(dialogo._combo_estado.isEnabled())
+        dialogo.close()
 
 
 if __name__ == "__main__":
     unittest.main()
+

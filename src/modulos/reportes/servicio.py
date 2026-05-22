@@ -28,6 +28,8 @@ class ServicioReportes:
         "factura.mostrar_telefono",
         "factura.mostrar_direccion",
         "factura.mostrar_identificador_fiscal",
+        "documentos.abrir_pdf_automaticamente",
+        "documentos.imprimir_pdf_automaticamente",
     )
 
     def __init__(
@@ -87,6 +89,27 @@ class ServicioReportes:
             lineas_encabezado=self._obtener_lineas_encabezado_documental(),
             ruta_destino=ruta_destino,
         )
+
+    def obtener_politica_documental(self) -> tuple[bool, bool]:
+        if self._repositorio_configuracion is None:
+            return True, False
+        parametros = self._repositorio_configuracion.listar_por_claves(
+            (
+                "documentos.abrir_pdf_automaticamente",
+                "documentos.imprimir_pdf_automaticamente",
+            )
+        )
+        abrir = self._a_booleano(
+            parametros.get("documentos.abrir_pdf_automaticamente").valor
+            if parametros.get("documentos.abrir_pdf_automaticamente")
+            else "1"
+        )
+        imprimir = self._a_booleano(
+            parametros.get("documentos.imprimir_pdf_automaticamente").valor
+            if parametros.get("documentos.imprimir_pdf_automaticamente")
+            else "0"
+        )
+        return abrir, imprimir
 
     @staticmethod
     def _validar_rango(fecha_desde: str, fecha_hasta: str) -> None:

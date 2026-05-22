@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import shutil
@@ -49,7 +49,7 @@ class TestConfiguracion(unittest.TestCase):
             )
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.gestor_base_datos.inicializar_base_datos()
+        self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
         self.repositorio = RepositorioConfiguracionSQLite(self.gestor_base_datos)
         self.programador_tareas = ProgramadorTareasFalso()
         self.servicio_respaldo = ServicioRespaldoLocal(
@@ -73,6 +73,7 @@ class TestConfiguracion(unittest.TestCase):
         self.assertFalse(estado.parametros_cobro.multa_mora_automatica_activa)
         self.assertFalse(estado.parametros_cobro.corte_automatico_activo)
         self.assertEqual(estado.parametros_cobro.meses_para_corte, 5)
+        self.assertFalse(estado.parametros_cobro.cobrar_mensualidad_prorrateada_activacion)
         self.assertTrue(estado.parametros_cobro.permitir_pago_adelantado)
         self.assertEqual(estado.parametros_cobro.meses_adelanto_maximo, 12)
         self.assertEqual(estado.parametros_cobro.mora_leve_hasta_meses, 2)
@@ -82,12 +83,15 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.factura.etiqueta_copia, "ORIGINAL")
         self.assertFalse(estado.factura.firma_habilitada)
         self.assertEqual(estado.factura.firma_nombre, "")
+        self.assertTrue(estado.factura.abrir_pdf_automaticamente)
+        self.assertFalse(estado.factura.imprimir_pdf_automaticamente)
         self.assertTrue(estado.factura.correlativo_actual.startswith("REC-"))
         self.assertEqual(estado.operacion.total_respaldos, 0)
         self.assertEqual(estado.operacion.ruta_respaldos_principal, str(self.gestor_rutas.obtener_ruta_respaldos()))
         self.assertEqual(estado.seguridad.duracion_sesion_horas, 8.0)
         self.assertEqual(estado.informacion.version_sistema, "2.2.0")
         self.assertEqual(estado.seguridad.maximo_intentos_fallidos, 5)
+        self.assertEqual(estado.informacion.actualizado_por, "Sistema")
 
     def test_guardado_datos_junta_y_cobro_actualiza_base(self) -> None:
         resultado_junta = self.servicio.guardar_datos_junta(
@@ -106,6 +110,7 @@ class TestConfiguracion(unittest.TestCase):
             multa_mora_automatica_centavos=450,
             corte_automatico_activo=True,
             meses_para_corte=3,
+            cobrar_mensualidad_prorrateada_activacion=True,
             permitir_pago_adelantado=True,
             meses_adelanto_maximo=6,
             mora_leve_hasta_meses=2,
@@ -125,10 +130,12 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.parametros_cobro.multa_mora_automatica_centavos, 450)
         self.assertTrue(estado.parametros_cobro.corte_automatico_activo)
         self.assertEqual(estado.parametros_cobro.meses_para_corte, 3)
+        self.assertTrue(estado.parametros_cobro.cobrar_mensualidad_prorrateada_activacion)
         self.assertTrue(estado.parametros_cobro.permitir_pago_adelantado)
         self.assertEqual(estado.parametros_cobro.meses_adelanto_maximo, 6)
         self.assertEqual(estado.parametros_cobro.mora_leve_hasta_meses, 2)
         self.assertEqual(estado.parametros_cobro.mora_media_hasta_meses, 4)
+        self.assertEqual(estado.informacion.actualizado_por, "Administrador del Sistema")
 
     def test_guardado_factura_y_respaldo_actualiza_base(self) -> None:
         resultado_factura = self.servicio.guardar_parametros_factura(
@@ -148,6 +155,8 @@ class TestConfiguracion(unittest.TestCase):
             firma_cargo="Encargado de caja",
             firma_identificador="0801-01-0001",
             firma_texto_apoyo="Documento validado para uso interno.",
+            abrir_pdf_automaticamente=False,
+            imprimir_pdf_automaticamente=True,
             actor_id=1,
         )
         resultado_respaldo = self.servicio.guardar_operacion_respaldo(
@@ -175,6 +184,8 @@ class TestConfiguracion(unittest.TestCase):
         self.assertTrue(estado.factura.mostrar_identificador_fiscal)
         self.assertTrue(estado.factura.firma_habilitada)
         self.assertEqual(estado.factura.firma_nombre, "Administracion SICAP")
+        self.assertFalse(estado.factura.abrir_pdf_automaticamente)
+        self.assertTrue(estado.factura.imprimir_pdf_automaticamente)
         self.assertTrue(estado.operacion.respaldo_automatico)
         self.assertEqual(estado.operacion.programacion_tipo, "DIARIO")
         self.assertEqual(estado.seguridad.duracion_sesion_horas, 4.0)
@@ -211,6 +222,7 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(manifiesto["tipo_respaldo"], "MANUAL")
         self.assertTrue(estado.operacion.total_respaldos >= 1)
         self.assertTrue(bool(estado.operacion.ultimo_respaldo_hash))
+        self.assertEqual(estado.operacion.ultimo_respaldo_generado_por, "Administrador del Sistema")
 
     def test_no_permite_firma_habilitada_sin_nombre(self) -> None:
         resultado = self.servicio.guardar_parametros_factura(
@@ -230,6 +242,8 @@ class TestConfiguracion(unittest.TestCase):
             firma_cargo="Caja",
             firma_identificador="",
             firma_texto_apoyo="",
+            abrir_pdf_automaticamente=True,
+            imprimir_pdf_automaticamente=False,
             actor_id=1,
         )
 
@@ -243,6 +257,7 @@ class TestConfiguracion(unittest.TestCase):
             multa_mora_automatica_centavos=0,
             corte_automatico_activo=False,
             meses_para_corte=0,
+            cobrar_mensualidad_prorrateada_activacion=False,
             permitir_pago_adelantado=False,
             meses_adelanto_maximo=0,
             mora_leve_hasta_meses=2,
@@ -260,6 +275,7 @@ class TestConfiguracion(unittest.TestCase):
             multa_mora_automatica_centavos=0,
             corte_automatico_activo=False,
             meses_para_corte=5,
+            cobrar_mensualidad_prorrateada_activacion=False,
             permitir_pago_adelantado=True,
             meses_adelanto_maximo=0,
             mora_leve_hasta_meses=2,
@@ -277,6 +293,7 @@ class TestConfiguracion(unittest.TestCase):
             multa_mora_automatica_centavos=0,
             corte_automatico_activo=False,
             meses_para_corte=5,
+            cobrar_mensualidad_prorrateada_activacion=False,
             permitir_pago_adelantado=False,
             meses_adelanto_maximo=0,
             mora_leve_hasta_meses=3,
@@ -290,3 +307,4 @@ class TestConfiguracion(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

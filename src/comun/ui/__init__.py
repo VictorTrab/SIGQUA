@@ -3,6 +3,7 @@
 from comun.ui.contenedor_apilado import ContenedorApiladoAjustable
 from comun.ui.componentes import (
     BotonAccionContextual,
+    CampoMontoMonetario,
     DialogoBaseSicap,
     DialogoConfirmacionSicap,
     DialogoMensajeSicap,
@@ -14,6 +15,10 @@ from comun.ui.componentes import (
     crear_item_tabla,
     resolver_variante_boton_modal,
 )
+from comun.ui.documentos_pdf import (
+    describir_estado_automatizacion_documental,
+    ejecutar_acciones_documento_pdf,
+)
 from comun.ui.iconos import (
     obtener_icono_tabler,
     obtener_icono_tabler_coloreado,
@@ -23,6 +28,7 @@ from comun.ui.iconos import (
 __all__ = [
     "ContenedorApiladoAjustable",
     "BotonAccionContextual",
+    "CampoMontoMonetario",
     "DialogoBaseSicap",
     "DialogoConfirmacionSicap",
     "DialogoMensajeSicap",
@@ -33,6 +39,8 @@ __all__ = [
     "crear_boton_operativo",
     "crear_item_tabla",
     "resolver_variante_boton_modal",
+    "describir_estado_automatizacion_documental",
+    "ejecutar_acciones_documento_pdf",
     "obtener_icono_tabler",
     "obtener_icono_tabler_coloreado",
     "obtener_pixmap_tabler_coloreado",

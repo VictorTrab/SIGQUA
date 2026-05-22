@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import shutil
@@ -20,11 +20,18 @@ if str(RUTA_SRC) not in sys.path:
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from modulos.documentos.generadores.generador_pdf_reportlab import GeneradorPdfReportLab  # noqa: E402
+from modulos.documentos.modelos.dto_estado_cuenta import (  # noqa: E402
+    CasaEstadoCuenta,
+    DTOEstadoCuenta,
+    LineaDetalleEstadoCuenta,
+)
 from modulos.documentos import ServicioComprobantePago, ServicioReportePdf  # noqa: E402
 from modulos.pagos.entidades import FormularioPago  # noqa: E402
 from modulos.pagos.repositorio import RepositorioPagosSQLite  # noqa: E402
 from modulos.pagos.servicio import ServicioPagos  # noqa: E402
 from modulos.reportes.repositorio import RepositorioReportesSQLite  # noqa: E402
+from reportlab.platypus import Table  # noqa: E402
 
 
 class TestDocumentosPdf(unittest.TestCase):
@@ -38,7 +45,7 @@ class TestDocumentosPdf(unittest.TestCase):
             )
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.ruta_db = self.gestor_base_datos.inicializar_base_datos()
+        self.ruta_db = self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
         self.repositorio_pagos = RepositorioPagosSQLite(self.gestor_base_datos)
         self.servicio_pagos = ServicioPagos(self.repositorio_pagos, gestor_rutas=self.gestor_rutas)
         self.servicio_comprobantes = ServicioComprobantePago(gestor_rutas=self.gestor_rutas)
@@ -104,6 +111,53 @@ class TestDocumentosPdf(unittest.TestCase):
                 generado_en="2020-01-01 08:00:00",
             )
 
+    def test_estado_cuenta_no_duplica_totales_generales_con_una_sola_casa(self) -> None:
+        generador = GeneradorPdfReportLab()
+        dto = DTOEstadoCuenta(
+            titulo="DOCUMENTO DE DEUDA",
+            subtitulo="Detalle operativo generado desde morosidad",
+            lineas_encabezado=("SICAP",),
+            abonado_nombre="Julio Perdomo",
+            abonado_dni="0801199402022",
+            generado_en="20/05/2026 08:00",
+            observacion="Documento de consulta operativa.",
+            casas=(
+                CasaEstadoCuenta(
+                    casa_codigo="CA-007",
+                    barrio_nombre="La Laguna",
+                    direccion_casa="Casa blanca",
+                    estado_servicio="ACTIVO",
+                    meses_vencidos=1,
+                    dias_en_mora=38,
+                    prioridad="Baja",
+                    vencimiento_mas_antiguo="10/04/2026",
+                    deuda_base="L 150.00",
+                    recargo_mora="L 30.00",
+                    deuda_total="L 180.00",
+                    lineas_detalle=(
+                        LineaDetalleEstadoCuenta(
+                            descripcion="Mensualidad en mora 04/2026",
+                            fecha_vencimiento="10/04/2026",
+                            monto="L 150.00",
+                        ),
+                    ),
+                ),
+            ),
+            total_deuda_base="L 150.00",
+            total_recargo_mora="L 30.00",
+            total_general="L 180.00",
+            firma_habilitada=False,
+            firma_nombre="",
+            firma_cargo="",
+            firma_identificador="",
+            firma_texto_apoyo="",
+        )
+
+        elementos = generador._construir_elementos_estado_cuenta(dto)
+        tablas = [elemento for elemento in elementos if isinstance(elemento, Table)]
+
+        self.assertEqual(len(tablas), 3)
+
     def _obtener_casa_por_dni(self, dni: str) -> int:
         with closing(sqlite3.connect(self.ruta_db)) as conexion:
             fila = conexion.execute(
@@ -131,3 +185,4 @@ class TestDocumentosPdf(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

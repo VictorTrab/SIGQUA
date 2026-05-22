@@ -120,6 +120,7 @@ class ServicioBarrios:
                         "Abonados",
                         "Casas",
                         "Estado",
+                        "Creado",
                         "Ultima actualizacion",
                         "Observaciones",
                     ]
@@ -132,6 +133,7 @@ class ServicioBarrios:
                             barrio.total_abonados,
                             barrio.total_casas,
                             barrio.estado,
+                            self.formatear_fecha_hora(barrio.creado_en),
                             self.formatear_fecha_hora(barrio.actualizado_en),
                             barrio.observaciones,
                         ]

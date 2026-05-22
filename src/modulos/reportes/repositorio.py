@@ -78,7 +78,7 @@ class RepositorioReportesSQLite:
             FROM cargos c
             INNER JOIN casas ca ON ca.id = c.casa_id
             INNER JOIN conceptos_cobro cc ON cc.id = c.concepto_id
-            WHERE ca.estado_servicio = 'ACTIVO'
+            WHERE ca.estado_servicio IN ('ACTIVO', 'CORTADO')
               AND c.estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
               AND c.saldo_pendiente_centavos > 0
               AND c.anulado_en IS NULL
@@ -92,7 +92,7 @@ class RepositorioReportesSQLite:
             FROM cargos c
             INNER JOIN casas ca ON ca.id = c.casa_id
             INNER JOIN conceptos_cobro cc ON cc.id = c.concepto_id
-            WHERE ca.estado_servicio = 'ACTIVO'
+            WHERE ca.estado_servicio IN ('ACTIVO', 'CORTADO')
               AND c.estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
               AND c.saldo_pendiente_centavos > 0
               AND c.anulado_en IS NULL
@@ -140,19 +140,21 @@ class RepositorioReportesSQLite:
     def _reporte_casas_por_estado(self, conexion: object) -> TablaReporte:
         filas = conexion.execute(
             """
-            SELECT estado_servicio, COUNT(*) AS total
+            SELECT
+                estado_servicio || ' | ' || COALESCE(estado_administrativo, 'OPERATIVA') AS estado_compuesto,
+                COUNT(*) AS total
             FROM casas
             WHERE eliminado_en IS NULL
-            GROUP BY estado_servicio
-            ORDER BY estado_servicio;
+            GROUP BY estado_servicio, COALESCE(estado_administrativo, 'OPERATIVA')
+            ORDER BY estado_compuesto;
             """
         ).fetchall()
         return TablaReporte(
             codigo=REPORTE_CASAS_ESTADO,
             titulo="Casas por estado",
-            descripcion="Distribucion de casas por estado del servicio.",
+            descripcion="Distribucion de casas por estado fisico y administrativo.",
             columnas=("Estado", "Total"),
-            filas=tuple((str(fila["estado_servicio"]), str(fila["total"])) for fila in filas),
+            filas=tuple((str(fila["estado_compuesto"]), str(fila["total"])) for fila in filas),
         )
 
     def _reporte_deuda_activa(self, conexion: object) -> TablaReporte:
@@ -175,7 +177,7 @@ class RepositorioReportesSQLite:
             INNER JOIN casas ca ON ca.id = c.casa_id
             INNER JOIN abonados a ON a.id = ca.abonado_id
             INNER JOIN conceptos_cobro cc ON cc.id = c.concepto_id
-            WHERE ca.estado_servicio = 'ACTIVO'
+            WHERE ca.estado_servicio IN ('ACTIVO', 'CORTADO')
               AND c.estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
               AND c.saldo_pendiente_centavos > 0
               AND c.anulado_en IS NULL
@@ -186,8 +188,8 @@ class RepositorioReportesSQLite:
         ).fetchall()
         return TablaReporte(
             codigo=REPORTE_DEUDA_ACTIVA,
-            titulo="Deuda vencida/pendiente de casas activas",
-            descripcion="Deuda base y recargo por mora separados para casas activas.",
+            titulo="Deuda vencida/pendiente de casas operativas o cortadas",
+            descripcion="Deuda base y recargo por mora separados sin perder casas suspendidas administrativamente.",
             columnas=("Casa", "Abonado", "Estado", "Deuda base", "Mora", "Total"),
             filas=tuple(
                 (

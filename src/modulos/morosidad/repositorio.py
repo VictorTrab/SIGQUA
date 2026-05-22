@@ -42,7 +42,7 @@ class RepositorioMorosidadSQLite:
     def listar_morosidad(self, filtros: FiltroMorosidad) -> list[FilaMorosidad]:
         condiciones = [
             "ca.eliminado_en IS NULL",
-            "ca.estado_servicio IN ('ACTIVO', 'SUSPENDIDO', 'CORTADO')",
+            "ca.estado_servicio IN ('ACTIVO', 'CORTADO')",
             "c.estado = 'VENCIDO'",
             "c.saldo_pendiente_centavos > 0",
             "c.anulado_en IS NULL",
@@ -178,7 +178,7 @@ class RepositorioMorosidadSQLite:
             INNER JOIN conceptos_cobro cc ON cc.id = c.concepto_id
             WHERE a.id = ?
               AND ca.eliminado_en IS NULL
-              AND ca.estado_servicio IN ('ACTIVO', 'SUSPENDIDO', 'CORTADO')
+              AND ca.estado_servicio IN ('ACTIVO', 'CORTADO')
               AND c.estado = 'VENCIDO'
               AND c.saldo_pendiente_centavos > 0
               AND c.anulado_en IS NULL

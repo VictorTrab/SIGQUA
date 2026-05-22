@@ -5,10 +5,12 @@ from __future__ import annotations
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QSizePolicy,
     QTableWidget,
@@ -26,6 +28,7 @@ from comun.ui.temas import (
     obtener_paleta_tema_actual,
     obtener_tema_actual,
 )
+from comun.utilidades.moneda import formatear_monto_desde_centavos, parsear_monto_a_centavos
 
 
 COLOR_TEXTO_PRIMARIO = "#10233d"
@@ -44,12 +47,43 @@ ALTURA_BOTON_DIALOGO = 34
 configurar_filtro_mensajes_qt()
 
 
+class CampoMontoMonetario(QLineEdit):
+    """Campo comun para capturar montos visibles y convertirlos a centavos."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setPlaceholderText("0.00")
+        self.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.editingFinished.connect(self._normalizar_texto)
+
+    def obtener_centavos(self) -> int:
+        valor = parsear_monto_a_centavos(self.text())
+        return -1 if valor is None else valor
+
+    def establecer_desde_centavos(self, valor: int | None) -> None:
+        if valor is None:
+            self.clear()
+            return
+        self.setText(formatear_monto_desde_centavos(valor))
+
+    def _normalizar_texto(self) -> None:
+        valor = parsear_monto_a_centavos(self.text())
+        if valor is None:
+            if self.text().strip():
+                self.setText(self.text().strip())
+            else:
+                self.clear()
+            return
+        self.setText(formatear_monto_desde_centavos(valor))
+
+
 def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> str:
     return f"""
     QDialog#dialogoBaseSicap {{
         background: {color_fondo};
         border: 1px solid {paleta["borde_suave"]};
         border-radius: 4px;
+        font-family: "{paleta["familia_tipografica"]}";
     }}
     QWidget#tarjetaDialogoSicap,
     QFrame#cabeceraDialogoSicap,
@@ -72,12 +106,17 @@ def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> 
     }}
     QLabel#tituloDialogoSicap {{
         color: {paleta["texto_principal"]};
-        font-size: 18px;
-        font-weight: 800;
+        font-size: {paleta["tamano_titulo_panel"] + 4}px;
+        font-weight: {paleta["peso_titulo"]};
     }}
     QLabel#descripcionDialogoSicap {{
         color: {paleta["texto_suave"]};
-        font-size: 12px;
+        font-size: {paleta["tamano_fuente_base"] + 2}px;
+    }}
+    QLabel#ayudaCampoDialogoSicap {{
+        color: {paleta["texto_suave"]};
+        font-size: {paleta["tamano_fuente_base"] + 1}px;
+        font-weight: {paleta["peso_subtitulo"]};
     }}
     QLabel#mensajeErrorDialogoSicap {{
         color: {paleta["texto_error"]};
@@ -85,45 +124,61 @@ def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> 
         border: 1px solid {paleta["borde_error"]};
         border-radius: 4px;
         padding: 8px 10px;
-        font-size: 12px;
-        font-weight: 700;
+        font-size: {paleta["tamano_fuente_base"] + 2}px;
+        font-weight: {paleta["peso_subtitulo"]};
     }}
     QLabel#etiquetaDatoDialogoSicap {{
         color: {paleta["texto_muted"]};
-        font-size: 12px;
-        font-weight: 700;
+        font-size: {paleta["tamano_fuente_base"] + 1}px;
+        font-weight: {paleta["peso_subtitulo"]};
     }}
     QLabel#valorDatoDialogoSicap {{
         color: {paleta["texto_input"]};
-        font-size: 13px;
-        font-weight: 800;
+        font-size: {paleta["tamano_fuente_base"] + 2}px;
+        font-weight: {paleta["peso_titulo"]};
     }}
-    QLineEdit, QComboBox, QPlainTextEdit, QTextEdit, QTableWidget {{
+    QLineEdit, QComboBox, QPlainTextEdit, QTextEdit, QSpinBox {{
         border: 1px solid {paleta["borde_medio"]};
         border-radius: 4px;
         background: {paleta["fondo_input"]};
         color: {paleta["texto_input"]};
         padding: 8px 10px;
-        font-size: 13px;
+        font-size: {paleta["tamano_fuente_base"] + 2}px;
     }}
-    QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus {{
+    QTableWidget {{
+        border: 1px solid {paleta["borde_tabla"]};
+        border-radius: 8px;
+        background: {paleta["fondo_tabla_cuerpo"]};
+        alternate-background-color: {paleta["fondo_tabla_fila_alterna"]};
+        color: {paleta["texto_input"]};
+        padding: 0px;
+        gridline-color: {paleta["borde_tabla"]};
+    }}
+    QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus, QSpinBox:focus {{
         border-color: {paleta["borde_foco_input"]};
         background: {paleta["fondo_input_focus"]};
     }}
-    QTableWidget {{
-        padding: 0px;
-        gridline-color: {paleta["borde_suave"]};
-    }}
     QTableWidget::item {{
         padding: 6px 8px;
+        border-bottom: 1px solid {paleta["borde_tabla"]};
+        background: {paleta["fondo_tabla_fila"]};
+    }}
+    QTableWidget::item:alternate {{
+        background: {paleta["fondo_tabla_fila_alterna"]};
+    }}
+    QTableWidget::item:selected {{
+        background: {paleta["fondo_tabla_seleccion"]};
+        color: {paleta["texto_input"]};
     }}
     QHeaderView::section {{
-        background: {paleta["fondo_tabla_header"]};
+        background: {paleta["fondo_tabla_header_destacado"]};
         color: {paleta["texto_input"]};
         border: none;
+        border-right: 1px solid {paleta["borde_tabla"]};
+        border-bottom: 1px solid {paleta["borde_tabla"]};
         padding: 8px;
-        font-size: 12px;
-        font-weight: 800;
+        font-size: {paleta["tamano_fuente_base"] + 1}px;
+        font-weight: {paleta["peso_titulo"]};
     }}
     QComboBox::drop-down {{
         border: none;
@@ -136,8 +191,8 @@ def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> 
     }}
     QLabel {{
         color: {paleta["texto_input"]};
-        font-size: 13px;
-        font-weight: 700;
+        font-size: {paleta["tamano_fuente_base"] + 2}px;
+        font-weight: {paleta["peso_subtitulo"]};
     }}
     """
 
@@ -383,6 +438,7 @@ class DialogoBaseSicap(QDialog):
         self._nombre_tema = obtener_tema_actual()
         self._paleta_tema = obtener_paleta_tema_actual()
         self._color_fondo_dialogo = str(self._paleta_tema["fondo_dialogo"])
+        self._presentacion_preparada = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -425,6 +481,19 @@ class DialogoBaseSicap(QDialog):
         layout.addWidget(self._tarjeta)
         self.setStyleSheet(_crear_estilo_dialogo_sicap(self._color_fondo_dialogo, self._paleta_tema))
 
+    def exec(self) -> int:
+        self._preparar_presentacion_inicial()
+        return super().exec()
+
+    def showEvent(self, evento) -> None:
+        super().showEvent(evento)
+        if self._presentacion_preparada:
+            if self.layout() is not None:
+                self.layout().activate()
+            self.adjustSize()
+            self.resize(self.sizeHint().expandedTo(self.minimumSizeHint()))
+            self._centrar_en_pantalla_activa()
+
     @property
     def layout_cabecera(self) -> QVBoxLayout:
         return self._layout_cabecera
@@ -450,6 +519,45 @@ class DialogoBaseSicap(QDialog):
         self._paleta_tema = obtener_paleta_tema(self._nombre_tema)
         self._color_fondo_dialogo = str(self._paleta_tema["fondo_dialogo"])
         self.setStyleSheet(_crear_estilo_dialogo_sicap(self._color_fondo_dialogo, self._paleta_tema))
+        self._presentacion_preparada = False
+
+    def _preparar_presentacion_inicial(self) -> None:
+        if self._presentacion_preparada:
+            return
+        self.ensurePolished()
+        if self.layout() is not None:
+            self.layout().activate()
+        self.adjustSize()
+        tamano_objetivo = self.sizeHint().expandedTo(self.minimumSizeHint())
+        self.resize(tamano_objetivo)
+        self._centrar_en_pantalla_activa()
+        self._presentacion_preparada = True
+
+    def _centrar_en_pantalla_activa(self) -> None:
+        pantalla = self.screen()
+        if pantalla is None:
+            ventana_padre = self.parentWidget().window() if self.parentWidget() is not None else None
+            pantalla = (
+                None if ventana_padre is None else ventana_padre.screen()
+            ) or QApplication.primaryScreen()
+        if pantalla is None:
+            return
+
+        geometria_disponible = pantalla.availableGeometry()
+        geometria_dialogo = self.frameGeometry()
+        geometria_dialogo.moveCenter(geometria_disponible.center())
+
+        posicion_x = max(geometria_disponible.left(), geometria_dialogo.left())
+        posicion_y = max(geometria_disponible.top(), geometria_dialogo.top())
+        posicion_x = min(
+            posicion_x,
+            geometria_disponible.right() - geometria_dialogo.width() + 1,
+        )
+        posicion_y = min(
+            posicion_y,
+            geometria_disponible.bottom() - geometria_dialogo.height() + 1,
+        )
+        self.move(posicion_x, posicion_y)
 
 
 class BotonAccionContextual(QPushButton):
@@ -664,6 +772,8 @@ class TarjetaKPI(QFrame):
     def __init__(self, titulo: str, valor: str, detalle: str = "") -> None:
         super().__init__()
         self.setObjectName("tarjetaKPI")
+        self._tema_actual = obtener_tema_actual()
+        self._paleta_tema = obtener_paleta_tema_actual()
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setMinimumHeight(104)
 
@@ -689,30 +799,39 @@ class TarjetaKPI(QFrame):
         self._detalle.setText(detalle)
 
     def _aplicar_estilos(self) -> None:
+        paleta = self._paleta_tema
         self.setStyleSheet(
             f"""
             QFrame#tarjetaKPI {{
-                background-color: {COLOR_FONDO_PANEL};
-                border: 1px solid {COLOR_BORDE};
+                background-color: {paleta["fondo_superficie_suave"]};
+                border: 1px solid {paleta["borde_suave"]};
                 border-radius: 20px;
+                font-family: "{paleta["familia_tipografica"]}";
             }}
             QLabel#kpiTitulo {{
-                color: {COLOR_TEXTO_SECUNDARIO};
-                font-size: 12px;
-                font-weight: 700;
+                color: {paleta["texto_secundario"]};
+                font-size: {paleta["tamano_fuente_base"] + 2}px;
+                font-weight: {paleta["peso_subtitulo"]};
                 letter-spacing: 0.04em;
             }}
             QLabel#kpiValor {{
-                color: #ffffff;
-                font-size: 30px;
-                font-weight: 800;
+                color: {paleta["texto_principal"]};
+                font-size: {paleta["tamano_titulo_tarjeta"] + 10}px;
+                font-weight: {paleta["peso_titulo"]};
             }}
             QLabel#kpiDetalle {{
-                color: {COLOR_TEXTO_SECUNDARIO};
-                font-size: 12px;
+                color: {paleta["texto_secundario"]};
+                font-size: {paleta["tamano_fuente_base"] + 2}px;
             }}
             """
         )
+
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._tema_actual = (
+            nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        )
+        self._paleta_tema = obtener_paleta_tema(self._tema_actual)
+        self._aplicar_estilos()
 
 
 class VistaPlaceholderModulo(QWidget):
@@ -769,12 +888,13 @@ class VistaPlaceholderModulo(QWidget):
             }}
             QLabel#placeholderTitulo {{
                 color: {paleta["texto_principal"]};
-                font-size: 22px;
-                font-weight: 800;
+                font-size: {paleta["tamano_titulo_modulo"]}px;
+                font-weight: {paleta["peso_titulo"]};
+                font-family: "{paleta["familia_tipografica"]}";
             }}
             QLabel#placeholderDescripcion {{
                 color: {paleta["texto_secundario"]};
-                font-size: 14px;
+                font-size: {paleta["tamano_fuente_base"] + 4}px;
             }}
             QLabel#placeholderAviso {{
                 color: {paleta["texto_advertencia"]};
@@ -782,8 +902,8 @@ class VistaPlaceholderModulo(QWidget):
                 border: 1px solid {paleta["borde_advertencia"]};
                 border-radius: 14px;
                 padding: 10px 12px;
-                font-size: 13px;
-                font-weight: 700;
+                font-size: {paleta["tamano_fuente_base"] + 3}px;
+                font-weight: {paleta["peso_subtitulo"]};
             }}
             """
         )

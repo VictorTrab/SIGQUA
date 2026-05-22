@@ -1,4 +1,4 @@
-"""Contratos e implementacion SQLite del modulo de barrios."""
+﻿"""Contratos e implementacion SQLite del modulo de barrios."""
 
 from __future__ import annotations
 
@@ -88,6 +88,7 @@ class RepositorioBarriosSQLite:
                 b.nombre,
                 b.estado,
                 COALESCE(b.observaciones, '') AS observaciones,
+                COALESCE(b.creado_en, '') AS creado_en,
                 COALESCE(b.actualizado_en, '') AS actualizado_en,
                 COALESCE(ab.total_abonados, 0) AS total_abonados,
                 COALESCE(cs.total_casas, 0) AS total_casas
@@ -158,6 +159,7 @@ class RepositorioBarriosSQLite:
                 b.nombre,
                 b.estado,
                 COALESCE(b.observaciones, '') AS observaciones,
+                COALESCE(b.creado_en, '') AS creado_en,
                 COALESCE(b.actualizado_en, '') AS actualizado_en,
                 COALESCE(ab.total_abonados, 0) AS total_abonados,
                 COALESCE(cs.total_casas, 0) AS total_casas
@@ -178,7 +180,7 @@ class RepositorioBarriosSQLite:
                     conexion.execute(
                         """
                         INSERT INTO barrios(nombre, estado, observaciones, actualizado_en)
-                        VALUES (?, ?, ?, datetime('now'));
+                        VALUES (?, ?, ?, datetime('now', 'localtime'));
                         """,
                         (barrio.nombre, barrio.estado, barrio.observaciones),
                     )
@@ -190,7 +192,7 @@ class RepositorioBarriosSQLite:
                     SET nombre = ?,
                         estado = ?,
                         observaciones = ?,
-                        actualizado_en = datetime('now')
+                        actualizado_en = datetime('now', 'localtime')
                     WHERE id = ? AND eliminado_en IS NULL;
                     """,
                     (barrio.nombre, barrio.estado, barrio.observaciones, barrio.identificador),
@@ -203,7 +205,7 @@ class RepositorioBarriosSQLite:
                     """
                     UPDATE barrios
                     SET estado = ?,
-                        actualizado_en = datetime('now')
+                        actualizado_en = datetime('now', 'localtime')
                     WHERE id = ? AND eliminado_en IS NULL;
                     """,
                     (estado, barrio_id),
@@ -261,5 +263,7 @@ class RepositorioBarriosSQLite:
             observaciones=str(fila["observaciones"] or ""),
             total_abonados=int(fila["total_abonados"] or 0),
             total_casas=int(fila["total_casas"] or 0),
+            creado_en=str(fila["creado_en"] or ""),
             actualizado_en=str(fila["actualizado_en"] or ""),
         )
+

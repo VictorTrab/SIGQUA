@@ -320,16 +320,17 @@ class GeneradorPdfReportLab:
         for casa in dto.casas:
             elementos.extend(self._construir_bloque_casa_estado_cuenta(casa))
             elementos.append(Spacer(1, 4 * mm))
-        elementos.append(
-            self._crear_tabla_totales_reporte(
-                (
-                    ("Deuda base", dto.total_deuda_base),
-                    ("Recargo mora", dto.total_recargo_mora),
-                    ("Total general", dto.total_general),
+        if len(dto.casas) > 1:
+            elementos.append(
+                self._crear_tabla_totales_reporte(
+                    (
+                        ("Deuda base", dto.total_deuda_base),
+                        ("Recargo mora", dto.total_recargo_mora),
+                        ("Total general", dto.total_general),
+                    )
                 )
             )
-        )
-        elementos.append(Spacer(1, 4 * mm))
+            elementos.append(Spacer(1, 4 * mm))
         elementos.append(Paragraph(self._escapar(dto.observacion), self._estilos["SicapMetaReporte"]))
         elementos.extend(
             self._construir_bloque_firma(

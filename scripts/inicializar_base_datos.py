@@ -23,10 +23,16 @@ def main() -> int:
         action="store_true",
         help="Elimina la base actual y la vuelve a crear desde el esquema inicial.",
     )
+    parser.add_argument(
+        "--con-datos-prueba",
+        action="store_true",
+        help="Aplica tambien la migracion de datos de prueba de desarrollo.",
+    )
     argumentos = parser.parse_args()
 
     ruta_base_datos = GestorBaseDatos().inicializar_base_datos(
-        forzar_recreacion=argumentos.recrear
+        forzar_recreacion=argumentos.recrear,
+        incluir_datos_prueba=argumentos.con_datos_prueba,
     )
     print(f"Base de datos inicializada en: {ruta_base_datos}")
     return 0

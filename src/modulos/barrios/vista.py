@@ -40,7 +40,11 @@ from comun.ui import (
     resolver_variante_boton_modal,
 )
 from comun.ui.componentes import COLOR_FONDO_DIALOGO, RADIO_TARJETA_DIALOGO
-from comun.ui.temas import TEMA_SICAP_PREDETERMINADO, obtener_paleta_tema
+from comun.ui.temas import (
+    TEMA_SICAP_PREDETERMINADO,
+    obtener_fondo_header_destacado,
+    obtener_paleta_tema,
+)
 from modulos.barrios.entidades import (
     Barrio,
     FILTRO_BARRIOS_ACTIVOS,
@@ -158,8 +162,8 @@ class DialogoFormularioBarrio(DialogoBaseSicap):
     def __init__(self, barrio: Barrio | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._barrio = barrio
-        self.setMinimumWidth(560)
-        self.setMinimumHeight(500)
+        self.setMinimumWidth(540)
+        self.setMinimumHeight(420)
         self._construir_ui()
 
     def obtener_formulario(self) -> FormularioBarrio:
@@ -187,10 +191,9 @@ class DialogoFormularioBarrio(DialogoBaseSicap):
         descripcion.setObjectName("descripcionDialogoSicap")
         descripcion.setWordWrap(True)
 
-        formulario = QGridLayout()
-        formulario.setContentsMargins(0, 0, 0, 0)
-        formulario.setHorizontalSpacing(10)
-        formulario.setVerticalSpacing(10)
+        fila_superior = QHBoxLayout()
+        fila_superior.setContentsMargins(0, 0, 0, 0)
+        fila_superior.setSpacing(10)
 
         self._campo_nombre = QLineEdit()
         self._campo_nombre.setPlaceholderText("Nombre del barrio")
@@ -198,36 +201,30 @@ class DialogoFormularioBarrio(DialogoBaseSicap):
         self._combo_estado.addItems(["ACTIVO", "INACTIVO"])
         self._campo_observaciones = QPlainTextEdit()
         self._campo_observaciones.setPlaceholderText("Observaciones")
-        self._campo_observaciones.setFixedHeight(92)
+        self._campo_observaciones.setFixedHeight(82)
 
         if self._barrio is not None:
             self._campo_nombre.setText(self._barrio.nombre)
             self._combo_estado.setCurrentText(self._barrio.estado)
             self._campo_observaciones.setPlainText(self._barrio.observaciones)
 
-        formulario.addWidget(
+        fila_superior.addWidget(
             self._crear_bloque_formulario("Nombre del barrio", self._campo_nombre),
-            0,
-            0,
-        )
-        formulario.addWidget(
-            self._crear_bloque_formulario("Estado", self._combo_estado),
-            0,
-            1,
-        )
-        formulario.addWidget(
-            self._crear_bloque_formulario("Observaciones", self._campo_observaciones),
-            1,
-            0,
-            1,
             2,
+        )
+        fila_superior.addWidget(
+            self._crear_bloque_formulario("Estado", self._combo_estado),
+            1,
         )
 
         panel_datos = self._crear_panel_formulario(
             "Datos principales",
             "Configura el nombre del barrio y su estado operativo dentro del sistema.",
         )
-        panel_datos.layout().addLayout(formulario)
+        panel_datos.layout().addLayout(fila_superior)
+        panel_datos.layout().addWidget(
+            self._crear_bloque_formulario("Observaciones", self._campo_observaciones)
+        )
 
         self._mensaje = QLabel("")
         self._mensaje.setObjectName("mensajeErrorDialogoSicap")
@@ -277,7 +274,7 @@ class DialogoFormularioBarrio(DialogoBaseSicap):
         bloque = QWidget()
         layout = QVBoxLayout(bloque)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(3)
 
         label = QLabel(etiqueta)
         label.setObjectName("etiquetaDatoDialogoSicap")
@@ -290,7 +287,7 @@ class DialogoFormularioBarrio(DialogoBaseSicap):
         panel.setObjectName("bloqueDialogoSicap")
         layout_panel = QVBoxLayout(panel)
         layout_panel.setContentsMargins(14, 14, 14, 14)
-        layout_panel.setSpacing(10)
+        layout_panel.setSpacing(8)
         label_titulo = QLabel(titulo)
         label_titulo.setObjectName("etiquetaDatoDialogoSicap")
         label_descripcion = QLabel(descripcion)
@@ -307,11 +304,13 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
     def __init__(
         self,
         barrio: Barrio,
+        fecha_creacion: str,
         fecha_actualizada: str,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._barrio = barrio
+        self._fecha_creacion = fecha_creacion
         self._fecha_actualizada = fecha_actualizada
         self._accion_resultado = "cerrar"
         self.setMinimumWidth(780)
@@ -372,7 +371,7 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
 
         encabezado_contexto = self._crear_encabezado_seccion_detalle(
             "Contexto territorial",
-            "Consulta el codigo, estado operativo y la ultima actualizacion del barrio.",
+            "Consulta el codigo, estado operativo y las fechas base del barrio.",
         )
         grid_info = QGridLayout()
         grid_info.setHorizontalSpacing(14)
@@ -380,12 +379,11 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
         grid_info.addWidget(self._crear_campo_detalle("Codigo", self._barrio.codigo), 0, 0)
         grid_info.addWidget(self._crear_campo_detalle("Estado", self._barrio.estado.title()), 0, 1)
         grid_info.addWidget(
-            self._crear_campo_detalle("Ultima actualizacion", self._fecha_actualizada),
+            self._crear_campo_detalle("Creado", self._fecha_creacion),
             1,
             0,
-            1,
-            2,
         )
+        grid_info.addWidget(self._crear_campo_detalle("Ultima actualizacion", self._fecha_actualizada), 1, 1)
 
         encabezado_metricas = self._crear_encabezado_seccion_detalle(
             "Cobertura operativa",
@@ -446,8 +444,8 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
         boton_editar.setMinimumWidth(124)
 
         boton_cerrar.clicked.connect(self.reject)
-        boton_ver_abonados.clicked.connect(self._mostrar_aviso_abonados)
-        boton_ver_casas.clicked.connect(self._mostrar_aviso_casas)
+        boton_ver_abonados.clicked.connect(self._abrir_abonados)
+        boton_ver_casas.clicked.connect(self._abrir_casas)
         boton_editar.clicked.connect(self._solicitar_edicion)
 
         fila_acciones.addWidget(boton_cerrar)
@@ -547,23 +545,13 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
         layout.addWidget(label_valor)
         return tarjeta
 
-    def _mostrar_aviso_abonados(self) -> None:
-        DialogoMensajeSicap(
-            "Ver abonados",
-            "La navegacion hacia el modulo de abonados se integrara en el siguiente hito.",
-            icono="user.svg",
-            variante="informacion",
-            parent=self.parentWidget() or self,
-        ).exec()
+    def _abrir_abonados(self) -> None:
+        self._accion_resultado = "ver_abonados"
+        self.accept()
 
-    def _mostrar_aviso_casas(self) -> None:
-        DialogoMensajeSicap(
-            "Ver casas",
-            "La navegacion hacia el modulo de casas se integrara en el siguiente hito.",
-            icono="home.svg",
-            variante="informacion",
-            parent=self.parentWidget() or self,
-        ).exec()
+    def _abrir_casas(self) -> None:
+        self._accion_resultado = "ver_casas"
+        self.accept()
 
     def _solicitar_edicion(self) -> None:
         self._accion_resultado = "editar"
@@ -684,7 +672,7 @@ class VistaBarrios(QWidget):
     """Pantalla principal del modulo de barrios."""
 
     RADIO_PANEL_TABLA = 18
-    ANCHO_COLUMNA_ACCIONES = 164
+    ANCHO_COLUMNA_ACCIONES = 234
     DURACION_MENSAJE_MS = 5200
 
     filtro_texto_cambiado = Signal(str)
@@ -695,6 +683,8 @@ class VistaBarrios(QWidget):
     detalle_barrio_solicitado = Signal(int)
     editar_barrio_solicitado = Signal(int)
     cambio_estado_solicitado = Signal(int)
+    ver_abonados_barrio_solicitado = Signal(int)
+    ver_casas_barrio_solicitado = Signal(int)
 
     def __init__(self) -> None:
         super().__init__()
@@ -799,8 +789,18 @@ class VistaBarrios(QWidget):
             return None
         return dialogo.obtener_formulario()
 
-    def mostrar_detalle_barrio(self, barrio: Barrio, fecha_actualizada: str) -> str:
-        dialogo = DialogoDetalleBarrio(barrio=barrio, fecha_actualizada=fecha_actualizada, parent=self)
+    def mostrar_detalle_barrio(
+        self,
+        barrio: Barrio,
+        fecha_creacion: str,
+        fecha_actualizada: str,
+    ) -> str:
+        dialogo = DialogoDetalleBarrio(
+            barrio=barrio,
+            fecha_creacion=fecha_creacion,
+            fecha_actualizada=fecha_actualizada,
+            parent=self,
+        )
         dialogo.exec()
         return dialogo.accion_resultado
 
@@ -926,6 +926,7 @@ class VistaBarrios(QWidget):
         self._tabla.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.Interactive)
         self._tabla.setColumnWidth(6, self.ANCHO_COLUMNA_ACCIONES)
         self._tabla.verticalHeader().setDefaultSectionSize(58)
+        self._tabla.setAlternatingRowColors(True)
         self._tabla.setFrameShape(QFrame.Shape.NoFrame)
         self._tabla.setViewportMargins(0, 0, 0, self.RADIO_PANEL_TABLA)
         self._tabla.viewport().setObjectName("viewportTablaBarrios")
@@ -997,6 +998,16 @@ class VistaBarrios(QWidget):
             "#4fa3ff",
             "Ver informacion",
         )
+        boton_ver_abonados = BotonIconoFilaBarrio(
+            "user.svg",
+            "#8de8c7",
+            "Ver abonados",
+        )
+        boton_ver_casas = BotonIconoFilaBarrio(
+            "home.svg",
+            "#c6b6ff",
+            "Ver casas",
+        )
         boton_accion_editar = BotonIconoFilaBarrio(
             "key.svg",
             "#4fa3ff",
@@ -1014,6 +1025,16 @@ class VistaBarrios(QWidget):
                 int(identificador or 0)
             )
         )
+        boton_ver_abonados.clicked.connect(
+            lambda checked=False, identificador=barrio.identificador: self.ver_abonados_barrio_solicitado.emit(
+                int(identificador or 0)
+            )
+        )
+        boton_ver_casas.clicked.connect(
+            lambda checked=False, identificador=barrio.identificador: self.ver_casas_barrio_solicitado.emit(
+                int(identificador or 0)
+            )
+        )
         boton_accion_editar.clicked.connect(
             lambda checked=False, identificador=barrio.identificador: self.editar_barrio_solicitado.emit(
                 int(identificador or 0)
@@ -1026,9 +1047,18 @@ class VistaBarrios(QWidget):
         )
 
         layout.addWidget(boton_accion_detalle)
+        layout.addWidget(boton_ver_abonados)
+        layout.addWidget(boton_ver_casas)
         layout.addWidget(boton_accion_editar)
         layout.addWidget(boton_accion_estado)
         return contenedor
+
+    def aplicar_busqueda_externa(self, texto: str) -> None:
+        texto_normalizado = texto.strip()
+        if self._campo_busqueda.text() != texto_normalizado:
+            self._campo_busqueda.setText(texto_normalizado)
+            return
+        self.filtro_texto_cambiado.emit(texto_normalizado)
 
     def _actualizar_estado_vacio(self, sin_datos: bool) -> None:
         self._estado_vacio.setVisible(sin_datos)
@@ -1036,6 +1066,7 @@ class VistaBarrios(QWidget):
 
     def _aplicar_estilos(self) -> None:
         radio_panel_tabla = self.RADIO_PANEL_TABLA
+        fondo_header_destacado = obtener_fondo_header_destacado(self._tema_actual)
         self.setStyleSheet(
             """
             QWidget#vistaBarrios {
@@ -1069,19 +1100,25 @@ class VistaBarrios(QWidget):
             }
             QFrame#panelOperativoBarrios,
             QFrame#tarjetaResumenBarrios {
-                background: rgba(255, 255, 255, 0.10);
+                background: """
+            + fondo_header_destacado
+            + """;
                 border: 1px solid rgba(255, 255, 255, 0.16);
                 border-radius: 18px;
             }
             QFrame#panelTablaBarrios {
-                background: rgba(255, 255, 255, 0.10);
+                background: """
+            + fondo_header_destacado
+            + """;
                 border: 1px solid rgba(255, 255, 255, 0.16);
                 border-radius: """
             + str(radio_panel_tabla)
             + """px;
             }
             QTableWidget#tablaBarrios {
-                background: rgba(255, 255, 255, 0.03);
+                background: """
+            + self._paleta_tema["fondo_tabla_cuerpo"]
+            + """;
                 background-clip: padding;
                 border: none;
                 border-radius: """
@@ -1107,11 +1144,17 @@ class VistaBarrios(QWidget):
             + """px;
             }
             QTableWidget#tablaBarrios QHeaderView::section {
-                background: rgba(255, 255, 255, 0.10);
+                background: """
+            + self._paleta_tema["fondo_tabla_header_destacado"]
+            + """;
                 color: #f7fbff;
                 border: none;
-                border-right: 1px solid rgba(255, 255, 255, 0.06);
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                border-right: 1px solid """
+            + self._paleta_tema["borde_tabla"]
+            + """;
+                border-bottom: 1px solid """
+            + self._paleta_tema["borde_tabla"]
+            + """;
                 padding: 10px 12px;
                 font-size: 12px;
                 font-weight: 800;
@@ -1123,7 +1166,22 @@ class VistaBarrios(QWidget):
             }
             QTableWidget#tablaBarrios::item {
                 padding: 9px 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+                border-bottom: 1px solid """
+            + self._paleta_tema["borde_tabla"]
+            + """;
+                background: """
+            + self._paleta_tema["fondo_tabla_fila"]
+            + """;
+            }
+            QTableWidget#tablaBarrios::item:alternate {
+                background: """
+            + self._paleta_tema["fondo_tabla_fila_alterna"]
+            + """;
+            }
+            QTableWidget#tablaBarrios::item:selected {
+                background: """
+            + self._paleta_tema["fondo_tabla_seleccion"]
+            + """;
             }
             QLabel#iconoTarjetaResumen {
                 background: rgba(255, 255, 255, 0.08);
@@ -1242,14 +1300,20 @@ class VistaBarrios(QWidget):
                 QFrame#panelOperativoBarrios,
                 QFrame#panelTablaBarrios,
                 QFrame#tarjetaResumenBarrios {{
-                    background: {paleta["fondo_superficie"]};
+                    background: {obtener_fondo_header_destacado(self._tema_actual)};
                     border: 1px solid {paleta["borde_principal"]};
                 }}
                 QTableWidget#tablaBarrios {{
                     background: {paleta["fondo_superficie_muy_suave"]};
+                    /*
+                    Tema claro pendiente:
+                    background: {paleta["fondo_tabla_cuerpo"]};
+                    alternate-background-color: {paleta["fondo_tabla_fila_alterna"]};
+                    */
                 }}
                 QTableWidget#tablaBarrios QHeaderView::section {{
                     background: {paleta["fondo_tabla_header"]};
+                    /* Tema claro pendiente: background: {paleta["fondo_tabla_header_destacado"]}; */
                     color: {paleta["texto_input"]};
                     border-right: 1px solid {paleta["borde_suave"]};
                     border-bottom: 1px solid {paleta["borde_suave"]};

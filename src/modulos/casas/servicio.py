@@ -8,7 +8,18 @@ from datetime import datetime
 from modulos.casas.entidades import (
     Casa,
     DetalleCasa,
+    ESTADO_ADMINISTRATIVO_OPERATIVA,
+    ESTADO_ADMINISTRATIVO_SUSPENDIDA,
+    ESTADO_SERVICIO_ACTIVO,
+    ESTADO_SERVICIO_CORTADO,
+    ESTADO_SERVICIO_INACTIVO,
+    ESTADOS_ADMINISTRATIVOS_VALIDOS,
+    ESTADOS_SERVICIO_VALIDOS,
     FILTRO_CASAS_TODAS,
+    MOTIVO_ESTADO_ADMINISTRATIVO_ABONADO_INACTIVO,
+    MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO,
+    MOTIVO_ESTADO_ADMINISTRATIVO_REVISION_ADMINISTRATIVA,
+    MOTIVOS_ESTADO_ADMINISTRATIVO_VALIDOS,
     OpcionAbonado,
     OpcionBarrio,
     PaginaCasas,
@@ -76,8 +87,15 @@ class ServicioCasas:
         direccion_referencia: str,
         observaciones: str,
         estado_servicio: str,
+        estado_administrativo: str,
+        motivo_estado_administrativo: str,
+        ha_tenido_servicio_activo: bool,
     ) -> ResultadoGestionCasas:
-        estado_servicio = estado_servicio.strip().upper() or "ACTIVO"
+        estado_servicio = estado_servicio.strip().upper() or ESTADO_SERVICIO_ACTIVO
+        estado_administrativo = estado_administrativo.strip().upper() or ESTADO_ADMINISTRATIVO_OPERATIVA
+        motivo_estado_administrativo = (
+            motivo_estado_administrativo.strip().upper() or MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO
+        )
         direccion_referencia = direccion_referencia.strip()
         observaciones = observaciones.strip()
 
@@ -119,10 +137,51 @@ class ServicioCasas:
                 "Solo puedes asignar casas a abonados activos.",
                 "VALIDACION",
             )
-        if estado_servicio not in {"ACTIVO", "CORTADO", "SUSPENDIDO", "INACTIVO"}:
+        if estado_servicio not in ESTADOS_SERVICIO_VALIDOS:
             return ResultadoGestionCasas(
                 False,
-                "El estado de servicio de la casa no es valido.",
+                "El estado fisico del servicio no es valido.",
+                "VALIDACION",
+            )
+        if estado_administrativo not in ESTADOS_ADMINISTRATIVOS_VALIDOS:
+            return ResultadoGestionCasas(
+                False,
+                "El estado administrativo de la casa no es valido.",
+                "VALIDACION",
+            )
+        if motivo_estado_administrativo not in MOTIVOS_ESTADO_ADMINISTRATIVO_VALIDOS:
+            return ResultadoGestionCasas(
+                False,
+                "El motivo administrativo seleccionado no es valido.",
+                "VALIDACION",
+            )
+        if estado_administrativo == ESTADO_ADMINISTRATIVO_OPERATIVA:
+            motivo_estado_administrativo = MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO
+        elif motivo_estado_administrativo == MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO:
+            return ResultadoGestionCasas(
+                False,
+                "Selecciona el motivo administrativo cuando la casa quede suspendida.",
+                "VALIDACION",
+            )
+        if estado_servicio == ESTADO_SERVICIO_INACTIVO and estado_administrativo != ESTADO_ADMINISTRATIVO_OPERATIVA:
+            return ResultadoGestionCasas(
+                False,
+                "Una casa inactiva no debe quedar suspendida administrativamente.",
+                "VALIDACION",
+            )
+        if casa_actual is not None and estado_servicio != casa_actual.estado_servicio:
+            return ResultadoGestionCasas(
+                False,
+                "El estado fisico del servicio no se edita desde este formulario. Usa la accion operativa correspondiente.",
+                "VALIDACION",
+            )
+        if casa_actual is not None and (
+            ha_tenido_servicio_activo != casa_actual.ha_tenido_servicio_activo
+            and not casa_actual.antecedente_servicio_editable
+        ):
+            return ResultadoGestionCasas(
+                False,
+                "El antecedente de servicio ya no se puede editar porque la casa tiene trazabilidad de activacion.",
                 "VALIDACION",
             )
 
@@ -135,6 +194,9 @@ class ServicioCasas:
                     direccion_referencia=direccion_referencia,
                     observaciones=observaciones,
                     estado_servicio=estado_servicio,
+                    estado_administrativo=estado_administrativo,
+                    motivo_estado_administrativo=motivo_estado_administrativo,
+                    ha_tenido_servicio_activo=ha_tenido_servicio_activo,
                 )
             )
         except Exception:
@@ -147,25 +209,92 @@ class ServicioCasas:
         mensaje = "Casa actualizada correctamente." if identificador else "Casa creada correctamente."
         return ResultadoGestionCasas(True, mensaje, "OK")
 
-    def cambiar_estado(self, casa_id: int, estado_actual: str) -> ResultadoGestionCasas:
-        transiciones = {
-            "ACTIVO": "SUSPENDIDO",
-            "SUSPENDIDO": "ACTIVO",
-            "CORTADO": "ACTIVO",
-            "INACTIVO": "ACTIVO",
-        }
-        nuevo_estado = transiciones.get(estado_actual, "ACTIVO")
+    def cambiar_estado(
+        self,
+        casa_id: int,
+        estado_administrativo_actual: str,
+        motivo_actual: str,
+    ) -> ResultadoGestionCasas:
+        if estado_administrativo_actual == ESTADO_ADMINISTRATIVO_SUSPENDIDA:
+            nuevo_estado = ESTADO_ADMINISTRATIVO_OPERATIVA
+            nuevo_motivo = MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO
+        else:
+            nuevo_estado = ESTADO_ADMINISTRATIVO_SUSPENDIDA
+            nuevo_motivo = MOTIVO_ESTADO_ADMINISTRATIVO_REVISION_ADMINISTRATIVA
         try:
-            self._repositorio_casas.cambiar_estado(casa_id, nuevo_estado)
+            self._repositorio_casas.cambiar_estado(
+                casa_id,
+                nuevo_estado,
+                nuevo_motivo if nuevo_estado == ESTADO_ADMINISTRATIVO_SUSPENDIDA else motivo_actual,
+            )
         except Exception:
             return ResultadoGestionCasas(
                 False,
-                "No fue posible actualizar el estado de la casa. Verifica los datos asociados y la base de datos.",
+                "No fue posible actualizar el estado administrativo de la casa. Verifica los datos asociados y la base de datos.",
                 "ERROR_SQLITE",
             )
         return ResultadoGestionCasas(
             True,
-            f"Casa marcada como {nuevo_estado.lower()}.",
+            (
+                "Casa marcada como operativa."
+                if nuevo_estado == ESTADO_ADMINISTRATIVO_OPERATIVA
+                else "Casa marcada como suspendida administrativamente."
+            ),
+            "OK",
+        )
+
+    def cortar_servicio(
+        self,
+        casa_id: int,
+        observaciones: str,
+        actor_id: int | None,
+    ) -> ResultadoGestionCasas:
+        casa = self._repositorio_casas.obtener_por_id(casa_id)
+        if casa is None:
+            return ResultadoGestionCasas(
+                False,
+                "La casa que intentas cortar ya no existe.",
+                "CASA_NO_ENCONTRADA",
+            )
+        if casa.estado_servicio == ESTADO_SERVICIO_CORTADO:
+            return ResultadoGestionCasas(
+                False,
+                "La casa seleccionada ya tiene el servicio cortado.",
+                "VALIDACION",
+            )
+        if casa.estado_servicio == ESTADO_SERVICIO_INACTIVO:
+            return ResultadoGestionCasas(
+                False,
+                "No puedes cortar una casa inactiva.",
+                "VALIDACION",
+            )
+
+        observaciones = observaciones.strip()
+        if not observaciones:
+            return ResultadoGestionCasas(
+                False,
+                "Describe las observaciones del corte para mantener trazabilidad.",
+                "VALIDACION",
+            )
+
+        try:
+            self._repositorio_casas.cortar_servicio(
+                casa_id=casa_id,
+                observaciones=observaciones,
+                actor_id=actor_id,
+            )
+        except ValueError as error:
+            return ResultadoGestionCasas(False, str(error), "VALIDACION")
+        except Exception:
+            return ResultadoGestionCasas(
+                False,
+                "No fue posible registrar el corte fisico del servicio.",
+                "ERROR_SQLITE",
+            )
+
+        return ResultadoGestionCasas(
+            True,
+            "Servicio cortado correctamente. La reactivacion debe resolverse desde Pagos.",
             "OK",
         )
 
@@ -251,6 +380,8 @@ class ServicioCasas:
                         "Meses pendientes",
                         "Meses en mora",
                         "Estado",
+                        "Creado",
+                        "Ultima actualizacion",
                         "Plan activo",
                         "Deuda pendiente",
                     ]
@@ -265,7 +396,9 @@ class ServicioCasas:
                             casa.direccion_referencia,
                             casa.meses_pendientes,
                             casa.meses_en_mora,
-                            casa.estado_servicio,
+                            casa.resumen_estado_compuesto,
+                            self.formatear_fecha_hora(casa.creado_en),
+                            self.formatear_fecha_hora(casa.actualizado_en),
                             "Si" if casa.tiene_plan_activo else "No",
                             self.formatear_moneda(casa.deuda_total_centavos),
                         ]

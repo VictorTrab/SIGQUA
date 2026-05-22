@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import shutil
@@ -21,10 +21,14 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+import modulos.morosidad.controlador as controlador_morosidad_modulo  # noqa: E402
+import modulos.reportes.controlador as controlador_reportes_modulo  # noqa: E402
+from modulos.morosidad.controlador import ControladorMorosidad  # noqa: E402
 from modulos.morosidad.entidades import FILTRO_MOROSIDAD_SEVERA  # noqa: E402
 from modulos.morosidad.repositorio import RepositorioMorosidadSQLite  # noqa: E402
 from modulos.morosidad.servicio import ServicioMorosidad  # noqa: E402
 from modulos.morosidad.vista import VistaMorosidad  # noqa: E402
+from modulos.reportes.controlador import ControladorReportes  # noqa: E402
 from modulos.reportes.repositorio import RepositorioReportesSQLite  # noqa: E402
 from modulos.reportes.servicio import ServicioReportes  # noqa: E402
 from modulos.reportes.vista import VistaReportes  # noqa: E402
@@ -41,7 +45,7 @@ class TestMorosidadReportes(unittest.TestCase):
             )
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.gestor_base_datos.inicializar_base_datos()
+        self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
 
     def tearDown(self) -> None:
         shutil.rmtree(self.raiz_temporal, ignore_errors=True)
@@ -186,7 +190,67 @@ class TestMorosidadReportes(unittest.TestCase):
 
         self.assertEqual(vista_morosidad.objectName(), "vistaMorosidad")
         self.assertEqual(vista_reportes.objectName(), "vistaReportes")
+        vista_morosidad.aplicar_tema("claro")
+        vista_reportes.aplicar_tema("claro")
+        self.assertEqual(vista_morosidad._tema_actual, "claro")
+        self.assertEqual(vista_reportes._tema_actual, "claro")
+        self.assertIn('font-family: "Segoe UI"', vista_morosidad.styleSheet())
+        self.assertIn('font-family: "Segoe UI"', vista_reportes.styleSheet())
+
+    def test_controlador_morosidad_aplica_politica_documental_al_emitir_pdf(self) -> None:
+        _app = QApplication.instance() or QApplication([])
+        servicio = ServicioMorosidad(
+            RepositorioMorosidadSQLite(self.gestor_base_datos),
+            gestor_rutas=self.gestor_rutas,
+        )
+        vista = VistaMorosidad()
+        controlador = ControladorMorosidad(servicio, vista)
+        estado = servicio.obtener_estado()
+        abonado_id = estado.pagina.items[0].abonado_id
+        detalle = servicio.obtener_detalle(abonado_id)
+        assert detalle is not None
+        mensajes: list[str] = []
+        vista.mostrar_mensaje = lambda mensaje, es_error=False: mensajes.append(mensaje)  # type: ignore[method-assign]
+        vista.seleccionar_casas_documento = lambda _detalle: (True, ())  # type: ignore[method-assign]
+        helper_original = controlador_morosidad_modulo.ejecutar_acciones_documento_pdf
+        controlador_morosidad_modulo.ejecutar_acciones_documento_pdf = (  # type: ignore[assignment]
+            lambda ruta, **_kwargs: f"Documento abierto automaticamente desde {ruta}"
+        )
+
+        try:
+            controlador._emitir_documento(abonado_id)
+        finally:
+            controlador_morosidad_modulo.ejecutar_acciones_documento_pdf = helper_original  # type: ignore[assignment]
+
+        self.assertTrue(mensajes)
+        self.assertIn("abierto automaticamente", mensajes[-1].lower())
+        vista.close()
+
+    def test_controlador_reportes_aplica_politica_documental_al_exportar_pdf(self) -> None:
+        _app = QApplication.instance() or QApplication([])
+        servicio = ServicioReportes(RepositorioReportesSQLite(self.gestor_base_datos))
+        vista = VistaReportes()
+        controlador = ControladorReportes(servicio, vista)
+        mensajes: list[str] = []
+        vista.mostrar_mensaje = lambda mensaje, es_error=False: mensajes.append(mensaje)  # type: ignore[method-assign]
+        vista.obtener_reporte_actual_codigo = lambda: "historial_pagos"  # type: ignore[method-assign]
+        ruta_pdf = self.raiz_temporal / "exportaciones" / "reportes" / "historial_pagos.pdf"
+        vista.solicitar_ruta_exportacion = lambda _codigo: str(ruta_pdf)  # type: ignore[method-assign]
+        helper_original = controlador_reportes_modulo.ejecutar_acciones_documento_pdf
+        controlador_reportes_modulo.ejecutar_acciones_documento_pdf = (  # type: ignore[assignment]
+            lambda ruta, **_kwargs: f"Documento abierto automaticamente desde {ruta}"
+        )
+
+        try:
+            controlador._exportar()
+        finally:
+            controlador_reportes_modulo.ejecutar_acciones_documento_pdf = helper_original  # type: ignore[assignment]
+
+        self.assertTrue(mensajes)
+        self.assertIn("abierto automaticamente", mensajes[-1].lower())
+        vista.close()
 
 
 if __name__ == "__main__":
     unittest.main()
+

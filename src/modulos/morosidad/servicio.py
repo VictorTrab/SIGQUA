@@ -38,6 +38,8 @@ class ServicioMorosidad:
         "factura.mostrar_telefono",
         "factura.mostrar_direccion",
         "factura.mostrar_identificador_fiscal",
+        "documentos.abrir_pdf_automaticamente",
+        "documentos.imprimir_pdf_automaticamente",
         "documentos.firma_habilitada",
         "documentos.firma_nombre",
         "documentos.firma_cargo",
@@ -157,6 +159,13 @@ class ServicioMorosidad:
             media = leve + 1
         return leve, media
 
+    def obtener_politica_documental(self) -> tuple[bool, bool]:
+        configuracion = self._obtener_configuracion_documental()
+        return (
+            bool(getattr(configuracion, "abrir_pdf_automaticamente", True)),
+            bool(getattr(configuracion, "imprimir_pdf_automaticamente", False)),
+        )
+
     @staticmethod
     def filtro_inicial() -> FiltroMorosidad:
         return FiltroMorosidad()
@@ -260,6 +269,16 @@ class ServicioMorosidad:
                 valores.get("documentos.firma_texto_apoyo").valor
                 if valores.get("documentos.firma_texto_apoyo")
                 else ""
+            )
+            abrir_pdf_automaticamente = ServicioMorosidad._a_booleano(
+                valores.get("documentos.abrir_pdf_automaticamente").valor
+                if valores.get("documentos.abrir_pdf_automaticamente")
+                else "1"
+            )
+            imprimir_pdf_automaticamente = ServicioMorosidad._a_booleano(
+                valores.get("documentos.imprimir_pdf_automaticamente").valor
+                if valores.get("documentos.imprimir_pdf_automaticamente")
+                else "0"
             )
 
         return _ConfiguracionTemporal()

@@ -47,6 +47,7 @@ class AnaliticaDashboard:
     recaudacion_mensual: tuple[PuntoSerieDashboard, ...]
     deuda_por_barrio: tuple[CategoriaDashboard, ...]
     estados_servicio: tuple[CategoriaDashboard, ...]
+    antiguedad_deuda: tuple[CategoriaDashboard, ...]
     insights: tuple[InsightDashboard, ...]
 
 

@@ -35,7 +35,11 @@ from comun.ui import (
     obtener_icono_tabler_coloreado,
     resolver_variante_boton_modal,
 )
-from comun.ui.temas import TEMA_SICAP_PREDETERMINADO, obtener_paleta_tema
+from comun.ui.temas import (
+    TEMA_SICAP_PREDETERMINADO,
+    obtener_fondo_header_destacado,
+    obtener_paleta_tema,
+)
 from modulos.morosidad.entidades import (
     DetalleMorosidad,
     FILTRO_MOROSIDAD_LEVE,
@@ -124,6 +128,10 @@ class BotonIconoFilaMorosidad(QToolButton):
         self._actualizar_icono(self.COLOR_BASE)
         super().leaveEvent(evento)
 
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        paleta = obtener_paleta_tema(nombre_tema)
+        self._actualizar_icono(str(paleta["icono_fila_base"]))
+
     def _actualizar_icono(self, color_icono: str) -> None:
         self.setIcon(obtener_icono_tabler_coloreado(self._icono, color_icono, tamano=18))
 
@@ -165,8 +173,12 @@ class DialogoDetalleMorosidad(DialogoBaseSicap):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.viewport().setAutoFillBackground(False)
 
         contenedor = QWidget()
+        contenedor.setObjectName("contenedorScrollDetalleMorosidad")
+        contenedor.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         layout_scroll = QVBoxLayout(contenedor)
         layout_scroll.setContentsMargins(0, 0, 0, 0)
         layout_scroll.setSpacing(12)
@@ -211,6 +223,7 @@ class DialogoDetalleMorosidad(DialogoBaseSicap):
         layout_panel.addLayout(fila_acciones)
 
         layout_scroll.addWidget(panel)
+        layout_scroll.addStretch(1)
         scroll.setWidget(contenedor)
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
@@ -255,6 +268,11 @@ class DialogoDetalleMorosidad(DialogoBaseSicap):
         configurar_tabla_operativa(tabla, ["Concepto", "Vencimiento", "Saldo"])
         tabla.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         tabla.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        tabla.setAlternatingRowColors(True)
+        tabla.setFrameShape(QFrame.Shape.NoFrame)
+        tabla.setViewportMargins(0, 0, 0, 18)
+        tabla.viewport().setObjectName("viewportTablaDetalleMorosidad")
+        tabla.viewport().setAutoFillBackground(False)
         tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -301,33 +319,85 @@ class DialogoDetalleMorosidad(DialogoBaseSicap):
         self.accept()
 
     def _aplicar_estilos(self) -> None:
+        paleta = self._paleta_tema
         self.setStyleSheet(
-            """
-            QScrollArea#scrollDetalleMorosidad {
+            self.styleSheet()
+            + f"""
+            QScrollArea#scrollDetalleMorosidad {{
                 background: transparent;
                 border: none;
-            }
-            QFrame#panelDetalleMorosidad,
-            QFrame#seccionDetalleMorosidad,
-            QFrame#campoDetalleMorosidad {
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                border-radius: 16px;
-            }
-            QLabel#tituloSeccionMorosidad,
-            QLabel#valorCampoMorosidad {
-                color: #ffffff;
+            }}
+            QWidget#contenedorScrollDetalleMorosidad {{
+                background: transparent;
+                border: none;
+            }}
+            QFrame#panelDetalleMorosidad {{
+                background: {paleta["fondo_dialogo"]};
+                border: 1px solid {paleta["borde_principal"]};
+                border-radius: 4px;
+            }}
+            QFrame#seccionDetalleMorosidad {{
+                background: {paleta["fondo_superficie"]};
+                border: 1px solid {paleta["borde_principal"]};
+                border-radius: 4px;
+            }}
+            QFrame#campoDetalleMorosidad {{
+                background: {paleta["fondo_superficie_suave"]};
+                border: 1px solid {paleta["borde_suave"]};
+                border-radius: 4px;
+            }}
+            QLabel#tituloSeccionMorosidad {{
+                color: {paleta["texto_principal"]};
+                font-size: 14px;
+                font-weight: 800;
+            }}
+            QLabel#valorCampoMorosidad {{
+                color: {paleta["texto_input"]};
+                font-size: 13px;
                 font-weight: 700;
-            }
+            }}
             QLabel#descripcionSeccionMorosidad,
-            QLabel#etiquetaCampoMorosidad {
-                color: rgba(232, 241, 249, 0.74);
-            }
-            QTableWidget#tablaDetalleMorosidad {
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 14px;
-            }
+            QLabel#etiquetaCampoMorosidad {{
+                color: {paleta["texto_secundario"]};
+                font-size: 11px;
+                font-weight: 700;
+            }}
+            QTableWidget#tablaDetalleMorosidad {{
+                background: {paleta["fondo_tabla_cuerpo"]};
+                border: 1px solid {paleta["borde_tabla"]};
+                border-radius: 4px;
+            }}
+            QTableWidget#tablaDetalleMorosidad QHeaderView::section {{
+                background: {paleta["fondo_tabla_header_destacado"]};
+                color: {paleta["texto_input"]};
+                border: none;
+                border-right: 1px solid {paleta["borde_tabla"]};
+                border-bottom: 1px solid {paleta["borde_tabla"]};
+                padding: 10px 12px;
+                font-size: 12px;
+                font-weight: 800;
+            }}
+            QScrollBar:vertical {{
+                background: transparent;
+                width: 10px;
+                margin: 2px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {paleta["borde_chip_activo"]};
+                border-radius: 5px;
+                min-height: 28px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {paleta["acento_hover"]};
+            }}
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical,
+            QScrollBar::add-page:vertical,
+            QScrollBar::sub-page:vertical {{
+                background: transparent;
+                border: none;
+                height: 0px;
+            }}
             """
         )
 
@@ -412,7 +482,7 @@ class DialogoSeleccionDocumentoMorosidad(DialogoBaseSicap):
         if not emitir_total and not casas:
             DialogoMensajeSicap(
                 titulo="Seleccion requerida",
-                descripcion="Selecciona al menos una casa o usa la opcion de total del abonado.",
+                mensaje="Selecciona al menos una casa o usa la opcion de total del abonado.",
                 texto_boton="Entendido",
                 parent=self,
             ).exec()
@@ -434,7 +504,8 @@ class VistaMorosidad(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("vistaMorosidad")
-        self._paleta = obtener_paleta_tema(TEMA_SICAP_PREDETERMINADO)
+        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._paleta = obtener_paleta_tema(self._tema_actual)
         self._timer_mensaje = QTimer(self)
         self._timer_mensaje.setSingleShot(True)
         self._timer_mensaje.timeout.connect(self._ocultar_mensaje)
@@ -530,7 +601,7 @@ class VistaMorosidad(QWidget):
 
     def _construir_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(26, 24, 26, 24)
+        layout.setContentsMargins(6, 4, 6, 6)
         layout.setSpacing(16)
 
         self._mensaje = QLabel("")
@@ -606,6 +677,11 @@ class VistaMorosidad(QWidget):
         self._tabla.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._tabla.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._tabla.verticalHeader().setDefaultSectionSize(52)
+        self._tabla.setAlternatingRowColors(True)
+        self._tabla.setFrameShape(QFrame.Shape.NoFrame)
+        self._tabla.setViewportMargins(0, 0, 0, 18)
+        self._tabla.viewport().setObjectName("viewportTablaMorosidad")
+        self._tabla.viewport().setAutoFillBackground(False)
         self._tabla.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._tabla.horizontalHeader().setSectionResizeMode(8, QHeaderView.ResizeMode.ResizeToContents)
         layout_tabla.addWidget(self._tabla)
@@ -628,6 +704,7 @@ class VistaMorosidad(QWidget):
 
     def _crear_acciones_fila(self, abonado_id: int) -> QWidget:
         contenedor = QWidget()
+        contenedor.setObjectName("contenedorAccionesMorosidad")
         layout = QHBoxLayout(contenedor)
         layout.setContentsMargins(4, 0, 4, 0)
         layout.setSpacing(4)
@@ -651,103 +728,150 @@ class VistaMorosidad(QWidget):
         self._mensaje.clear()
         self._mensaje.setVisible(False)
 
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._tema_actual = (
+            nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        )
+        self._paleta = obtener_paleta_tema(self._tema_actual)
+        for boton in self.findChildren(BotonIconoFilaMorosidad):
+            boton.aplicar_tema(self._tema_actual)
+        self._aplicar_estilos()
+
     def _aplicar_estilos(self) -> None:
         paleta = self._paleta
+        oscuro = self._tema_actual != "claro"
+        fondo_panel_destacado = (
+            obtener_fondo_header_destacado(self._tema_actual)
+            if oscuro
+            else paleta["fondo_superficie_suave"]
+        )
+        borde_panel_destacado = "rgba(255, 255, 255, 0.16)" if oscuro else paleta["borde_suave"]
         self.setStyleSheet(
             f"""
             QWidget#vistaMorosidad {{
                 background: transparent;
                 color: {paleta["texto_principal"]};
+                font-family: "{paleta["familia_tipografica"]}";
             }}
             QLabel#mensajeMorosidad {{
-                background: rgba(45, 212, 191, 0.14);
-                border: 1px solid rgba(45, 212, 191, 0.32);
+                background: {paleta["fondo_exito"]};
+                border: 1px solid {paleta["borde_exito"]};
                 border-radius: 12px;
-                color: #d9fff5;
+                color: {paleta["texto_exito"]};
                 padding: 10px 12px;
-                font-size: 12px;
-                font-weight: 700;
+                font-size: {paleta["tamano_fuente_base"] + 2}px;
+                font-weight: {paleta["peso_subtitulo"]};
             }}
             QLabel#mensajeMorosidad[estado="error"] {{
-                background: rgba(248, 113, 113, 0.16);
-                border-color: rgba(248, 113, 113, 0.34);
-                color: #ffe2e2;
+                background: {paleta["fondo_error"]};
+                border-color: {paleta["borde_error"]};
+                color: {paleta["texto_error"]};
             }}
             QFrame#tarjetaResumenMorosidad,
             QFrame#panelFiltrosMorosidad,
             QFrame#panelTablaMorosidad,
             QFrame#panelSeleccionDocumentoMorosidad {{
-                background: rgba(255, 255, 255, 0.10);
-                border: 1px solid rgba(255, 255, 255, 0.14);
+                background: {fondo_panel_destacado};
+                border: 1px solid {borde_panel_destacado};
                 border-radius: 18px;
             }}
             QLabel#tituloTarjetaResumenMorosidad,
             QLabel#detalleTarjetaResumenMorosidad,
             QLabel#textoPaginacionMorosidad {{
-                color: rgba(235, 242, 248, 0.74);
+                color: {paleta["texto_secundario"]};
                 font-size: 11px;
             }}
             QLabel#valorTarjetaResumenMorosidad {{
-                color: #ffffff;
-                font-size: 22px;
-                font-weight: 800;
+                color: {paleta["texto_principal"]};
+                font-size: {paleta["tamano_titulo_tarjeta"] + 2}px;
+                font-weight: {paleta["peso_titulo"]};
             }}
             QLabel#iconoTarjetaResumenMorosidad {{
-                background: rgba(255, 255, 255, 0.10);
+                background: {paleta["fondo_superficie_muy_suave"]};
                 border-radius: 12px;
             }}
             QLineEdit {{
                 min-height: 38px;
-                border: 1px solid rgba(255, 255, 255, 0.18);
+                border: 1px solid {paleta["borde_medio"]};
                 border-radius: 12px;
-                background: rgba(255, 255, 255, 0.10);
-                color: #f5fbff;
+                background: {paleta["fondo_input"]};
+                color: {paleta["texto_input"]};
                 padding: 0 12px;
             }}
             QLineEdit:focus {{
-                border-color: rgba(109, 241, 220, 0.40);
-                background: rgba(255, 255, 255, 0.14);
+                border-color: {paleta["borde_foco_input"]};
+                background: {paleta["fondo_input_focus"]};
             }}
             QPushButton#chipFiltroMorosidad {{
                 min-height: 30px;
                 padding: 0 14px;
                 border-radius: 11px;
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                background: rgba(255, 255, 255, 0.06);
-                color: rgba(235, 242, 248, 0.82);
+                border: 1px solid {paleta["borde_suave"]};
+                background: {paleta["fondo_chip"]};
+                color: {paleta["texto_chip"]};
                 font-size: 11px;
                 font-weight: 700;
             }}
             QPushButton#chipFiltroMorosidad:hover {{
-                background: rgba(255, 255, 255, 0.10);
-                color: #ffffff;
+                background: {paleta["fondo_chip_hover"]};
+                color: {paleta["texto_principal"]};
             }}
             QPushButton#chipFiltroMorosidad:checked {{
-                background: rgba(93, 227, 210, 0.18);
-                border-color: rgba(93, 227, 210, 0.36);
-                color: #d9fff5;
+                background: {paleta["fondo_chip_activo"]};
+                border-color: {paleta["borde_chip_activo"]};
+                color: {paleta["texto_chip_activo"]};
             }}
             QTableWidget#tablaMorosidad,
             QTableWidget#tablaDetalleMorosidad {{
-                background: rgba(255, 255, 255, 0.05);
-                alternate-background-color: rgba(255, 255, 255, 0.03);
-                border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 16px;
-                color: #f5fbff;
-                gridline-color: rgba(255, 255, 255, 0.06);
+                background: {paleta["fondo_tabla_cuerpo"]};
+                background-clip: padding;
+                alternate-background-color: {paleta["fondo_tabla_fila_alterna"]};
+                border: none;
+                border-radius: 18px;
+                padding: 0 0 18px 0;
+                color: {paleta["texto_input"]};
+                gridline-color: {paleta["borde_tabla"]};
+            }}
+            QWidget#viewportTablaMorosidad {{
+                background: transparent;
+                border: none;
+                border-bottom-left-radius: 18px;
+                border-bottom-right-radius: 18px;
+            }}
+            QWidget#viewportTablaDetalleMorosidad {{
+                background: transparent;
+                border: none;
+                border-bottom-left-radius: 18px;
+                border-bottom-right-radius: 18px;
             }}
             QTableWidget#tablaMorosidad::item,
             QTableWidget#tablaDetalleMorosidad::item {{
                 padding: 8px;
+                background: {paleta["fondo_tabla_fila"]};
+                border-bottom: 1px solid {paleta["borde_tabla"]};
+            }}
+            QTableWidget#tablaMorosidad::item:selected,
+            QTableWidget#tablaDetalleMorosidad::item:selected {{
+                background: {paleta["fondo_tabla_seleccion"]};
+                color: {paleta["texto_input"]};
+            }}
+            QTableWidget#tablaMorosidad QHeaderView::section:first,
+            QTableWidget#tablaDetalleMorosidad QHeaderView::section:first {{
+                border-top-left-radius: 18px;
             }}
             QHeaderView::section {{
-                background: rgba(255, 255, 255, 0.08);
-                color: #ffffff;
+                background: {paleta["fondo_tabla_header_destacado"]};
+                color: {paleta["texto_input"]};
                 border: none;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                border-right: 1px solid {paleta["borde_tabla"]};
+                border-bottom: 1px solid {paleta["borde_tabla"]};
                 padding: 10px 8px;
                 font-size: 11px;
-                font-weight: 800;
+                font-weight: {paleta["peso_titulo"]};
+            }}
+            QTableWidget#tablaMorosidad QHeaderView::section:last,
+            QTableWidget#tablaDetalleMorosidad QHeaderView::section:last {{
+                border-top-right-radius: 18px;
             }}
             QScrollArea,
             QScrollBar:vertical {{
@@ -758,12 +882,12 @@ class VistaMorosidad(QWidget):
                 margin: 2px;
             }}
             QScrollBar::handle:vertical {{
-                background: rgba(210, 244, 242, 0.42);
+                background: {paleta["borde_chip_activo"]};
                 border-radius: 5px;
                 min-height: 28px;
             }}
             QScrollBar::handle:vertical:hover {{
-                background: rgba(210, 244, 242, 0.62);
+                background: {paleta["acento_hover"]};
             }}
             QScrollBar::add-line:vertical,
             QScrollBar::sub-line:vertical,
@@ -778,6 +902,20 @@ class VistaMorosidad(QWidget):
                 font-size: 12px;
                 font-weight: 600;
                 spacing: 8px;
+            }}
+            QWidget#contenedorAccionesMorosidad {{
+                background: transparent;
+            }}
+            QToolButton#botonIconoFilaMorosidad {{
+                background: transparent;
+                border: none;
+                border-radius: 8px;
+                padding: 0px;
+                margin: 0px;
+            }}
+            QToolButton#botonIconoFilaMorosidad:hover {{
+                background: transparent;
+                border: none;
             }}
             """
         )

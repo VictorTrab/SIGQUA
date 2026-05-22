@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import shutil
@@ -23,6 +23,8 @@ from PySide6.QtWidgets import QPushButton  # noqa: E402
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+import modulos.historial_pagos.controlador as controlador_historial_modulo  # noqa: E402
+from modulos.historial_pagos.controlador import ControladorHistorialPagos  # noqa: E402
 from modulos.historial_pagos.repositorio import RepositorioHistorialPagosSQLite  # noqa: E402
 from modulos.historial_pagos.servicio import ServicioHistorialPagos  # noqa: E402
 from modulos.historial_pagos.vista import VistaHistorialPagos  # noqa: E402
@@ -46,7 +48,7 @@ class TestHistorialPagos(unittest.TestCase):
             )
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.ruta_db = self.gestor_base_datos.inicializar_base_datos()
+        self.ruta_db = self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
         self.repositorio_pagos = RepositorioPagosSQLite(self.gestor_base_datos)
         self.servicio_pagos = ServicioPagos(self.repositorio_pagos, gestor_rutas=self.gestor_rutas)
         self.repositorio_historial = RepositorioHistorialPagosSQLite(self.gestor_base_datos)
@@ -163,6 +165,30 @@ class TestHistorialPagos(unittest.TestCase):
             "Actualizar",
             [boton.text() for boton in vista.findChildren(QPushButton)],
         )
+        vista.aplicar_tema("claro")
+        self.assertEqual(vista._tema_actual, "claro")
+        self.assertIn('font-family: "Segoe UI"', vista.styleSheet())
+        vista.close()
+
+    def test_controlador_reimprime_y_aplica_politica_documental(self) -> None:
+        vista = VistaHistorialPagos()
+        controlador = ControladorHistorialPagos(self.servicio_historial, vista)
+        pagina = self.servicio_historial.listar()
+        pago_id = pagina.items[0].pago_id
+        mensajes: list[str] = []
+        vista.mostrar_mensaje = lambda mensaje, es_error=False: mensajes.append(mensaje)  # type: ignore[method-assign]
+        helper_original = controlador_historial_modulo.ejecutar_acciones_documento_pdf
+        controlador_historial_modulo.ejecutar_acciones_documento_pdf = (  # type: ignore[assignment]
+            lambda ruta, **_kwargs: f"Documento abierto automaticamente desde {ruta}"
+        )
+
+        try:
+            controlador._reimprimir_copia(pago_id)
+        finally:
+            controlador_historial_modulo.ejecutar_acciones_documento_pdf = helper_original  # type: ignore[assignment]
+
+        self.assertTrue(mensajes)
+        self.assertIn("abierto automaticamente", mensajes[-1].lower())
         vista.close()
 
     def _crear_pago_historial(self, dni: str, metodo_codigo: str, referencia: str = "") -> None:
@@ -205,3 +231,4 @@ class TestHistorialPagos(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

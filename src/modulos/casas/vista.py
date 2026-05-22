@@ -39,17 +39,31 @@ from comun.ui import (
     resolver_variante_boton_modal,
 )
 from comun.ui.componentes import RADIO_TARJETA_DIALOGO
-from comun.ui.temas import TEMA_SICAP_PREDETERMINADO, obtener_paleta_tema
+from comun.ui.temas import (
+    TEMA_SICAP_PREDETERMINADO,
+    obtener_fondo_header_destacado,
+    obtener_paleta_tema,
+)
 from modulos.casas.entidades import (
     Casa,
     DetalleCasa,
+    ESTADO_ADMINISTRATIVO_OPERATIVA,
+    ESTADO_ADMINISTRATIVO_SUSPENDIDA,
+    ESTADO_SERVICIO_ACTIVO,
+    ESTADO_SERVICIO_CORTADO,
+    ESTADO_SERVICIO_INACTIVO,
     FILTRO_CASAS_ACTIVAS,
     FILTRO_CASAS_CON_MORA,
     FILTRO_CASAS_SIN_PROPIETARIO,
     FILTRO_CASAS_SUSPENDIDAS,
     FILTRO_CASAS_TODAS,
+    FormularioCorteServicioCasa,
     FormularioCasa,
     HistorialPropietarioCasa,
+    MOTIVO_ESTADO_ADMINISTRATIVO_ABONADO_INACTIVO,
+    MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO,
+    MOTIVO_ESTADO_ADMINISTRATIVO_REASIGNACION_PENDIENTE,
+    MOTIVO_ESTADO_ADMINISTRATIVO_REVISION_ADMINISTRATIVA,
     OpcionAbonado,
     OpcionBarrio,
     PaginaCasas,
@@ -168,13 +182,14 @@ class DialogoFormularioCasa(DialogoBaseSicap):
         self._barrios = list(barrios)
         self._abonados = list(abonados)
         self._casa = casa
-        self.setMinimumWidth(640)
-        self.setMinimumHeight(560)
+        self.setMinimumWidth(820)
+        self.setMinimumHeight(500)
         self._construir_ui()
 
     def obtener_formulario(self) -> FormularioCasa:
         barrio_id = self._combo_barrio.currentData()
         abonado_id = self._combo_abonado.currentData()
+        motivo = self._combo_motivo_administrativo.currentData()
         return FormularioCasa(
             identificador=None if self._casa is None else self._casa.identificador,
             abonado_id=int(abonado_id) if abonado_id is not None else None,
@@ -182,6 +197,9 @@ class DialogoFormularioCasa(DialogoBaseSicap):
             direccion_referencia=self._campo_direccion.toPlainText(),
             observaciones=self._campo_observaciones.toPlainText(),
             estado_servicio=self._combo_estado.currentText(),
+            estado_administrativo=self._combo_estado_administrativo.currentText(),
+            motivo_estado_administrativo=str(motivo or MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO),
+            ha_tenido_servicio_activo=self._combo_antecedente.currentData() == 1,
         )
 
     def accept(self) -> None:
@@ -191,6 +209,13 @@ class DialogoFormularioCasa(DialogoBaseSicap):
             return
         if self._combo_barrio.currentData() is None:
             self._mensaje.setText("Selecciona un barrio valido.")
+            self._mensaje.setVisible(True)
+            return
+        if (
+            self._combo_estado_administrativo.currentText() == ESTADO_ADMINISTRATIVO_SUSPENDIDA
+            and self._combo_motivo_administrativo.currentData() is None
+        ):
+            self._mensaje.setText("Selecciona el motivo administrativo de la suspension.")
             self._mensaje.setVisible(True)
             return
         self._mensaje.setVisible(False)
@@ -221,13 +246,39 @@ class DialogoFormularioCasa(DialogoBaseSicap):
             self._combo_barrio.addItem(barrio.nombre, barrio.identificador)
 
         self._combo_estado = QComboBox()
-        self._combo_estado.addItems(["ACTIVO", "CORTADO", "SUSPENDIDO", "INACTIVO"])
+        self._combo_estado.addItems(
+            [ESTADO_SERVICIO_ACTIVO, ESTADO_SERVICIO_CORTADO, ESTADO_SERVICIO_INACTIVO]
+        )
+        self._combo_estado.setToolTip(
+            "El estado fisico se registra al crear y luego se gestiona con acciones operativas."
+        )
+        self._combo_estado_administrativo = QComboBox()
+        self._combo_estado_administrativo.addItems(
+            [ESTADO_ADMINISTRATIVO_OPERATIVA, ESTADO_ADMINISTRATIVO_SUSPENDIDA]
+        )
+        self._combo_motivo_administrativo = QComboBox()
+        self._combo_motivo_administrativo.addItem("Sin motivo", None)
+        self._combo_motivo_administrativo.addItem(
+            "Abonado inactivo", MOTIVO_ESTADO_ADMINISTRATIVO_ABONADO_INACTIVO
+        )
+        self._combo_motivo_administrativo.addItem(
+            "Reasignacion pendiente", MOTIVO_ESTADO_ADMINISTRATIVO_REASIGNACION_PENDIENTE
+        )
+        self._combo_motivo_administrativo.addItem(
+            "Revision administrativa", MOTIVO_ESTADO_ADMINISTRATIVO_REVISION_ADMINISTRATIVA
+        )
+        self._combo_antecedente = QComboBox()
+        self._combo_antecedente.addItem("Nunca ha tenido servicio", 0)
+        self._combo_antecedente.addItem("Ya tuvo servicio antes", 1)
         self._campo_direccion = QPlainTextEdit()
         self._campo_direccion.setPlaceholderText("Direccion o referencia de la casa")
-        self._campo_direccion.setFixedHeight(78)
+        self._campo_direccion.setFixedHeight(70)
         self._campo_observaciones = QPlainTextEdit()
         self._campo_observaciones.setPlaceholderText("Observaciones")
-        self._campo_observaciones.setFixedHeight(78)
+        self._campo_observaciones.setFixedHeight(70)
+        self._combo_estado_administrativo.currentTextChanged.connect(
+            self._actualizar_estado_campos_administrativos
+        )
 
         if self._casa is not None:
             indice_abonado = self._combo_abonado.findData(self._casa.abonado_id)
@@ -246,9 +297,18 @@ class DialogoFormularioCasa(DialogoBaseSicap):
             if indice_barrio >= 0:
                 self._combo_barrio.setCurrentIndex(indice_barrio)
             self._combo_estado.setCurrentText(self._casa.estado_servicio)
+            self._combo_estado_administrativo.setCurrentText(self._casa.estado_administrativo)
+            indice_motivo = self._combo_motivo_administrativo.findData(
+                self._casa.motivo_estado_administrativo
+            )
+            if indice_motivo >= 0:
+                self._combo_motivo_administrativo.setCurrentIndex(indice_motivo)
+            self._combo_antecedente.setCurrentIndex(1 if self._casa.ha_tenido_servicio_activo else 0)
+            self._combo_antecedente.setEnabled(self._casa.antecedente_servicio_editable)
             self._campo_direccion.setPlainText(self._casa.direccion_referencia)
             self._campo_observaciones.setPlainText(self._casa.observaciones)
             self._combo_abonado.setEnabled(False)
+            self._combo_estado.setEnabled(False)
 
         formulario.addWidget(
             self._crear_bloque_formulario("Abonado actual", self._combo_abonado),
@@ -258,15 +318,48 @@ class DialogoFormularioCasa(DialogoBaseSicap):
             2,
         )
         formulario.addWidget(self._crear_bloque_formulario("Barrio", self._combo_barrio), 1, 0)
+        bloque_estado_servicio = self._crear_bloque_formulario(
+            "Estado fisico del servicio",
+            self._combo_estado,
+        )
+        if self._casa is not None:
+            nota_estado = QLabel(
+                "Se muestra solo como referencia. Para cortar el servicio usa la accion operativa del modulo."
+            )
+            nota_estado.setObjectName("descripcionDialogoSicap")
+            nota_estado.setWordWrap(True)
+            bloque_estado_servicio.layout().addWidget(nota_estado)
+        formulario.addWidget(bloque_estado_servicio, 1, 1)
         formulario.addWidget(
-            self._crear_bloque_formulario("Estado del servicio", self._combo_estado),
+            self._crear_bloque_formulario(
+                "Estado administrativo",
+                self._combo_estado_administrativo,
+            ),
+            2,
+            0,
+        )
+        formulario.addWidget(
+            self._crear_bloque_formulario(
+                "Antecedente de servicio",
+                self._combo_antecedente,
+            ),
+            2,
             1,
+        )
+        formulario.addWidget(
+            self._crear_bloque_formulario(
+                "Motivo administrativo",
+                self._combo_motivo_administrativo,
+            ),
+            3,
+            0,
             1,
+            2,
         )
 
         panel_datos = self._crear_panel_formulario(
             "Datos principales",
-            "Define el propietario actual, barrio y estado de servicio.",
+            "Define el propietario actual, el estado fisico, la dimension administrativa y el antecedente real del servicio.",
         )
         panel_datos.layout().addLayout(formulario)
 
@@ -276,7 +369,7 @@ class DialogoFormularioCasa(DialogoBaseSicap):
         )
         notas_layout = QVBoxLayout()
         notas_layout.setContentsMargins(0, 0, 0, 0)
-        notas_layout.setSpacing(10)
+        notas_layout.setSpacing(8)
         notas_layout.addWidget(
             self._crear_bloque_formulario("Referencia", self._campo_direccion)
         )
@@ -313,16 +406,27 @@ class DialogoFormularioCasa(DialogoBaseSicap):
 
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(panel_datos)
-        self.layout_cuerpo.addWidget(panel_notas)
+        fila_paneles = QHBoxLayout()
+        fila_paneles.setContentsMargins(0, 0, 0, 0)
+        fila_paneles.setSpacing(10)
+        fila_paneles.addWidget(panel_datos, 2)
+        fila_paneles.addWidget(panel_notas, 1)
+        self.layout_cuerpo.addLayout(fila_paneles)
         self.layout_cuerpo.addWidget(self._mensaje)
         self.layout_pie.addLayout(fila_acciones)
+        self._actualizar_estado_campos_administrativos()
+
+    def _actualizar_estado_campos_administrativos(self) -> None:
+        suspendida = self._combo_estado_administrativo.currentText() == ESTADO_ADMINISTRATIVO_SUSPENDIDA
+        self._combo_motivo_administrativo.setEnabled(suspendida)
+        if not suspendida:
+            self._combo_motivo_administrativo.setCurrentIndex(0)
 
     def _crear_bloque_formulario(self, etiqueta: str, campo: QWidget) -> QWidget:
         bloque = QWidget()
         layout = QVBoxLayout(bloque)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(3)
         label = QLabel(etiqueta)
         label.setObjectName("etiquetaDatoDialogoSicap")
         layout.addWidget(label)
@@ -334,7 +438,7 @@ class DialogoFormularioCasa(DialogoBaseSicap):
         panel.setObjectName("bloqueDialogoSicap")
         layout_panel = QVBoxLayout(panel)
         layout_panel.setContentsMargins(14, 14, 14, 14)
-        layout_panel.setSpacing(10)
+        layout_panel.setSpacing(8)
         label_titulo = QLabel(titulo)
         label_titulo.setObjectName("etiquetaDatoDialogoSicap")
         label_descripcion = QLabel(descripcion)
@@ -656,10 +760,10 @@ class DialogoHistorialPropietariosCasa(DialogoBaseSicap):
                 font-weight: 800;
             }}
             QTableWidget#tablaHistorialCasa {{
-                background: {paleta["fondo_input"]};
+                background: {paleta["fondo_tabla_cuerpo"]};
                 border: none;
                 border-radius: 4px;
-                alternate-background-color: {paleta["fondo_superficie_suave"]};
+                alternate-background-color: {paleta["fondo_tabla_fila_alterna"]};
                 color: {paleta["texto_input"]};
                 padding: 0 0 8px 0;
             }}
@@ -668,18 +772,25 @@ class DialogoHistorialPropietariosCasa(DialogoBaseSicap):
                 border: none;
             }}
             QTableWidget#tablaHistorialCasa QHeaderView::section {{
-                background: {paleta["fondo_tabla_header"]};
+                background: {paleta["fondo_tabla_header_destacado"]};
                 color: {paleta["texto_input"]};
                 border: none;
-                border-right: 1px solid {paleta["borde_suave"]};
-                border-bottom: 1px solid {paleta["borde_suave"]};
+                border-right: 1px solid {paleta["borde_tabla"]};
+                border-bottom: 1px solid {paleta["borde_tabla"]};
                 padding: 10px 12px;
                 font-size: 12px;
                 font-weight: 800;
             }}
             QTableWidget#tablaHistorialCasa::item {{
                 padding: 10px 12px;
-                border-bottom: 1px solid {paleta["borde_suave"]};
+                border-bottom: 1px solid {paleta["borde_tabla"]};
+                background: {paleta["fondo_tabla_fila"]};
+            }}
+            QTableWidget#tablaHistorialCasa::item:alternate {{
+                background: {paleta["fondo_tabla_fila_alterna"]};
+            }}
+            QTableWidget#tablaHistorialCasa::item:selected {{
+                background: {paleta["fondo_tabla_seleccion"]};
             }}
             """
         )
@@ -700,8 +811,8 @@ class DialogoDetalleCasa(DialogoBaseSicap):
         self._formateador_fecha = formateador_fecha
         self._formateador_moneda = formateador_moneda
         self._accion_resultado = "cerrar"
-        self.setMinimumWidth(820)
-        self.setMinimumHeight(660)
+        self.setMinimumWidth(860)
+        self.setMinimumHeight(620)
         self._construir_ui()
 
     @property
@@ -750,16 +861,30 @@ class DialogoDetalleCasa(DialogoBaseSicap):
 
         estado = QLabel(casa.estado_servicio.title())
         estado.setObjectName("badgeDetalleCasa")
-        estado.setProperty("activo", casa.estado_servicio == "ACTIVO")
+        estado.setProperty("activo", casa.estado_servicio == ESTADO_SERVICIO_ACTIVO)
         estado.style().unpolish(estado)
         estado.style().polish(estado)
 
+        estado_administrativo = QLabel(casa.estado_administrativo.title())
+        estado_administrativo.setObjectName("badgeDetalleCasaSecundario")
+        estado_administrativo.setProperty(
+            "activo",
+            casa.estado_administrativo == ESTADO_ADMINISTRATIVO_OPERATIVA,
+        )
+        estado_administrativo.style().unpolish(estado_administrativo)
+        estado_administrativo.style().polish(estado_administrativo)
+
         fila_superior.addLayout(bloque_nombre, 1)
-        fila_superior.addWidget(estado, alignment=Qt.AlignmentFlag.AlignTop)
+        fila_badges = QVBoxLayout()
+        fila_badges.setContentsMargins(0, 0, 0, 0)
+        fila_badges.setSpacing(6)
+        fila_badges.addWidget(estado, alignment=Qt.AlignmentFlag.AlignRight)
+        fila_badges.addWidget(estado_administrativo, alignment=Qt.AlignmentFlag.AlignRight)
+        fila_superior.addLayout(fila_badges)
 
         encabezado_seccion_contexto = self._crear_encabezado_seccion_detalle(
             "Contexto operativo",
-            "Identifica el propietario actual, barrio y fecha del ultimo cambio registrado.",
+            "Identifica el propietario actual, barrio y trazabilidad base de la casa.",
         )
         grid_info = QGridLayout()
         grid_info.setHorizontalSpacing(14)
@@ -784,10 +909,44 @@ class DialogoDetalleCasa(DialogoBaseSicap):
         )
         grid_info.addWidget(
             self._crear_campo_detalle(
+                "Antecedente de servicio",
+                casa.resumen_antecedente_servicio,
+            ),
+            1,
+            1,
+        )
+        grid_info.addWidget(
+            self._crear_campo_detalle(
+                "Creado",
+                self._formateador_fecha(casa.creado_en),
+            ),
+            2,
+            0,
+        )
+        grid_info.addWidget(
+            self._crear_campo_detalle(
+                "Ultima actualizacion",
+                self._formateador_fecha(casa.actualizado_en),
+            ),
+            2,
+            1,
+        )
+        grid_info.addWidget(
+            self._crear_campo_detalle(
                 "Ultimo cambio de dueno",
                 self._formateador_fecha(self._detalle.ultima_fecha_cambio_dueno),
             ),
-            1,
+            3,
+            0,
+        )
+        grid_info.addWidget(
+            self._crear_campo_detalle(
+                "Motivo administrativo",
+                casa.motivo_estado_administrativo.replace("_", " ").title()
+                if casa.motivo_estado_administrativo != MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO
+                else "Sin bloqueo administrativo",
+            ),
+            3,
             1,
         )
 
@@ -844,6 +1003,15 @@ class DialogoDetalleCasa(DialogoBaseSicap):
             casa.observaciones or "Sin observaciones registradas.",
         )
         observaciones.setObjectName("campoDetalleCasaAmplio")
+        reactivacion = self._crear_campo_detalle(
+            "Reactivacion fisica",
+            (
+                "Resolver desde Pagos > Conexión/Reconexion."
+                if casa.estado_servicio == ESTADO_SERVICIO_CORTADO
+                else "Disponible desde la accion Cortar servicio cuando corresponda."
+            ),
+        )
+        reactivacion.setObjectName("campoDetalleCasaAmplio")
 
         separador = QFrame()
         separador.setObjectName("separadorDetalleCasa")
@@ -875,14 +1043,23 @@ class DialogoDetalleCasa(DialogoBaseSicap):
             centrado=True,
             mostrar_icono=False,
         )
+        boton_corte = BotonAccionContextual(
+            "Cortar servicio",
+            variante="salida",
+            centrado=True,
+            mostrar_icono=False,
+        )
         boton_cerrar.clicked.connect(self.reject)
         boton_historial.clicked.connect(self._abrir_historial)
         boton_dueno.clicked.connect(self._abrir_cambio_dueno)
         boton_editar.clicked.connect(self._solicitar_edicion)
+        boton_corte.clicked.connect(self._solicitar_corte_servicio)
         fila_acciones.addWidget(boton_cerrar)
         fila_acciones.addStretch(1)
         fila_acciones.addWidget(boton_historial)
         fila_acciones.addWidget(boton_dueno)
+        if casa.estado_servicio == ESTADO_SERVICIO_ACTIVO:
+            fila_acciones.addWidget(boton_corte)
         fila_acciones.addWidget(boton_editar)
 
         layout_panel.addLayout(fila_superior)
@@ -907,7 +1084,7 @@ class DialogoDetalleCasa(DialogoBaseSicap):
                     "Trazabilidad",
                     "Conserva el ultimo movimiento y las observaciones administrativas de la casa.",
                 ),
-                [historial, observaciones],
+                [historial, observaciones, reactivacion],
             )
         )
         layout_panel.addWidget(separador)
@@ -990,11 +1167,19 @@ class DialogoDetalleCasa(DialogoBaseSicap):
         self.accept()
 
     def _abrir_historial(self) -> None:
-        self._accion_resultado = "historial"
-        self.accept()
+        DialogoHistorialPropietariosCasa(
+            casa=self._detalle.casa,
+            historial=self._detalle.historial_propietarios,
+            formateador_fecha=self._formateador_fecha,
+            parent=self,
+        ).exec()
 
     def _abrir_cambio_dueno(self) -> None:
         self._accion_resultado = "cambiar_dueno"
+        self.accept()
+
+    def _solicitar_corte_servicio(self) -> None:
+        self._accion_resultado = "cortar_servicio"
         self.accept()
 
     def _aplicar_estilos(self) -> None:
@@ -1064,6 +1249,20 @@ class DialogoDetalleCasa(DialogoBaseSicap):
                 background: {paleta["fondo_badge_activo"]};
                 border-color: {paleta["borde_badge_activo"]};
             }}
+            QLabel#badgeDetalleCasaSecundario {{
+                border-radius: {radio}px;
+                padding: 6px 10px;
+                font-size: 12px;
+                font-weight: 800;
+                color: {paleta["texto_badge"]};
+                background: {paleta["fondo_badge"]};
+                border: 1px solid {paleta["borde_suave"]};
+            }}
+            QLabel#badgeDetalleCasaSecundario[activo="true"] {{
+                color: {paleta["texto_badge_activo"]};
+                background: {paleta["fondo_badge_activo"]};
+                border-color: {paleta["borde_badge_activo"]};
+            }}
             QLabel#etiquetaDetalleCasa {{
                 color: {paleta["texto_muted"]};
                 font-size: 11px;
@@ -1084,21 +1283,26 @@ class DialogoDetalleCasa(DialogoBaseSicap):
 
 
 class DialogoConfirmacionEstadoCasa(DialogoConfirmacionSicap):
-    """Modal de confirmacion para activar o suspender casas."""
+    """Modal de confirmacion para cambiar suspension administrativa."""
 
     def __init__(self, casa: Casa, parent: QWidget | None = None) -> None:
-        nuevo_estado = "suspender" if casa.estado_servicio == "ACTIVO" else "activar"
+        nuevo_estado = (
+            "reactivar"
+            if casa.estado_administrativo == ESTADO_ADMINISTRATIVO_SUSPENDIDA
+            else "suspender"
+        )
         super().__init__(
-            titulo="Confirmar cambio de estado",
+            titulo="Confirmar cambio administrativo",
             descripcion=(
-                f"Estas a punto de {nuevo_estado} la casa seleccionada. "
-                "Verifica la situacion administrativa antes de confirmar."
+                f"Estas a punto de {nuevo_estado} administrativamente la casa seleccionada. "
+                "Este atajo no cambia el estado fisico del servicio."
             ),
             detalles=(
                 ("Casa", casa.codigo),
                 ("Abonado actual", casa.resumen_propietario),
                 ("Barrio", casa.barrio_nombre),
-                ("Estado actual", casa.estado_servicio.title()),
+                ("Estado fisico", casa.estado_servicio.title()),
+                ("Estado administrativo", casa.estado_administrativo.title()),
             ),
             texto_confirmar=nuevo_estado.title(),
             icono="alert-triangle.svg",
@@ -1107,12 +1311,165 @@ class DialogoConfirmacionEstadoCasa(DialogoConfirmacionSicap):
         )
 
 
+class DialogoCorteServicioCasa(DialogoBaseSicap):
+    """Modal para confirmar el corte fisico del servicio."""
+
+    def __init__(
+        self,
+        detalle: DetalleCasa,
+        formateador_moneda: Callable[[int], str],
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._detalle = detalle
+        self._formateador_moneda = formateador_moneda
+        self.setMinimumWidth(640)
+        self.setMinimumHeight(520)
+        self._construir_ui()
+
+    @property
+    def observaciones(self) -> str:
+        return self._campo_observaciones.toPlainText().strip()
+
+    def obtener_formulario(self) -> FormularioCorteServicioCasa:
+        return FormularioCorteServicioCasa(
+            casa_id=int(self._detalle.casa.identificador or 0),
+            observaciones=self.observaciones,
+        )
+
+    def accept(self) -> None:
+        if not self.observaciones:
+            self._mensaje.setText("Describe las observaciones del corte antes de continuar.")
+            self._mensaje.setVisible(True)
+            return
+        self._mensaje.setVisible(False)
+        super().accept()
+
+    def _construir_ui(self) -> None:
+        casa = self._detalle.casa
+        titulo = QLabel("Confirmar corte de servicio")
+        titulo.setObjectName("tituloDialogoSicap")
+        descripcion = QLabel(
+            "Esta accion registra un corte fisico del servicio. La reactivacion posterior se gestiona desde Pagos > Conexión/Reconexion."
+        )
+        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setWordWrap(True)
+
+        panel_contexto = QFrame()
+        panel_contexto.setObjectName("bloqueDialogoSicap")
+        layout_contexto = QVBoxLayout(panel_contexto)
+        layout_contexto.setContentsMargins(14, 14, 14, 14)
+        layout_contexto.setSpacing(10)
+
+        grid_contexto = QGridLayout()
+        grid_contexto.setContentsMargins(0, 0, 0, 0)
+        grid_contexto.setHorizontalSpacing(10)
+        grid_contexto.setVerticalSpacing(10)
+        grid_contexto.addWidget(self._crear_campo_contexto("Casa", casa.codigo), 0, 0)
+        grid_contexto.addWidget(
+            self._crear_campo_contexto("Abonado actual", casa.resumen_propietario),
+            0,
+            1,
+        )
+        grid_contexto.addWidget(
+            self._crear_campo_contexto("Barrio", casa.barrio_nombre or "Sin barrio"),
+            1,
+            0,
+        )
+        grid_contexto.addWidget(
+            self._crear_campo_contexto(
+                "Deuda actual",
+                self._formateador_moneda(casa.deuda_total_centavos),
+            ),
+            1,
+            1,
+        )
+        grid_contexto.addWidget(
+            self._crear_campo_contexto("Estado fisico", casa.estado_servicio.title()),
+            2,
+            0,
+        )
+        grid_contexto.addWidget(
+            self._crear_campo_contexto(
+                "Estado administrativo",
+                casa.estado_administrativo.title(),
+            ),
+            2,
+            1,
+        )
+        layout_contexto.addLayout(grid_contexto)
+
+        panel_observaciones = QFrame()
+        panel_observaciones.setObjectName("bloqueDialogoSicap")
+        layout_observaciones = QVBoxLayout(panel_observaciones)
+        layout_observaciones.setContentsMargins(14, 14, 14, 14)
+        layout_observaciones.setSpacing(8)
+        etiqueta_observaciones = QLabel("Observaciones del corte")
+        etiqueta_observaciones.setObjectName("etiquetaDatoDialogoSicap")
+        ayuda_observaciones = QLabel(
+            "Explica brevemente por que se realiza el corte o cualquier contexto operativo relevante."
+        )
+        ayuda_observaciones.setObjectName("descripcionDialogoSicap")
+        ayuda_observaciones.setWordWrap(True)
+        self._campo_observaciones = QPlainTextEdit()
+        self._campo_observaciones.setPlaceholderText("Ejemplo: corte operativo manual por revision en campo.")
+        self._campo_observaciones.setFixedHeight(120)
+        layout_observaciones.addWidget(etiqueta_observaciones)
+        layout_observaciones.addWidget(ayuda_observaciones)
+        layout_observaciones.addWidget(self._campo_observaciones)
+
+        self._mensaje = QLabel("")
+        self._mensaje.setObjectName("mensajeErrorDialogoSicap")
+        self._mensaje.setVisible(False)
+
+        fila_acciones = QHBoxLayout()
+        fila_acciones.setSpacing(10)
+        boton_cancelar = BotonAccionContextual(
+            "Cancelar",
+            variante=resolver_variante_boton_modal("Cancelar", "neutro"),
+            centrado=True,
+            mostrar_icono=False,
+        )
+        boton_confirmar = BotonAccionContextual(
+            "Cortar servicio",
+            variante="salida",
+            centrado=True,
+            mostrar_icono=False,
+        )
+        boton_cancelar.clicked.connect(self.reject)
+        boton_confirmar.clicked.connect(self.accept)
+        fila_acciones.addWidget(boton_cancelar)
+        fila_acciones.addStretch(1)
+        fila_acciones.addWidget(boton_confirmar)
+
+        self.layout_cabecera.addWidget(titulo)
+        self.layout_cabecera.addWidget(descripcion)
+        self.layout_cuerpo.addWidget(panel_contexto)
+        self.layout_cuerpo.addWidget(panel_observaciones)
+        self.layout_cuerpo.addWidget(self._mensaje)
+        self.layout_pie.addLayout(fila_acciones)
+
+    def _crear_campo_contexto(self, etiqueta: str, valor: str) -> QWidget:
+        bloque = QWidget()
+        layout = QVBoxLayout(bloque)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(3)
+        label_etiqueta = QLabel(etiqueta)
+        label_etiqueta.setObjectName("etiquetaDatoDialogoSicap")
+        label_valor = QLabel(valor)
+        label_valor.setObjectName("valorDetalleCasa")
+        label_valor.setWordWrap(True)
+        layout.addWidget(label_etiqueta)
+        layout.addWidget(label_valor)
+        return bloque
+
+
 class VistaCasas(QWidget):
     """Pantalla principal del modulo de casas."""
 
     DURACION_MENSAJE_MS = 3200
     RADIO_PANEL_TABLA = 16
-    ANCHO_COLUMNA_ACCIONES = 230
+    ANCHO_COLUMNA_ACCIONES = 272
 
     filtro_texto_cambiado = Signal(str)
     filtro_rapido_cambiado = Signal(str)
@@ -1122,6 +1479,7 @@ class VistaCasas(QWidget):
     detalle_casa_solicitado = Signal(int)
     editar_casa_solicitado = Signal(int)
     cambio_estado_solicitado = Signal(int)
+    corte_servicio_solicitado = Signal(int)
     historial_casa_solicitado = Signal(int)
     cambio_dueno_solicitado = Signal(int)
 
@@ -1187,7 +1545,7 @@ class VistaCasas(QWidget):
             self._tabla.setItem(fila, 3, crear_item_tabla(casa.barrio_nombre))
             self._tabla.setItem(fila, 4, crear_item_tabla(casa.direccion_referencia or "-"))
             self._tabla.setItem(fila, 5, crear_item_tabla(casa.meses_en_mora))
-            self._tabla.setCellWidget(fila, 6, self._crear_badge_estado(casa.estado_servicio))
+            self._tabla.setCellWidget(fila, 6, self._crear_badge_estado_compuesto(casa))
             self._tabla.setCellWidget(fila, 7, self._crear_acciones_fila(casa))
 
         self._tabla.resizeRowsToContents()
@@ -1209,6 +1567,13 @@ class VistaCasas(QWidget):
         self._mensaje.style().polish(self._mensaje)
         if mensaje:
             self._temporizador_mensaje.start(self.DURACION_MENSAJE_MS)
+
+    def aplicar_busqueda_externa(self, texto: str) -> None:
+        texto_normalizado = texto.strip()
+        if self._campo_busqueda.text() != texto_normalizado:
+            self._campo_busqueda.setText(texto_normalizado)
+            return
+        self.filtro_texto_cambiado.emit(texto_normalizado)
 
     def solicitar_datos_casa(
         self,
@@ -1235,6 +1600,20 @@ class VistaCasas(QWidget):
         if dialogo.exec() != QDialog.DialogCode.Accepted:
             return None
         return dialogo
+
+    def solicitar_corte_servicio(
+        self,
+        detalle: DetalleCasa,
+        formateador_moneda: Callable[[int], str],
+    ) -> FormularioCorteServicioCasa | None:
+        dialogo = DialogoCorteServicioCasa(
+            detalle=detalle,
+            formateador_moneda=formateador_moneda,
+            parent=self,
+        )
+        if dialogo.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialogo.obtener_formulario()
 
     def mostrar_detalle_casa(
         self,
@@ -1391,7 +1770,7 @@ class VistaCasas(QWidget):
         self._tabla.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         self._tabla.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.Interactive)
         self._tabla.setColumnWidth(7, self.ANCHO_COLUMNA_ACCIONES)
-        self._tabla.verticalHeader().setDefaultSectionSize(58)
+        self._tabla.verticalHeader().setDefaultSectionSize(74)
         self._tabla.setFrameShape(QFrame.Shape.NoFrame)
         self._tabla.setViewportMargins(0, 0, 0, self.RADIO_PANEL_TABLA)
         self._tabla.viewport().setObjectName("viewportTablaCasas")
@@ -1433,18 +1812,27 @@ class VistaCasas(QWidget):
         layout.addWidget(panel_filtros)
         layout.addWidget(panel_tabla, 1)
 
-    def _crear_badge_estado(self, estado: str) -> QWidget:
+    def _crear_badge_estado_compuesto(self, casa: Casa) -> QWidget:
         contenedor = QWidget()
-        layout = QHBoxLayout(contenedor)
+        layout = QVBoxLayout(contenedor)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setSpacing(3)
 
-        badge = QLabel(estado.title())
+        badge = QLabel(casa.estado_servicio.title())
         badge.setObjectName("badgeEstadoCasa")
-        badge.setProperty("activo", estado == "ACTIVO")
+        badge.setProperty("activo", casa.estado_servicio == ESTADO_SERVICIO_ACTIVO)
         badge.style().unpolish(badge)
         badge.style().polish(badge)
+        badge_admin = QLabel(casa.estado_administrativo.title())
+        badge_admin.setObjectName("badgeEstadoCasaSecundario")
+        badge_admin.setProperty(
+            "activo",
+            casa.estado_administrativo == ESTADO_ADMINISTRATIVO_OPERATIVA,
+        )
+        badge_admin.style().unpolish(badge_admin)
+        badge_admin.style().polish(badge_admin)
         layout.addWidget(badge, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(badge_admin, alignment=Qt.AlignmentFlag.AlignCenter)
         return contenedor
 
     def _crear_acciones_fila(self, casa: Casa) -> QWidget:
@@ -1452,9 +1840,9 @@ class VistaCasas(QWidget):
         contenedor.setObjectName("contenedorAccionesCasa")
         contenedor.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         contenedor.setMinimumWidth(self.ANCHO_COLUMNA_ACCIONES)
-        contenedor.setMinimumHeight(58)
+        contenedor.setMinimumHeight(74)
         layout = QHBoxLayout(contenedor)
-        layout.setContentsMargins(0, 0, 0, 14)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -1463,10 +1851,17 @@ class VistaCasas(QWidget):
         boton_cambio_dueno = BotonIconoFilaCasa("user.svg", "#8de8c7", "Cambiar dueno")
         boton_historial = BotonIconoFilaCasa("clock.svg", "#b48bff", "Ver historial")
         boton_estado = BotonIconoFilaCasa(
-            "lock.svg" if casa.estado_servicio == "ACTIVO" else "circle-check.svg",
-            "#ff625c" if casa.estado_servicio == "ACTIVO" else "#4fa3ff",
-            "Suspender" if casa.estado_servicio == "ACTIVO" else "Activar",
+            "lock.svg"
+            if casa.estado_administrativo == ESTADO_ADMINISTRATIVO_OPERATIVA
+            else "circle-check.svg",
+            "#ff625c"
+            if casa.estado_administrativo == ESTADO_ADMINISTRATIVO_OPERATIVA
+            else "#4fa3ff",
+            "Suspender"
+            if casa.estado_administrativo == ESTADO_ADMINISTRATIVO_OPERATIVA
+            else "Reactivar",
         )
+        boton_corte = BotonIconoFilaCasa("alert-triangle.svg", "#ff625c", "Cortar servicio")
 
         boton_detalle.clicked.connect(
             lambda checked=False, identificador=casa.identificador: self.detalle_casa_solicitado.emit(
@@ -1493,12 +1888,19 @@ class VistaCasas(QWidget):
                 int(identificador or 0)
             )
         )
+        boton_corte.clicked.connect(
+            lambda checked=False, identificador=casa.identificador: self.corte_servicio_solicitado.emit(
+                int(identificador or 0)
+            )
+        )
 
         layout.addWidget(boton_detalle)
         layout.addWidget(boton_editar)
         layout.addWidget(boton_cambio_dueno)
         layout.addWidget(boton_historial)
         layout.addWidget(boton_estado)
+        if casa.estado_servicio == ESTADO_SERVICIO_ACTIVO:
+            layout.addWidget(boton_corte)
         return contenedor
 
     def _actualizar_estado_vacio(self, sin_datos: bool) -> None:
@@ -1507,6 +1909,7 @@ class VistaCasas(QWidget):
 
     def _aplicar_estilos(self) -> None:
         radio_panel_tabla = self.RADIO_PANEL_TABLA
+        fondo_header_destacado = obtener_fondo_header_destacado(self._tema_actual)
         self.setStyleSheet(
             """
             QWidget#vistaCasas {
@@ -1540,19 +1943,25 @@ class VistaCasas(QWidget):
             }
             QFrame#panelOperativoCasas,
             QFrame#tarjetaResumenCasas {
-                background: rgba(255, 255, 255, 0.10);
+                background: """
+            + fondo_header_destacado
+            + """;
                 border: 1px solid rgba(255, 255, 255, 0.16);
                 border-radius: 18px;
             }
             QFrame#panelTablaCasas {
-                background: rgba(255, 255, 255, 0.10);
+                background: """
+            + fondo_header_destacado
+            + """;
                 border: 1px solid rgba(255, 255, 255, 0.16);
                 border-radius: """
             + str(radio_panel_tabla)
             + """px;
             }
             QTableWidget#tablaCasas {
-                background: rgba(255, 255, 255, 0.03);
+                background: """
+            + self._paleta_tema["fondo_tabla_cuerpo"]
+            + """;
                 background-clip: padding;
                 border: none;
                 border-radius: """
@@ -1578,11 +1987,17 @@ class VistaCasas(QWidget):
             + """px;
             }
             QTableWidget#tablaCasas QHeaderView::section {
-                background: rgba(255, 255, 255, 0.10);
+                background: """
+            + self._paleta_tema["fondo_tabla_header_destacado"]
+            + """;
                 color: #f7fbff;
                 border: none;
-                border-right: 1px solid rgba(255, 255, 255, 0.06);
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                border-right: 1px solid """
+            + self._paleta_tema["borde_tabla"]
+            + """;
+                border-bottom: 1px solid """
+            + self._paleta_tema["borde_tabla"]
+            + """;
                 padding: 10px 12px;
                 font-size: 12px;
                 font-weight: 800;
@@ -1594,7 +2009,22 @@ class VistaCasas(QWidget):
             }
             QTableWidget#tablaCasas::item {
                 padding: 9px 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+                border-bottom: 1px solid """
+            + self._paleta_tema["borde_tabla"]
+            + """;
+                background: """
+            + self._paleta_tema["fondo_tabla_fila"]
+            + """;
+            }
+            QTableWidget#tablaCasas::item:alternate {
+                background: """
+            + self._paleta_tema["fondo_tabla_fila_alterna"]
+            + """;
+            }
+            QTableWidget#tablaCasas::item:selected {
+                background: """
+            + self._paleta_tema["fondo_tabla_seleccion"]
+            + """;
             }
             QLabel#iconoTarjetaResumen {
                 background: rgba(255, 255, 255, 0.08);
@@ -1655,6 +2085,20 @@ class VistaCasas(QWidget):
                 color: #d9fff5;
                 background: rgba(16, 120, 98, 0.22);
                 border-color: rgba(158, 231, 214, 0.26);
+            }
+            QLabel#badgeEstadoCasaSecundario {
+                border-radius: 10px;
+                padding: 5px 8px;
+                font-size: 10px;
+                font-weight: 800;
+                color: #f4f8fb;
+                background: rgba(132, 146, 166, 0.18);
+                border: 1px solid rgba(255, 255, 255, 0.10);
+            }
+            QLabel#badgeEstadoCasaSecundario[activo="true"] {
+                color: #d9fff5;
+                background: rgba(16, 120, 98, 0.18);
+                border-color: rgba(158, 231, 214, 0.22);
             }
             QWidget#contenedorAccionesCasa {
                 background: transparent;
@@ -1718,9 +2162,15 @@ class VistaCasas(QWidget):
                 }}
                 QTableWidget#tablaCasas {{
                     background: {paleta["fondo_superficie_muy_suave"]};
+                    /*
+                    Tema claro pendiente:
+                    background: {paleta["fondo_tabla_cuerpo"]};
+                    alternate-background-color: {paleta["fondo_tabla_fila_alterna"]};
+                    */
                 }}
                 QTableWidget#tablaCasas QHeaderView::section {{
                     background: {paleta["fondo_tabla_header"]};
+                    /* Tema claro pendiente: background: {paleta["fondo_tabla_header_destacado"]}; */
                     color: {paleta["texto_input"]};
                     border-right: 1px solid {paleta["borde_suave"]};
                     border-bottom: 1px solid {paleta["borde_suave"]};
@@ -1753,6 +2203,16 @@ class VistaCasas(QWidget):
                     border: 1px solid {paleta["borde_suave"]};
                 }}
                 QLabel#badgeEstadoCasa[activo="true"] {{
+                    color: {paleta["texto_badge_activo"]};
+                    background: {paleta["fondo_badge_activo"]};
+                    border-color: {paleta["borde_badge_activo"]};
+                }}
+                QLabel#badgeEstadoCasaSecundario {{
+                    color: {paleta["texto_badge"]};
+                    background: {paleta["fondo_badge"]};
+                    border: 1px solid {paleta["borde_suave"]};
+                }}
+                QLabel#badgeEstadoCasaSecundario[activo="true"] {{
                     color: {paleta["texto_badge_activo"]};
                     background: {paleta["fondo_badge_activo"]};
                     border-color: {paleta["borde_badge_activo"]};

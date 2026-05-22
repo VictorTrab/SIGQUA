@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from comun.actualizaciones import EventoModuloActualizado, bus_actualizaciones_modulos
+from comun.ui import ejecutar_acciones_documento_pdf
 from modulos.historial_pagos.entidades import FiltroHistorialPagos
 from modulos.historial_pagos.servicio import ServicioHistorialPagos
 from modulos.historial_pagos.vista import VistaHistorialPagos
@@ -80,6 +81,18 @@ class ControladorHistorialPagos:
 
     def _reimprimir_copia(self, pago_id: int) -> None:
         resultado = self._servicio_historial.reimprimir_copia(pago_id)
+        if resultado.exito and resultado.ruta_documento:
+            abrir_automaticamente, imprimir_automaticamente = (
+                self._servicio_historial.obtener_politica_documental()
+            )
+            mensaje = ejecutar_acciones_documento_pdf(
+                resultado.ruta_documento,
+                etiqueta_documento="Copia PDF del comprobante",
+                abrir_automaticamente=abrir_automaticamente,
+                imprimir_automaticamente=imprimir_automaticamente,
+            )
+            self._vista_historial.mostrar_mensaje(mensaje, es_error=False)
+            return
         self._vista_historial.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
 
     def _manejar_actualizacion_modulo(self, evento: object) -> None:

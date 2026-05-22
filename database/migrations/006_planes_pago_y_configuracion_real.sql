@@ -1,4 +1,4 @@
-BEGIN TRANSACTION;
+﻿BEGIN TRANSACTION;
 
 ALTER TABLE planes_pago ADD COLUMN tipo_plan TEXT NOT NULL DEFAULT 'MESES_PENDIENTES';
 ALTER TABLE planes_pago ADD COLUMN concepto_financiado TEXT NOT NULL DEFAULT 'MESES_PENDIENTES';
@@ -22,13 +22,13 @@ UPDATE configuracion_sistema
 SET valor = '1',
     descripcion = 'La mora forma parte del sistema como meses vencidos no pagados y no se desactiva desde configuracion.',
     editable = 0,
-    actualizado_en = datetime('now')
+    actualizado_en = datetime('now', 'localtime')
 WHERE clave = 'cobro.mora_activa';
 
 UPDATE configuracion_sistema
 SET descripcion = 'Clave heredada. No representa un recargo automatico y no debe usarse para parametrizar mora.',
     editable = 0,
-    actualizado_en = datetime('now')
+    actualizado_en = datetime('now', 'localtime')
 WHERE clave = 'cobro.mora_monto_centavos';
 
 INSERT OR IGNORE INTO configuracion_sistema(clave, valor, tipo_dato, categoria, descripcion, editable)
@@ -39,7 +39,7 @@ VALUES
 
 UPDATE configuracion_sistema
 SET valor = '2.2.0',
-    actualizado_en = datetime('now')
+    actualizado_en = datetime('now', 'localtime')
 WHERE clave = 'sistema.version';
 
 INSERT INTO esquema_migraciones(version, descripcion, checksum)
@@ -51,3 +51,4 @@ WHERE NOT EXISTS (
 );
 
 COMMIT;
+

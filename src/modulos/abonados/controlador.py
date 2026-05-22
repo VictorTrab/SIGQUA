@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Callable
+
 from modulos.autenticacion.entidades import UsuarioAutenticado
-from modulos.abonados.entidades import FILTRO_ABONADOS_TODOS
+from modulos.abonados.entidades import Abonado, FILTRO_ABONADOS_TODOS
 from modulos.abonados.servicio import ServicioAbonados
 from modulos.abonados.vista import VistaAbonados
 
@@ -18,6 +20,7 @@ class ControladorAbonados:
         self._filtro_actual = ""
         self._filtro_rapido_actual = FILTRO_ABONADOS_TODOS
         self._pagina_actual = 1
+        self._callback_ver_casas: Callable[[str], None] | None = None
         self._conectar_senales()
 
     def mostrar(self) -> None:
@@ -37,7 +40,11 @@ class ControladorAbonados:
         self._vista_abonados.detalle_abonado_solicitado.connect(self._mostrar_detalle)
         self._vista_abonados.editar_abonado_solicitado.connect(self._editar_abonado)
         self._vista_abonados.cambio_estado_solicitado.connect(self._confirmar_cambio_estado)
+        self._vista_abonados.ver_casas_abonado_solicitado.connect(self._ver_casas_relacionadas)
         self._vista_abonados.exportar_solicitado.connect(self._exportar)
+
+    def configurar_callback_ver_casas(self, callback: Callable[[str], None]) -> None:
+        self._callback_ver_casas = callback
 
     def _manejar_filtro_texto(self, texto: str) -> None:
         self._filtro_actual = texto.strip()
@@ -73,11 +80,14 @@ class ControladorAbonados:
 
         accion = self._vista_abonados.mostrar_detalle_abonado(
             abonado=abonado,
+            fecha_creacion=self._servicio_abonados.formatear_fecha_hora(abonado.creado_en),
             fecha_actualizada=self._servicio_abonados.formatear_fecha_hora(abonado.actualizado_en),
             deuda_formateada=self._servicio_abonados.formatear_moneda(abonado.deuda_total_centavos),
         )
         if accion == "editar":
             self._editar_abonado(abonado_id)
+        elif accion == "ver_casas":
+            self._abrir_modulo_casas(abonado)
 
     def _editar_abonado(self, abonado_id: int) -> None:
         abonado = self._servicio_abonados.obtener_por_id(abonado_id)
@@ -145,6 +155,26 @@ class ControladorAbonados:
             filtro_rapido=self._filtro_rapido_actual,
         )
         self._vista_abonados.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
+
+    def _ver_casas_relacionadas(self, abonado_id: int) -> None:
+        abonado = self._servicio_abonados.obtener_por_id(abonado_id)
+        if abonado is None:
+            self._vista_abonados.mostrar_mensaje(
+                "No fue posible encontrar el abonado seleccionado.",
+                es_error=True,
+            )
+            self._refrescar()
+            return
+        self._abrir_modulo_casas(abonado)
+
+    def _abrir_modulo_casas(self, abonado: Abonado) -> None:
+        if self._callback_ver_casas is not None:
+            self._callback_ver_casas(abonado.dni)
+            return
+        self._vista_abonados.mostrar_mensaje(
+            "La navegacion hacia casas no esta disponible en esta sesion.",
+            es_error=True,
+        )
 
     def _refrescar(self) -> None:
         pagina = self._servicio_abonados.listar(

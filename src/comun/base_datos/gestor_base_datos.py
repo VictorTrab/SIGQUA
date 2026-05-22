@@ -11,6 +11,8 @@ from comun.configuracion.gestor_rutas import GestorRutas
 class GestorBaseDatos:
     """Centraliza la inicializacion y apertura segura de la base de datos."""
 
+    VERSION_MIGRACION_DATOS_PRUEBA = "004"
+
     def __init__(self, gestor_rutas: GestorRutas | None = None) -> None:
         self._gestor_rutas = gestor_rutas or GestorRutas()
 
@@ -24,7 +26,11 @@ class GestorBaseDatos:
         conexion.execute("PRAGMA busy_timeout = 5000;")
         return conexion
 
-    def inicializar_base_datos(self, forzar_recreacion: bool = False) -> Path:
+    def inicializar_base_datos(
+        self,
+        forzar_recreacion: bool = False,
+        incluir_datos_prueba: bool = False,
+    ) -> Path:
         """Crea la base y aplica migraciones versionadas pendientes."""
         self._gestor_rutas.asegurar_directorios_base()
 
@@ -43,7 +49,11 @@ class GestorBaseDatos:
         if not ruta_base_datos.exists():
             self._crear_base_desde_esquema_inicial(ruta_base_datos, ruta_esquema)
 
-        self._aplicar_migraciones_pendientes(ruta_base_datos, ruta_migraciones)
+        self._aplicar_migraciones_pendientes(
+            ruta_base_datos,
+            ruta_migraciones,
+            incluir_datos_prueba=incluir_datos_prueba,
+        )
         return ruta_base_datos
 
     def _crear_base_desde_esquema_inicial(
@@ -84,6 +94,8 @@ class GestorBaseDatos:
         self,
         ruta_base_datos: Path,
         ruta_migraciones: Path,
+        *,
+        incluir_datos_prueba: bool,
     ) -> None:
         rutas_migracion = sorted(ruta_migraciones.glob("[0-9][0-9][0-9]_*.sql"))
         if not rutas_migracion:
@@ -102,6 +114,11 @@ class GestorBaseDatos:
             for ruta_migracion in rutas_migracion:
                 version = ruta_migracion.stem.split("_", maxsplit=1)[0]
                 if version in versiones_aplicadas:
+                    continue
+                if (
+                    version == self.VERSION_MIGRACION_DATOS_PRUEBA
+                    and not incluir_datos_prueba
+                ):
                     continue
 
                 script_sql = ruta_migracion.read_text(encoding="utf-8")

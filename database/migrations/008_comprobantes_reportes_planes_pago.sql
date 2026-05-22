@@ -1,4 +1,4 @@
-BEGIN TRANSACTION;
+﻿BEGIN TRANSACTION;
 
 ALTER TABLE comprobantes
 ADD COLUMN saldo_posterior_centavos INTEGER NOT NULL DEFAULT 0
@@ -24,7 +24,7 @@ SET tipo_plan = 'RECONEXION',
                 observaciones || ' [Migrado] Plan legado alineado al flujo de reconexion del prototipo.'
         END
     ),
-    actualizado_en = datetime('now')
+    actualizado_en = datetime('now', 'localtime')
 WHERE tipo_plan NOT IN ('CONEXION', 'RECONEXION')
    OR concepto_financiado NOT IN ('CONEXION', 'RECONEXION');
 
@@ -37,3 +37,4 @@ WHERE NOT EXISTS (
 );
 
 COMMIT;
+

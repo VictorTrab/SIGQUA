@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import shutil
@@ -22,7 +22,13 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
-from modulos.pagos.entidades import FormularioPago, ResumenConfirmacionPago  # noqa: E402
+import modulos.pagos.vista as vista_pagos_modulo  # noqa: E402
+from modulos.pagos.entidades import (  # noqa: E402
+    FormularioPago,
+    ResumenConfirmacionPago,
+    TIPO_PAGO_CONEXION,
+    TIPO_PAGO_RECONEXION,
+)
 from modulos.pagos.controlador import ControladorPagos  # noqa: E402
 from modulos.pagos.repositorio import RepositorioPagosSQLite  # noqa: E402
 from modulos.pagos.servicio import ServicioPagos  # noqa: E402
@@ -44,7 +50,7 @@ class TestPagos(unittest.TestCase):
             )
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.ruta_db = self.gestor_base_datos.inicializar_base_datos()
+        self.ruta_db = self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
         self.repositorio = RepositorioPagosSQLite(self.gestor_base_datos)
         self.servicio = ServicioPagos(self.repositorio, gestor_rutas=self.gestor_rutas)
 
@@ -240,7 +246,8 @@ class TestPagos(unittest.TestCase):
             conexion.execute(
                 """
                 UPDATE casas
-                SET estado_servicio = 'SUSPENDIDO'
+                SET estado_administrativo = 'SUSPENDIDA',
+                    motivo_estado_administrativo = 'REVISION_ADMINISTRATIVA'
                 WHERE id = ?;
                 """,
                 (casa_id,),
@@ -333,26 +340,182 @@ class TestPagos(unittest.TestCase):
 
         self.assertEqual(adelantos[0], 2)
 
+    def test_diagnostico_activacion_clasifica_por_antecedente(self) -> None:
+        casa_conexion, _dni_conexion = self._crear_casa_cortada_para_activacion(
+            ha_tenido_servicio_activo=False
+        )
+        casa_reconexion, _dni_reconexion = self._crear_casa_cortada_para_activacion(
+            ha_tenido_servicio_activo=True
+        )
+
+        diagnostico_conexion = self.servicio.obtener_diagnostico_conexion(casa_conexion)
+        diagnostico_reconexion = self.servicio.obtener_diagnostico_reconexion(casa_reconexion)
+        resultado_flujo_incorrecto = self.servicio.previsualizar_pago_reconexion(
+            FormularioPago(
+                casa_id=casa_conexion,
+                tipo_pago=TIPO_PAGO_RECONEXION,
+                cantidad_meses=1,
+                metodo_pago_id=self._obtener_metodo("EFECTIVO"),
+                fecha_activacion="2026-05-19",
+                monto_reconexion_centavos=50000,
+            )
+        )
+
+        self.assertIsNotNone(diagnostico_conexion)
+        self.assertIsNotNone(diagnostico_reconexion)
+        assert diagnostico_conexion is not None
+        assert diagnostico_reconexion is not None
+        self.assertTrue(diagnostico_conexion.permite_continuar)
+        self.assertEqual(diagnostico_conexion.clasificacion, TIPO_PAGO_CONEXION)
+        self.assertTrue(diagnostico_reconexion.permite_continuar)
+        self.assertEqual(diagnostico_reconexion.clasificacion, TIPO_PAGO_RECONEXION)
+        self.assertNotIsInstance(resultado_flujo_incorrecto, ResumenConfirmacionPago)
+        self.assertEqual(resultado_flujo_incorrecto.codigo, "VALIDACION")
+        self.assertIn("nunca ha tenido servicio", resultado_flujo_incorrecto.mensaje.lower())
+
+    def test_plan_activo_bloquea_activacion_normal(self) -> None:
+        casa_id, _dni = self._crear_casa_cortada_para_activacion(ha_tenido_servicio_activo=False)
+        self._crear_plan_activo_para_casa(casa_id)
+
+        resultado = self.servicio.previsualizar_pago_conexion(
+            FormularioPago(
+                casa_id=casa_id,
+                tipo_pago=TIPO_PAGO_CONEXION,
+                cantidad_meses=1,
+                metodo_pago_id=self._obtener_metodo("EFECTIVO"),
+                fecha_activacion="2026-05-19",
+                monto_conexion_centavos=50000,
+            )
+        )
+
+        self.assertNotIsInstance(resultado, ResumenConfirmacionPago)
+        self.assertEqual(resultado.codigo, "VALIDACION")
+        self.assertIn("plan de pago activo", resultado.mensaje.lower())
+
+    def test_previsualizacion_conexion_incluye_prorrateo_si_configurado(self) -> None:
+        casa_id, _dni = self._crear_casa_cortada_para_activacion(ha_tenido_servicio_activo=False)
+        self._configurar_prorrateo_activacion(True)
+
+        resultado = self.servicio.previsualizar_pago_conexion(
+            FormularioPago(
+                casa_id=casa_id,
+                tipo_pago=TIPO_PAGO_CONEXION,
+                cantidad_meses=1,
+                metodo_pago_id=self._obtener_metodo("EFECTIVO"),
+                fecha_activacion="2026-05-19",
+                monto_conexion_centavos=50000,
+            )
+        )
+
+        self.assertIsInstance(resultado, ResumenConfirmacionPago)
+        assert isinstance(resultado, ResumenConfirmacionPago)
+        conceptos = [detalle.concepto_codigo for detalle in resultado.detalles]
+        self.assertIn("CONEXION", conceptos)
+        self.assertIn("MENSUALIDAD_PRORRATEADA", conceptos)
+
+    def test_registro_conexion_actualiza_estado_y_antecedente(self) -> None:
+        casa_id, _dni = self._crear_casa_cortada_para_activacion(ha_tenido_servicio_activo=False)
+        self._configurar_prorrateo_activacion(False)
+
+        resultado = self.servicio.registrar_pago(
+            FormularioPago(
+                casa_id=casa_id,
+                tipo_pago=TIPO_PAGO_CONEXION,
+                cantidad_meses=1,
+                metodo_pago_id=self._obtener_metodo("EFECTIVO"),
+                fecha_activacion="2026-05-19",
+                monto_conexion_centavos=50000,
+            ),
+            actor_id=1,
+        )
+
+        self.assertTrue(resultado.exito, resultado.mensaje)
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            fila = conexion.execute(
+                """
+                SELECT estado_servicio, estado_administrativo, ha_tenido_servicio_activo
+                FROM casas
+                WHERE id = ?;
+                """,
+                (casa_id,),
+            ).fetchone()
+        self.assertEqual(fila[0], "ACTIVO")
+        self.assertEqual(fila[1], "OPERATIVA")
+        self.assertEqual(fila[2], 1)
+
     def test_vista_pagos_instancia_en_offscreen(self) -> None:
         _app = QApplication.instance() or QApplication([])
         vista = VistaPagos()
         self.assertEqual(vista.objectName(), "vistaPagos")
         self.assertEqual(vista._tabs.count(), 4)
         self.assertEqual(vista._tabs.tabText(0), "Pago mensual")
+        self.assertEqual(vista._tabs.tabText(1), "Reconexion")
+        self.assertEqual(vista._tabs.tabText(2), "Conexion")
         self.assertEqual(vista._tabs.currentIndex(), 0)
         self.assertEqual(vista._flujo_mensual._stack.count(), 4)
+        self.assertEqual(vista._flujo_conexion._stack.count(), 4)
+        self.assertEqual(vista._flujo_reconexion._stack.count(), 4)
         self.assertEqual(vista._flujo_mensual._stack.currentIndex(), vista._flujo_mensual.PASO_BUSQUEDA)
         textos = [label.text() for label in vista.findChildren(type(vista.label_mensaje))]
         self.assertNotIn("Historial reciente de comprobantes", textos)
         self.assertFalse(hasattr(vista._flujo_mensual, "_barra_progreso"))
         self.assertEqual(vista._flujo_mensual._tabla_casas.rowCount(), 0)
         self.assertEqual(vista._tabs.property("estadoMensual"), None)
+        self.assertEqual(vista._label_estado_apertura.text(), "Abrir")
+        self.assertEqual(vista._label_estado_impresion.text(), "Imprimir")
+        self.assertIsInstance(vista._tabs.widget(3), vista_pagos_modulo.FlujoPagoPlan)
+        vista.aplicar_tema("claro")
+        self.assertEqual(vista._tema_actual, "claro")
+        self.assertEqual(vista._flujo_mensual._tema_actual, "claro")
+        self.assertIn('font-family: "Segoe UI"', vista.styleSheet())
 
     def test_vista_notifica_comprobante_pdf_generado(self) -> None:
         _app = QApplication.instance() or QApplication([])
         vista = VistaPagos()
-        vista.mostrar_comprobante(str(self.raiz_temporal / "exportaciones" / "comprobantes" / "REC-000001.pdf"))
+        ruta = self.raiz_temporal / "exportaciones" / "comprobantes" / "REC-000001.pdf"
+        vista.mostrar_comprobante(str(ruta))
         self.assertIn("REC-000001.pdf", vista.label_mensaje.text())
+        self.assertIn(str(ruta.resolve()), vista.label_mensaje.text())
+        vista.close()
+
+    def test_vista_muestra_advertencia_si_falla_impresion_automatica(self) -> None:
+        _app = QApplication.instance() or QApplication([])
+        vista = VistaPagos()
+        helper_original = vista_pagos_modulo.ejecutar_acciones_documento_pdf
+        vista_pagos_modulo.ejecutar_acciones_documento_pdf = lambda *_args, **_kwargs: (  # type: ignore[assignment]
+            "Comprobante PDF generado correctamente: REC-000001.pdf. "
+            "Ruta del documento: C:/tmp/REC-000001.pdf. "
+            "no se detecto una impresora disponible; verifica que este conectada y encendida."
+        )
+
+        try:
+            vista.mostrar_comprobante(
+                str(self.raiz_temporal / "exportaciones" / "comprobantes" / "REC-000001.pdf"),
+                abrir_automaticamente=False,
+                imprimir_automaticamente=True,
+            )
+        finally:
+            vista_pagos_modulo.ejecutar_acciones_documento_pdf = helper_original  # type: ignore[assignment]
+
+        self.assertIn("impresora", vista.label_mensaje.text().lower())
+        self.assertIn("conectada", vista.label_mensaje.text().lower())
+        self.assertIn("ruta del documento", vista.label_mensaje.text().lower())
+        vista.close()
+
+    def test_vista_muestra_estado_documental_en_label(self) -> None:
+        _app = QApplication.instance() or QApplication([])
+        vista = VistaPagos()
+        estado = self.servicio.obtener_estado(filtro="0801199000022")
+
+        vista.mostrar_estado(
+            estado,
+            self.servicio.formatear_moneda,
+            self.servicio.formatear_fecha,
+            mostrar_casas=True,
+        )
+
+        self.assertTrue(vista._label_estado_apertura.property("activo"))
+        self.assertFalse(vista._label_estado_impresion.property("activo"))
         vista.close()
 
     def test_controlador_avanza_flujo_mensual_con_datos_reales(self) -> None:
@@ -382,7 +545,10 @@ class TestPagos(unittest.TestCase):
         app.processEvents()
 
         self.assertEqual(flujo._stack.currentIndex(), flujo.PASO_RESUMEN)
-        self.assertEqual(flujo._metricas_resumen["Método"].text(), "Efectivo")
+        etiqueta_metodo = next(
+            clave for clave in flujo._metricas_resumen.keys() if "todo" in clave.lower()
+        )
+        self.assertEqual(flujo._metricas_resumen[etiqueta_metodo].text(), "Efectivo")
         self.assertNotEqual(flujo._metricas_resumen["Total"].text(), "-")
         self.assertTrue(flujo._boton_confirmar.isEnabled())
 
@@ -391,29 +557,171 @@ class TestPagos(unittest.TestCase):
         vista = VistaPagos()
         controlador = ControladorPagos(self.servicio, vista)
         flujo = vista._flujo_mensual
-        casa_id = self._obtener_casa_por_dni("0801199000022")
+        casa_id = self._crear_casa_activa_sin_cargos()
+        dni = self._obtener_dni_por_casa(casa_id)
         with closing(sqlite3.connect(self.ruta_db)) as conexion:
             conexion.execute(
                 """
                 UPDATE casas
-                SET estado_servicio = 'SUSPENDIDO'
+                SET estado_administrativo = 'SUSPENDIDA',
+                    motivo_estado_administrativo = 'REVISION_ADMINISTRATIVA'
                 WHERE id = ?;
                 """,
                 (casa_id,),
             )
             conexion.commit()
 
-        controlador._refrescar("0801199000022")
+        controlador._refrescar(dni)
         app.processEvents()
 
         self.assertGreaterEqual(flujo._tabla_casas.rowCount(), 1)
-        flujo._seleccionar_casa(0)
+        fila_casa = self._buscar_fila_tabla_por_casa(flujo._tabla_casas, casa_id)
+        self.assertIsNotNone(fila_casa)
+        assert fila_casa is not None
+        flujo._seleccionar_casa(fila_casa)
         app.processEvents()
 
         self.assertEqual(flujo._stack.currentIndex(), flujo.PASO_DIAGNOSTICO)
         self.assertFalse(flujo._boton_diagnostico_siguiente.isEnabled())
         self.assertIn("suspendida", flujo._label_alerta_diagnostico.text().lower())
         self.assertEqual(vista._tabs.property("estadoMensual"), "BLOQUEADO")
+
+    def test_controlador_avanza_flujo_conexion_con_datos_reales(self) -> None:
+        app = QApplication.instance() or QApplication([])
+        vista = VistaPagos()
+        controlador = ControladorPagos(self.servicio, vista)
+        flujo = vista._flujo_conexion
+        _casa_id, dni = self._crear_casa_cortada_para_activacion(ha_tenido_servicio_activo=False)
+        self._configurar_prorrateo_activacion(True)
+
+        controlador._refrescar(dni)
+        app.processEvents()
+
+        self.assertGreaterEqual(flujo._tabla_casas.rowCount(), 1)
+        flujo._seleccionar_casa(0, 0)
+        app.processEvents()
+
+        self.assertEqual(flujo._stack.currentIndex(), flujo.PASO_DIAGNOSTICO)
+        self.assertTrue(flujo._boton_diagnostico_siguiente.isEnabled())
+        self.assertEqual(
+            flujo._metricas_diagnostico["Clasificacion calculada"].text().lower(),
+            "conexion",
+        )
+
+        flujo._stack.setCurrentIndex(flujo.PASO_DATOS)
+        flujo._input_fecha_activacion.setText("2026-05-19")
+        flujo._input_monto_principal.setText("500.00")
+        indice_metodo = flujo._combo_metodo.findData(self._obtener_metodo("EFECTIVO"))
+        self.assertGreaterEqual(indice_metodo, 0)
+        flujo._combo_metodo.setCurrentIndex(indice_metodo)
+        flujo._emitir_previsualizacion()
+        app.processEvents()
+
+        self.assertEqual(flujo._stack.currentIndex(), flujo.PASO_RESUMEN)
+        self.assertIn("Conexion de servicio", flujo._visor_resumen.toPlainText())
+        self.assertIn("Mensualidad prorrateada", flujo._visor_resumen.toPlainText())
+        self.assertTrue(flujo._boton_confirmar.isEnabled())
+
+    def test_diagnostico_plan_bloquea_casa_sin_plan_activo(self) -> None:
+        casa_id = self._crear_casa_activa_sin_cargos()
+
+        diagnostico = self.servicio.obtener_diagnostico_plan(casa_id)
+
+        self.assertIsNotNone(diagnostico)
+        assert diagnostico is not None
+        self.assertFalse(diagnostico.permite_continuar)
+        self.assertIn("no tiene un plan activo", diagnostico.mensaje_diagnostico.lower())
+
+    def test_pago_plan_multi_cuota_persiste_varias_lineas(self) -> None:
+        casa_id = self._crear_casa_activa_sin_cargos()
+        self._crear_plan_activo_para_casa(casa_id)
+        metodo_id = self._obtener_metodo("EFECTIVO")
+
+        diagnostico = self.servicio.obtener_diagnostico_plan(casa_id)
+        self.assertIsNotNone(diagnostico)
+        assert diagnostico is not None
+        self.assertTrue(diagnostico.permite_continuar)
+        self.assertEqual(len(diagnostico.cuotas_cobrables), 2)
+
+        formulario = FormularioPago(
+            casa_id=casa_id,
+            tipo_pago="PLAN_PAGO",
+            cantidad_meses=0,
+            metodo_pago_id=metodo_id,
+            plan_pago_id=diagnostico.plan_pago_id,
+            cuotas_plan_pago_ids=tuple(cuota.cuota_id for cuota in diagnostico.cuotas_cobrables),
+        )
+
+        confirmacion = self.servicio.preparar_confirmacion(formulario)
+        self.assertIsInstance(confirmacion, ResumenConfirmacionPago)
+        assert isinstance(confirmacion, ResumenConfirmacionPago)
+        self.assertEqual(confirmacion.total_pago_centavos, 80000)
+        self.assertEqual(len(confirmacion.detalles), 2)
+
+        resultado = self.servicio.registrar_pago(formulario, actor_id=1)
+
+        self.assertTrue(resultado.exito, resultado.mensaje)
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            filas_detalle = conexion.execute(
+                """
+                SELECT COUNT(*)
+                FROM pagos_detalle
+                WHERE pago_id = ?;
+                """,
+                (resultado.comprobante.pago_id,),
+            ).fetchone()
+            cuotas = conexion.execute(
+                """
+                SELECT estado, saldo_pendiente_centavos
+                FROM cuotas_plan_pago
+                WHERE plan_pago_id = ?
+                ORDER BY numero_cuota ASC;
+                """,
+                (diagnostico.plan_pago_id,),
+            ).fetchall()
+            fila_pago = conexion.execute(
+                "SELECT tipo_pago, plan_pago_id FROM pagos WHERE id = ?;",
+                (resultado.comprobante.pago_id,),
+            ).fetchone()
+        self.assertEqual(filas_detalle[0], 2)
+        self.assertEqual(fila_pago[0], "PLAN_PAGO")
+        self.assertEqual(fila_pago[1], diagnostico.plan_pago_id)
+        self.assertEqual(cuotas[0], ("PAGADO", 0))
+        self.assertEqual(cuotas[1], ("PAGADO", 0))
+
+    def test_controlador_avanza_flujo_plan_con_cuota_preseleccionada(self) -> None:
+        app = QApplication.instance() or QApplication([])
+        vista = VistaPagos()
+        controlador = ControladorPagos(self.servicio, vista)
+        flujo = vista._flujo_plan
+        casa_id = self._crear_casa_activa_sin_cargos()
+        self._crear_plan_activo_para_casa(casa_id)
+        dni = self._obtener_dni_por_casa(casa_id)
+
+        controlador._refrescar(dni)
+        app.processEvents()
+
+        self.assertGreaterEqual(flujo._tabla_casas.rowCount(), 1)
+        flujo._seleccionar_casa(0, 0)
+        app.processEvents()
+
+        self.assertEqual(flujo._stack.currentIndex(), flujo.PASO_DIAGNOSTICO)
+        self.assertTrue(flujo._boton_diagnostico_siguiente.isEnabled())
+        self.assertEqual(flujo._metricas_diagnostico["Codigo plan"].text()[:3], "PP-")
+
+        flujo._ir_a_paso(flujo.PASO_DATOS)
+        app.processEvents()
+
+        self.assertEqual(len(flujo._cuotas_seleccionadas), 1)
+        indice_metodo = flujo._combo_metodo.findData(self._obtener_metodo("EFECTIVO"))
+        self.assertGreaterEqual(indice_metodo, 0)
+        flujo._combo_metodo.setCurrentIndex(indice_metodo)
+        flujo._emitir_previsualizacion()
+        app.processEvents()
+
+        self.assertEqual(flujo._stack.currentIndex(), flujo.PASO_RESUMEN)
+        self.assertIn("Cuota 1", flujo._visor_resumen.toPlainText())
+        self.assertTrue(flujo._boton_confirmar.isEnabled())
 
     def test_registro_desde_resumen_persiste_y_abre_comprobante(self) -> None:
         app = QApplication.instance() or QApplication([])
@@ -498,6 +806,136 @@ class TestPagos(unittest.TestCase):
             conexion.commit()
         return int(cursor_casa.lastrowid)
 
+    def _crear_casa_cortada_para_activacion(
+        self,
+        *,
+        ha_tenido_servicio_activo: bool,
+        estado_administrativo: str = "OPERATIVA",
+        abonado_estado: str = "ACTIVO",
+    ) -> tuple[int, str]:
+        dni = f"8888{uuid.uuid4().hex[:8]}"
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            barrio_id = conexion.execute("SELECT id FROM barrios LIMIT 1;").fetchone()[0]
+            cursor_abonado = conexion.execute(
+                """
+                INSERT INTO abonados(
+                    dni,
+                    nombre_completo,
+                    telefono,
+                    barrio_id,
+                    direccion_referencia,
+                    estado
+                )
+                VALUES (?, 'Casa activacion prueba', '0000-0000', ?, 'Casa activacion', ?);
+                """,
+                (dni, barrio_id, abonado_estado),
+            )
+            cursor_casa = conexion.execute(
+                """
+                INSERT INTO casas(
+                    abonado_id,
+                    barrio_id,
+                    direccion_referencia,
+                    estado_servicio,
+                    estado_administrativo,
+                    motivo_estado_administrativo,
+                    ha_tenido_servicio_activo
+                )
+                VALUES (?, ?, 'Casa cortada para activacion', 'CORTADO', ?, ?, ?);
+                """,
+                (
+                    int(cursor_abonado.lastrowid),
+                    barrio_id,
+                    estado_administrativo,
+                    "REVISION_ADMINISTRATIVA" if estado_administrativo == "SUSPENDIDA" else "NINGUNO",
+                    1 if ha_tenido_servicio_activo else 0,
+                ),
+            )
+            conexion.commit()
+        return int(cursor_casa.lastrowid), dni
+
+    def _crear_plan_activo_para_casa(self, casa_id: int) -> None:
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            abonado_id = conexion.execute(
+                "SELECT abonado_id FROM casas WHERE id = ?;",
+                (casa_id,),
+            ).fetchone()[0]
+            cursor_plan = conexion.execute(
+                """
+                INSERT INTO planes_pago(
+                    abonado_id,
+                    casa_id,
+                    fecha_inicio,
+                    fecha_fin,
+                    monto_total_centavos,
+                    cuota_regular_centavos,
+                    cantidad_cuotas,
+                    cuotas_pagadas,
+                    estado,
+                    observaciones,
+                    creado_por,
+                    tipo_plan,
+                    concepto_financiado,
+                    prima_centavos
+                )
+                VALUES (?, ?, '2026-05-01', '2026-07-31', 80000, 40000, 2, 0, 'ACTIVO', 'Plan de prueba', 1, 'RECONEXION', 'RECONEXION', 0);
+                """,
+                (int(abonado_id), casa_id),
+            )
+            plan_id = int(cursor_plan.lastrowid)
+            conexion.executemany(
+                """
+                INSERT INTO cuotas_plan_pago(
+                    plan_pago_id,
+                    numero_cuota,
+                    fecha_vencimiento,
+                    monto_centavos,
+                    saldo_pendiente_centavos,
+                    estado
+                )
+                VALUES (?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    (plan_id, 1, "2026-05-15", 40000, 40000, "VENCIDO"),
+                    (plan_id, 2, "2026-06-15", 40000, 40000, "PENDIENTE"),
+                ),
+            )
+            conexion.commit()
+
+    def _obtener_dni_por_casa(self, casa_id: int) -> str:
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            fila = conexion.execute(
+                """
+                SELECT a.dni
+                FROM casas c
+                INNER JOIN abonados a ON a.id = c.abonado_id
+                WHERE c.id = ?;
+                """,
+                (casa_id,),
+            ).fetchone()
+        assert fila is not None
+        return str(fila[0])
+
+    @staticmethod
+    def _buscar_fila_tabla_por_casa(tabla: object, casa_id: int) -> int | None:
+        for fila in range(tabla.rowCount()):
+            item = tabla.item(fila, 0)
+            if item is not None and int(item.data(vista_pagos_modulo.Qt.ItemDataRole.UserRole)) == casa_id:
+                return fila
+        return None
+
+    def _configurar_prorrateo_activacion(self, activo: bool) -> None:
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            conexion.execute(
+                """
+                UPDATE configuracion_sistema
+                SET valor = ?
+                WHERE clave = 'cobro.cobrar_mensualidad_prorrateada_activacion';
+                """,
+                ("1" if activo else "0",),
+            )
+            conexion.commit()
+
     def _crear_cargo_mora_vencido(self, casa_id: int) -> None:
         with closing(sqlite3.connect(self.ruta_db)) as conexion:
             fila = conexion.execute(
@@ -526,7 +964,7 @@ class TestPagos(unittest.TestCase):
                     estado,
                     origen
                 )
-                VALUES (?, ?, NULL, ?, 'Recargo vencido de prueba', 5000, 5000, date('now', '-15 day'), 'VENCIDO', 'MANUAL');
+                VALUES (?, ?, NULL, ?, 'Recargo vencido de prueba', 5000, 5000, date('now', 'localtime', '-15 day'), 'VENCIDO', 'MANUAL');
                 """,
                 (casa_id, int(fila[0]), int(fila[1])),
             )
@@ -535,3 +973,5 @@ class TestPagos(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+

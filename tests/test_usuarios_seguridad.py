@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import sqlite3
 import sys
@@ -36,7 +36,7 @@ class TestUsuariosSeguridad(unittest.TestCase):
 
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.gestor_base_datos.inicializar_base_datos()
+        self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
         self.repositorio = RepositorioUsuariosSQLite(self.gestor_base_datos)
         self.servicio = ServicioUsuarios(self.repositorio)
 
@@ -198,6 +198,8 @@ class TestUsuariosSeguridad(unittest.TestCase):
         self.assertIsNotNone(usuario)
         self.assertEqual(usuario.rol_principal, "CAJERO")
         self.assertTrue(usuario.requiere_cambio_contrasena)
+        self.assertEqual(usuario.creado_por_nombre, "Administrador del Sistema")
+        self.assertEqual(usuario.actualizado_por_nombre, "Administrador del Sistema")
 
     def test_admin_puede_actualizar_usuario_operativo(self) -> None:
         usuario = self.repositorio.obtener_por_nombre_usuario("cajero1")
@@ -221,6 +223,8 @@ class TestUsuariosSeguridad(unittest.TestCase):
         self.assertEqual(actualizado.correo, "cajero1.actualizado@sicap.local")
         self.assertEqual(actualizado.estado, "INACTIVO")
         self.assertEqual(actualizado.rol_principal, "ADMINISTRADOR")
+        self.assertEqual(actualizado.creado_por_nombre, "")
+        self.assertEqual(actualizado.actualizado_por_nombre, "Administrador del Sistema")
 
     def test_admin_puede_exportar_usuarios_filtrados_a_csv(self) -> None:
         ruta_csv = self.raiz_temporal / "usuarios_exportados.csv"
@@ -415,3 +419,4 @@ class TestUsuariosSeguridad(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

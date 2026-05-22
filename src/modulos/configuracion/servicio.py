@@ -36,6 +36,7 @@ CLAVES_COBRO = (
     "cobro.multa_mora_automatica_centavos",
     "cobro.corte_automatico_activo",
     "cobro.meses_para_corte",
+    "cobro.cobrar_mensualidad_prorrateada_activacion",
     "cobro.permitir_pago_adelantado",
     "cobro.meses_adelanto_maximo",
     "cobro.mora_leve_hasta_meses",
@@ -58,6 +59,8 @@ CLAVES_FACTURA = (
     "documentos.firma_cargo",
     "documentos.firma_identificador",
     "documentos.firma_texto_apoyo",
+    "documentos.abrir_pdf_automaticamente",
+    "documentos.imprimir_pdf_automaticamente",
 )
 CLAVES_SISTEMA = (
     "sistema.nombre",
@@ -109,6 +112,15 @@ class ServicioConfiguracion:
         )
         detalle_respaldo = self._repositorio_configuracion.obtener_detalle_ultimo_respaldo()
         identidad = construir_identidad_empresa(parametros, nombre_predeterminado="SICAP")
+        ultimo_parametro_actualizado = max(
+            (
+                parametro
+                for parametro in parametros.values()
+                if hasattr(parametro, "actualizado_en") and parametro.actualizado_en
+            ),
+            key=lambda parametro: parametro.actualizado_en,
+            default=None,
+        )
 
         parametros_cobro = ParametrosCobro(
             precio_mensual_centavos=self._a_entero(self._valor_parametro(parametros, "cobro.precio_mensual_centavos", "0")),
@@ -123,6 +135,13 @@ class ServicioConfiguracion:
                 self._valor_parametro(parametros, "cobro.corte_automatico_activo", "0")
             ),
             meses_para_corte=self._a_entero(self._valor_parametro(parametros, "cobro.meses_para_corte", "0")),
+            cobrar_mensualidad_prorrateada_activacion=self._a_booleano(
+                self._valor_parametro(
+                    parametros,
+                    "cobro.cobrar_mensualidad_prorrateada_activacion",
+                    "0",
+                )
+            ),
             permitir_pago_adelantado=self._a_booleano(
                 self._valor_parametro(parametros, "cobro.permitir_pago_adelantado", "0")
             ),
@@ -161,6 +180,12 @@ class ServicioConfiguracion:
             firma_cargo=self._valor_parametro(parametros, "documentos.firma_cargo", ""),
             firma_identificador=self._valor_parametro(parametros, "documentos.firma_identificador", ""),
             firma_texto_apoyo=self._valor_parametro(parametros, "documentos.firma_texto_apoyo", ""),
+            abrir_pdf_automaticamente=self._a_booleano(
+                self._valor_parametro(parametros, "documentos.abrir_pdf_automaticamente", "1")
+            ),
+            imprimir_pdf_automaticamente=self._a_booleano(
+                self._valor_parametro(parametros, "documentos.imprimir_pdf_automaticamente", "0")
+            ),
             correlativo_actual=self._formatear_correlativo(correlativo_actual),
             proximo_correlativo=self._formatear_correlativo(correlativo_actual + 1),
             ultimo_comprobante_emitido=ultimo_comprobante if ultimo_comprobante else "Sin comprobantes emitidos",
@@ -184,6 +209,10 @@ class ServicioConfiguracion:
             ultimo_respaldo_archivo=str(detalle_respaldo.get("nombre_archivo", "")),
             ultimo_respaldo_tamano_bytes=int(detalle_respaldo.get("tamano_bytes", 0) or 0),
             ultimo_respaldo_hash=str(detalle_respaldo.get("hash_archivo", "")),
+            ultimo_respaldo_generado_por=self._resolver_autoria(
+                str(detalle_respaldo.get("generado_por_nombre", "")),
+                bool(detalle_respaldo.get("generado_en", "")),
+            ),
             ruta_respaldos_principal=configuracion_respaldo.ruta_principal,
             ruta_respaldos_secundaria=configuracion_respaldo.ruta_secundaria,
             respaldo_secundario_activo=configuracion_respaldo.secundaria_activa,
@@ -202,13 +231,10 @@ class ServicioConfiguracion:
             version_sistema=self._valor_parametro(parametros, "sistema.version", ""),
             ruta_base_datos=str(self._gestor_rutas.obtener_ruta_base_datos()),
             modo_operacion="Autenticacion local sin correo y con soporte administrativo",
-            ultima_actualizacion=max(
-                (
-                    parametro.actualizado_en
-                    for parametro in parametros.values()
-                    if hasattr(parametro, "actualizado_en") and parametro.actualizado_en
-                ),
-                default="",
+            ultima_actualizacion=ultimo_parametro_actualizado.actualizado_en if ultimo_parametro_actualizado else "",
+            actualizado_por=self._resolver_autoria(
+                ultimo_parametro_actualizado.actualizado_por_nombre if ultimo_parametro_actualizado else "",
+                bool(ultimo_parametro_actualizado),
             ),
         )
         seguridad = SeguridadConfiguracion(
@@ -293,6 +319,8 @@ class ServicioConfiguracion:
         firma_cargo: str,
         firma_identificador: str,
         firma_texto_apoyo: str,
+        abrir_pdf_automaticamente: bool = True,
+        imprimir_pdf_automaticamente: bool = False,
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
         titulo_documento = titulo_documento.strip()
@@ -336,6 +364,8 @@ class ServicioConfiguracion:
                     "documentos.firma_cargo": firma_cargo,
                     "documentos.firma_identificador": firma_identificador,
                     "documentos.firma_texto_apoyo": firma_texto_apoyo,
+                    "documentos.abrir_pdf_automaticamente": "1" if abrir_pdf_automaticamente else "0",
+                    "documentos.imprimir_pdf_automaticamente": "1" if imprimir_pdf_automaticamente else "0",
                 },
                 actor_id=actor_id,
             )
@@ -350,6 +380,7 @@ class ServicioConfiguracion:
         multa_mora_automatica_centavos: int,
         corte_automatico_activo: bool,
         meses_para_corte: int,
+        cobrar_mensualidad_prorrateada_activacion: bool,
         permitir_pago_adelantado: bool,
         meses_adelanto_maximo: int,
         mora_leve_hasta_meses: int,
@@ -380,6 +411,9 @@ class ServicioConfiguracion:
                     "cobro.multa_mora_automatica_centavos": str(multa_mora_automatica_centavos),
                     "cobro.corte_automatico_activo": "1" if corte_automatico_activo else "0",
                     "cobro.meses_para_corte": str(meses_para_corte),
+                    "cobro.cobrar_mensualidad_prorrateada_activacion": (
+                        "1" if cobrar_mensualidad_prorrateada_activacion else "0"
+                    ),
                     "cobro.permitir_pago_adelantado": "1" if permitir_pago_adelantado else "0",
                     "cobro.meses_adelanto_maximo": str(meses_adelanto_maximo),
                     "cobro.mora_leve_hasta_meses": str(mora_leve_hasta_meses),
@@ -566,6 +600,13 @@ class ServicioConfiguracion:
     @staticmethod
     def _duracion_para_visualizacion(valor: float) -> float:
         return float(valor)
+
+    @staticmethod
+    def _resolver_autoria(nombre_usuario: str, existe_evento: bool) -> str:
+        nombre_limpio = (nombre_usuario or "").strip()
+        if nombre_limpio:
+            return nombre_limpio
+        return "Sistema" if existe_evento else "Sin registro"
 
     @staticmethod
     def _formatear_correlativo(numero: int) -> str:

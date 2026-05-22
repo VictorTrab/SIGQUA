@@ -17,7 +17,11 @@ from PySide6.QtWidgets import (
 )
 
 from comun.ui import configurar_tabla_operativa, crear_boton_operativo, crear_item_tabla
-from comun.ui.temas import TEMA_SICAP_PREDETERMINADO, obtener_paleta_tema
+from comun.ui.temas import (
+    TEMA_SICAP_PREDETERMINADO,
+    obtener_fondo_header_destacado,
+    obtener_paleta_tema,
+)
 from modulos.reportes.entidades import EstadoReportes, TablaReporte
 
 
@@ -30,7 +34,8 @@ class VistaReportes(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("vistaReportes")
-        self._paleta = obtener_paleta_tema(TEMA_SICAP_PREDETERMINADO)
+        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._paleta = obtener_paleta_tema(self._tema_actual)
         self._tablas: tuple[TablaReporte, ...] = ()
         self._construir_ui()
         self._aplicar_estilos()
@@ -60,7 +65,7 @@ class VistaReportes(QWidget):
 
     def _construir_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(26, 24, 26, 24)
+        layout.setContentsMargins(6, 4, 6, 6)
         layout.setSpacing(16)
 
         self._mensaje = QLabel("")
@@ -118,9 +123,20 @@ class VistaReportes(QWidget):
         fila_selector.addWidget(self._combo_reportes)
         layout.addLayout(fila_selector)
 
+        panel_tabla = QFrame()
+        panel_tabla.setObjectName("panelTablaReportes")
+        layout_tabla = QVBoxLayout(panel_tabla)
+        layout_tabla.setContentsMargins(14, 14, 14, 14)
+        layout_tabla.setSpacing(10)
+
         self._tabla = QTableWidget()
         self._tabla.setObjectName("tablaOperativaOscura")
-        layout.addWidget(self._tabla, 1)
+        self._tabla.setFrameShape(QFrame.Shape.NoFrame)
+        self._tabla.setViewportMargins(0, 0, 0, 18)
+        self._tabla.viewport().setObjectName("viewportTablaReportes")
+        self._tabla.viewport().setAutoFillBackground(False)
+        layout_tabla.addWidget(self._tabla)
+        layout.addWidget(panel_tabla, 1)
 
     def mostrar_mensaje(self, mensaje: str, es_error: bool = False) -> None:
         self._mensaje.setText(mensaje)
@@ -182,6 +198,7 @@ class VistaReportes(QWidget):
         self._titulo_reporte.setText(tabla.titulo)
         self._descripcion_reporte.setText(tabla.descripcion)
         configurar_tabla_operativa(self._tabla, list(tabla.columnas))
+        self._tabla.setAlternatingRowColors(True)
         self._tabla.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._tabla.setRowCount(len(tabla.filas))
         for fila, valores in enumerate(tabla.filas):
@@ -195,13 +212,28 @@ class VistaReportes(QWidget):
             self._fecha_hasta.date().toString("yyyy-MM-dd"),
         )
 
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._tema_actual = (
+            nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        )
+        self._paleta = obtener_paleta_tema(self._tema_actual)
+        self._aplicar_estilos()
+
     def _aplicar_estilos(self) -> None:
         paleta = self._paleta
+        oscuro = self._tema_actual != "claro"
+        fondo_panel_destacado = (
+            obtener_fondo_header_destacado(self._tema_actual)
+            if oscuro
+            else paleta["fondo_superficie_suave"]
+        )
+        borde_panel_destacado = "rgba(255, 255, 255, 0.16)" if oscuro else paleta["borde_suave"]
         self.setStyleSheet(
             f"""
             QWidget#vistaReportes {{
                 background-color: {paleta["fondo_principal"]};
                 color: {paleta["texto_principal"]};
+                font-family: "{paleta["familia_tipografica"]}";
             }}
             QLabel#descripcionModulo,
             QLabel#descripcionReporte,
@@ -226,18 +258,23 @@ class VistaReportes(QWidget):
                 color: {paleta["texto_error"]};
             }}
             QLabel#tituloReporte {{
-                color: #ffffff;
-                font-size: 16px;
-                font-weight: 800;
+                color: {paleta["texto_principal"]};
+                font-size: {paleta["tamano_titulo_panel"] + 2}px;
+                font-weight: {paleta["peso_titulo"]};
             }}
             QFrame#panelFiltrosReportes {{
-                background-color: {paleta["fondo_superficie_suave"]};
-                border: 1px solid {paleta["borde_suave"]};
+                background-color: {fondo_panel_destacado};
+                border: 1px solid {borde_panel_destacado};
+                border-radius: 18px;
+            }}
+            QFrame#panelTablaReportes {{
+                background-color: {fondo_panel_destacado};
+                border: 1px solid {borde_panel_destacado};
                 border-radius: 18px;
             }}
             QFrame#tarjetaResumenSimple {{
-                background-color: {paleta["fondo_superficie_suave"]};
-                border: 1px solid {paleta["borde_suave"]};
+                background-color: {fondo_panel_destacado};
+                border: 1px solid {borde_panel_destacado};
                 border-radius: 18px;
             }}
             QLabel#tarjetaTitulo {{
@@ -246,9 +283,9 @@ class VistaReportes(QWidget):
                 font-weight: 700;
             }}
             QLabel#tarjetaValor {{
-                color: #ffffff;
-                font-size: 20px;
-                font-weight: 800;
+                color: {paleta["texto_principal"]};
+                font-size: {paleta["tamano_titulo_tarjeta"]}px;
+                font-weight: {paleta["peso_titulo"]};
             }}
             QComboBox,
             QDateEdit#campoFechaReporte {{
@@ -261,22 +298,38 @@ class VistaReportes(QWidget):
                 padding: 0 10px;
             }}
             QTableWidget#tablaOperativaOscura {{
-                background-color: {paleta["fondo_superficie_muy_suave"]};
-                alternate-background-color: {paleta["fondo_superficie_suave"]};
-                border: 1px solid {paleta["borde_suave"]};
-                border-radius: 14px;
+                background-color: {paleta["fondo_tabla_cuerpo"]};
+                background-clip: padding;
+                alternate-background-color: {paleta["fondo_tabla_fila_alterna"]};
+                border: none;
+                border-radius: 18px;
+                padding: 0 0 18px 0;
                 color: {paleta["texto_principal"]};
             }}
+            QWidget#viewportTablaReportes {{
+                background: transparent;
+                border: none;
+                border-bottom-left-radius: 18px;
+                border-bottom-right-radius: 18px;
+            }}
+            QTableWidget#tablaOperativaOscura QHeaderView::section:first {{
+                border-top-left-radius: 18px;
+            }}
             QHeaderView::section {{
-                background-color: {paleta["fondo_tabla_header"]};
+                background-color: {paleta["fondo_tabla_header_destacado"]};
                 border: 0;
-                color: #ffffff;
-                font-weight: 800;
+                color: {paleta["texto_input"]};
+                border-right: 1px solid {paleta["borde_tabla"]};
+                border-bottom: 1px solid {paleta["borde_tabla"]};
+                font-weight: {paleta["peso_titulo"]};
                 padding: 8px;
             }}
+            QTableWidget#tablaOperativaOscura QHeaderView::section:last {{
+                border-top-right-radius: 18px;
+            }}
             QTableWidget::item:selected {{
-                background-color: rgba(45, 212, 191, 0.24);
-                color: #ffffff;
+                background-color: {paleta["fondo_tabla_seleccion"]};
+                color: {paleta["texto_principal"]};
             }}
             """
         )

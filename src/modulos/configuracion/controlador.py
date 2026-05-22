@@ -86,6 +86,8 @@ class ControladorConfiguracion:
         firma_cargo: str,
         firma_identificador: str,
         firma_texto_apoyo: str,
+        abrir_pdf_automaticamente: bool,
+        imprimir_pdf_automaticamente: bool,
     ) -> None:
         resultado = self._servicio_configuracion.guardar_parametros_factura(
             titulo_documento=titulo_documento,
@@ -104,6 +106,8 @@ class ControladorConfiguracion:
             firma_cargo=firma_cargo,
             firma_identificador=firma_identificador,
             firma_texto_apoyo=firma_texto_apoyo,
+            abrir_pdf_automaticamente=abrir_pdf_automaticamente,
+            imprimir_pdf_automaticamente=imprimir_pdf_automaticamente,
             actor_id=None if self._actor is None else self._actor.identificador,
         )
         self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
@@ -121,6 +125,7 @@ class ControladorConfiguracion:
         multa_mora_automatica_centavos: int,
         corte_automatico_activo: bool,
         meses_para_corte: int,
+        cobrar_mensualidad_prorrateada_activacion: bool,
         permitir_pago_adelantado: bool,
         meses_adelanto_maximo: int,
         mora_leve_hasta_meses: int,
@@ -132,6 +137,7 @@ class ControladorConfiguracion:
             multa_mora_automatica_centavos=multa_mora_automatica_centavos,
             corte_automatico_activo=corte_automatico_activo,
             meses_para_corte=meses_para_corte,
+            cobrar_mensualidad_prorrateada_activacion=cobrar_mensualidad_prorrateada_activacion,
             permitir_pago_adelantado=permitir_pago_adelantado,
             meses_adelanto_maximo=meses_adelanto_maximo,
             mora_leve_hasta_meses=mora_leve_hasta_meses,

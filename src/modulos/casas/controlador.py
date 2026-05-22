@@ -37,6 +37,7 @@ class ControladorCasas:
         self._vista_casas.detalle_casa_solicitado.connect(self._mostrar_detalle)
         self._vista_casas.editar_casa_solicitado.connect(self._editar_casa)
         self._vista_casas.cambio_estado_solicitado.connect(self._confirmar_cambio_estado)
+        self._vista_casas.corte_servicio_solicitado.connect(self._confirmar_corte_servicio)
         self._vista_casas.historial_casa_solicitado.connect(self._mostrar_historial)
         self._vista_casas.cambio_dueno_solicitado.connect(self._cambiar_dueno)
         self._vista_casas.exportar_solicitado.connect(self._exportar)
@@ -85,6 +86,8 @@ class ControladorCasas:
             self._mostrar_historial(casa_id)
         elif accion == "cambiar_dueno":
             self._cambiar_dueno(casa_id)
+        elif accion == "cortar_servicio":
+            self._confirmar_corte_servicio(casa_id)
 
     def _editar_casa(self, casa_id: int) -> None:
         casa = self._servicio_casas.obtener_por_id(casa_id)
@@ -113,6 +116,9 @@ class ControladorCasas:
             direccion_referencia=formulario.direccion_referencia,
             observaciones=formulario.observaciones,
             estado_servicio=formulario.estado_servicio,
+            estado_administrativo=formulario.estado_administrativo,
+            motivo_estado_administrativo=formulario.motivo_estado_administrativo,
+            ha_tenido_servicio_activo=formulario.ha_tenido_servicio_activo,
         )
         self._vista_casas.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
@@ -131,7 +137,37 @@ class ControladorCasas:
         if not self._vista_casas.confirmar_cambio_estado_casa(casa):
             return
 
-        resultado = self._servicio_casas.cambiar_estado(casa_id, casa.estado_servicio)
+        resultado = self._servicio_casas.cambiar_estado(
+            casa_id,
+            casa.estado_administrativo,
+            casa.motivo_estado_administrativo,
+        )
+        self._vista_casas.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
+        if resultado.exito:
+            self._refrescar()
+
+    def _confirmar_corte_servicio(self, casa_id: int) -> None:
+        detalle = self._servicio_casas.obtener_detalle(casa_id)
+        if detalle is None:
+            self._vista_casas.mostrar_mensaje(
+                "No fue posible encontrar la casa seleccionada.",
+                es_error=True,
+            )
+            self._refrescar()
+            return
+
+        formulario = self._vista_casas.solicitar_corte_servicio(
+            detalle=detalle,
+            formateador_moneda=self._servicio_casas.formatear_moneda,
+        )
+        if formulario is None:
+            return
+
+        resultado = self._servicio_casas.cortar_servicio(
+            casa_id=formulario.casa_id,
+            observaciones=formulario.observaciones,
+            actor_id=None if self._actor is None else self._actor.identificador,
+        )
         self._vista_casas.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
             self._refrescar()

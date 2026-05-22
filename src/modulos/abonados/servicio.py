@@ -27,6 +27,13 @@ class RepositorioCasasRelacionado(Protocol):
     ) -> int:
         """Suspende casas operativas asociadas a un abonado inactivado."""
 
+    def reactivar_casas_por_abonado_activado(
+        self,
+        abonado_id: int,
+        actor_id: int | None = None,
+    ) -> int:
+        """Reactiva casas suspendidas por abonado inactivo una vez restaurado."""
+
 
 class ServicioAbonados:
     """Orquesta reglas de negocio y presentacion operativa para abonados."""
@@ -164,6 +171,16 @@ class ServicioAbonados:
                         f"Abonado marcado como inactivo. {total_suspendidas} casa(s) asociada(s) "
                         "pasaron a estado suspendido."
                     )
+            elif nuevo_estado == "ACTIVO" and self._repositorio_casas_relacionado is not None:
+                total_reactivadas = self._repositorio_casas_relacionado.reactivar_casas_por_abonado_activado(
+                    abonado_id=abonado_id,
+                    actor_id=actor_id,
+                )
+                if total_reactivadas > 0:
+                    mensaje = (
+                        f"Abonado marcado como activo. {total_reactivadas} casa(s) suspendida(s) "
+                        "por esta causa volvieron a operativa."
+                    )
         except Exception:
             return ResultadoGestionAbonados(
                 False,
@@ -196,6 +213,8 @@ class ServicioAbonados:
                         "Casas",
                         "Meses en mora",
                         "Estado",
+                        "Creado",
+                        "Ultima actualizacion",
                         "Tiene plan activo",
                         "Deuda pendiente",
                     ]
@@ -210,6 +229,8 @@ class ServicioAbonados:
                             abonado.total_casas,
                             abonado.meses_en_mora,
                             abonado.estado,
+                            self.formatear_fecha_hora(abonado.creado_en),
+                            self.formatear_fecha_hora(abonado.actualizado_en),
                             "Si" if abonado.tiene_plan_activo else "No",
                             self.formatear_moneda(abonado.deuda_total_centavos),
                         ]

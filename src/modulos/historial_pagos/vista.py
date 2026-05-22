@@ -36,7 +36,11 @@ from comun.ui import (
     obtener_icono_tabler_coloreado,
     resolver_variante_boton_modal,
 )
-from comun.ui.temas import TEMA_SICAP_PREDETERMINADO, obtener_paleta_tema
+from comun.ui.temas import (
+    TEMA_SICAP_PREDETERMINADO,
+    obtener_fondo_header_destacado,
+    obtener_paleta_tema,
+)
 from modulos.historial_pagos.entidades import (
     DetalleHistorialPago,
     FILTRO_HISTORIAL_CONEXION,
@@ -137,6 +141,11 @@ class BotonIconoFilaHistorial(QToolButton):
     def leaveEvent(self, evento: object) -> None:
         self._actualizar_icono(self._color_base)
         super().leaveEvent(evento)
+
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        paleta = obtener_paleta_tema(nombre_tema)
+        self._color_base = str(paleta["icono_fila_base"])
+        self._actualizar_icono(self._color_base)
 
     def _actualizar_icono(self, color_icono: str) -> None:
         self.setIcon(obtener_icono_tabler_coloreado(self._icono, color_icono, tamano=18))
@@ -434,14 +443,16 @@ class DialogoDetalleHistorialPago(DialogoBaseSicap):
                 font-weight: 700;
             }
             QTableWidget#tablaDetalleHistorialPago {
-                background: rgba(255, 255, 255, 0.04);
-                border: 1px solid rgba(255, 255, 255, 0.10);
+                background: rgba(74, 79, 154, 0.88);
+                border: 1px solid rgba(255, 255, 255, 0.08);
                 border-radius: 14px;
             }
             QTableWidget#tablaDetalleHistorialPago QHeaderView::section {
-                background: rgba(255, 255, 255, 0.10);
+                background: rgba(108, 113, 190, 0.92);
                 color: #f7fbff;
                 border: none;
+                border-right: 1px solid rgba(255, 255, 255, 0.08);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
                 padding: 10px 12px;
                 font-size: 12px;
                 font-weight: 800;
@@ -754,163 +765,174 @@ class VistaHistorialPagos(QWidget):
         self._estado_vacio.setVisible(sin_datos)
         self._tabla.setVisible(not sin_datos)
 
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._tema_actual = (
+            nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        )
+        self._paleta_tema = obtener_paleta_tema(self._tema_actual)
+        for boton in self.findChildren(BotonIconoFilaHistorial):
+            boton.aplicar_tema(self._tema_actual)
+        self._aplicar_estilos()
+
     def _aplicar_estilos(self) -> None:
         radio_panel_tabla = self.RADIO_PANEL_TABLA
+        paleta = self._paleta_tema
+        oscuro = self._tema_actual != "claro"
+        fondo_panel_destacado = (
+            obtener_fondo_header_destacado(self._tema_actual)
+            if oscuro
+            else paleta["fondo_superficie_suave"]
+        )
+        borde_panel_destacado = "rgba(255, 255, 255, 0.16)" if oscuro else paleta["borde_suave"]
         self.setStyleSheet(
-            """
-            QWidget#vistaHistorialPagos {
+            f"""
+            QWidget#vistaHistorialPagos {{
                 background: transparent;
-            }
-            QLabel#mensajeHistorialPagos {
-                color: #d9fff5;
-                font-size: 12px;
-                font-weight: 700;
+                font-family: "{paleta["familia_tipografica"]}";
+            }}
+            QLabel#mensajeHistorialPagos {{
+                color: {paleta["texto_exito"]};
+                font-size: {paleta["tamano_fuente_base"] + 2}px;
+                font-weight: {paleta["peso_subtitulo"]};
                 padding: 8px 10px;
                 border-radius: 12px;
-                background-color: rgba(16, 120, 98, 0.16);
-                border: 1px solid rgba(158, 231, 214, 0.26);
-            }
-            QLabel#mensajeHistorialPagos[error="true"] {
-                color: #ffd4cf;
-                background-color: rgba(180, 35, 24, 0.15);
-                border: 1px solid rgba(255, 205, 199, 0.28);
-            }
+                background-color: {paleta["fondo_exito"]};
+                border: 1px solid {paleta["borde_exito"]};
+            }}
+            QLabel#mensajeHistorialPagos[error="true"] {{
+                color: {paleta["texto_error"]};
+                background-color: {paleta["fondo_error"]};
+                border: 1px solid {paleta["borde_error"]};
+            }}
             QFrame#panelOperativoHistorialPagos,
-            QFrame#tarjetaResumenHistorialPagos {
-                background: rgba(255, 255, 255, 0.10);
-                border: 1px solid rgba(255, 255, 255, 0.16);
+            QFrame#tarjetaResumenHistorialPagos {{
+                background: {fondo_panel_destacado};
+                border: 1px solid {borde_panel_destacado};
                 border-radius: 18px;
-            }
-            QFrame#panelTablaHistorialPagos {
-                background: rgba(255, 255, 255, 0.10);
-                border: 1px solid rgba(255, 255, 255, 0.16);
-                border-radius: """
-            + str(radio_panel_tabla)
-            + """px;
-            }
-            QTableWidget#tablaHistorialPagos {
-                background: rgba(255, 255, 255, 0.03);
+            }}
+            QFrame#panelTablaHistorialPagos {{
+                background: {fondo_panel_destacado};
+                border: 1px solid {borde_panel_destacado};
+                border-radius: {radio_panel_tabla}px;
+            }}
+            QTableWidget#tablaHistorialPagos {{
+                background: {paleta["fondo_tabla_cuerpo"]};
                 background-clip: padding;
                 border: none;
-                border-radius: """
-            + str(radio_panel_tabla)
-            + """px;
-                padding: 0 0 """
-            + str(radio_panel_tabla)
-            + """px 0;
-            }
-            QWidget#viewportTablaHistorialPagos {
+                border-radius: {radio_panel_tabla}px;
+                padding: 0 0 {radio_panel_tabla}px 0;
+            }}
+            QWidget#viewportTablaHistorialPagos {{
                 background: transparent;
                 border: none;
-                border-bottom-left-radius: """
-            + str(radio_panel_tabla)
-            + """px;
-                border-bottom-right-radius: """
-            + str(radio_panel_tabla)
-            + """px;
-            }
-            QTableWidget#tablaHistorialPagos QHeaderView::section:first {
-                border-top-left-radius: """
-            + str(radio_panel_tabla)
-            + """px;
-            }
-            QTableWidget#tablaHistorialPagos QHeaderView::section {
-                background: rgba(255, 255, 255, 0.10);
-                color: #f7fbff;
+                border-bottom-left-radius: {radio_panel_tabla}px;
+                border-bottom-right-radius: {radio_panel_tabla}px;
+            }}
+            QTableWidget#tablaHistorialPagos QHeaderView::section:first {{
+                border-top-left-radius: {radio_panel_tabla}px;
+            }}
+            QTableWidget#tablaHistorialPagos QHeaderView::section {{
+                background: {paleta["fondo_tabla_header_destacado"]};
+                color: {paleta["texto_input"]};
                 border: none;
-                border-right: 1px solid rgba(255, 255, 255, 0.06);
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                border-right: 1px solid {paleta["borde_tabla"]};
+                border-bottom: 1px solid {paleta["borde_tabla"]};
                 padding: 10px 12px;
-                font-size: 12px;
-                font-weight: 800;
-            }
-            QTableWidget#tablaHistorialPagos QHeaderView::section:last {
-                border-top-right-radius: """
-            + str(radio_panel_tabla)
-            + """px;
-            }
-            QTableWidget#tablaHistorialPagos::item {
+                font-size: {paleta["tamano_fuente_base"] + 2}px;
+                font-weight: {paleta["peso_titulo"]};
+            }}
+            QTableWidget#tablaHistorialPagos QHeaderView::section:last {{
+                border-top-right-radius: {radio_panel_tabla}px;
+            }}
+            QTableWidget#tablaHistorialPagos::item {{
                 padding: 9px 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-            }
-            QLabel#iconoTarjetaResumen {
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.10);
+                border-bottom: 1px solid {paleta["borde_tabla"]};
+                background: {paleta["fondo_tabla_fila"]};
+            }}
+            QTableWidget#tablaHistorialPagos::item:alternate {{
+                background: {paleta["fondo_tabla_fila_alterna"]};
+            }}
+            QTableWidget#tablaHistorialPagos::item:selected {{
+                background: {paleta["fondo_tabla_seleccion"]};
+            }}
+            QLabel#iconoTarjetaResumen {{
+                background: {paleta["fondo_superficie_muy_suave"]};
+                border: 1px solid {paleta["borde_suave"]};
                 border-radius: 12px;
-            }
-            QLabel#tituloTarjetaResumen {
-                color: rgba(235, 242, 248, 0.72);
+            }}
+            QLabel#tituloTarjetaResumen {{
+                color: {paleta["texto_secundario"]};
                 font-size: 11px;
                 font-weight: 700;
-            }
-            QLabel#valorTarjetaResumen {
-                color: #ffffff;
-                font-size: 20px;
-                font-weight: 900;
-            }
+            }}
+            QLabel#valorTarjetaResumen {{
+                color: {paleta["texto_principal"]};
+                font-size: {paleta["tamano_titulo_tarjeta"]}px;
+                font-weight: {paleta["peso_titulo"]};
+            }}
             QLabel#detalleTarjetaResumen,
-            QLabel#textoPieHistorialPagos {
-                color: rgba(235, 242, 248, 0.76);
+            QLabel#textoPieHistorialPagos {{
+                color: {paleta["texto_secundario"]};
                 font-size: 11px;
                 font-weight: 600;
-            }
+            }}
             QLineEdit,
             QComboBox,
-            QDateEdit#campoFechaHistorialPago {
+            QDateEdit#campoFechaHistorialPago {{
                 min-height: 36px;
-                border: 1px solid rgba(255, 255, 255, 0.18);
+                border: 1px solid {paleta["borde_medio"]};
                 border-radius: 12px;
-                background: rgba(255, 255, 255, 0.11);
-                color: #f5fbff;
+                background: {paleta["fondo_input"]};
+                color: {paleta["texto_input"]};
                 padding: 0 10px;
                 font-size: 12px;
-            }
+            }}
             QLineEdit:focus,
             QComboBox:focus,
-            QDateEdit#campoFechaHistorialPago:focus {
-                border-color: rgba(109, 241, 220, 0.42);
-                background: rgba(255, 255, 255, 0.16);
-            }
-            QPushButton#chipFiltroHistorialPago {
+            QDateEdit#campoFechaHistorialPago:focus {{
+                border-color: {paleta["borde_foco_input"]};
+                background: {paleta["fondo_input_focus"]};
+            }}
+            QPushButton#chipFiltroHistorialPago {{
                 min-height: 30px;
                 border-radius: 11px;
                 padding: 0 12px;
-                background: rgba(255, 255, 255, 0.06);
-                border: 1px solid rgba(255, 255, 255, 0.14);
-                color: #ecf5ff;
+                background: {paleta["fondo_chip"]};
+                border: 1px solid {paleta["borde_suave"]};
+                color: {paleta["texto_chip"]};
                 font-size: 11px;
                 font-weight: 700;
-            }
-            QPushButton#chipFiltroHistorialPago:hover {
-                background: rgba(255, 255, 255, 0.12);
-            }
-            QPushButton#chipFiltroHistorialPago:checked {
-                color: #0f2d43;
-                background: #d2f4f2;
-                border-color: rgba(255, 255, 255, 0.18);
-            }
-            QWidget#contenedorAccionesHistorialPago {
+            }}
+            QPushButton#chipFiltroHistorialPago:hover {{
+                background: {paleta["fondo_chip_hover"]};
+            }}
+            QPushButton#chipFiltroHistorialPago:checked {{
+                color: {paleta["texto_chip_activo"]};
+                background: {paleta["fondo_chip_activo"]};
+                border-color: {paleta["borde_chip_activo"]};
+            }}
+            QWidget#contenedorAccionesHistorialPago {{
                 background: transparent;
-            }
-            QToolButton#botonIconoFilaHistorial {
+            }}
+            QToolButton#botonIconoFilaHistorial {{
                 background: transparent;
                 border: none;
                 border-radius: 8px;
                 padding: 0px;
                 margin: 0px;
-            }
-            QToolButton#botonIconoFilaHistorial:hover {
+            }}
+            QToolButton#botonIconoFilaHistorial:hover {{
                 background: transparent;
                 border: none;
-            }
-            QLabel#estadoVacioHistorialPagos {
-                color: rgba(235, 242, 248, 0.76);
+            }}
+            QLabel#estadoVacioHistorialPagos {{
+                color: {paleta["texto_secundario"]};
                 font-size: 12px;
                 font-weight: 700;
                 padding: 20px 14px;
-            }
-            QLabel {
-                color: #f4fbff;
-            }
+            }}
+            QLabel {{
+                color: {paleta["texto_principal"]};
+            }}
             """
         )

@@ -1,4 +1,4 @@
-PRAGMA foreign_keys = OFF;
+﻿PRAGMA foreign_keys = OFF;
 
 BEGIN TRANSACTION;
 
@@ -26,7 +26,7 @@ BEGIN
         'Pago anulado: REC-' || printf('%06d', NEW.id),
         json_object('estado', OLD.estado, 'total_pagado_centavos', OLD.total_pagado_centavos),
         json_object('estado', NEW.estado, 'motivo_anulacion', NEW.motivo_anulacion),
-        datetime('now')
+        datetime('now', 'localtime')
     );
 END;
 
@@ -54,7 +54,7 @@ BEGIN
         'Cambio de estado de servicio de casa ' || NEW.id,
         json_object('estado_servicio', OLD.estado_servicio),
         json_object('estado_servicio', NEW.estado_servicio),
-        datetime('now')
+        datetime('now', 'localtime')
     );
 END;
 
@@ -68,3 +68,4 @@ VALUES (
 COMMIT;
 
 PRAGMA foreign_keys = ON;
+

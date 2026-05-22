@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from calendar import monthrange
 from datetime import date, datetime
 
 from comun.configuracion.gestor_rutas import GestorRutas
@@ -10,6 +11,8 @@ from modulos.pagos.entidades import (
     CargoPago,
     ComprobantePago,
     ConfiguracionReciboPago,
+    DiagnosticoPagoPlan,
+    DiagnosticoPagoActivacion,
     DiagnosticoPagoMensual,
     DetalleAplicacionPago,
     ESTADO_VISUAL_PAGO_BLOQUEADO,
@@ -18,7 +21,10 @@ from modulos.pagos.entidades import (
     FormularioPago,
     ResumenConfirmacionPago,
     ResultadoPago,
+    TIPO_PAGO_CONEXION,
     TIPO_PAGO_MENSUALIDAD,
+    TIPO_PAGO_PLAN,
+    TIPO_PAGO_RECONEXION,
     TIPOS_PAGO_VALIDOS,
 )
 from modulos.pagos.repositorio import RepositorioPagos
@@ -40,9 +46,15 @@ class ServicioPagos:
         )
 
     def obtener_estado(self, filtro: str = "") -> EstadoModuloPagos:
+        configuracion = self.obtener_configuracion_recibo()
         return EstadoModuloPagos(
             casas=tuple(self.repositorio_pagos.listar_casas(filtro=filtro)),
             metodos_pago=tuple(self.repositorio_pagos.listar_metodos_pago_activos()),
+            cobrar_mensualidad_prorrateada_activacion=(
+                self.repositorio_pagos.cobrar_mensualidad_prorrateada_en_activacion()
+            ),
+            abrir_pdf_automaticamente=configuracion.abrir_pdf_automaticamente,
+            imprimir_pdf_automaticamente=configuracion.imprimir_pdf_automaticamente,
         )
 
     def obtener_cargos_mensuales(self, casa_id: int) -> tuple[CargoPago, ...]:
@@ -56,22 +68,68 @@ class ServicioPagos:
         if casa is None:
             return None
         alertas: list[str] = []
-        resultado = self._validar_estado_operativo_mensual(casa.abonado_estado, casa.estado_servicio)
+        resultado = self._validar_estado_operativo_mensual(
+            casa.abonado_estado,
+            casa.estado_servicio,
+            casa.estado_administrativo,
+        )
         permite_continuar = resultado is None
         if resultado is not None:
             alertas.append(resultado.mensaje)
         if casa.meses_vencidos > 0:
             alertas.append(
-                f"La casa tiene {casa.meses_vencidos} mes(es) vencido(s) y se cobrarán primero."
+                f"La casa tiene {casa.meses_vencidos} mes(es) vencido(s) y se cobraran primero."
             )
         if casa.deuda_total_centavos <= 0:
             alertas.append(
-                "La casa no tiene deuda mensual pendiente; cualquier pago se tratará como adelanto si la regla vigente lo permite."
+                "La casa no tiene deuda mensual pendiente; cualquier pago se tratara como adelanto si la regla vigente lo permite."
             )
         if not alertas:
             alertas.append("La casa cumple las reglas vigentes para continuar con el pago mensual.")
         return DiagnosticoPagoMensual(
             casa_id=casa.casa_id,
+            permite_continuar=permite_continuar,
+            estado_visual=ESTADO_VISUAL_PAGO_OK if permite_continuar else ESTADO_VISUAL_PAGO_BLOQUEADO,
+            mensaje_diagnostico=alertas[0],
+            alertas=tuple(alertas),
+        )
+
+    def obtener_diagnostico_conexion(self, casa_id: int) -> DiagnosticoPagoActivacion | None:
+        return self._obtener_diagnostico_activacion(casa_id, TIPO_PAGO_CONEXION)
+
+    def obtener_diagnostico_reconexion(self, casa_id: int) -> DiagnosticoPagoActivacion | None:
+        return self._obtener_diagnostico_activacion(casa_id, TIPO_PAGO_RECONEXION)
+
+    def obtener_diagnostico_plan(self, casa_id: int) -> DiagnosticoPagoPlan | None:
+        diagnostico = self.repositorio_pagos.obtener_diagnostico_plan(casa_id)
+        if diagnostico is None:
+            return None
+        casa = self.repositorio_pagos.obtener_casa(casa_id)
+        if casa is None:
+            return None
+        alertas: list[str] = []
+        resultado = self._validar_estado_operativo_plan(casa, diagnostico)
+        permite_continuar = resultado is None and bool(diagnostico.cuotas_cobrables)
+        if resultado is not None:
+            alertas.append(resultado.mensaje)
+        elif diagnostico.cuotas_cobrables:
+            primera = diagnostico.cuotas_cobrables[0]
+            alertas.append(
+                f"Plan {diagnostico.codigo_plan} listo para cobro. La cuota {primera.numero_cuota} quedara preseleccionada por defecto."
+            )
+        else:
+            alertas.append("El plan no tiene cuotas cobrables con saldo pendiente.")
+        return DiagnosticoPagoPlan(
+            casa_id=diagnostico.casa_id,
+            cantidad_planes_activos=diagnostico.cantidad_planes_activos,
+            plan_pago_id=diagnostico.plan_pago_id,
+            codigo_plan=diagnostico.codigo_plan,
+            tipo_plan=diagnostico.tipo_plan,
+            estado_plan=diagnostico.estado_plan,
+            cuotas_pendientes=diagnostico.cuotas_pendientes,
+            cuotas_en_mora=diagnostico.cuotas_en_mora,
+            saldo_vivo_centavos=diagnostico.saldo_vivo_centavos,
+            cuotas_cobrables=diagnostico.cuotas_cobrables,
             permite_continuar=permite_continuar,
             estado_visual=ESTADO_VISUAL_PAGO_OK if permite_continuar else ESTADO_VISUAL_PAGO_BLOQUEADO,
             mensaje_diagnostico=alertas[0],
@@ -84,15 +142,35 @@ class ServicioPagos:
     ) -> ResumenConfirmacionPago | ResultadoPago:
         return self.preparar_confirmacion(formulario)
 
+    def previsualizar_pago_conexion(
+        self,
+        formulario: FormularioPago,
+    ) -> ResumenConfirmacionPago | ResultadoPago:
+        return self._previsualizar_pago_activacion(formulario, TIPO_PAGO_CONEXION)
+
+    def previsualizar_pago_reconexion(
+        self,
+        formulario: FormularioPago,
+    ) -> ResumenConfirmacionPago | ResultadoPago:
+        return self._previsualizar_pago_activacion(formulario, TIPO_PAGO_RECONEXION)
+
+    def previsualizar_pago_plan(
+        self,
+        formulario: FormularioPago,
+    ) -> ResumenConfirmacionPago | ResultadoPago:
+        return self._previsualizar_cuota_plan(formulario)
+
     def preparar_confirmacion(self, formulario: FormularioPago) -> ResumenConfirmacionPago | ResultadoPago:
         if formulario.tipo_pago not in TIPOS_PAGO_VALIDOS:
             return ResultadoPago(False, "El tipo de pago no es valido.", "VALIDACION")
+        if formulario.tipo_pago == TIPO_PAGO_CONEXION:
+            return self.previsualizar_pago_conexion(formulario)
+        if formulario.tipo_pago == TIPO_PAGO_RECONEXION:
+            return self.previsualizar_pago_reconexion(formulario)
+        if formulario.tipo_pago == TIPO_PAGO_PLAN:
+            return self.previsualizar_pago_plan(formulario)
         if formulario.tipo_pago != TIPO_PAGO_MENSUALIDAD:
-            return ResultadoPago(
-                False,
-                "Esta version cierra primero mensualidades y pagos adelantados. Usa planes, conexion o reconexion en una fase separada.",
-                "FLUJO_PENDIENTE",
-            )
+            return ResultadoPago(False, "El tipo de pago solicitado aun no esta disponible.", "FLUJO_PENDIENTE")
         if formulario.casa_id is None or formulario.casa_id <= 0:
             return ResultadoPago(False, "Selecciona una casa para registrar el pago.", "VALIDACION")
         if formulario.metodo_pago_id is None or formulario.metodo_pago_id <= 0:
@@ -103,7 +181,11 @@ class ServicioPagos:
         casa = self.repositorio_pagos.obtener_casa(formulario.casa_id)
         if casa is None:
             return ResultadoPago(False, "La casa seleccionada ya no existe.", "NO_ENCONTRADO")
-        validacion_estado = self._validar_estado_operativo_mensual(casa.abonado_estado, casa.estado_servicio)
+        validacion_estado = self._validar_estado_operativo_mensual(
+            casa.abonado_estado,
+            casa.estado_servicio,
+            casa.estado_administrativo,
+        )
         if validacion_estado is not None:
             return validacion_estado
 
@@ -112,21 +194,13 @@ class ServicioPagos:
             return ResultadoPago(False, "El metodo de pago seleccionado no esta activo.", "VALIDACION")
         referencia = formulario.referencia.strip()
         if metodo.requiere_referencia and not referencia:
-            return ResultadoPago(
-                False,
-                "Este metodo de pago requiere una referencia.",
-                "VALIDACION",
-            )
+            return ResultadoPago(False, "Este metodo de pago requiere una referencia.", "VALIDACION")
 
         resumen_deuda = self.repositorio_pagos.obtener_resumen_deuda_pago(casa.casa_id)
         cargos = self.repositorio_pagos.listar_cargos_mensuales(casa.casa_id)
         precio_mensual = self.repositorio_pagos.obtener_precio_mensual_centavos()
         if precio_mensual <= 0:
-            return ResultadoPago(
-                False,
-                "Configura primero el precio mensual del servicio.",
-                "VALIDACION",
-            )
+            return ResultadoPago(False, "Configura primero el precio mensual del servicio.", "VALIDACION")
 
         detalles: list[DetalleAplicacionPago] = []
         meses_solicitados = formulario.cantidad_meses
@@ -188,6 +262,7 @@ class ServicioPagos:
             saldo_posterior_centavos=saldo_posterior,
             referencia=referencia,
             observaciones=formulario.observaciones.strip(),
+            fecha_activacion="",
         )
 
     def registrar_pago(
@@ -206,11 +281,7 @@ class ServicioPagos:
                 actor_id=actor_id,
             )
         except Exception as error:
-            return ResultadoPago(
-                False,
-                f"No fue posible registrar el pago. {error}",
-                "ERROR_SQLITE",
-            )
+            return ResultadoPago(False, f"No fue posible registrar el pago. {error}", "ERROR_SQLITE")
         return ResultadoPago(
             True,
             f"Pago registrado correctamente. Comprobante {comprobante.numero_comprobante}.",
@@ -222,31 +293,28 @@ class ServicioPagos:
         self,
         abonado_estado: str,
         estado_servicio: str,
+        estado_administrativo: str,
     ) -> ResultadoPago | None:
         if abonado_estado != "ACTIVO":
             return ResultadoPago(
                 False,
-                "Solo se puede registrar pago mensual cuando el abonado responsable está ACTIVO.",
+                "Solo se puede registrar pago mensual cuando el abonado responsable esta ACTIVO.",
                 "VALIDACION",
             )
-        if estado_servicio == "SUSPENDIDO":
+        if estado_administrativo != "OPERATIVA":
             return ResultadoPago(
                 False,
-                "No se puede registrar pago mensual para una casa suspendida. Reactiva o reasigna primero un abonado activo responsable.",
+                "No se puede registrar pago mensual para una casa suspendida administrativamente. Reactiva o reasigna primero un abonado activo responsable.",
                 "VALIDACION",
             )
         if estado_servicio == "CORTADO":
             return ResultadoPago(
                 False,
-                "La casa está cortada. El pago mensual directo no aplica en este flujo; primero debe resolverse mediante reconexión.",
+                "La casa esta cortada. El pago mensual directo no aplica en este flujo; primero debe resolverse mediante conexion o reconexion segun corresponda.",
                 "VALIDACION",
             )
         if estado_servicio == "INACTIVO":
-            return ResultadoPago(
-                False,
-                "No se puede registrar pago mensual para una casa inactiva.",
-                "VALIDACION",
-            )
+            return ResultadoPago(False, "No se puede registrar pago mensual para una casa inactiva.", "VALIDACION")
         if estado_servicio != "ACTIVO":
             return ResultadoPago(
                 False,
@@ -254,6 +322,313 @@ class ServicioPagos:
                 "VALIDACION",
             )
         return None
+
+    def _validar_estado_operativo_plan(
+        self,
+        casa: object,
+        diagnostico: DiagnosticoPagoPlan,
+    ) -> ResultadoPago | None:
+        if casa.abonado_estado != "ACTIVO":
+            return ResultadoPago(
+                False,
+                "Solo se pueden cobrar cuotas de plan cuando el abonado responsable esta ACTIVO.",
+                "VALIDACION",
+            )
+        if casa.estado_administrativo != "OPERATIVA":
+            return ResultadoPago(
+                False,
+                "La casa esta suspendida administrativamente. Reactiva o reasigna primero el abonado responsable.",
+                "VALIDACION",
+            )
+        if diagnostico.cantidad_planes_activos <= 0:
+            return ResultadoPago(
+                False,
+                "La casa no tiene un plan activo disponible para este flujo.",
+                "VALIDACION",
+            )
+        if diagnostico.cantidad_planes_activos > 1:
+            return ResultadoPago(
+                False,
+                "La casa tiene mas de un plan activo. Debes corregir esa inconsistencia antes de cobrar cuotas.",
+                "VALIDACION",
+            )
+        if diagnostico.plan_pago_id is None:
+            return ResultadoPago(
+                False,
+                "No fue posible identificar el plan activo de la casa.",
+                "VALIDACION",
+            )
+        if not diagnostico.cuotas_cobrables:
+            return ResultadoPago(
+                False,
+                "El plan activo no tiene cuotas pendientes, parciales o vencidas con saldo pendiente.",
+                "VALIDACION",
+            )
+        return None
+
+    def _obtener_diagnostico_activacion(
+        self,
+        casa_id: int,
+        tipo_pago: str,
+    ) -> DiagnosticoPagoActivacion | None:
+        casa = self.repositorio_pagos.obtener_casa(casa_id)
+        if casa is None:
+            return None
+        alertas: list[str] = []
+        resultado = self._validar_estado_operativo_activacion(casa, tipo_pago)
+        permite_continuar = resultado is None
+        if resultado is not None:
+            alertas.append(resultado.mensaje)
+        clasificacion = self._resolver_clasificacion_activacion(casa)
+        if not alertas:
+            alertas.append(
+                f"La casa esta lista para {clasificacion.lower()} dentro del flujo de {tipo_pago.lower()}."
+            )
+        return DiagnosticoPagoActivacion(
+            casa_id=casa.casa_id,
+            tipo_pago=tipo_pago,
+            clasificacion=clasificacion,
+            permite_continuar=permite_continuar,
+            estado_visual=ESTADO_VISUAL_PAGO_OK if permite_continuar else ESTADO_VISUAL_PAGO_BLOQUEADO,
+            mensaje_diagnostico=alertas[0],
+            alertas=tuple(alertas),
+        )
+
+    def _validar_estado_operativo_activacion(
+        self,
+        casa: object,
+        tipo_pago: str,
+    ) -> ResultadoPago | None:
+        clasificacion = self._resolver_clasificacion_activacion(casa)
+        if casa.abonado_estado != "ACTIVO":
+            return ResultadoPago(
+                False,
+                "La activacion solo se permite cuando el abonado responsable esta ACTIVO.",
+                "VALIDACION",
+            )
+        if casa.estado_administrativo != "OPERATIVA":
+            return ResultadoPago(
+                False,
+                "La casa esta suspendida administrativamente. Resuelve primero el abonado o la reasignacion.",
+                "VALIDACION",
+            )
+        if casa.estado_servicio != "CORTADO":
+            return ResultadoPago(
+                False,
+                "Conexion y reconexion solo aplican cuando la casa esta fisicamente CORTADA.",
+                "VALIDACION",
+            )
+        if casa.tiene_plan_activo:
+            return ResultadoPago(
+                False,
+                "La casa tiene un plan de pago activo. Este flujo debe resolverse desde el flujo especifico del plan.",
+                "VALIDACION",
+            )
+        if tipo_pago == TIPO_PAGO_CONEXION and clasificacion != TIPO_PAGO_CONEXION:
+            return ResultadoPago(
+                False,
+                "Esta casa ya tuvo servicio activo antes. Debe cobrarse como reconexion.",
+                "VALIDACION",
+            )
+        if tipo_pago == TIPO_PAGO_RECONEXION and clasificacion != TIPO_PAGO_RECONEXION:
+            return ResultadoPago(
+                False,
+                "Esta casa nunca ha tenido servicio activo. Debe cobrarse como conexion.",
+                "VALIDACION",
+            )
+        return None
+
+    def _previsualizar_cuota_plan(
+        self,
+        formulario: FormularioPago,
+    ) -> ResumenConfirmacionPago | ResultadoPago:
+        if formulario.casa_id is None or formulario.casa_id <= 0:
+            return ResultadoPago(False, "Selecciona una casa para registrar el pago.", "VALIDACION")
+        if formulario.metodo_pago_id is None or formulario.metodo_pago_id <= 0:
+            return ResultadoPago(False, "Selecciona un metodo de pago.", "VALIDACION")
+        casa = self.repositorio_pagos.obtener_casa(formulario.casa_id)
+        if casa is None:
+            return ResultadoPago(False, "La casa seleccionada ya no existe.", "NO_ENCONTRADO")
+        diagnostico = self.obtener_diagnostico_plan(formulario.casa_id)
+        if diagnostico is None:
+            return ResultadoPago(False, "No fue posible obtener el diagnostico del plan.", "ERROR")
+        validacion = self._validar_estado_operativo_plan(casa, diagnostico)
+        if validacion is not None:
+            return validacion
+        metodo = self.repositorio_pagos.obtener_metodo_pago(formulario.metodo_pago_id)
+        if metodo is None:
+            return ResultadoPago(False, "El metodo de pago seleccionado no esta activo.", "VALIDACION")
+        referencia = formulario.referencia.strip()
+        if metodo.requiere_referencia and not referencia:
+            return ResultadoPago(False, "Este metodo de pago requiere una referencia.", "VALIDACION")
+        cuotas_por_id = {cuota.cuota_id: cuota for cuota in diagnostico.cuotas_cobrables}
+        cuotas_ids = tuple(int(cuota_id) for cuota_id in formulario.cuotas_plan_pago_ids if cuota_id)
+        if not cuotas_ids:
+            return ResultadoPago(False, "Selecciona al menos una cuota del plan.", "VALIDACION")
+        detalles: list[DetalleAplicacionPago] = []
+        total_pago = 0
+        for cuota_id in cuotas_ids:
+            cuota = cuotas_por_id.get(cuota_id)
+            if cuota is None:
+                return ResultadoPago(
+                    False,
+                    "Una de las cuotas seleccionadas ya no esta disponible para cobro.",
+                    "VALIDACION",
+                )
+            descripcion = (
+                f"Cuota {cuota.numero_cuota} del plan {diagnostico.codigo_plan} "
+                f"(vence {cuota.fecha_vencimiento})"
+            )
+            detalles.append(
+                DetalleAplicacionPago(
+                    cargo_id=cuota.cuota_id,
+                    periodo_id=None,
+                    periodo_anio=None,
+                    periodo_mes=None,
+                    periodo_nombre=f"Cuota {cuota.numero_cuota}",
+                    concepto_codigo="CUOTA_PLAN_PAGO",
+                    descripcion=descripcion,
+                    monto_centavos=cuota.saldo_pendiente_centavos,
+                    etiqueta=cuota.estado.title(),
+                )
+            )
+            total_pago += cuota.saldo_pendiente_centavos
+        saldo_posterior = max(0, diagnostico.saldo_vivo_centavos - total_pago)
+        return ResumenConfirmacionPago(
+            casa=casa,
+            tipo_pago=TIPO_PAGO_PLAN,
+            metodo_pago=metodo,
+            detalles=tuple(detalles),
+            saldo_anterior_centavos=diagnostico.saldo_vivo_centavos,
+            total_pago_centavos=total_pago,
+            saldo_posterior_centavos=saldo_posterior,
+            referencia=referencia,
+            observaciones=formulario.observaciones.strip(),
+            fecha_activacion="",
+            plan_pago_id=diagnostico.plan_pago_id,
+        )
+
+    def _previsualizar_pago_activacion(
+        self,
+        formulario: FormularioPago,
+        tipo_pago: str,
+    ) -> ResumenConfirmacionPago | ResultadoPago:
+        if formulario.casa_id is None or formulario.casa_id <= 0:
+            return ResultadoPago(False, "Selecciona una casa para registrar el pago.", "VALIDACION")
+        if formulario.metodo_pago_id is None or formulario.metodo_pago_id <= 0:
+            return ResultadoPago(False, "Selecciona un metodo de pago.", "VALIDACION")
+        casa = self.repositorio_pagos.obtener_casa(formulario.casa_id)
+        if casa is None:
+            return ResultadoPago(False, "La casa seleccionada ya no existe.", "NO_ENCONTRADO")
+        validacion = self._validar_estado_operativo_activacion(casa, tipo_pago)
+        if validacion is not None:
+            return validacion
+
+        metodo = self.repositorio_pagos.obtener_metodo_pago(formulario.metodo_pago_id)
+        if metodo is None:
+            return ResultadoPago(False, "El metodo de pago seleccionado no esta activo.", "VALIDACION")
+        referencia = formulario.referencia.strip()
+        if metodo.requiere_referencia and not referencia:
+            return ResultadoPago(False, "Este metodo de pago requiere una referencia.", "VALIDACION")
+
+        fecha_activacion = formulario.fecha_activacion.strip()
+        if not fecha_activacion:
+            return ResultadoPago(False, "Indica la fecha de activacion del servicio.", "VALIDACION")
+        try:
+            fecha_real = date.fromisoformat(fecha_activacion)
+        except ValueError:
+            return ResultadoPago(False, "La fecha de activacion no es valida.", "VALIDACION")
+
+        detalles: list[DetalleAplicacionPago] = []
+        if tipo_pago == TIPO_PAGO_CONEXION:
+            if formulario.monto_conexion_centavos <= 0:
+                return ResultadoPago(False, "Indica un monto valido para la conexion.", "VALIDACION")
+            detalles.append(
+                DetalleAplicacionPago(
+                    cargo_id=None,
+                    periodo_id=None,
+                    periodo_anio=None,
+                    periodo_mes=None,
+                    periodo_nombre="Operacion de activacion",
+                    concepto_codigo="CONEXION",
+                    descripcion="Conexion de servicio",
+                    monto_centavos=formulario.monto_conexion_centavos,
+                    etiqueta="Conexion",
+                )
+            )
+        else:
+            if formulario.monto_reconexion_centavos <= 0:
+                return ResultadoPago(False, "Indica un monto valido para la reconexion.", "VALIDACION")
+            detalles.append(
+                DetalleAplicacionPago(
+                    cargo_id=None,
+                    periodo_id=None,
+                    periodo_anio=None,
+                    periodo_mes=None,
+                    periodo_nombre="Operacion de activacion",
+                    concepto_codigo="RECONEXION",
+                    descripcion="Reconexion de servicio",
+                    monto_centavos=formulario.monto_reconexion_centavos,
+                    etiqueta="Reconexion",
+                )
+            )
+            if formulario.multa_corte_centavos > 0:
+                detalles.append(
+                    DetalleAplicacionPago(
+                        cargo_id=None,
+                        periodo_id=None,
+                        periodo_anio=None,
+                        periodo_mes=None,
+                        periodo_nombre="Operacion de activacion",
+                        concepto_codigo="MULTA",
+                        descripcion="Multa por corte",
+                        monto_centavos=formulario.multa_corte_centavos,
+                        etiqueta="Multa",
+                    )
+                )
+
+        if self.repositorio_pagos.cobrar_mensualidad_prorrateada_en_activacion():
+            precio_mensual = self.repositorio_pagos.obtener_precio_mensual_centavos()
+            if precio_mensual <= 0:
+                return ResultadoPago(
+                    False,
+                    "Configura primero el precio mensual del servicio para calcular el prorrateo.",
+                    "VALIDACION",
+                )
+            dias_mes = monthrange(fecha_real.year, fecha_real.month)[1]
+            dias_cobrados = (dias_mes - fecha_real.day) + 1
+            monto_prorrateado = round((precio_mensual * dias_cobrados) / dias_mes)
+            detalles.append(
+                DetalleAplicacionPago(
+                    cargo_id=None,
+                    periodo_id=None,
+                    periodo_anio=fecha_real.year,
+                    periodo_mes=fecha_real.month,
+                    periodo_nombre=f"Periodo {fecha_real.month:02d}/{fecha_real.year:04d}",
+                    concepto_codigo="MENSUALIDAD_PRORRATEADA",
+                    descripcion=f"Mensualidad prorrateada desde {fecha_real.isoformat()}",
+                    monto_centavos=monto_prorrateado,
+                    etiqueta="Prorrateo",
+                )
+            )
+
+        total_pago = sum(detalle.monto_centavos for detalle in detalles)
+        return ResumenConfirmacionPago(
+            casa=casa,
+            tipo_pago=tipo_pago,
+            metodo_pago=metodo,
+            detalles=tuple(detalles),
+            saldo_anterior_centavos=casa.deuda_total_centavos,
+            total_pago_centavos=total_pago,
+            saldo_posterior_centavos=casa.deuda_total_centavos,
+            referencia=referencia,
+            observaciones=formulario.observaciones.strip(),
+            fecha_activacion=fecha_activacion,
+        )
+
+    @staticmethod
+    def _resolver_clasificacion_activacion(casa: object) -> str:
+        return TIPO_PAGO_RECONEXION if casa.ha_tenido_servicio_activo else TIPO_PAGO_CONEXION
 
     def obtener_comprobante(self, pago_id: int) -> ComprobantePago | None:
         return self.repositorio_pagos.obtener_comprobante(pago_id)

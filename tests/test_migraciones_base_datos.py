@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import shutil
 import sqlite3
@@ -41,7 +41,7 @@ class TestMigracionesBaseDatos(unittest.TestCase):
 
         gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         gestor = GestorBaseDatos(gestor_rutas)
-        ruta_db = gestor.inicializar_base_datos()
+        ruta_db = gestor.inicializar_base_datos(incluir_datos_prueba=True)
 
         with closing(sqlite3.connect(ruta_db)) as conexion:
             conexion.executescript(
@@ -106,7 +106,7 @@ class TestMigracionesBaseDatos(unittest.TestCase):
             encoding="utf-8",
         )
 
-        gestor.inicializar_base_datos()
+        gestor.inicializar_base_datos(incluir_datos_prueba=True)
 
         with closing(sqlite3.connect(ruta_db)) as conexion:
             triggers_rotos = conexion.execute(
@@ -128,7 +128,7 @@ class TestMigracionesBaseDatos(unittest.TestCase):
                 """
                 UPDATE casas
                 SET estado_servicio = 'SUSPENDIDO',
-                    actualizado_en = datetime('now')
+                    actualizado_en = datetime('now', 'localtime')
                 WHERE id = 1;
                 """
             )
@@ -145,6 +145,69 @@ class TestMigracionesBaseDatos(unittest.TestCase):
             ).fetchone()
             self.assertIsNotNone(auditoria)
 
+    def test_migracion_014_separa_estado_fisico_administrativo_y_activacion(self) -> None:
+        ruta_migraciones_origen = RAIZ_PROYECTO / "database" / "migrations"
+        for ruta in ruta_migraciones_origen.glob("*.sql"):
+            destino = self.raiz_temporal / "database" / "migrations" / ruta.name
+            destino.write_text(ruta.read_text(encoding="utf-8"), encoding="utf-8")
+
+        gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
+        gestor = GestorBaseDatos(gestor_rutas)
+        ruta_db = gestor.inicializar_base_datos(incluir_datos_prueba=True)
+
+        with closing(sqlite3.connect(ruta_db)) as conexion:
+            columnas_casas = {
+                fila[1] for fila in conexion.execute("PRAGMA table_info(casas);").fetchall()
+            }
+            columnas_procesos = {
+                fila[1] for fila in conexion.execute("PRAGMA table_info(procesos_servicio);").fetchall()
+            }
+            columnas_cargos = {
+                fila[1] for fila in conexion.execute("PRAGMA table_info(cargos);").fetchall()
+            }
+            casa_suspendida = conexion.execute(
+                """
+                SELECT estado_servicio, estado_administrativo, motivo_estado_administrativo
+                FROM casas
+                WHERE direccion_referencia = 'Casa 03, pasaje las flores'
+                LIMIT 1;
+                """
+            ).fetchone()
+            configuracion = conexion.execute(
+                """
+                SELECT valor
+                FROM configuracion_sistema
+                WHERE clave = 'cobro.cobrar_mensualidad_prorrateada_activacion'
+                LIMIT 1;
+                """
+            ).fetchone()
+            conceptos = {
+                fila[0]
+                for fila in conexion.execute(
+                    """
+                    SELECT codigo
+                    FROM conceptos_cobro
+                    WHERE codigo IN ('CONEXION', 'MENSUALIDAD_PRORRATEADA');
+                    """
+                ).fetchall()
+            }
+
+        self.assertIn("estado_administrativo", columnas_casas)
+        self.assertIn("motivo_estado_administrativo", columnas_casas)
+        self.assertIn("ha_tenido_servicio_activo", columnas_casas)
+        self.assertIn("fecha_activacion", columnas_procesos)
+        self.assertIn("pago_id", columnas_procesos)
+        self.assertIn("proceso_servicio_id", columnas_cargos)
+        self.assertIsNotNone(casa_suspendida)
+        self.assertEqual(casa_suspendida[0], "ACTIVO")
+        self.assertEqual(casa_suspendida[1], "SUSPENDIDA")
+        self.assertEqual(casa_suspendida[2], "REVISION_ADMINISTRATIVA")
+        self.assertIsNotNone(configuracion)
+        self.assertEqual(configuracion[0], "0")
+        self.assertEqual(conceptos, {"CONEXION", "MENSUALIDAD_PRORRATEADA"})
+
 
 if __name__ == "__main__":
     unittest.main()
+
+

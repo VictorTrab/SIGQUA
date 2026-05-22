@@ -69,6 +69,22 @@ class ServicioPlanesPago:
         formulario: FormularioPlanPago,
         actor_id: int | None = None,
     ) -> ResultadoGestionPlanesPago:
+        cuota_regular_calculada = self.calcular_cuota_regular(
+            formulario.saldo_financiado_centavos,
+            formulario.cantidad_cuotas,
+        )
+        formulario = FormularioPlanPago(
+            identificador=formulario.identificador,
+            casa_id=formulario.casa_id,
+            tipo_plan=formulario.tipo_plan,
+            concepto_financiado=formulario.concepto_financiado,
+            prima_centavos=formulario.prima_centavos,
+            saldo_financiado_centavos=formulario.saldo_financiado_centavos,
+            cuota_regular_centavos=cuota_regular_calculada,
+            cantidad_cuotas=formulario.cantidad_cuotas,
+            estado=formulario.estado,
+            observaciones=formulario.observaciones,
+        )
         if formulario.casa_id is None or formulario.casa_id <= 0:
             return ResultadoGestionPlanesPago(False, "Selecciona la casa asociada al plan.", "VALIDACION")
         if formulario.tipo_plan not in TIPOS_PLAN_VALIDOS:
@@ -199,6 +215,8 @@ class ServicioPlanesPago:
                         "Cuota",
                         "Cuotas pendientes",
                         "Estado",
+                        "Creado",
+                        "Ultima actualizacion",
                     ]
                 )
                 for plan in planes:
@@ -214,6 +232,8 @@ class ServicioPlanesPago:
                             self.formatear_moneda(plan.cuota_regular_centavos),
                             plan.cuotas_pendientes,
                             plan.estado,
+                            self.formatear_fecha(plan.creado_en),
+                            self.formatear_fecha(plan.actualizado_en),
                         ]
                     )
         except OSError:
@@ -223,6 +243,12 @@ class ServicioPlanesPago:
     @staticmethod
     def formatear_moneda(valor_centavos: int) -> str:
         return f"L {valor_centavos / 100:,.2f}"
+
+    @staticmethod
+    def calcular_cuota_regular(total_centavos: int, cantidad_cuotas: int) -> int:
+        if total_centavos <= 0 or cantidad_cuotas <= 0:
+            return 0
+        return total_centavos // cantidad_cuotas
 
     @staticmethod
     def formatear_fecha(valor: str) -> str:

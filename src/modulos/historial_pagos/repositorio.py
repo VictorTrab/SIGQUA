@@ -327,6 +327,8 @@ class RepositorioHistorialPagosSQLite:
             "documentos.firma_cargo",
             "documentos.firma_identificador",
             "documentos.firma_texto_apoyo",
+            "documentos.abrir_pdf_automaticamente",
+            "documentos.imprimir_pdf_automaticamente",
         )
         marcadores = ", ".join("?" for _ in claves)
         consulta = f"""
@@ -363,6 +365,12 @@ class RepositorioHistorialPagosSQLite:
             firma_cargo=valores.get("documentos.firma_cargo", ""),
             firma_identificador=valores.get("documentos.firma_identificador", ""),
             firma_texto_apoyo=valores.get("documentos.firma_texto_apoyo", ""),
+            abrir_pdf_automaticamente=self._a_booleano(
+                valores.get("documentos.abrir_pdf_automaticamente", "1")
+            ),
+            imprimir_pdf_automaticamente=self._a_booleano(
+                valores.get("documentos.imprimir_pdf_automaticamente", "0")
+            ),
         )
 
     @staticmethod

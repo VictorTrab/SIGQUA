@@ -24,13 +24,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from comun.ui import BotonAccionContextual, crear_boton_operativo
+from comun.ui import BotonAccionContextual, CampoMontoMonetario, crear_boton_operativo
 from comun.ui.comprobante_termico import (
     ConfiguracionDocumentoRecibo,
     DatosDocumentoRecibo,
     crear_documento_recibo_termico,
 )
-from comun.ui.temas import TEMA_SICAP_PREDETERMINADO, obtener_paleta_tema, obtener_tema_actual
+from comun.ui.temas import (
+    TEMA_SICAP_PREDETERMINADO,
+    obtener_fondo_header_destacado,
+    obtener_paleta_tema,
+    obtener_tema_actual,
+)
 from modulos.configuracion.entidades import EstadoConfiguracion
 
 
@@ -80,8 +85,10 @@ class VistaConfiguracion(QWidget):
         str,
         str,
         str,
+        bool,
+        bool,
     )
-    guardar_parametros_cobro_solicitado = Signal(int, bool, int, bool, int, bool, int, int, int)
+    guardar_parametros_cobro_solicitado = Signal(int, bool, int, bool, int, bool, bool, int, int, int)
     guardar_operacion_respaldo_solicitado = Signal(
         bool,
         str,
@@ -183,6 +190,8 @@ class VistaConfiguracion(QWidget):
         self._check_mostrar_direccion.setChecked(estado.factura.mostrar_direccion)
         self._check_mostrar_identificador.setChecked(estado.factura.mostrar_identificador_fiscal)
         self._check_firma_habilitada.setChecked(estado.factura.firma_habilitada)
+        self._check_abrir_pdf_automatico.setChecked(estado.factura.abrir_pdf_automaticamente)
+        self._check_imprimir_pdf_automatico.setChecked(estado.factura.imprimir_pdf_automaticamente)
         self._campo_firma_nombre.setText(estado.factura.firma_nombre)
         self._campo_firma_cargo.setText(estado.factura.firma_cargo)
         self._campo_firma_identificador.setText(estado.factura.firma_identificador)
@@ -190,17 +199,24 @@ class VistaConfiguracion(QWidget):
         self._valor_total_comprobantes.setText(str(estado.factura.total_comprobantes_emitidos))
         self._valor_proximo_correlativo.setText(estado.factura.proximo_correlativo)
 
-        self._campo_precio_mensual.setText(str(estado.parametros_cobro.precio_mensual_centavos))
+        self._campo_precio_mensual.establecer_desde_centavos(
+            estado.parametros_cobro.precio_mensual_centavos
+        )
         self._check_multa_automatica.blockSignals(True)
         self._check_multa_automatica.setChecked(estado.parametros_cobro.multa_mora_automatica_activa)
         self._check_multa_automatica.blockSignals(False)
-        self._campo_multa_automatica.setText(
-            str(estado.parametros_cobro.multa_mora_automatica_centavos)
+        self._campo_multa_automatica.establecer_desde_centavos(
+            estado.parametros_cobro.multa_mora_automatica_centavos
         )
         self._check_corte_automatico.blockSignals(True)
         self._check_corte_automatico.setChecked(estado.parametros_cobro.corte_automatico_activo)
         self._check_corte_automatico.blockSignals(False)
         self._campo_meses_para_corte.setText(str(estado.parametros_cobro.meses_para_corte))
+        self._check_prorrateo_activacion.blockSignals(True)
+        self._check_prorrateo_activacion.setChecked(
+            estado.parametros_cobro.cobrar_mensualidad_prorrateada_activacion
+        )
+        self._check_prorrateo_activacion.blockSignals(False)
         self._check_pago_adelantado.blockSignals(True)
         self._check_pago_adelantado.setChecked(estado.parametros_cobro.permitir_pago_adelantado)
         self._check_pago_adelantado.blockSignals(False)
@@ -246,6 +262,7 @@ class VistaConfiguracion(QWidget):
             self._formatear_tamano_bytes(estado.operacion.ultimo_respaldo_tamano_bytes)
         )
         self._valor_hash_respaldo.setText(estado.operacion.ultimo_respaldo_hash or "Sin hash")
+        self._valor_respaldo_generado_por.setText(estado.operacion.ultimo_respaldo_generado_por)
         self._valor_ruta_respaldos.setText(estado.operacion.ruta_respaldos_principal)
         self._valor_retencion.setText(f"{estado.operacion.retencion_dias} dias")
         self._valor_proxima_ejecucion.setText(
@@ -267,6 +284,7 @@ class VistaConfiguracion(QWidget):
         self._valor_modo_operacion.setText(estado.informacion.modo_operacion)
         self._valor_duracion_sesion_info.setText(self._texto_duracion_sesion(estado.seguridad.duracion_sesion_horas))
         self._valor_actualizacion.setText(estado.informacion.ultima_actualizacion or "Sin registro")
+        self._valor_actualizado_por.setText(estado.informacion.actualizado_por)
 
         self._actualizar_estado_programacion_respaldo()
         self._actualizar_preview_comprobante(estado, formateador_moneda)
@@ -434,6 +452,12 @@ class VistaConfiguracion(QWidget):
         self._check_mostrar_direccion = QCheckBox("Mostrar direccion institucional")
         self._check_mostrar_identificador = QCheckBox("Mostrar identificador fiscal")
         self._check_firma_habilitada = QCheckBox("Habilitar firma compartida en documentos")
+        self._check_abrir_pdf_automatico = QCheckBox(
+            "Abrir automaticamente el comprobante PDF al registrar un pago"
+        )
+        self._check_imprimir_pdf_automatico = QCheckBox(
+            "Enviar automaticamente el comprobante PDF a impresion"
+        )
         self._campo_firma_nombre = QLineEdit()
         self._campo_firma_cargo = QLineEdit()
         self._campo_firma_identificador = QLineEdit()
@@ -477,6 +501,8 @@ class VistaConfiguracion(QWidget):
                 self._check_mostrar_telefono,
                 self._check_mostrar_direccion,
                 self._check_mostrar_identificador,
+                self._check_abrir_pdf_automatico,
+                self._check_imprimir_pdf_automatico,
                 self._crear_bloque_campo("Formato de salida", self._combo_formato_salida),
             ],
         )
@@ -526,6 +552,8 @@ class VistaConfiguracion(QWidget):
                 self._campo_firma_cargo.text(),
                 self._campo_firma_identificador.text(),
                 self._campo_firma_texto_apoyo.toPlainText(),
+                self._check_abrir_pdf_automatico.isChecked(),
+                self._check_imprimir_pdf_automatico.isChecked(),
             )
         )
 
@@ -543,15 +571,16 @@ class VistaConfiguracion(QWidget):
         return contenido
 
     def _crear_tab_parametros_cobro(self) -> QWidget:
-        self._campo_precio_mensual = QLineEdit()
-        self._campo_precio_mensual.setPlaceholderText("Centavos, por ejemplo 2500 para L 25.00")
+        self._campo_precio_mensual = CampoMontoMonetario()
         self._check_multa_automatica = QCheckBox("Aplicar recargo automatico por cada mes vencido")
         self._check_multa_automatica.toggled.connect(self._actualizar_estado_campos_cobro)
-        self._campo_multa_automatica = QLineEdit()
-        self._campo_multa_automatica.setPlaceholderText("Centavos del recargo adicional")
+        self._campo_multa_automatica = CampoMontoMonetario()
         self._check_corte_automatico = QCheckBox("Permitir corte automatico por deuda")
         self._campo_meses_para_corte = QLineEdit()
         self._campo_meses_para_corte.setPlaceholderText("Meses de deuda para alerta o corte")
+        self._check_prorrateo_activacion = QCheckBox(
+            "Cobrar primera mensualidad prorrateada en conexion y reconexion"
+        )
         self._check_pago_adelantado = QCheckBox("Permitir pago adelantado")
         self._check_pago_adelantado.toggled.connect(self._actualizar_estado_campos_cobro)
         self._campo_meses_adelanto_maximo = QLineEdit()
@@ -566,7 +595,7 @@ class VistaConfiguracion(QWidget):
         panel_precio = self._crear_panel(
             "Precio mensual del servicio",
             "Segun la regla cerrada, el cambio de tarifa solo afecta cargos nuevos. Nunca recalcula deuda historica.",
-            [self._crear_bloque_campo("Precio mensual (centavos)", self._campo_precio_mensual)],
+            [self._crear_bloque_campo("Precio mensual", self._campo_precio_mensual)],
         )
         panel_mora = self._crear_panel(
             "Mora y recargo automatico",
@@ -576,7 +605,7 @@ class VistaConfiguracion(QWidget):
                 self._crear_fila_resumen("Rangos visuales vigentes", self._valor_rangos_mora),
                 self._check_multa_automatica,
                 self._crear_bloque_campo(
-                    "Monto del recargo automatico por mes vencido (centavos)",
+                    "Monto del recargo automatico por mes vencido",
                     self._campo_multa_automatica,
                 ),
                 self._crear_bloque_campo(
@@ -601,6 +630,7 @@ class VistaConfiguracion(QWidget):
             "Pago adelantado",
             "Permite controlar si pagos puede registrar meses futuros y hasta donde, sin anular las reglas de deuda vencida.",
             [
+                self._check_prorrateo_activacion,
                 self._check_pago_adelantado,
                 self._crear_bloque_campo("Maximo de meses adelantados", self._campo_meses_adelanto_maximo),
             ],
@@ -622,7 +652,7 @@ class VistaConfiguracion(QWidget):
         contenido.widget().layout().addWidget(
             self._crear_aviso(
                 "Impacta Pagos, Morosidad, Casas y Reportes. "
-                "Conexion y reconexion no se configuran como tarifa global en esta pantalla."
+                "La primera mensualidad de conexion y reconexion se controla aqui como politica global de prorrateo."
             )
         )
         contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
@@ -654,6 +684,7 @@ class VistaConfiguracion(QWidget):
         self._valor_archivo_respaldo = self._crear_valor_seguridad()
         self._valor_tamano_respaldo = self._crear_valor_seguridad()
         self._valor_hash_respaldo = self._crear_valor_seguridad()
+        self._valor_respaldo_generado_por = self._crear_valor_seguridad()
         self._valor_ruta_respaldos = self._crear_valor_seguridad()
         self._valor_retencion = self._crear_valor_seguridad()
         self._valor_proxima_ejecucion = self._crear_valor_seguridad()
@@ -676,6 +707,7 @@ class VistaConfiguracion(QWidget):
                 self._crear_fila_resumen("Archivo generado", self._valor_archivo_respaldo),
                 self._crear_fila_resumen("Tamano", self._valor_tamano_respaldo),
                 self._crear_fila_resumen("Hash", self._valor_hash_respaldo),
+                self._crear_fila_resumen("Generado por", self._valor_respaldo_generado_por),
                 self._crear_fila_resumen("Carpeta principal", self._valor_ruta_respaldos),
                 self._crear_fila_resumen("Retencion", self._valor_retencion),
                 self._crear_fila_resumen("Proxima ejecucion", self._valor_proxima_ejecucion),
@@ -766,6 +798,7 @@ class VistaConfiguracion(QWidget):
         self._valor_modo_operacion = self._crear_valor_seguridad()
         self._valor_duracion_sesion_info = self._crear_valor_seguridad()
         self._valor_actualizacion = self._crear_valor_seguridad()
+        self._valor_actualizado_por = self._crear_valor_seguridad()
         panel = self._crear_panel(
             "Informacion del sistema",
             "Resumen tecnico legible del entorno local, las rutas activas y la politica vigente.",
@@ -777,6 +810,7 @@ class VistaConfiguracion(QWidget):
                 self._crear_fila_resumen("Modo de operacion", self._valor_modo_operacion),
                 self._crear_fila_resumen("Tiempo de sesion", self._valor_duracion_sesion_info),
                 self._crear_fila_resumen("Ultima actualizacion", self._valor_actualizacion),
+                self._crear_fila_resumen("Actualizado por", self._valor_actualizado_por),
             ],
         )
         contenido = self._crear_contenedor_scroll()
@@ -878,12 +912,18 @@ class VistaConfiguracion(QWidget):
         return lineas or ["Empresa no configurada"]
 
     def _emitir_guardado_parametros_cobro(self) -> None:
+        multa_automatica = (
+            self._campo_multa_automatica.obtener_centavos()
+            if self._check_multa_automatica.isChecked()
+            else 0
+        )
         self.guardar_parametros_cobro_solicitado.emit(
-            self._leer_entero(self._campo_precio_mensual.text()),
+            self._campo_precio_mensual.obtener_centavos(),
             self._check_multa_automatica.isChecked(),
-            self._leer_entero(self._campo_multa_automatica.text()),
+            multa_automatica,
             self._check_corte_automatico.isChecked(),
             self._leer_entero(self._campo_meses_para_corte.text()),
+            self._check_prorrateo_activacion.isChecked(),
             self._check_pago_adelantado.isChecked(),
             self._leer_entero(self._campo_meses_adelanto_maximo.text()),
             self._leer_entero(self._campo_mora_leve_hasta.text()),
@@ -1144,7 +1184,11 @@ class VistaConfiguracion(QWidget):
     def _aplicar_estilos(self) -> None:
         paleta = self._paleta_tema
         oscuro = self._tema_actual != "claro"
-        fondo_panel = "rgba(255, 255, 255, 0.10)" if oscuro else paleta["fondo_superficie"]
+        fondo_panel = (
+            obtener_fondo_header_destacado(self._tema_actual)
+            if oscuro
+            else paleta["fondo_superficie"]
+        )
         borde_panel = "rgba(255, 255, 255, 0.16)" if oscuro else paleta["borde_principal"]
         texto_principal = "#ffffff" if oscuro else paleta["texto_principal"]
         texto_secundario = "rgba(235, 242, 248, 0.76)" if oscuro else paleta["texto_secundario"]

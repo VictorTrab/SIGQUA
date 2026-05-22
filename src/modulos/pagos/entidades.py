@@ -43,10 +43,14 @@ class CasaPago:
     abonado_estado: str
     barrio_nombre: str
     estado_servicio: str
+    estado_administrativo: str
+    motivo_estado_administrativo: str
+    ha_tenido_servicio_activo: bool
     meses_pendientes: int
     meses_vencidos: int
     deuda_total_centavos: int
     deuda_vencida_centavos: int
+    tiene_plan_activo: bool = False
 
 
 @dataclass(slots=True)
@@ -103,6 +107,12 @@ class FormularioPago:
     metodo_pago_id: int | None
     referencia: str = ""
     observaciones: str = ""
+    fecha_activacion: str = ""
+    monto_conexion_centavos: int = 0
+    monto_reconexion_centavos: int = 0
+    multa_corte_centavos: int = 0
+    plan_pago_id: int | None = None
+    cuotas_plan_pago_ids: tuple[int, ...] = ()
 
 
 @dataclass(slots=True)
@@ -118,6 +128,8 @@ class ResumenConfirmacionPago:
     saldo_posterior_centavos: int
     referencia: str
     observaciones: str
+    fecha_activacion: str = ""
+    plan_pago_id: int | None = None
 
 
 @dataclass(slots=True)
@@ -169,6 +181,8 @@ class ConfiguracionReciboPago:
     firma_cargo: str
     firma_identificador: str
     firma_texto_apoyo: str
+    abrir_pdf_automaticamente: bool = True
+    imprimir_pdf_automaticamente: bool = False
 
 
 @dataclass(slots=True)
@@ -176,6 +190,51 @@ class DiagnosticoPagoMensual:
     """Estado visual y operativo de una casa dentro del flujo mensual."""
 
     casa_id: int
+    permite_continuar: bool
+    estado_visual: str
+    mensaje_diagnostico: str
+    alertas: tuple[str, ...] = ()
+
+
+@dataclass(slots=True)
+class DiagnosticoPagoActivacion:
+    """Estado visual y operativo de una casa dentro de conexión o reconexión."""
+
+    casa_id: int
+    tipo_pago: str
+    clasificacion: str
+    permite_continuar: bool
+    estado_visual: str
+    mensaje_diagnostico: str
+    alertas: tuple[str, ...] = ()
+
+
+@dataclass(slots=True)
+class CuotaPlanCobrable:
+    """Cuota de plan disponible para cobro dentro del flujo de pagos."""
+
+    cuota_id: int
+    plan_pago_id: int
+    numero_cuota: int
+    fecha_vencimiento: str
+    estado: str
+    saldo_pendiente_centavos: int
+
+
+@dataclass(slots=True)
+class DiagnosticoPagoPlan:
+    """Estado visual y operativo del plan activo dentro del flujo de cuotas."""
+
+    casa_id: int
+    cantidad_planes_activos: int
+    plan_pago_id: int | None
+    codigo_plan: str
+    tipo_plan: str
+    estado_plan: str
+    cuotas_pendientes: int
+    cuotas_en_mora: int
+    saldo_vivo_centavos: int
+    cuotas_cobrables: tuple[CuotaPlanCobrable, ...]
     permite_continuar: bool
     estado_visual: str
     mensaje_diagnostico: str
@@ -212,3 +271,6 @@ class EstadoModuloPagos:
 
     casas: tuple[CasaPago, ...]
     metodos_pago: tuple[MetodoPago, ...]
+    cobrar_mensualidad_prorrateada_activacion: bool = False
+    abrir_pdf_automaticamente: bool = True
+    imprimir_pdf_automaticamente: bool = False

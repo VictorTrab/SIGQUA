@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- 007. Pagos, comprobantes y reglas cerradas de negocio
 -- ============================================================
 
@@ -24,7 +24,7 @@ WHERE upper(codigo) IN ('TRANSFERENCIA', 'DEPOSITO');
 CREATE TABLE IF NOT EXISTS correlativos_comprobantes (
     clave TEXT PRIMARY KEY,
     ultimo_numero INTEGER NOT NULL DEFAULT 0 CHECK (ultimo_numero >= 0),
-    actualizado_en TEXT NOT NULL DEFAULT (datetime('now'))
+    actualizado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 INSERT OR IGNORE INTO correlativos_comprobantes(clave, ultimo_numero)
@@ -52,3 +52,4 @@ SELECT '007', 'pagos_comprobantes_reglas_negocio', NULL
 WHERE NOT EXISTS (
     SELECT 1 FROM esquema_migraciones WHERE version = '007'
 );
+

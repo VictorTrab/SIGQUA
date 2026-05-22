@@ -12,6 +12,33 @@ FILTRO_CASAS_SUSPENDIDAS = "SUSPENDIDAS"
 FILTRO_CASAS_CON_MORA = "CON_MORA"
 FILTRO_CASAS_SIN_PROPIETARIO = "SIN_PROPIETARIO"
 
+ESTADO_SERVICIO_ACTIVO = "ACTIVO"
+ESTADO_SERVICIO_CORTADO = "CORTADO"
+ESTADO_SERVICIO_INACTIVO = "INACTIVO"
+ESTADOS_SERVICIO_VALIDOS = (
+    ESTADO_SERVICIO_ACTIVO,
+    ESTADO_SERVICIO_CORTADO,
+    ESTADO_SERVICIO_INACTIVO,
+)
+
+ESTADO_ADMINISTRATIVO_OPERATIVA = "OPERATIVA"
+ESTADO_ADMINISTRATIVO_SUSPENDIDA = "SUSPENDIDA"
+ESTADOS_ADMINISTRATIVOS_VALIDOS = (
+    ESTADO_ADMINISTRATIVO_OPERATIVA,
+    ESTADO_ADMINISTRATIVO_SUSPENDIDA,
+)
+
+MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO = "NINGUNO"
+MOTIVO_ESTADO_ADMINISTRATIVO_ABONADO_INACTIVO = "ABONADO_INACTIVO"
+MOTIVO_ESTADO_ADMINISTRATIVO_REASIGNACION_PENDIENTE = "REASIGNACION_PENDIENTE"
+MOTIVO_ESTADO_ADMINISTRATIVO_REVISION_ADMINISTRATIVA = "REVISION_ADMINISTRATIVA"
+MOTIVOS_ESTADO_ADMINISTRATIVO_VALIDOS = (
+    MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO,
+    MOTIVO_ESTADO_ADMINISTRATIVO_ABONADO_INACTIVO,
+    MOTIVO_ESTADO_ADMINISTRATIVO_REASIGNACION_PENDIENTE,
+    MOTIVO_ESTADO_ADMINISTRATIVO_REVISION_ADMINISTRATIVA,
+)
+
 
 @dataclass(slots=True)
 class Casa:
@@ -26,11 +53,16 @@ class Casa:
     barrio_nombre: str = ""
     direccion_referencia: str = ""
     observaciones: str = ""
-    estado_servicio: str = "ACTIVO"
+    estado_servicio: str = ESTADO_SERVICIO_ACTIVO
+    estado_administrativo: str = ESTADO_ADMINISTRATIVO_OPERATIVA
+    motivo_estado_administrativo: str = MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO
+    ha_tenido_servicio_activo: bool = False
+    antecedente_servicio_editable: bool = True
     deuda_total_centavos: int = 0
     meses_pendientes: int = 0
     meses_en_mora: int = 0
     tiene_plan_activo: bool = False
+    creado_en: str = ""
     fecha_alta: str = ""
     actualizado_en: str = ""
 
@@ -51,6 +83,20 @@ class Casa:
         if self.abonado_estado != "ACTIVO":
             return f"{self.abonado_nombre} (inactivo)"
         return self.abonado_nombre
+
+    @property
+    def esta_operativa(self) -> bool:
+        return self.estado_administrativo == ESTADO_ADMINISTRATIVO_OPERATIVA
+
+    @property
+    def resumen_antecedente_servicio(self) -> str:
+        if self.ha_tenido_servicio_activo:
+            return "Ya tuvo servicio antes"
+        return "Nunca ha tenido servicio"
+
+    @property
+    def resumen_estado_compuesto(self) -> str:
+        return f"{self.estado_servicio} | {self.estado_administrativo}"
 
 
 @dataclass(slots=True)
@@ -124,6 +170,17 @@ class FormularioCasa:
     direccion_referencia: str
     observaciones: str
     estado_servicio: str
+    estado_administrativo: str
+    motivo_estado_administrativo: str
+    ha_tenido_servicio_activo: bool
+
+
+@dataclass(slots=True)
+class FormularioCorteServicioCasa:
+    """Datos capturados para confirmar un corte fisico de servicio."""
+
+    casa_id: int
+    observaciones: str
 
 
 @dataclass(slots=True)

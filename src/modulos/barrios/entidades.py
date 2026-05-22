@@ -23,6 +23,7 @@ class Barrio:
     observaciones: str = ""
     total_abonados: int = 0
     total_casas: int = 0
+    creado_en: str = ""
     actualizado_en: str = ""
 
     @property

@@ -1,4 +1,4 @@
-BEGIN TRANSACTION;
+﻿BEGIN TRANSACTION;
 
 INSERT OR IGNORE INTO configuracion_sistema(clave, valor, tipo_dato, categoria, descripcion, editable) VALUES
 ('factura.titulo_documento', 'RECIBO DE PAGO', 'TEXTO', 'Factura', 'Titulo principal del recibo de pago.', 1),
@@ -16,7 +16,7 @@ INSERT OR IGNORE INTO configuracion_sistema(clave, valor, tipo_dato, categoria, 
 
 UPDATE configuracion_sistema
 SET valor = 'HTML',
-    actualizado_en = datetime('now')
+    actualizado_en = datetime('now', 'localtime')
 WHERE clave = 'factura.formato_salida'
   AND upper(COALESCE(valor, '')) = 'PDF';
 
@@ -29,3 +29,4 @@ WHERE NOT EXISTS (
 );
 
 COMMIT;
+

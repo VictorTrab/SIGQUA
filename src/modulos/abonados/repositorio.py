@@ -1,4 +1,4 @@
-"""Contratos e implementacion SQLite del modulo de abonados."""
+﻿"""Contratos e implementacion SQLite del modulo de abonados."""
 
 from __future__ import annotations
 
@@ -119,6 +119,7 @@ class RepositorioAbonadosSQLite:
                 COALESCE(a.direccion_referencia, '') AS direccion_referencia,
                 COALESCE(a.observaciones, '') AS observaciones,
                 a.estado,
+                COALESCE(a.creado_en, '') AS creado_en,
                 COALESCE(a.actualizado_en, '') AS actualizado_en,
                 COALESCE(cs.total_casas, 0) AS total_casas,
                 COALESCE(dd.meses_en_mora, 0) AS meses_en_mora,
@@ -142,6 +143,7 @@ class RepositorioAbonadosSQLite:
         consulta = f"""
             SELECT COUNT(*)
             FROM abonados a
+            INNER JOIN barrios b ON b.id = a.barrio_id
             LEFT JOIN ({SUBCONSULTA_DEUDA}) dd ON dd.abonado_id = a.id
             LEFT JOIN ({SUBCONSULTA_PLANES}) pp ON pp.abonado_id = a.id
             WHERE {' AND '.join(condiciones)};
@@ -183,6 +185,7 @@ class RepositorioAbonadosSQLite:
                 COALESCE(a.direccion_referencia, '') AS direccion_referencia,
                 COALESCE(a.observaciones, '') AS observaciones,
                 a.estado,
+                COALESCE(a.creado_en, '') AS creado_en,
                 COALESCE(a.actualizado_en, '') AS actualizado_en,
                 COALESCE(cs.total_casas, 0) AS total_casas,
                 COALESCE(dd.meses_en_mora, 0) AS meses_en_mora,
@@ -216,7 +219,7 @@ class RepositorioAbonadosSQLite:
                             estado,
                             actualizado_en
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'));
+                        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'));
                         """,
                         (
                             abonado.dni,
@@ -240,7 +243,7 @@ class RepositorioAbonadosSQLite:
                         direccion_referencia = ?,
                         observaciones = ?,
                         estado = ?,
-                        actualizado_en = datetime('now')
+                        actualizado_en = datetime('now', 'localtime')
                     WHERE id = ? AND eliminado_en IS NULL;
                     """,
                     (
@@ -262,7 +265,7 @@ class RepositorioAbonadosSQLite:
                     """
                     UPDATE abonados
                     SET estado = ?,
-                        actualizado_en = datetime('now')
+                        actualizado_en = datetime('now', 'localtime')
                     WHERE id = ? AND eliminado_en IS NULL;
                     """,
                     (estado, abonado_id),
@@ -288,8 +291,18 @@ class RepositorioAbonadosSQLite:
         parametros: list[object] = []
         filtro = filtro.strip()
         if filtro:
-            condiciones.append("(a.dni LIKE ? OR lower(a.nombre_completo) LIKE lower(?))")
-            parametros.extend([f"%{filtro}%", f"%{filtro}%"])
+            patron = f"%{filtro}%"
+            condiciones.append(
+                """
+                (
+                    a.dni LIKE ?
+                    OR lower(a.nombre_completo) LIKE lower(?)
+                    OR lower(COALESCE(b.nombre, '')) LIKE lower(?)
+                    OR lower(printf('BR-%03d', a.barrio_id)) LIKE lower(?)
+                )
+                """
+            )
+            parametros.extend([patron, patron, patron, patron])
 
         if filtro_rapido == FILTRO_ABONADOS_CON_MORA:
             condiciones.append("COALESCE(dd.meses_en_mora, 0) > 0")
@@ -316,5 +329,7 @@ class RepositorioAbonadosSQLite:
             meses_en_mora=int(fila["meses_en_mora"] or 0),
             deuda_total_centavos=int(fila["deuda_total_centavos"] or 0),
             tiene_plan_activo=int(fila["total_planes_activos"] or 0) > 0,
+            creado_en=str(fila["creado_en"] or ""),
             actualizado_en=str(fila["actualizado_en"] or ""),
         )
+

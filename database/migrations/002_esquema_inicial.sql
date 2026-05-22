@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- SICAP - Sistema de Control Administrativo de Pagos
 -- Junta de Agua de Yarumela, La Paz, Honduras
 -- Script SQLite actualizado para creacion desde cero
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS esquema_migraciones (
     id INTEGER PRIMARY KEY,
     version TEXT NOT NULL UNIQUE,
     descripcion TEXT NOT NULL,
-    aplicado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    aplicado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     checksum TEXT
 );
 
@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS roles (
     descripcion TEXT,
     es_sistema INTEGER NOT NULL DEFAULT 0 CHECK (es_sistema IN (0, 1)),
     estado TEXT NOT NULL DEFAULT 'ACTIVO' CHECK (estado IN ('ACTIVO', 'INACTIVO')),
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
-    actualizado_en TEXT NOT NULL DEFAULT (datetime('now'))
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    actualizado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS permisos (
@@ -47,13 +47,13 @@ CREATE TABLE IF NOT EXISTS permisos (
     nombre TEXT NOT NULL,
     descripcion TEXT,
     modulo TEXT NOT NULL,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now'))
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS roles_permisos (
     rol_id INTEGER NOT NULL,
     permiso_id INTEGER NOT NULL,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     PRIMARY KEY (rol_id, permiso_id),
     FOREIGN KEY (rol_id) REFERENCES roles(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (permiso_id) REFERENCES permisos(id) ON UPDATE CASCADE ON DELETE RESTRICT
@@ -69,8 +69,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
     ultimo_acceso_en TEXT,
     ultimo_cambio_contrasena_en TEXT,
     observaciones TEXT,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
-    actualizado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    actualizado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     eliminado_en TEXT,
     creado_por INTEGER,
     actualizado_por INTEGER,
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
 CREATE TABLE IF NOT EXISTS usuarios_roles (
     usuario_id INTEGER NOT NULL,
     rol_id INTEGER NOT NULL,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     PRIMARY KEY (usuario_id, rol_id),
     FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (rol_id) REFERENCES roles(id) ON UPDATE CASCADE ON DELETE RESTRICT
@@ -96,8 +96,8 @@ CREATE TABLE IF NOT EXISTS barrios (
     nombre TEXT NOT NULL UNIQUE COLLATE NOCASE,
     estado TEXT NOT NULL DEFAULT 'ACTIVO' CHECK (estado IN ('ACTIVO', 'INACTIVO')),
     observaciones TEXT,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
-    actualizado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    actualizado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     eliminado_en TEXT
 );
 
@@ -110,9 +110,9 @@ CREATE TABLE IF NOT EXISTS abonados (
     direccion_referencia TEXT,
     observaciones TEXT,
     estado TEXT NOT NULL DEFAULT 'ACTIVO' CHECK (estado IN ('ACTIVO', 'INACTIVO')),
-    fecha_alta TEXT NOT NULL DEFAULT (date('now')),
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
-    actualizado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    fecha_alta TEXT NOT NULL DEFAULT (date('now', 'localtime')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    actualizado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     eliminado_en TEXT,
     FOREIGN KEY (barrio_id) REFERENCES barrios(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     CHECK (length(trim(dni)) >= 8)
@@ -124,10 +124,10 @@ CREATE TABLE IF NOT EXISTS casas (
     barrio_id INTEGER NOT NULL,
     direccion_referencia TEXT,
     estado_servicio TEXT NOT NULL DEFAULT 'ACTIVO' CHECK (estado_servicio IN ('ACTIVO', 'CORTADO', 'SUSPENDIDO', 'INACTIVO')),
-    fecha_alta TEXT NOT NULL DEFAULT (date('now')),
+    fecha_alta TEXT NOT NULL DEFAULT (date('now', 'localtime')),
     observaciones TEXT,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
-    actualizado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    actualizado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     eliminado_en TEXT,
     FOREIGN KEY (abonado_id) REFERENCES abonados(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (barrio_id) REFERENCES barrios(id) ON UPDATE CASCADE ON DELETE RESTRICT
@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS periodos_cobro (
     fecha_fin TEXT NOT NULL,
     fecha_vencimiento TEXT NOT NULL,
     estado TEXT NOT NULL DEFAULT 'ABIERTO' CHECK (estado IN ('ABIERTO', 'CERRADO')),
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     UNIQUE (anio, mes),
     CHECK (fecha_fin >= fecha_inicio),
     CHECK (fecha_vencimiento >= fecha_inicio)
@@ -170,7 +170,7 @@ CREATE TABLE IF NOT EXISTS conceptos_cobro (
     requiere_periodo INTEGER NOT NULL DEFAULT 1 CHECK (requiere_periodo IN (0, 1)),
     monto_global_centavos INTEGER CHECK (monto_global_centavos IS NULL OR monto_global_centavos >= 0),
     estado TEXT NOT NULL DEFAULT 'ACTIVO' CHECK (estado IN ('ACTIVO', 'INACTIVO')),
-    creado_en TEXT NOT NULL DEFAULT (datetime('now'))
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS cargos (
@@ -182,12 +182,12 @@ CREATE TABLE IF NOT EXISTS cargos (
     descripcion TEXT NOT NULL,
     monto_centavos INTEGER NOT NULL CHECK (monto_centavos >= 0),
     saldo_pendiente_centavos INTEGER NOT NULL CHECK (saldo_pendiente_centavos >= 0),
-    fecha_generacion TEXT NOT NULL DEFAULT (date('now')),
+    fecha_generacion TEXT NOT NULL DEFAULT (date('now', 'localtime')),
     fecha_vencimiento TEXT NOT NULL,
     estado TEXT NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'PARCIAL', 'PAGADO', 'ANULADO', 'VENCIDO')),
     origen TEXT NOT NULL DEFAULT 'MANUAL' CHECK (origen IN ('MENSUAL', 'PAGO', 'PLAN_PAGO', 'PROCESO_SERVICIO', 'ADELANTO', 'MANUAL')),
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
-    actualizado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    actualizado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     anulado_en TEXT,
     anulado_por INTEGER,
     motivo_anulacion TEXT,
@@ -206,7 +206,7 @@ CREATE TABLE IF NOT EXISTS metodos_pago (
     nombre TEXT NOT NULL,
     descripcion TEXT,
     estado TEXT NOT NULL DEFAULT 'ACTIVO' CHECK (estado IN ('ACTIVO', 'INACTIVO')),
-    creado_en TEXT NOT NULL DEFAULT (datetime('now'))
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 -- ============================================================
@@ -224,14 +224,14 @@ CREATE TABLE IF NOT EXISTS pagos (
     descuento_centavos INTEGER NOT NULL DEFAULT 0 CHECK (descuento_centavos >= 0),
     total_pagado_centavos INTEGER NOT NULL CHECK (total_pagado_centavos >= 0),
     saldo_a_favor_centavos INTEGER NOT NULL DEFAULT 0 CHECK (saldo_a_favor_centavos >= 0),
-    fecha_pago TEXT NOT NULL DEFAULT (datetime('now')),
+    fecha_pago TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     estado TEXT NOT NULL DEFAULT 'CONFIRMADO' CHECK (estado IN ('CONFIRMADO', 'ANULADO')),
     observaciones TEXT,
     anulado_en TEXT,
     anulado_por INTEGER,
     motivo_anulacion TEXT,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
-    actualizado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    actualizado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (abonado_id) REFERENCES abonados(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (casa_id) REFERENCES casas(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (usuario_cobrador_id) REFERENCES usuarios(id) ON UPDATE CASCADE ON DELETE RESTRICT,
@@ -249,7 +249,7 @@ CREATE TABLE IF NOT EXISTS pagos_detalle (
     monto_pagado_centavos INTEGER NOT NULL CHECK (monto_pagado_centavos >= 0),
     periodo_id INTEGER,
     orden_aplicacion INTEGER NOT NULL DEFAULT 1 CHECK (orden_aplicacion >= 1),
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (pago_id) REFERENCES pagos(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (casa_id) REFERENCES casas(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (cargo_id) REFERENCES cargos(id) ON UPDATE CASCADE ON DELETE RESTRICT,
@@ -264,7 +264,7 @@ CREATE TABLE IF NOT EXISTS comprobantes (
     formato_salida TEXT NOT NULL DEFAULT 'PDF' CHECK (formato_salida IN ('PDF', 'HTML', 'TEXTO')),
     ruta_archivo TEXT,
     hash_documento TEXT,
-    generado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    generado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     generado_por INTEGER,
     FOREIGN KEY (pago_id) REFERENCES pagos(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (generado_por) REFERENCES usuarios(id) ON UPDATE CASCADE ON DELETE SET NULL
@@ -286,8 +286,8 @@ CREATE TABLE IF NOT EXISTS planes_pago (
     cuotas_pagadas INTEGER NOT NULL DEFAULT 0 CHECK (cuotas_pagadas >= 0),
     estado TEXT NOT NULL DEFAULT 'ACTIVO' CHECK (estado IN ('ACTIVO', 'FINALIZADO', 'ANULADO', 'CANCELADO')),
     observaciones TEXT,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
-    actualizado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    actualizado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     creado_por INTEGER,
     FOREIGN KEY (abonado_id) REFERENCES abonados(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (casa_id) REFERENCES casas(id) ON UPDATE CASCADE ON DELETE RESTRICT,
@@ -304,8 +304,8 @@ CREATE TABLE IF NOT EXISTS cuotas_plan_pago (
     saldo_pendiente_centavos INTEGER NOT NULL CHECK (saldo_pendiente_centavos >= 0),
     estado TEXT NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE', 'PARCIAL', 'PAGADO', 'VENCIDO', 'ANULADO')),
     cargo_id INTEGER,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
-    actualizado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    actualizado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (plan_pago_id) REFERENCES planes_pago(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (cargo_id) REFERENCES cargos(id) ON UPDATE CASCADE ON DELETE SET NULL,
     CHECK (saldo_pendiente_centavos <= monto_centavos),
@@ -315,7 +315,7 @@ CREATE TABLE IF NOT EXISTS cuotas_plan_pago (
 CREATE TABLE IF NOT EXISTS planes_pago_cargos (
     plan_pago_id INTEGER NOT NULL,
     cargo_id INTEGER NOT NULL,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     PRIMARY KEY (plan_pago_id, cargo_id),
     FOREIGN KEY (plan_pago_id) REFERENCES planes_pago(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (cargo_id) REFERENCES cargos(id) ON UPDATE CASCADE ON DELETE RESTRICT
@@ -328,7 +328,7 @@ CREATE TABLE IF NOT EXISTS pagos_adelantados (
     pago_id INTEGER NOT NULL,
     periodo_id INTEGER NOT NULL,
     monto_centavos INTEGER NOT NULL CHECK (monto_centavos >= 0),
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     observaciones TEXT,
     FOREIGN KEY (abonado_id) REFERENCES abonados(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (casa_id) REFERENCES casas(id) ON UPDATE CASCADE ON DELETE RESTRICT,
@@ -349,8 +349,8 @@ CREATE TABLE IF NOT EXISTS procesos_servicio (
     observaciones TEXT,
     plan_pago_id INTEGER,
     usuario_id INTEGER,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
-    actualizado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    actualizado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (abonado_id) REFERENCES abonados(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (casa_id) REFERENCES casas(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (plan_pago_id) REFERENCES planes_pago(id) ON UPDATE CASCADE ON DELETE SET NULL,
@@ -362,10 +362,10 @@ CREATE TABLE IF NOT EXISTS historial_propietarios_casa (
     casa_id INTEGER NOT NULL,
     abonado_anterior_id INTEGER,
     abonado_nuevo_id INTEGER NOT NULL,
-    fecha_cambio TEXT NOT NULL DEFAULT (datetime('now')),
+    fecha_cambio TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     motivo TEXT,
     usuario_id INTEGER,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (casa_id) REFERENCES casas(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (abonado_anterior_id) REFERENCES abonados(id) ON UPDATE CASCADE ON DELETE SET NULL,
     FOREIGN KEY (abonado_nuevo_id) REFERENCES abonados(id) ON UPDATE CASCADE ON DELETE RESTRICT,
@@ -380,7 +380,7 @@ CREATE TABLE IF NOT EXISTS sesiones (
     id INTEGER PRIMARY KEY,
     usuario_id INTEGER NOT NULL,
     token_sesion TEXT NOT NULL UNIQUE,
-    iniciado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    iniciado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     expira_en TEXT NOT NULL,
     finalizado_en TEXT,
     ip_origen TEXT,
@@ -393,7 +393,7 @@ CREATE TABLE IF NOT EXISTS intentos_login (
     nombre_usuario TEXT NOT NULL,
     exito INTEGER NOT NULL CHECK (exito IN (0, 1)),
     ip_origen TEXT,
-    registrado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    registrado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON UPDATE CASCADE ON DELETE SET NULL
 );
 
@@ -405,7 +405,7 @@ CREATE TABLE IF NOT EXISTS configuracion_sistema (
     categoria TEXT NOT NULL,
     descripcion TEXT,
     editable INTEGER NOT NULL DEFAULT 1 CHECK (editable IN (0, 1)),
-    actualizado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    actualizado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     actualizado_por INTEGER,
     FOREIGN KEY (actualizado_por) REFERENCES usuarios(id) ON UPDATE CASCADE ON DELETE SET NULL
 );
@@ -419,7 +419,7 @@ CREATE TABLE IF NOT EXISTS auditoria (
     resumen TEXT NOT NULL,
     datos_antes_json TEXT,
     datos_despues_json TEXT,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON UPDATE CASCADE ON DELETE SET NULL
 );
 
@@ -429,7 +429,7 @@ CREATE TABLE IF NOT EXISTS reportes_generados (
     parametros_json TEXT,
     formato TEXT NOT NULL CHECK (formato IN ('PDF', 'XLSX', 'CSV', 'HTML')),
     ruta_archivo TEXT,
-    generado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    generado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     generado_por INTEGER,
     FOREIGN KEY (generado_por) REFERENCES usuarios(id) ON UPDATE CASCADE ON DELETE SET NULL
 );
@@ -661,7 +661,7 @@ SELECT
     cpp.estado
 FROM cuotas_plan_pago cpp
 WHERE cpp.estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
-  AND cpp.fecha_vencimiento < date('now');
+  AND cpp.fecha_vencimiento < date('now', 'localtime');
 
 CREATE VIEW IF NOT EXISTS vw_pagos_adelantados AS
 SELECT
@@ -686,7 +686,7 @@ AFTER UPDATE ON usuarios
 FOR EACH ROW
 WHEN NEW.actualizado_en = OLD.actualizado_en
 BEGIN
-    UPDATE usuarios SET actualizado_en = datetime('now') WHERE id = NEW.id;
+    UPDATE usuarios SET actualizado_en = datetime('now', 'localtime') WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_barrios_actualizado
@@ -694,7 +694,7 @@ AFTER UPDATE ON barrios
 FOR EACH ROW
 WHEN NEW.actualizado_en = OLD.actualizado_en
 BEGIN
-    UPDATE barrios SET actualizado_en = datetime('now') WHERE id = NEW.id;
+    UPDATE barrios SET actualizado_en = datetime('now', 'localtime') WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_abonados_actualizado
@@ -702,7 +702,7 @@ AFTER UPDATE ON abonados
 FOR EACH ROW
 WHEN NEW.actualizado_en = OLD.actualizado_en
 BEGIN
-    UPDATE abonados SET actualizado_en = datetime('now') WHERE id = NEW.id;
+    UPDATE abonados SET actualizado_en = datetime('now', 'localtime') WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_casas_actualizado
@@ -710,7 +710,7 @@ AFTER UPDATE ON casas
 FOR EACH ROW
 WHEN NEW.actualizado_en = OLD.actualizado_en
 BEGIN
-    UPDATE casas SET actualizado_en = datetime('now') WHERE id = NEW.id;
+    UPDATE casas SET actualizado_en = datetime('now', 'localtime') WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_cargos_actualizado
@@ -718,7 +718,7 @@ AFTER UPDATE ON cargos
 FOR EACH ROW
 WHEN NEW.actualizado_en = OLD.actualizado_en
 BEGIN
-    UPDATE cargos SET actualizado_en = datetime('now') WHERE id = NEW.id;
+    UPDATE cargos SET actualizado_en = datetime('now', 'localtime') WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_pagos_actualizado
@@ -726,7 +726,7 @@ AFTER UPDATE ON pagos
 FOR EACH ROW
 WHEN NEW.actualizado_en = OLD.actualizado_en
 BEGIN
-    UPDATE pagos SET actualizado_en = datetime('now') WHERE id = NEW.id;
+    UPDATE pagos SET actualizado_en = datetime('now', 'localtime') WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_planes_pago_actualizado
@@ -734,7 +734,7 @@ AFTER UPDATE ON planes_pago
 FOR EACH ROW
 WHEN NEW.actualizado_en = OLD.actualizado_en
 BEGIN
-    UPDATE planes_pago SET actualizado_en = datetime('now') WHERE id = NEW.id;
+    UPDATE planes_pago SET actualizado_en = datetime('now', 'localtime') WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_cuotas_plan_pago_actualizado
@@ -742,7 +742,7 @@ AFTER UPDATE ON cuotas_plan_pago
 FOR EACH ROW
 WHEN NEW.actualizado_en = OLD.actualizado_en
 BEGIN
-    UPDATE cuotas_plan_pago SET actualizado_en = datetime('now') WHERE id = NEW.id;
+    UPDATE cuotas_plan_pago SET actualizado_en = datetime('now', 'localtime') WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_procesos_servicio_actualizado
@@ -750,7 +750,7 @@ AFTER UPDATE ON procesos_servicio
 FOR EACH ROW
 WHEN NEW.actualizado_en = OLD.actualizado_en
 BEGIN
-    UPDATE procesos_servicio SET actualizado_en = datetime('now') WHERE id = NEW.id;
+    UPDATE procesos_servicio SET actualizado_en = datetime('now', 'localtime') WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS trg_bloquear_eliminacion_pagos
@@ -911,3 +911,4 @@ COMMIT;
 -- Nota sobre reconexion:
 -- La reconexion no tiene monto global obligatorio. El monto se define en el pago,
 -- cargo o proceso de servicio correspondiente.
+

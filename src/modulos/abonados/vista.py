@@ -39,7 +39,11 @@ from comun.ui import (
     resolver_variante_boton_modal,
 )
 from comun.ui.componentes import COLOR_FONDO_DIALOGO, RADIO_TARJETA_DIALOGO
-from comun.ui.temas import TEMA_SICAP_PREDETERMINADO, obtener_paleta_tema
+from comun.ui.temas import (
+    TEMA_SICAP_PREDETERMINADO,
+    obtener_fondo_header_destacado,
+    obtener_paleta_tema,
+)
 from modulos.abonados.entidades import (
     Abonado,
     FILTRO_ABONADOS_CON_MORA,
@@ -345,12 +349,14 @@ class DialogoDetalleAbonado(DialogoBaseSicap):
     def __init__(
         self,
         abonado: Abonado,
+        fecha_creacion: str,
         fecha_actualizada: str,
         deuda_formateada: str,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._abonado = abonado
+        self._fecha_creacion = fecha_creacion
         self._fecha_actualizada = fecha_actualizada
         self._deuda_formateada = deuda_formateada
         self._accion_resultado = "cerrar"
@@ -412,7 +418,7 @@ class DialogoDetalleAbonado(DialogoBaseSicap):
 
         encabezado_contexto = self._crear_encabezado_seccion_detalle(
             "Contexto operativo",
-            "Consulta contacto, barrio y estado administrativo actual del abonado.",
+            "Consulta contacto, barrio y fechas operativas principales del abonado.",
         )
         grid_info = QGridLayout()
         grid_info.setHorizontalSpacing(14)
@@ -432,10 +438,13 @@ class DialogoDetalleAbonado(DialogoBaseSicap):
             1,
             0,
         )
+        grid_info.addWidget(self._crear_campo_detalle("Creado", self._fecha_creacion), 1, 1)
         grid_info.addWidget(
             self._crear_campo_detalle("Ultima actualizacion", self._fecha_actualizada),
+            2,
+            0,
             1,
-            1,
+            2,
         )
 
         encabezado_finanzas = self._crear_encabezado_seccion_detalle(
@@ -487,12 +496,21 @@ class DialogoDetalleAbonado(DialogoBaseSicap):
             centrado=True,
             mostrar_icono=False,
         )
+        boton_ver_casas = BotonAccionContextual(
+            "Ver casas",
+            variante="informacion",
+            centrado=True,
+            mostrar_icono=False,
+        )
         boton_cerrar.setMinimumWidth(124)
+        boton_ver_casas.setMinimumWidth(132)
         boton_editar.setMinimumWidth(124)
         boton_cerrar.clicked.connect(self.reject)
+        boton_ver_casas.clicked.connect(self._abrir_casas)
         boton_editar.clicked.connect(self._solicitar_edicion)
         fila_acciones.addWidget(boton_cerrar)
         fila_acciones.addStretch(1)
+        fila_acciones.addWidget(boton_ver_casas)
         fila_acciones.addWidget(boton_editar)
 
         panel_detalle_layout.addLayout(fila_superior)
@@ -590,6 +608,10 @@ class DialogoDetalleAbonado(DialogoBaseSicap):
         self._accion_resultado = "editar"
         self.accept()
 
+    def _abrir_casas(self) -> None:
+        self._accion_resultado = "ver_casas"
+        self.accept()
+
     def _aplicar_estilos(self) -> None:
         radio = RADIO_TARJETA_DIALOGO
         paleta = self._paleta_tema
@@ -681,6 +703,20 @@ class DialogoConfirmacionEstadoAbonado(DialogoConfirmacionSicap):
 
     def __init__(self, abonado: Abonado, parent: QWidget | None = None) -> None:
         nuevo_estado = "inactivar" if abonado.estado == "ACTIVO" else "activar"
+        detalle_casas = (
+            f"{abonado.total_casas} casa(s) vinculada(s) pasaran a estado suspendido."
+            if nuevo_estado == "inactivar" and abonado.total_casas > 0
+            else (
+                "No hay casas vinculadas que se vean afectadas por este cambio."
+                if nuevo_estado == "inactivar"
+                else (
+                    f"{abonado.total_casas} casa(s) suspendida(s) por abonado inactivo "
+                    "podrian volver a operativa."
+                    if abonado.total_casas > 0
+                    else "No hay casas vinculadas que reactivar con este cambio."
+                )
+            )
+        )
         super().__init__(
             titulo="Confirmar cambio de estado",
             descripcion=(
@@ -691,6 +727,7 @@ class DialogoConfirmacionEstadoAbonado(DialogoConfirmacionSicap):
                 ("Abonado", abonado.nombre_completo),
                 ("DNI", abonado.dni),
                 ("Estado actual", abonado.estado.title()),
+                ("Casas afectadas", detalle_casas),
                 ("Accion", nuevo_estado.title()),
             ),
             texto_confirmar=nuevo_estado.title(),
@@ -704,7 +741,7 @@ class VistaAbonados(QWidget):
     """Pantalla principal del modulo de abonados."""
 
     RADIO_PANEL_TABLA = 18
-    ANCHO_COLUMNA_ACCIONES = 164
+    ANCHO_COLUMNA_ACCIONES = 198
     DURACION_MENSAJE_MS = 5200
 
     filtro_texto_cambiado = Signal(str)
@@ -715,6 +752,7 @@ class VistaAbonados(QWidget):
     detalle_abonado_solicitado = Signal(int)
     editar_abonado_solicitado = Signal(int)
     cambio_estado_solicitado = Signal(int)
+    ver_casas_abonado_solicitado = Signal(int)
 
     def __init__(self) -> None:
         super().__init__()
@@ -818,11 +856,13 @@ class VistaAbonados(QWidget):
     def mostrar_detalle_abonado(
         self,
         abonado: Abonado,
+        fecha_creacion: str,
         fecha_actualizada: str,
         deuda_formateada: str,
     ) -> str:
         dialogo = DialogoDetalleAbonado(
             abonado=abonado,
+            fecha_creacion=fecha_creacion,
             fecha_actualizada=fecha_actualizada,
             deuda_formateada=deuda_formateada,
             parent=self,
@@ -833,6 +873,13 @@ class VistaAbonados(QWidget):
     def confirmar_cambio_estado_abonado(self, abonado: Abonado) -> bool:
         dialogo = DialogoConfirmacionEstadoAbonado(abonado=abonado, parent=self)
         return dialogo.exec() == QDialog.DialogCode.Accepted
+
+    def aplicar_busqueda_externa(self, texto: str) -> None:
+        texto_normalizado = texto.strip()
+        if self._campo_busqueda.text() != texto_normalizado:
+            self._campo_busqueda.setText(texto_normalizado)
+            return
+        self.filtro_texto_cambiado.emit(texto_normalizado)
 
     def solicitar_ruta_exportacion(self) -> str:
         ruta, _ = QFileDialog.getSaveFileName(
@@ -1020,6 +1067,7 @@ class VistaAbonados(QWidget):
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         boton_accion_detalle = BotonIconoFilaAbonado("eye.svg", "#4fa3ff", "Ver detalle")
+        boton_ver_casas = BotonIconoFilaAbonado("home.svg", "#8de8c7", "Ver casas")
         boton_accion_editar = BotonIconoFilaAbonado("key.svg", "#4fa3ff", "Editar")
         accion_desactiva = abonado.estado == "ACTIVO"
         boton_accion_estado = BotonIconoFilaAbonado(
@@ -1030,6 +1078,11 @@ class VistaAbonados(QWidget):
 
         boton_accion_detalle.clicked.connect(
             lambda checked=False, identificador=abonado.identificador: self.detalle_abonado_solicitado.emit(
+                int(identificador or 0)
+            )
+        )
+        boton_ver_casas.clicked.connect(
+            lambda checked=False, identificador=abonado.identificador: self.ver_casas_abonado_solicitado.emit(
                 int(identificador or 0)
             )
         )
@@ -1045,6 +1098,7 @@ class VistaAbonados(QWidget):
         )
 
         layout.addWidget(boton_accion_detalle)
+        layout.addWidget(boton_ver_casas)
         layout.addWidget(boton_accion_editar)
         layout.addWidget(boton_accion_estado)
         return contenedor
@@ -1055,6 +1109,7 @@ class VistaAbonados(QWidget):
 
     def _aplicar_estilos(self) -> None:
         radio_panel_tabla = self.RADIO_PANEL_TABLA
+        fondo_header_destacado = obtener_fondo_header_destacado(self._tema_actual)
         self.setStyleSheet(
             """
             QWidget#vistaAbonados {
@@ -1088,19 +1143,25 @@ class VistaAbonados(QWidget):
             }
             QFrame#panelOperativoAbonados,
             QFrame#tarjetaResumenAbonados {
-                background: rgba(255, 255, 255, 0.10);
+                background: """
+            + fondo_header_destacado
+            + """;
                 border: 1px solid rgba(255, 255, 255, 0.16);
                 border-radius: 18px;
             }
             QFrame#panelTablaAbonados {
-                background: rgba(255, 255, 255, 0.10);
+                background: """
+            + fondo_header_destacado
+            + """;
                 border: 1px solid rgba(255, 255, 255, 0.16);
                 border-radius: """
             + str(radio_panel_tabla)
             + """px;
             }
             QTableWidget#tablaAbonados {
-                background: rgba(255, 255, 255, 0.03);
+                background: """
+            + self._paleta_tema["fondo_tabla_cuerpo"]
+            + """;
                 background-clip: padding;
                 border: none;
                 border-radius: """
@@ -1126,11 +1187,17 @@ class VistaAbonados(QWidget):
             + """px;
             }
             QTableWidget#tablaAbonados QHeaderView::section {
-                background: rgba(255, 255, 255, 0.10);
+                background: """
+            + self._paleta_tema["fondo_tabla_header_destacado"]
+            + """;
                 color: #f7fbff;
                 border: none;
-                border-right: 1px solid rgba(255, 255, 255, 0.06);
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                border-right: 1px solid """
+            + self._paleta_tema["borde_tabla"]
+            + """;
+                border-bottom: 1px solid """
+            + self._paleta_tema["borde_tabla"]
+            + """;
                 padding: 10px 12px;
                 font-size: 12px;
                 font-weight: 800;
@@ -1142,7 +1209,22 @@ class VistaAbonados(QWidget):
             }
             QTableWidget#tablaAbonados::item {
                 padding: 9px 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+                border-bottom: 1px solid """
+            + self._paleta_tema["borde_tabla"]
+            + """;
+                background: """
+            + self._paleta_tema["fondo_tabla_fila"]
+            + """;
+            }
+            QTableWidget#tablaAbonados::item:alternate {
+                background: """
+            + self._paleta_tema["fondo_tabla_fila_alterna"]
+            + """;
+            }
+            QTableWidget#tablaAbonados::item:selected {
+                background: """
+            + self._paleta_tema["fondo_tabla_seleccion"]
+            + """;
             }
             QLabel#iconoTarjetaResumen {
                 background: rgba(255, 255, 255, 0.08);
@@ -1266,9 +1348,15 @@ class VistaAbonados(QWidget):
                 }}
                 QTableWidget#tablaAbonados {{
                     background: {paleta["fondo_superficie_muy_suave"]};
+                    /*
+                    Tema claro pendiente:
+                    background: {paleta["fondo_tabla_cuerpo"]};
+                    alternate-background-color: {paleta["fondo_tabla_fila_alterna"]};
+                    */
                 }}
                 QTableWidget#tablaAbonados QHeaderView::section {{
                     background: {paleta["fondo_tabla_header"]};
+                    /* Tema claro pendiente: background: {paleta["fondo_tabla_header_destacado"]}; */
                     color: {paleta["texto_input"]};
                     border-right: 1px solid {paleta["borde_suave"]};
                     border-bottom: 1px solid {paleta["borde_suave"]};

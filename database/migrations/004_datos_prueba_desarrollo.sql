@@ -1,4 +1,4 @@
-BEGIN;
+﻿BEGIN;
 
 -- ============================================================
 -- 1. Regla de semilla
@@ -75,7 +75,7 @@ VALUES
 
 UPDATE configuracion_sistema
 SET valor = '35000',
-    actualizado_en = datetime('now')
+    actualizado_en = datetime('now', 'localtime')
 WHERE clave = 'cobro.precio_mensual_centavos'
   AND valor = '0';
 
@@ -224,12 +224,12 @@ INSERT OR IGNORE INTO periodos_cobro(
     estado
 )
 SELECT
-    CAST(strftime('%Y', date('now', '-2 month')) AS INTEGER),
-    CAST(strftime('%m', date('now', '-2 month')) AS INTEGER),
-    'Periodo de prueba ' || strftime('%m/%Y', date('now', '-2 month')),
-    date(date('now', '-2 month'), 'start of month'),
-    date(date('now', '-2 month'), 'start of month', '+1 month', '-1 day'),
-    date(date('now', '-2 month'), 'start of month', '+1 month', '+9 day'),
+    CAST(strftime('%Y', date('now', 'localtime', '-2 month')) AS INTEGER),
+    CAST(strftime('%m', date('now', 'localtime', '-2 month')) AS INTEGER),
+    'Periodo de prueba ' || strftime('%m/%Y', date('now', 'localtime', '-2 month')),
+    date(date('now', 'localtime', '-2 month'), 'start of month'),
+    date(date('now', 'localtime', '-2 month'), 'start of month', '+1 month', '-1 day'),
+    date(date('now', 'localtime', '-2 month'), 'start of month', '+1 month', '+9 day'),
     'CERRADO';
 
 INSERT OR IGNORE INTO periodos_cobro(
@@ -242,12 +242,12 @@ INSERT OR IGNORE INTO periodos_cobro(
     estado
 )
 SELECT
-    CAST(strftime('%Y', date('now', '-1 month')) AS INTEGER),
-    CAST(strftime('%m', date('now', '-1 month')) AS INTEGER),
-    'Periodo de prueba ' || strftime('%m/%Y', date('now', '-1 month')),
-    date(date('now', '-1 month'), 'start of month'),
-    date(date('now', '-1 month'), 'start of month', '+1 month', '-1 day'),
-    date(date('now', '-1 month'), 'start of month', '+1 month', '+9 day'),
+    CAST(strftime('%Y', date('now', 'localtime', '-1 month')) AS INTEGER),
+    CAST(strftime('%m', date('now', 'localtime', '-1 month')) AS INTEGER),
+    'Periodo de prueba ' || strftime('%m/%Y', date('now', 'localtime', '-1 month')),
+    date(date('now', 'localtime', '-1 month'), 'start of month'),
+    date(date('now', 'localtime', '-1 month'), 'start of month', '+1 month', '-1 day'),
+    date(date('now', 'localtime', '-1 month'), 'start of month', '+1 month', '+9 day'),
     'CERRADO';
 
 INSERT OR IGNORE INTO periodos_cobro(
@@ -260,12 +260,12 @@ INSERT OR IGNORE INTO periodos_cobro(
     estado
 )
 SELECT
-    CAST(strftime('%Y', date('now')) AS INTEGER),
-    CAST(strftime('%m', date('now')) AS INTEGER),
-    'Periodo de prueba ' || strftime('%m/%Y', date('now')),
-    date('now', 'start of month'),
-    date('now', 'start of month', '+1 month', '-1 day'),
-    date('now', 'start of month', '+1 month', '+9 day'),
+    CAST(strftime('%Y', date('now', 'localtime')) AS INTEGER),
+    CAST(strftime('%m', date('now', 'localtime')) AS INTEGER),
+    'Periodo de prueba ' || strftime('%m/%Y', date('now', 'localtime')),
+    date('now', 'localtime', 'start of month'),
+    date('now', 'localtime', 'start of month', '+1 month', '-1 day'),
+    date('now', 'localtime', 'start of month', '+1 month', '+9 day'),
     'ABIERTO';
 
 -- ============================================================
@@ -301,8 +301,8 @@ FROM casas c
 JOIN abonados a ON a.id = c.abonado_id
 JOIN conceptos_cobro cc ON cc.codigo = 'SERVICIO_MENSUAL'
 JOIN periodos_cobro p
-    ON p.anio = CAST(strftime('%Y', date('now')) AS INTEGER)
-   AND p.mes = CAST(strftime('%m', date('now')) AS INTEGER)
+    ON p.anio = CAST(strftime('%Y', date('now', 'localtime')) AS INTEGER)
+   AND p.mes = CAST(strftime('%m', date('now', 'localtime')) AS INTEGER)
 WHERE a.dni = '0801199000011';
 
 INSERT OR IGNORE INTO cargos(
@@ -334,8 +334,8 @@ FROM casas c
 JOIN abonados a ON a.id = c.abonado_id
 JOIN conceptos_cobro cc ON cc.codigo = 'SERVICIO_MENSUAL'
 JOIN periodos_cobro p
-    ON p.anio = CAST(strftime('%Y', date('now', '-1 month')) AS INTEGER)
-   AND p.mes = CAST(strftime('%m', date('now', '-1 month')) AS INTEGER)
+    ON p.anio = CAST(strftime('%Y', date('now', 'localtime', '-1 month')) AS INTEGER)
+   AND p.mes = CAST(strftime('%m', date('now', 'localtime', '-1 month')) AS INTEGER)
 WHERE a.dni = '0801199000022';
 
 INSERT OR IGNORE INTO cargos(
@@ -367,8 +367,8 @@ FROM casas c
 JOIN abonados a ON a.id = c.abonado_id
 JOIN conceptos_cobro cc ON cc.codigo = 'SERVICIO_MENSUAL'
 JOIN periodos_cobro p
-    ON p.anio = CAST(strftime('%Y', date('now')) AS INTEGER)
-   AND p.mes = CAST(strftime('%m', date('now')) AS INTEGER)
+    ON p.anio = CAST(strftime('%Y', date('now', 'localtime')) AS INTEGER)
+   AND p.mes = CAST(strftime('%m', date('now', 'localtime')) AS INTEGER)
 WHERE a.dni = '0801199000022';
 
 INSERT OR IGNORE INTO cargos(
@@ -400,8 +400,8 @@ FROM casas c
 JOIN abonados a ON a.id = c.abonado_id
 JOIN conceptos_cobro cc ON cc.codigo = 'SERVICIO_MENSUAL'
 JOIN periodos_cobro p
-    ON p.anio = CAST(strftime('%Y', date('now', '-2 month')) AS INTEGER)
-   AND p.mes = CAST(strftime('%m', date('now', '-2 month')) AS INTEGER)
+    ON p.anio = CAST(strftime('%Y', date('now', 'localtime', '-2 month')) AS INTEGER)
+   AND p.mes = CAST(strftime('%m', date('now', 'localtime', '-2 month')) AS INTEGER)
 WHERE a.dni = '0801199000033';
 
 INSERT OR IGNORE INTO cargos(
@@ -433,8 +433,8 @@ FROM casas c
 JOIN abonados a ON a.id = c.abonado_id
 JOIN conceptos_cobro cc ON cc.codigo = 'SERVICIO_MENSUAL'
 JOIN periodos_cobro p
-    ON p.anio = CAST(strftime('%Y', date('now', '-1 month')) AS INTEGER)
-   AND p.mes = CAST(strftime('%m', date('now', '-1 month')) AS INTEGER)
+    ON p.anio = CAST(strftime('%Y', date('now', 'localtime', '-1 month')) AS INTEGER)
+   AND p.mes = CAST(strftime('%m', date('now', 'localtime', '-1 month')) AS INTEGER)
 WHERE a.dni = '0801199000044';
 
 -- ============================================================
@@ -457,8 +457,8 @@ INSERT INTO planes_pago(
 SELECT
     a.id,
     c.id,
-    date('now', 'start of month'),
-    date('now', 'start of month', '+1 month', '+29 day'),
+    date('now', 'localtime', 'start of month'),
+    date('now', 'localtime', 'start of month', '+1 month', '+29 day'),
     70000,
     35000,
     2,
@@ -488,7 +488,7 @@ INSERT INTO cuotas_plan_pago(
 SELECT
     pp.id,
     1,
-    date('now', '-5 day'),
+    date('now', 'localtime', '-5 day'),
     35000,
     35000,
     'VENCIDO',
@@ -518,7 +518,7 @@ INSERT INTO cuotas_plan_pago(
 SELECT
     pp.id,
     2,
-    date('now', '+25 day'),
+    date('now', 'localtime', '+25 day'),
     35000,
     35000,
     'PENDIENTE',
@@ -568,7 +568,7 @@ SELECT
     c.id,
     a_anterior.id,
     a_nuevo.id,
-    datetime('now', '-18 day'),
+    datetime('now', 'localtime', '-18 day'),
     '[PRUEBA] Traspaso administrativo previo registrado para pruebas.',
     (SELECT id FROM usuarios WHERE lower(nombre_usuario) = 'admin')
 FROM casas c
@@ -610,7 +610,7 @@ SELECT
     0,
     35000,
     0,
-    datetime('now'),
+    datetime('now', 'localtime'),
     'CONFIRMADO',
     '[PRUEBA] Pago confirmado de desarrollo local.'
 FROM abonados a
@@ -707,7 +707,7 @@ BEGIN
         'Pago anulado: REC-' || printf('%06d', NEW.id),
         json_object('estado', OLD.estado, 'total_pagado_centavos', OLD.total_pagado_centavos),
         json_object('estado', NEW.estado, 'motivo_anulacion', NEW.motivo_anulacion),
-        datetime('now')
+        datetime('now', 'localtime')
     );
 END;
 
@@ -735,7 +735,7 @@ BEGIN
         'Cambio de estado de servicio de casa ' || NEW.id,
         json_object('estado_servicio', OLD.estado_servicio),
         json_object('estado_servicio', NEW.estado_servicio),
-        datetime('now')
+        datetime('now', 'localtime')
     );
 END;
 
@@ -751,3 +751,4 @@ VALUES (
 );
 
 COMMIT;
+

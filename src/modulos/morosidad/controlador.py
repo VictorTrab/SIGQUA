@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from comun.actualizaciones import EventoModuloActualizado, bus_actualizaciones_modulos
+from comun.ui import ejecutar_acciones_documento_pdf
 from modulos.morosidad.entidades import FiltroMorosidad
 from modulos.morosidad.servicio import ServicioMorosidad
 from modulos.morosidad.vista import VistaMorosidad
@@ -80,6 +81,18 @@ class ControladorMorosidad:
             abonado_id=abonado_id,
             casas_seleccionadas=casas_seleccionadas,
         )
+        if resultado.exito and resultado.ruta_documento:
+            abrir_automaticamente, imprimir_automaticamente = (
+                self._servicio_morosidad.obtener_politica_documental()
+            )
+            mensaje = ejecutar_acciones_documento_pdf(
+                resultado.ruta_documento,
+                etiqueta_documento="Documento PDF de deuda",
+                abrir_automaticamente=abrir_automaticamente,
+                imprimir_automaticamente=imprimir_automaticamente,
+            )
+            self._vista_morosidad.mostrar_mensaje(mensaje, es_error=False)
+            return
         self._vista_morosidad.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
 
     def _manejar_actualizacion_modulo(self, evento: object) -> None:

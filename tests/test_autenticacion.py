@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import sqlite3
 import sys
@@ -36,7 +36,7 @@ class TestAutenticacion(unittest.TestCase):
 
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.gestor_base_datos.inicializar_base_datos()
+        self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
         self.repositorio = RepositorioAutenticacionSQLite(self.gestor_base_datos)
         self.repositorio_configuracion = RepositorioConfiguracionSQLite(self.gestor_base_datos)
         self.servicio = ServicioAutenticacion(
@@ -321,3 +321,4 @@ class TestAutenticacion(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

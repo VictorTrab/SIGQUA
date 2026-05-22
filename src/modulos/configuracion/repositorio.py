@@ -1,4 +1,4 @@
-"""Persistencia SQLite del modulo de configuracion."""
+﻿"""Persistencia SQLite del modulo de configuracion."""
 
 from __future__ import annotations
 
@@ -57,16 +57,18 @@ class RepositorioConfiguracionSQLite:
         marcadores = ", ".join("?" for _ in claves)
         consulta = f"""
             SELECT
-                clave,
-                valor,
-                tipo_dato,
-                categoria,
-                COALESCE(descripcion, '') AS descripcion,
-                editable,
-                COALESCE(actualizado_en, '') AS actualizado_en,
-                actualizado_por
-            FROM configuracion_sistema
-            WHERE clave IN ({marcadores});
+                cs.clave,
+                cs.valor,
+                cs.tipo_dato,
+                cs.categoria,
+                COALESCE(cs.descripcion, '') AS descripcion,
+                cs.editable,
+                COALESCE(cs.actualizado_en, '') AS actualizado_en,
+                cs.actualizado_por,
+                COALESCE(u.nombre_completo, u.nombre_usuario, '') AS actualizado_por_nombre
+            FROM configuracion_sistema cs
+            LEFT JOIN usuarios u ON u.id = cs.actualizado_por
+            WHERE cs.clave IN ({marcadores});
         """
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             filas = conexion.execute(consulta, claves).fetchall()
@@ -82,6 +84,7 @@ class RepositorioConfiguracionSQLite:
                 actualizado_por=(
                     int(fila["actualizado_por"]) if fila["actualizado_por"] is not None else None
                 ),
+                actualizado_por_nombre=str(fila["actualizado_por_nombre"] or ""),
             )
             for fila in filas
         }
@@ -100,7 +103,7 @@ class RepositorioConfiguracionSQLite:
                         """
                         UPDATE configuracion_sistema
                         SET valor = ?,
-                            actualizado_en = datetime('now'),
+                            actualizado_en = datetime('now', 'localtime'),
                             actualizado_por = ?
                         WHERE clave = ?
                           AND editable = 1;
@@ -160,16 +163,18 @@ class RepositorioConfiguracionSQLite:
             fila = conexion.execute(
                 """
                 SELECT
-                    COALESCE(nombre_archivo, '') AS nombre_archivo,
-                    COALESCE(ruta_archivo, '') AS ruta_archivo,
-                    COALESCE(tamano_bytes, 0) AS tamano_bytes,
-                    COALESCE(hash_archivo, '') AS hash_archivo,
-                    COALESCE(tipo_respaldo, '') AS tipo_respaldo,
-                    COALESCE(estado, '') AS estado,
-                    COALESCE(observaciones, '') AS observaciones,
-                    COALESCE(generado_en, '') AS generado_en
-                FROM historial_respaldos
-                ORDER BY generado_en DESC, id DESC
+                    COALESCE(hr.nombre_archivo, '') AS nombre_archivo,
+                    COALESCE(hr.ruta_archivo, '') AS ruta_archivo,
+                    COALESCE(hr.tamano_bytes, 0) AS tamano_bytes,
+                    COALESCE(hr.hash_archivo, '') AS hash_archivo,
+                    COALESCE(hr.tipo_respaldo, '') AS tipo_respaldo,
+                    COALESCE(hr.estado, '') AS estado,
+                    COALESCE(hr.observaciones, '') AS observaciones,
+                    COALESCE(hr.generado_en, '') AS generado_en,
+                    COALESCE(u.nombre_completo, u.nombre_usuario, '') AS generado_por_nombre
+                FROM historial_respaldos hr
+                LEFT JOIN usuarios u ON u.id = hr.generado_por
+                ORDER BY hr.generado_en DESC, hr.id DESC
                 LIMIT 1;
                 """
             ).fetchone()
@@ -184,6 +189,7 @@ class RepositorioConfiguracionSQLite:
             "estado": str(fila["estado"] or ""),
             "observaciones": str(fila["observaciones"] or ""),
             "generado_en": str(fila["generado_en"] or ""),
+            "generado_por_nombre": str(fila["generado_por_nombre"] or ""),
         }
 
     def registrar_respaldo(
@@ -224,3 +230,4 @@ class RepositorioConfiguracionSQLite:
                         generado_por,
                     ),
                 )
+

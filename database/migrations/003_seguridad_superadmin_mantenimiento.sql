@@ -1,4 +1,4 @@
-PRAGMA foreign_keys = OFF;
+﻿PRAGMA foreign_keys = OFF;
 
 BEGIN TRANSACTION;
 
@@ -15,7 +15,7 @@ CREATE TABLE sesiones (
     id INTEGER PRIMARY KEY,
     usuario_id INTEGER NOT NULL,
     token_sesion_hash TEXT NOT NULL UNIQUE,
-    iniciado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    iniciado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     expira_en TEXT,
     cerrado_en TEXT,
     equipo TEXT,
@@ -26,7 +26,7 @@ INSERT INTO sesiones(usuario_id, token_sesion_hash, iniciado_en, expira_en, cerr
 SELECT
     usuario_id,
     lower(hex(randomblob(32))),
-    COALESCE(iniciado_en, datetime('now')),
+    COALESCE(iniciado_en, datetime('now', 'localtime')),
     expira_en,
     finalizado_en,
     ip_origen,
@@ -42,7 +42,7 @@ CREATE TABLE intentos_login (
     id INTEGER PRIMARY KEY,
     usuario_o_correo TEXT NOT NULL,
     usuario_id INTEGER,
-    intento_en TEXT NOT NULL DEFAULT (datetime('now')),
+    intento_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     resultado TEXT NOT NULL CHECK (resultado IN ('EXITOSO', 'FALLIDO')),
     motivo TEXT,
     equipo TEXT,
@@ -53,7 +53,7 @@ SELECT
     id,
     nombre_usuario,
     usuario_id,
-    COALESCE(registrado_en, datetime('now')),
+    COALESCE(registrado_en, datetime('now', 'localtime')),
     CASE WHEN exito = 1 THEN 'EXITOSO' ELSE 'FALLIDO' END,
     NULL,
     ip_origen
@@ -69,7 +69,7 @@ CREATE TABLE configuracion_sistema (
     categoria TEXT NOT NULL,
     descripcion TEXT,
     editable INTEGER NOT NULL DEFAULT 1 CHECK (editable IN (0, 1)),
-    actualizado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    actualizado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     actualizado_por INTEGER,
     FOREIGN KEY (actualizado_por) REFERENCES usuarios(id) ON UPDATE CASCADE ON DELETE SET NULL
 );
@@ -97,7 +97,7 @@ CREATE TABLE auditoria (
     resumen TEXT,
     datos_antes_json TEXT,
     datos_despues_json TEXT,
-    fecha_evento TEXT NOT NULL DEFAULT (datetime('now')),
+    fecha_evento TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON UPDATE CASCADE ON DELETE SET NULL
 );
 INSERT INTO auditoria(id, usuario_id, accion, entidad, entidad_id, resumen, datos_antes_json, datos_despues_json, fecha_evento)
@@ -123,7 +123,7 @@ CREATE TABLE IF NOT EXISTS historial_respaldos (
     hash_archivo TEXT,
     estado TEXT NOT NULL DEFAULT 'GENERADO' CHECK (estado IN ('GENERADO', 'VALIDADO', 'RESTAURADO', 'FALLIDO')),
     observaciones TEXT,
-    generado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    generado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     generado_por INTEGER,
     FOREIGN KEY (generado_por) REFERENCES usuarios(id) ON UPDATE CASCADE ON DELETE SET NULL
 );
@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS eventos_tecnicos (
     entidad TEXT,
     entidad_id INTEGER,
     equipo TEXT,
-    registrado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    registrado_en TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     registrado_por INTEGER,
     resuelto_en TEXT,
     FOREIGN KEY (registrado_por) REFERENCES usuarios(id) ON UPDATE CASCADE ON DELETE SET NULL
@@ -240,7 +240,7 @@ INSERT OR IGNORE INTO configuracion_sistema(clave, valor, tipo_dato, categoria, 
 
 UPDATE configuracion_sistema
 SET valor = '2.1.0',
-    actualizado_en = datetime('now')
+    actualizado_en = datetime('now', 'localtime')
 WHERE clave = 'sistema.version';
 
 DROP VIEW IF EXISTS vw_usuarios_operativos;
@@ -360,7 +360,7 @@ BEGIN
             'estado', NEW.estado,
             'fecha_restablecimiento_contrasena', NEW.fecha_restablecimiento_contrasena
         ),
-        datetime('now')
+        datetime('now', 'localtime')
     );
 END;
 
@@ -374,3 +374,4 @@ VALUES (
 COMMIT;
 
 PRAGMA foreign_keys = ON;
+

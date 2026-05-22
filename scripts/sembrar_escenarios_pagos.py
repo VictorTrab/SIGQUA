@@ -1,4 +1,4 @@
-"""Siembra escenarios operativos de pagos para validacion local de SICAP."""
+﻿"""Siembra escenarios operativos de pagos para validacion local de SICAP."""
 
 from __future__ import annotations
 
@@ -407,7 +407,7 @@ class SembradorEscenariosPagos:
             """
             UPDATE configuracion_sistema
             SET valor = COALESCE(NULLIF(valor, ''), ?),
-                actualizado_en = datetime('now')
+                actualizado_en = datetime('now', 'localtime')
             WHERE clave = 'cobro.precio_mensual_centavos';
             """,
             (str(PRECIO_MENSUAL_DEFECTO),),
@@ -468,7 +468,7 @@ class SembradorEscenariosPagos:
                 direccion_referencia = ?,
                 observaciones = ?,
                 estado = ?,
-                actualizado_en = datetime('now')
+                actualizado_en = datetime('now', 'localtime')
             WHERE id = ?;
             """,
             (nombre, telefono, barrio_id, direccion_referencia, observaciones, estado, abonado_id),
@@ -531,7 +531,7 @@ class SembradorEscenariosPagos:
                 direccion_referencia = ?,
                 estado_servicio = ?,
                 observaciones = ?,
-                actualizado_en = datetime('now')
+                actualizado_en = datetime('now', 'localtime')
             WHERE id = ?;
             """,
             (
@@ -671,7 +671,7 @@ class SembradorEscenariosPagos:
                 fecha_vencimiento = ?,
                 estado = ?,
                 origen = ?,
-                actualizado_en = datetime('now'),
+                actualizado_en = datetime('now', 'localtime'),
                 anulado_en = NULL,
                 anulado_por = NULL,
                 motivo_anulacion = NULL
@@ -760,7 +760,7 @@ class SembradorEscenariosPagos:
                 fecha_vencimiento = ?,
                 estado = ?,
                 origen = ?,
-                actualizado_en = datetime('now'),
+                actualizado_en = datetime('now', 'localtime'),
                 anulado_en = NULL,
                 anulado_por = NULL,
                 motivo_anulacion = NULL
@@ -844,7 +844,7 @@ class SembradorEscenariosPagos:
                 SET estado = ?,
                     saldo_pendiente_centavos = ?,
                     fecha_vencimiento = ?,
-                    actualizado_en = datetime('now')
+                    actualizado_en = datetime('now', 'localtime')
                 WHERE id = ?;
                 """,
                 (estado, saldo, fecha, int(cuota["id"])),
@@ -853,7 +853,7 @@ class SembradorEscenariosPagos:
             """
             UPDATE planes_pago
             SET cuotas_pagadas = 1,
-                actualizado_en = datetime('now')
+                actualizado_en = datetime('now', 'localtime')
             WHERE id = ?;
             """,
             (plan_id,),
@@ -909,7 +909,7 @@ class SembradorEscenariosPagos:
             """
             UPDATE casas
             SET abonado_id = ?,
-                actualizado_en = datetime('now')
+                actualizado_en = datetime('now', 'localtime')
             WHERE id = ?;
             """,
             (abonado_id, casa_id),
@@ -918,7 +918,7 @@ class SembradorEscenariosPagos:
             """
             UPDATE cargos
             SET abonado_id = ?,
-                actualizado_en = datetime('now')
+                actualizado_en = datetime('now', 'localtime')
             WHERE casa_id = ?
               AND anulado_en IS NULL
               AND estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
@@ -930,7 +930,7 @@ class SembradorEscenariosPagos:
             """
             UPDATE planes_pago
             SET abonado_id = ?,
-                actualizado_en = datetime('now')
+                actualizado_en = datetime('now', 'localtime')
             WHERE casa_id = ?
               AND estado = 'ACTIVO';
             """,
@@ -951,7 +951,7 @@ class SembradorEscenariosPagos:
             return
         pago_id = int(fila["id"])
         conexion.execute(
-            "UPDATE pagos SET fecha_pago = ?, actualizado_en = datetime('now') WHERE id = ?;",
+            "UPDATE pagos SET fecha_pago = ?, actualizado_en = datetime('now', 'localtime') WHERE id = ?;",
             (fecha_hora, pago_id),
         )
         conexion.execute(
@@ -1030,3 +1030,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

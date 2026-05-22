@@ -1,4 +1,4 @@
-"""Contratos e implementacion SQLite del modulo de casas."""
+﻿"""Contratos e implementacion SQLite del modulo de casas."""
 
 from __future__ import annotations
 
@@ -10,12 +10,20 @@ from comun.base_datos import GestorBaseDatos
 from modulos.casas.entidades import (
     Casa,
     DetalleCasa,
+    ESTADO_ADMINISTRATIVO_OPERATIVA,
+    ESTADO_ADMINISTRATIVO_SUSPENDIDA,
+    ESTADO_SERVICIO_ACTIVO,
+    ESTADO_SERVICIO_CORTADO,
     FILTRO_CASAS_ACTIVAS,
     FILTRO_CASAS_CON_MORA,
     FILTRO_CASAS_SIN_PROPIETARIO,
     FILTRO_CASAS_SUSPENDIDAS,
     FILTRO_CASAS_TODAS,
     HistorialPropietarioCasa,
+    MOTIVO_ESTADO_ADMINISTRATIVO_ABONADO_INACTIVO,
+    MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO,
+    MOTIVO_ESTADO_ADMINISTRATIVO_REASIGNACION_PENDIENTE,
+    MOTIVO_ESTADO_ADMINISTRATIVO_REVISION_ADMINISTRATIVA,
     OpcionAbonado,
     OpcionBarrio,
     PlanActivoCasa,
@@ -64,6 +72,27 @@ SUBCONSULTA_PLANES = """
     GROUP BY casa_id
 """
 
+SUBCONSULTA_TRAZABILIDAD_ACTIVACION = """
+    SELECT
+        c.id AS casa_id,
+        CASE
+            WHEN EXISTS (
+                SELECT 1
+                FROM procesos_servicio ps
+                WHERE ps.casa_id = c.id
+                  AND ps.tipo IN ('CONEXION', 'RECONEXION')
+            ) THEN 0
+            WHEN EXISTS (
+                SELECT 1
+                FROM pagos p
+                WHERE p.casa_id = c.id
+                  AND COALESCE(p.tipo_pago, 'MENSUALIDAD') IN ('CONEXION', 'RECONEXION')
+            ) THEN 0
+            ELSE 1
+        END AS antecedente_servicio_editable
+    FROM casas c
+"""
+
 
 class RepositorioCasas(Protocol):
     """Define la persistencia requerida por casas."""
@@ -92,8 +121,21 @@ class RepositorioCasas(Protocol):
     def guardar(self, casa: Casa) -> None:
         """Crea o actualiza una casa."""
 
-    def cambiar_estado(self, casa_id: int, estado: str) -> None:
-        """Cambia el estado de servicio de una casa."""
+    def cambiar_estado(
+        self,
+        casa_id: int,
+        estado_administrativo: str,
+        motivo_estado_administrativo: str,
+    ) -> None:
+        """Cambia el estado administrativo de una casa."""
+
+    def cortar_servicio(
+        self,
+        casa_id: int,
+        observaciones: str,
+        actor_id: int | None,
+    ) -> None:
+        """Registra un corte fisico de servicio y actualiza la casa."""
 
     def cambiar_dueno(
         self,
@@ -120,9 +162,18 @@ class RepositorioCasas(Protocol):
     ) -> int:
         """Suspende casas operativas de un abonado inactivado."""
 
+    def reactivar_casas_por_abonado_activado(
+        self,
+        abonado_id: int,
+        actor_id: int | None = None,
+    ) -> int:
+        """Reactiva administrativamente casas suspendidas por abonado inactivo."""
+
 
 class RepositorioCasasSQLite:
     """Repositorio SQLite para casas."""
+
+    MOTIVO_CORTE_MANUAL = "CORTE_MANUAL"
 
     def __init__(self, gestor_base_datos: GestorBaseDatos) -> None:
         self._gestor_base_datos = gestor_base_datos
@@ -152,10 +203,15 @@ class RepositorioCasasSQLite:
                 COALESCE(c.direccion_referencia, '') AS direccion_referencia,
                 COALESCE(c.observaciones, '') AS observaciones,
                 c.estado_servicio,
+                c.estado_administrativo,
+                c.motivo_estado_administrativo,
+                COALESCE(c.ha_tenido_servicio_activo, 0) AS ha_tenido_servicio_activo,
+                COALESCE(ta.antecedente_servicio_editable, 1) AS antecedente_servicio_editable,
                 COALESCE(dd.deuda_total_centavos, 0) AS deuda_total_centavos,
                 COALESCE(dd.meses_pendientes, 0) AS meses_pendientes,
                 COALESCE(dd.meses_en_mora, 0) AS meses_en_mora,
                 COALESCE(pp.total_planes_activos, 0) AS total_planes_activos,
+                COALESCE(c.creado_en, '') AS creado_en,
                 COALESCE(c.fecha_alta, '') AS fecha_alta,
                 COALESCE(c.actualizado_en, '') AS actualizado_en
             FROM casas c
@@ -163,6 +219,7 @@ class RepositorioCasasSQLite:
             LEFT JOIN abonados a ON a.id = c.abonado_id
             LEFT JOIN ({SUBCONSULTA_DEUDA}) dd ON dd.casa_id = c.id
             LEFT JOIN ({SUBCONSULTA_PLANES}) pp ON pp.casa_id = c.id
+            LEFT JOIN ({SUBCONSULTA_TRAZABILIDAD_ACTIVACION}) ta ON ta.casa_id = c.id
             WHERE {' AND '.join(condiciones)}
             ORDER BY c.id ASC
             {clausula_paginacion};
@@ -176,6 +233,7 @@ class RepositorioCasasSQLite:
         consulta = f"""
             SELECT COUNT(*)
             FROM casas c
+            INNER JOIN barrios b ON b.id = c.barrio_id
             LEFT JOIN abonados a ON a.id = c.abonado_id
             LEFT JOIN ({SUBCONSULTA_DEUDA}) dd ON dd.casa_id = c.id
             WHERE {' AND '.join(condiciones)};
@@ -187,7 +245,14 @@ class RepositorioCasasSQLite:
         consulta = f"""
             SELECT
                 COUNT(*) AS total_casas,
-                SUM(CASE WHEN c.estado_servicio = 'ACTIVO' THEN 1 ELSE 0 END) AS casas_activas,
+                SUM(
+                    CASE
+                        WHEN c.estado_servicio = 'ACTIVO'
+                         AND c.estado_administrativo = 'OPERATIVA'
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS casas_activas,
                 SUM(CASE WHEN COALESCE(dd.deuda_total_centavos, 0) > 0 THEN 1 ELSE 0 END) AS casas_con_deuda,
                 SUM(CASE WHEN COALESCE(dd.meses_en_mora, 0) > 0 THEN 1 ELSE 0 END) AS casas_morosas
             FROM casas c
@@ -216,10 +281,15 @@ class RepositorioCasasSQLite:
                 COALESCE(c.direccion_referencia, '') AS direccion_referencia,
                 COALESCE(c.observaciones, '') AS observaciones,
                 c.estado_servicio,
+                c.estado_administrativo,
+                c.motivo_estado_administrativo,
+                COALESCE(c.ha_tenido_servicio_activo, 0) AS ha_tenido_servicio_activo,
+                COALESCE(ta.antecedente_servicio_editable, 1) AS antecedente_servicio_editable,
                 COALESCE(dd.deuda_total_centavos, 0) AS deuda_total_centavos,
                 COALESCE(dd.meses_pendientes, 0) AS meses_pendientes,
                 COALESCE(dd.meses_en_mora, 0) AS meses_en_mora,
                 COALESCE(pp.total_planes_activos, 0) AS total_planes_activos,
+                COALESCE(c.creado_en, '') AS creado_en,
                 COALESCE(c.fecha_alta, '') AS fecha_alta,
                 COALESCE(c.actualizado_en, '') AS actualizado_en
             FROM casas c
@@ -227,6 +297,7 @@ class RepositorioCasasSQLite:
             LEFT JOIN abonados a ON a.id = c.abonado_id
             LEFT JOIN ({SUBCONSULTA_DEUDA}) dd ON dd.casa_id = c.id
             LEFT JOIN ({SUBCONSULTA_PLANES}) pp ON pp.casa_id = c.id
+            LEFT JOIN ({SUBCONSULTA_TRAZABILIDAD_ACTIVACION}) ta ON ta.casa_id = c.id
             WHERE c.id = ? AND c.eliminado_en IS NULL
             LIMIT 1;
         """
@@ -306,16 +377,22 @@ class RepositorioCasasSQLite:
                             barrio_id,
                             direccion_referencia,
                             estado_servicio,
+                            estado_administrativo,
+                            motivo_estado_administrativo,
+                            ha_tenido_servicio_activo,
                             observaciones,
                             actualizado_en
                         )
-                        VALUES (?, ?, ?, ?, ?, datetime('now'));
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'));
                         """,
                         (
                             casa.abonado_id,
                             casa.barrio_id,
                             casa.direccion_referencia,
                             casa.estado_servicio,
+                            casa.estado_administrativo,
+                            casa.motivo_estado_administrativo,
+                            1 if casa.ha_tenido_servicio_activo else 0,
                             casa.observaciones,
                         ),
                     )
@@ -328,8 +405,11 @@ class RepositorioCasasSQLite:
                         barrio_id = ?,
                         direccion_referencia = ?,
                         estado_servicio = ?,
+                        estado_administrativo = ?,
+                        motivo_estado_administrativo = ?,
+                        ha_tenido_servicio_activo = ?,
                         observaciones = ?,
-                        actualizado_en = datetime('now')
+                        actualizado_en = datetime('now', 'localtime')
                     WHERE id = ? AND eliminado_en IS NULL;
                     """,
                     (
@@ -337,22 +417,141 @@ class RepositorioCasasSQLite:
                         casa.barrio_id,
                         casa.direccion_referencia,
                         casa.estado_servicio,
+                        casa.estado_administrativo,
+                        casa.motivo_estado_administrativo,
+                        1 if casa.ha_tenido_servicio_activo else 0,
                         casa.observaciones,
                         casa.identificador,
                     ),
                 )
 
-    def cambiar_estado(self, casa_id: int, estado: str) -> None:
+    def cambiar_estado(
+        self,
+        casa_id: int,
+        estado_administrativo: str,
+        motivo_estado_administrativo: str,
+    ) -> None:
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             with conexion:
                 conexion.execute(
                     """
                     UPDATE casas
-                    SET estado_servicio = ?,
-                        actualizado_en = datetime('now')
+                    SET estado_administrativo = ?,
+                        motivo_estado_administrativo = ?,
+                        actualizado_en = datetime('now', 'localtime')
                     WHERE id = ? AND eliminado_en IS NULL;
                     """,
-                    (estado, casa_id),
+                    (estado_administrativo, motivo_estado_administrativo, casa_id),
+                )
+
+    def cortar_servicio(
+        self,
+        casa_id: int,
+        observaciones: str,
+        actor_id: int | None,
+    ) -> None:
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            with conexion:
+                fila_actual = conexion.execute(
+                    """
+                    SELECT
+                        c.id,
+                        c.abonado_id,
+                        COALESCE(c.estado_servicio, 'ACTIVO') AS estado_servicio,
+                        COALESCE(c.estado_administrativo, 'OPERATIVA') AS estado_administrativo,
+                        COALESCE(c.motivo_estado_administrativo, 'NINGUNO') AS motivo_estado_administrativo
+                    FROM casas c
+                    WHERE c.id = ? AND c.eliminado_en IS NULL
+                    LIMIT 1;
+                    """,
+                    (casa_id,),
+                ).fetchone()
+                if fila_actual is None:
+                    raise ValueError("La casa indicada no existe.")
+                if str(fila_actual["estado_servicio"] or ESTADO_SERVICIO_ACTIVO) != ESTADO_SERVICIO_ACTIVO:
+                    raise ValueError("Solo puedes cortar servicio a casas activas.")
+
+                conexion.execute(
+                    """
+                    INSERT INTO procesos_servicio(
+                        abonado_id,
+                        casa_id,
+                        tipo,
+                        fecha_ejecucion,
+                        estado,
+                        motivo,
+                        observaciones,
+                        usuario_id
+                    )
+                    VALUES (?, ?, 'CORTE', datetime('now', 'localtime'), 'EJECUTADO', ?, ?, ?);
+                    """,
+                    (
+                        int(fila_actual["abonado_id"]) if fila_actual["abonado_id"] is not None else None,
+                        casa_id,
+                        self.MOTIVO_CORTE_MANUAL,
+                        observaciones,
+                        actor_id,
+                    ),
+                )
+                conexion.execute(
+                    """
+                    UPDATE casas
+                    SET estado_servicio = ?,
+                        actualizado_en = datetime('now', 'localtime')
+                    WHERE id = ? AND eliminado_en IS NULL;
+                    """,
+                    (ESTADO_SERVICIO_CORTADO, casa_id),
+                )
+                conexion.execute(
+                    """
+                    INSERT INTO auditoria(
+                        usuario_id,
+                        accion,
+                        entidad,
+                        entidad_id,
+                        resumen,
+                        datos_antes_json,
+                        datos_despues_json
+                    )
+                    VALUES (?, 'CORTE_SERVICIO_CASA', 'casas', ?, ?, ?, ?);
+                    """,
+                    (
+                        actor_id,
+                        casa_id,
+                        f"Corte fisico manual de servicio para casa {casa_id}",
+                        json.dumps(
+                            {
+                                "estado_servicio": str(
+                                    fila_actual["estado_servicio"] or ESTADO_SERVICIO_ACTIVO
+                                ),
+                                "estado_administrativo": str(
+                                    fila_actual["estado_administrativo"]
+                                    or ESTADO_ADMINISTRATIVO_OPERATIVA
+                                ),
+                                "motivo_estado_administrativo": str(
+                                    fila_actual["motivo_estado_administrativo"]
+                                    or MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO
+                                ),
+                            },
+                            ensure_ascii=True,
+                        ),
+                        json.dumps(
+                            {
+                                "estado_servicio": ESTADO_SERVICIO_CORTADO,
+                                "estado_administrativo": str(
+                                    fila_actual["estado_administrativo"]
+                                    or ESTADO_ADMINISTRATIVO_OPERATIVA
+                                ),
+                                "motivo_estado_administrativo": str(
+                                    fila_actual["motivo_estado_administrativo"]
+                                    or MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO
+                                ),
+                                "motivo": self.MOTIVO_CORTE_MANUAL,
+                                "observaciones": observaciones,
+                            },
+                            ensure_ascii=True,
+                        ),
+                    ),
                 )
 
     def cambiar_dueno(
@@ -371,7 +570,9 @@ class RepositorioCasasSQLite:
                         c.abonado_id,
                         COALESCE(a.nombre_completo, '') AS abonado_actual,
                         COALESCE(a.dni, '') AS dni_actual,
-                        COALESCE(c.estado_servicio, '') AS estado_servicio
+                        COALESCE(c.estado_servicio, '') AS estado_servicio,
+                        COALESCE(c.estado_administrativo, 'OPERATIVA') AS estado_administrativo,
+                        COALESCE(c.motivo_estado_administrativo, 'NINGUNO') AS motivo_estado_administrativo
                     FROM casas c
                     LEFT JOIN abonados a ON a.id = c.abonado_id
                     WHERE c.id = ? AND c.eliminado_en IS NULL
@@ -404,16 +605,28 @@ class RepositorioCasasSQLite:
                     """
                     UPDATE casas
                     SET abonado_id = ?,
-                        actualizado_en = datetime('now')
+                        estado_administrativo = CASE
+                            WHEN ? = 'ACTIVO'
+                             AND motivo_estado_administrativo IN ('ABONADO_INACTIVO', 'REASIGNACION_PENDIENTE')
+                            THEN 'OPERATIVA'
+                            ELSE estado_administrativo
+                        END,
+                        motivo_estado_administrativo = CASE
+                            WHEN ? = 'ACTIVO'
+                             AND motivo_estado_administrativo IN ('ABONADO_INACTIVO', 'REASIGNACION_PENDIENTE')
+                            THEN 'NINGUNO'
+                            ELSE motivo_estado_administrativo
+                        END,
+                        actualizado_en = datetime('now', 'localtime')
                     WHERE id = ? AND eliminado_en IS NULL;
                     """,
-                    (nuevo_abonado_id, casa_id),
+                    (nuevo_abonado_id, str(fila_nuevo_abonado["estado"] or ""), str(fila_nuevo_abonado["estado"] or ""), casa_id),
                 )
                 conexion.execute(
                     """
                     UPDATE cargos
                     SET abonado_id = ?,
-                        actualizado_en = datetime('now')
+                        actualizado_en = datetime('now', 'localtime')
                     WHERE casa_id = ?
                       AND anulado_en IS NULL
                       AND estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
@@ -425,7 +638,7 @@ class RepositorioCasasSQLite:
                     """
                     UPDATE planes_pago
                     SET abonado_id = ?,
-                        actualizado_en = datetime('now')
+                        actualizado_en = datetime('now', 'localtime')
                     WHERE casa_id = ?
                       AND estado = 'ACTIVO';
                     """,
@@ -441,7 +654,7 @@ class RepositorioCasasSQLite:
                         motivo,
                         usuario_id
                     )
-                    VALUES (?, ?, ?, datetime('now'), ?, ?);
+                    VALUES (?, ?, ?, datetime('now', 'localtime'), ?, ?);
                     """,
                     (casa_id, abonado_anterior_id, nuevo_abonado_id, motivo, actor_id),
                 )
@@ -469,6 +682,8 @@ class RepositorioCasasSQLite:
                                 "abonado_nombre": str(fila_actual["abonado_actual"] or ""),
                                 "abonado_dni": str(fila_actual["dni_actual"] or ""),
                                 "estado_servicio": str(fila_actual["estado_servicio"] or ""),
+                                "estado_administrativo": str(fila_actual["estado_administrativo"] or ""),
+                                "motivo_estado_administrativo": str(fila_actual["motivo_estado_administrativo"] or ""),
                             },
                             ensure_ascii=True,
                         ),
@@ -477,6 +692,7 @@ class RepositorioCasasSQLite:
                                 "abonado_id": int(fila_nuevo_abonado["id"]),
                                 "abonado_nombre": str(fila_nuevo_abonado["nombre_completo"] or ""),
                                 "abonado_dni": str(fila_nuevo_abonado["dni"] or ""),
+                                "estado_abonado": str(fila_nuevo_abonado["estado"] or ""),
                                 "motivo": motivo,
                             },
                             ensure_ascii=True,
@@ -556,12 +772,12 @@ class RepositorioCasasSQLite:
             with conexion:
                 filas_afectadas = conexion.execute(
                     """
-                    SELECT id, estado_servicio
+                    SELECT id, estado_servicio, estado_administrativo, motivo_estado_administrativo
                     FROM casas
                     WHERE abonado_id = ?
                       AND eliminado_en IS NULL
                       AND estado_servicio != 'INACTIVO'
-                      AND estado_servicio != 'SUSPENDIDO';
+                      AND estado_administrativo != 'SUSPENDIDA';
                     """,
                     (abonado_id,),
                 ).fetchall()
@@ -571,12 +787,13 @@ class RepositorioCasasSQLite:
                 conexion.execute(
                     """
                     UPDATE casas
-                    SET estado_servicio = 'SUSPENDIDO',
-                        actualizado_en = datetime('now')
+                    SET estado_administrativo = 'SUSPENDIDA',
+                        motivo_estado_administrativo = 'ABONADO_INACTIVO',
+                        actualizado_en = datetime('now', 'localtime')
                     WHERE abonado_id = ?
                       AND eliminado_en IS NULL
                       AND estado_servicio != 'INACTIVO'
-                      AND estado_servicio != 'SUSPENDIDO';
+                      AND estado_administrativo != 'SUSPENDIDA';
                     """,
                     (abonado_id,),
                 )
@@ -599,10 +816,95 @@ class RepositorioCasasSQLite:
                             int(fila["id"]),
                             f"Suspension automatica de casa {int(fila['id'])} por inactivacion del abonado",
                             json.dumps(
-                                {"estado_servicio": str(fila["estado_servicio"] or "")},
+                                {
+                                    "estado_servicio": str(fila["estado_servicio"] or ""),
+                                    "estado_administrativo": str(fila["estado_administrativo"] or ""),
+                                    "motivo_estado_administrativo": str(
+                                        fila["motivo_estado_administrativo"] or ""
+                                    ),
+                                },
                                 ensure_ascii=True,
                             ),
-                            json.dumps({"estado_servicio": "SUSPENDIDO"}, ensure_ascii=True),
+                            json.dumps(
+                                {
+                                    "estado_administrativo": "SUSPENDIDA",
+                                    "motivo_estado_administrativo": "ABONADO_INACTIVO",
+                                },
+                                ensure_ascii=True,
+                            ),
+                        ),
+                    )
+                return len(filas_afectadas)
+
+    def reactivar_casas_por_abonado_activado(
+        self,
+        abonado_id: int,
+        actor_id: int | None = None,
+    ) -> int:
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            with conexion:
+                filas_afectadas = conexion.execute(
+                    """
+                    SELECT id, estado_servicio, estado_administrativo, motivo_estado_administrativo
+                    FROM casas
+                    WHERE abonado_id = ?
+                      AND eliminado_en IS NULL
+                      AND estado_administrativo = 'SUSPENDIDA'
+                      AND motivo_estado_administrativo = 'ABONADO_INACTIVO';
+                    """,
+                    (abonado_id,),
+                ).fetchall()
+                if not filas_afectadas:
+                    return 0
+
+                conexion.execute(
+                    """
+                    UPDATE casas
+                    SET estado_administrativo = 'OPERATIVA',
+                        motivo_estado_administrativo = 'NINGUNO',
+                        actualizado_en = datetime('now', 'localtime')
+                    WHERE abonado_id = ?
+                      AND eliminado_en IS NULL
+                      AND estado_administrativo = 'SUSPENDIDA'
+                      AND motivo_estado_administrativo = 'ABONADO_INACTIVO';
+                    """,
+                    (abonado_id,),
+                )
+                for fila in filas_afectadas:
+                    conexion.execute(
+                        """
+                        INSERT INTO auditoria(
+                            usuario_id,
+                            accion,
+                            entidad,
+                            entidad_id,
+                            resumen,
+                            datos_antes_json,
+                            datos_despues_json
+                        )
+                        VALUES (?, 'REACTIVAR_CASA_POR_ABONADO_ACTIVO', 'casas', ?, ?, ?, ?);
+                        """,
+                        (
+                            actor_id,
+                            int(fila["id"]),
+                            f"Reactivacion administrativa de casa {int(fila['id'])} por restauracion del abonado",
+                            json.dumps(
+                                {
+                                    "estado_servicio": str(fila["estado_servicio"] or ""),
+                                    "estado_administrativo": str(fila["estado_administrativo"] or ""),
+                                    "motivo_estado_administrativo": str(
+                                        fila["motivo_estado_administrativo"] or ""
+                                    ),
+                                },
+                                ensure_ascii=True,
+                            ),
+                            json.dumps(
+                                {
+                                    "estado_administrativo": "OPERATIVA",
+                                    "motivo_estado_administrativo": "NINGUNO",
+                                },
+                                ensure_ascii=True,
+                            ),
                         ),
                     )
                 return len(filas_afectadas)
@@ -622,18 +924,22 @@ class RepositorioCasasSQLite:
                 (
                     CAST(c.id AS TEXT) LIKE ?
                     OR lower(printf('CA-%03d', c.id)) LIKE lower(?)
+                    OR lower(printf('BR-%03d', c.barrio_id)) LIKE lower(?)
                     OR a.dni LIKE ?
                     OR lower(COALESCE(a.nombre_completo, '')) LIKE lower(?)
+                    OR lower(COALESCE(b.nombre, '')) LIKE lower(?)
                     OR lower(COALESCE(c.direccion_referencia, '')) LIKE lower(?)
                 )
                 """
             )
-            parametros.extend([patron, patron, patron, patron, patron])
+            parametros.extend([patron, patron, patron, patron, patron, patron, patron])
 
         if filtro_rapido == FILTRO_CASAS_ACTIVAS:
-            condiciones.append("c.estado_servicio = 'ACTIVO'")
+            condiciones.append(
+                "c.estado_servicio = 'ACTIVO' AND c.estado_administrativo = 'OPERATIVA'"
+            )
         elif filtro_rapido == FILTRO_CASAS_SUSPENDIDAS:
-            condiciones.append("c.estado_servicio = 'SUSPENDIDO'")
+            condiciones.append("c.estado_administrativo = 'SUSPENDIDA'")
         elif filtro_rapido == FILTRO_CASAS_CON_MORA:
             condiciones.append("COALESCE(dd.meses_en_mora, 0) > 0")
         elif filtro_rapido == FILTRO_CASAS_SIN_PROPIETARIO:
@@ -654,10 +960,18 @@ class RepositorioCasasSQLite:
             direccion_referencia=str(fila["direccion_referencia"] or ""),
             observaciones=str(fila["observaciones"] or ""),
             estado_servicio=str(fila["estado_servicio"] or "ACTIVO"),
+            estado_administrativo=str(fila["estado_administrativo"] or "OPERATIVA"),
+            motivo_estado_administrativo=str(
+                fila["motivo_estado_administrativo"] or "NINGUNO"
+            ),
+            ha_tenido_servicio_activo=bool(int(fila["ha_tenido_servicio_activo"] or 0)),
+            antecedente_servicio_editable=bool(int(fila["antecedente_servicio_editable"] or 0)),
             deuda_total_centavos=int(fila["deuda_total_centavos"] or 0),
             meses_pendientes=int(fila["meses_pendientes"] or 0),
             meses_en_mora=int(fila["meses_en_mora"] or 0),
             tiene_plan_activo=int(fila["total_planes_activos"] or 0) > 0,
+            creado_en=str(fila["creado_en"] or ""),
             fecha_alta=str(fila["fecha_alta"] or ""),
             actualizado_en=str(fila["actualizado_en"] or ""),
         )
+

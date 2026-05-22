@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from comun.actualizaciones import EventoModuloActualizado, bus_actualizaciones_modulos
+from comun.ui import ejecutar_acciones_documento_pdf
 from modulos.reportes.servicio import ServicioReportes
 from modulos.reportes.vista import VistaReportes
 
@@ -59,7 +60,7 @@ class ControladorReportes:
         if not ruta:
             return
         try:
-            self.servicio_reportes.exportar_pdf(
+            ruta_pdf = self.servicio_reportes.exportar_pdf(
                 ruta_destino=ruta,
                 codigo_reporte=codigo_reporte,
                 fecha_desde=self._fecha_desde,
@@ -68,4 +69,13 @@ class ControladorReportes:
         except (OSError, ValueError) as error:
             self.vista_reportes.mostrar_mensaje(str(error), es_error=True)
             return
-        self.vista_reportes.mostrar_mensaje("Reporte exportado correctamente.", es_error=False)
+        abrir_automaticamente, imprimir_automaticamente = (
+            self.servicio_reportes.obtener_politica_documental()
+        )
+        mensaje = ejecutar_acciones_documento_pdf(
+            ruta_pdf,
+            etiqueta_documento="Reporte PDF",
+            abrir_automaticamente=abrir_automaticamente,
+            imprimir_automaticamente=imprimir_automaticamente,
+        )
+        self.vista_reportes.mostrar_mensaje(mensaje, es_error=False)

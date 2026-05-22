@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import csv
 import shutil
@@ -39,7 +39,7 @@ class TestBarrios(unittest.TestCase):
 
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.gestor_base_datos.inicializar_base_datos()
+        self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
         self.repositorio = RepositorioBarriosSQLite(self.gestor_base_datos)
         self.servicio = ServicioBarrios(self.repositorio)
 
@@ -114,12 +114,14 @@ class TestBarrios(unittest.TestCase):
                 "Abonados",
                 "Casas",
                 "Estado",
+                "Creado",
                 "Ultima actualizacion",
                 "Observaciones",
             ],
         )
         self.assertEqual(filas[1][0], "BR-001")
         self.assertEqual(filas[1][1], "Centro")
+        self.assertTrue(filas[1][5])
 
     def test_no_permite_desactivar_barrio_con_relaciones(self) -> None:
         barrio = self.servicio.listar().items[0]
@@ -133,3 +135,4 @@ class TestBarrios(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

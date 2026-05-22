@@ -1,4 +1,4 @@
-"""Persistencia SQLite del modulo de planes de pago."""
+﻿"""Persistencia SQLite del modulo de planes de pago."""
 
 from __future__ import annotations
 
@@ -190,11 +190,14 @@ class RepositorioPlanesPagoSQLite:
                 COALESCE(qc.proxima_fecha, '') AS proxima_fecha,
                 pp.estado,
                 COALESCE(pp.observaciones, '') AS observaciones,
-                COALESCE(pp.actualizado_en, '') AS actualizado_en
+                COALESCE(pp.creado_en, '') AS creado_en,
+                COALESCE(pp.actualizado_en, '') AS actualizado_en,
+                COALESCE(uc.nombre_completo, uc.nombre_usuario, '') AS creado_por_nombre
             FROM planes_pago pp
             INNER JOIN abonados a ON a.id = pp.abonado_id
             INNER JOIN casas c ON c.id = pp.casa_id
             LEFT JOIN barrios b ON b.id = c.barrio_id
+            LEFT JOIN usuarios uc ON uc.id = pp.creado_por
             LEFT JOIN ({SUBCONSULTA_CUOTAS}) qc ON qc.plan_pago_id = pp.id
             WHERE {' AND '.join(condiciones)}
             ORDER BY pp.id DESC
@@ -259,11 +262,14 @@ class RepositorioPlanesPagoSQLite:
                 COALESCE(qc.proxima_fecha, '') AS proxima_fecha,
                 pp.estado,
                 COALESCE(pp.observaciones, '') AS observaciones,
-                COALESCE(pp.actualizado_en, '') AS actualizado_en
+                COALESCE(pp.creado_en, '') AS creado_en,
+                COALESCE(pp.actualizado_en, '') AS actualizado_en,
+                COALESCE(uc.nombre_completo, uc.nombre_usuario, '') AS creado_por_nombre
             FROM planes_pago pp
             INNER JOIN abonados a ON a.id = pp.abonado_id
             INNER JOIN casas c ON c.id = pp.casa_id
             LEFT JOIN barrios b ON b.id = c.barrio_id
+            LEFT JOIN usuarios uc ON uc.id = pp.creado_por
             LEFT JOIN ({SUBCONSULTA_CUOTAS}) qc ON qc.plan_pago_id = pp.id
             WHERE pp.id = ?
             LIMIT 1;
@@ -377,7 +383,7 @@ class RepositorioPlanesPagoSQLite:
                             concepto_financiado,
                             prima_centavos
                         )
-                        VALUES (?, ?, date('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                        VALUES (?, ?, date('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                         """,
                         (
                             plan.abonado_id,
@@ -411,7 +417,7 @@ class RepositorioPlanesPagoSQLite:
                             tipo_plan = ?,
                             concepto_financiado = ?,
                             prima_centavos = ?,
-                            actualizado_en = datetime('now')
+                            actualizado_en = datetime('now', 'localtime')
                         WHERE id = ?;
                         """,
                         (
@@ -554,5 +560,8 @@ class RepositorioPlanesPagoSQLite:
             proxima_fecha=str(fila["proxima_fecha"] or ""),
             estado=str(fila["estado"] or "ACTIVO"),
             observaciones=str(fila["observaciones"] or ""),
+            creado_en=str(fila["creado_en"] or ""),
             actualizado_en=str(fila["actualizado_en"] or ""),
+            creado_por_nombre=str(fila["creado_por_nombre"] or ""),
         )
+

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import csv
 import shutil
@@ -39,7 +39,7 @@ class TestAbonados(unittest.TestCase):
 
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.gestor_base_datos.inicializar_base_datos()
+        self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
         self.repositorio_casas = RepositorioCasasSQLite(self.gestor_base_datos)
         self.repositorio = RepositorioAbonadosSQLite(self.gestor_base_datos)
         self.servicio = ServicioAbonados(self.repositorio, self.repositorio_casas)
@@ -81,8 +81,25 @@ class TestAbonados(unittest.TestCase):
         casa_carlos = next(
             item for item in self.repositorio_casas.listar() if item.abonado_dni == "0801199000022"
         )
-        self.assertEqual(casa_carlos.estado_servicio, "SUSPENDIDO")
+        self.assertEqual(casa_carlos.estado_servicio, "ACTIVO")
+        self.assertEqual(casa_carlos.estado_administrativo, "SUSPENDIDA")
+        self.assertEqual(casa_carlos.motivo_estado_administrativo, "ABONADO_INACTIVO")
         self.assertIn("pasaron a estado suspendido", resultado.mensaje.lower())
+
+    def test_reactivar_abonado_restaura_casas_suspendidas_por_esa_causa(self) -> None:
+        carlos = next(item for item in self.servicio.listar().items if item.nombre_completo == "Carlos Ramirez")
+
+        self.servicio.cambiar_estado(carlos.identificador or 0, carlos.estado, actor_id=1)
+        resultado = self.servicio.cambiar_estado(carlos.identificador or 0, "INACTIVO", actor_id=1)
+
+        self.assertTrue(resultado.exito)
+        casa_carlos = next(
+            item for item in self.repositorio_casas.listar() if item.abonado_dni == "0801199000022"
+        )
+        self.assertEqual(casa_carlos.estado_servicio, "ACTIVO")
+        self.assertEqual(casa_carlos.estado_administrativo, "OPERATIVA")
+        self.assertEqual(casa_carlos.motivo_estado_administrativo, "NINGUNO")
+        self.assertIn("volvieron a operativa", resultado.mensaje.lower())
 
     def test_guardar_nuevo_abonado_y_exportar_csv(self) -> None:
         barrios = self.servicio.listar_barrios_disponibles()
@@ -123,13 +140,17 @@ class TestAbonados(unittest.TestCase):
                 "Casas",
                 "Meses en mora",
                 "Estado",
+                "Creado",
+                "Ultima actualizacion",
                 "Tiene plan activo",
                 "Deuda pendiente",
             ],
         )
         self.assertEqual(filas[-1][0], "0801199000099")
         self.assertEqual(filas[-1][1], "Fabian Aguilar")
+        self.assertTrue(filas[-1][7])
 
 
 if __name__ == "__main__":
     unittest.main()
+

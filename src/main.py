@@ -13,4 +13,3 @@ if __name__ == "__main__":
     except Exception:
         logger.exception("Error no controlado al iniciar SICAP.")
         raise
-# Fin del archivo main.py

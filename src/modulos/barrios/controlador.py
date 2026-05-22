@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from modulos.barrios.entidades import FILTRO_BARRIOS_TODOS
+from typing import Callable
+
+from modulos.barrios.entidades import Barrio, FILTRO_BARRIOS_TODOS
 from modulos.barrios.servicio import ServicioBarrios
 from modulos.barrios.vista import VistaBarrios
 
@@ -16,6 +18,8 @@ class ControladorBarrios:
         self._filtro_actual = ""
         self._filtro_rapido_actual = FILTRO_BARRIOS_TODOS
         self._pagina_actual = 1
+        self._callback_ver_abonados: Callable[[str], None] | None = None
+        self._callback_ver_casas: Callable[[str], None] | None = None
         self._conectar_senales()
 
     def mostrar(self) -> None:
@@ -30,7 +34,15 @@ class ControladorBarrios:
         self._vista_barrios.detalle_barrio_solicitado.connect(self._mostrar_detalle)
         self._vista_barrios.editar_barrio_solicitado.connect(self._editar_barrio)
         self._vista_barrios.cambio_estado_solicitado.connect(self._confirmar_cambio_estado)
+        self._vista_barrios.ver_abonados_barrio_solicitado.connect(self._ver_abonados_relacionados)
+        self._vista_barrios.ver_casas_barrio_solicitado.connect(self._ver_casas_relacionadas)
         self._vista_barrios.exportar_solicitado.connect(self._exportar)
+
+    def configurar_callback_ver_abonados(self, callback: Callable[[str], None]) -> None:
+        self._callback_ver_abonados = callback
+
+    def configurar_callback_ver_casas(self, callback: Callable[[str], None]) -> None:
+        self._callback_ver_casas = callback
 
     def _manejar_filtro_texto(self, texto: str) -> None:
         self._filtro_actual = texto.strip()
@@ -69,10 +81,15 @@ class ControladorBarrios:
 
         accion = self._vista_barrios.mostrar_detalle_barrio(
             barrio=barrio,
+            fecha_creacion=self._servicio_barrios.formatear_fecha_hora(barrio.creado_en),
             fecha_actualizada=self._servicio_barrios.formatear_fecha_hora(barrio.actualizado_en),
         )
         if accion == "editar":
             self._editar_barrio(barrio_id)
+        elif accion == "ver_abonados":
+            self._abrir_modulo_abonados(barrio)
+        elif accion == "ver_casas":
+            self._abrir_modulo_casas(barrio)
 
     def _editar_barrio(self, barrio_id: int) -> None:
         barrio = self._servicio_barrios.obtener_por_id(barrio_id)
@@ -140,6 +157,46 @@ class ControladorBarrios:
             filtro_rapido=self._filtro_rapido_actual,
         )
         self._vista_barrios.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
+
+    def _ver_abonados_relacionados(self, barrio_id: int) -> None:
+        barrio = self._servicio_barrios.obtener_por_id(barrio_id)
+        if barrio is None:
+            self._vista_barrios.mostrar_mensaje(
+                "No fue posible encontrar el barrio seleccionado.",
+                es_error=True,
+            )
+            self._refrescar()
+            return
+        self._abrir_modulo_abonados(barrio)
+
+    def _ver_casas_relacionadas(self, barrio_id: int) -> None:
+        barrio = self._servicio_barrios.obtener_por_id(barrio_id)
+        if barrio is None:
+            self._vista_barrios.mostrar_mensaje(
+                "No fue posible encontrar el barrio seleccionado.",
+                es_error=True,
+            )
+            self._refrescar()
+            return
+        self._abrir_modulo_casas(barrio)
+
+    def _abrir_modulo_abonados(self, barrio: Barrio) -> None:
+        if self._callback_ver_abonados is not None:
+            self._callback_ver_abonados(barrio.codigo)
+            return
+        self._vista_barrios.mostrar_mensaje(
+            "La navegacion hacia abonados no esta disponible en esta sesion.",
+            es_error=True,
+        )
+
+    def _abrir_modulo_casas(self, barrio: Barrio) -> None:
+        if self._callback_ver_casas is not None:
+            self._callback_ver_casas(barrio.codigo)
+            return
+        self._vista_barrios.mostrar_mensaje(
+            "La navegacion hacia casas no esta disponible en esta sesion.",
+            es_error=True,
+        )
 
     def _refrescar(self) -> None:
         pagina = self._servicio_barrios.listar(

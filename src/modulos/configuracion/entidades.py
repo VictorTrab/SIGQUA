@@ -17,6 +17,7 @@ class ParametroConfiguracion:
     editable: bool = True
     actualizado_en: str = ""
     actualizado_por: int | None = None
+    actualizado_por_nombre: str = ""
 
 
 @dataclass(slots=True)
@@ -42,6 +43,7 @@ class ParametrosCobro:
     multa_mora_automatica_centavos: int
     corte_automatico_activo: bool
     meses_para_corte: int
+    cobrar_mensualidad_prorrateada_activacion: bool
     permitir_pago_adelantado: bool
     meses_adelanto_maximo: int
     mora_leve_hasta_meses: int
@@ -68,6 +70,8 @@ class FacturaConfiguracion:
     firma_cargo: str
     firma_identificador: str
     firma_texto_apoyo: str
+    abrir_pdf_automaticamente: bool
+    imprimir_pdf_automaticamente: bool
     correlativo_actual: str
     proximo_correlativo: str
     ultimo_comprobante_emitido: str
@@ -85,6 +89,7 @@ class OperacionConfiguracion:
     ultimo_respaldo_archivo: str
     ultimo_respaldo_tamano_bytes: int
     ultimo_respaldo_hash: str
+    ultimo_respaldo_generado_por: str
     ruta_respaldos_principal: str
     ruta_respaldos_secundaria: str
     respaldo_secundario_activo: bool
@@ -119,6 +124,7 @@ class InformacionConfiguracion:
     ruta_base_datos: str
     modo_operacion: str
     ultima_actualizacion: str
+    actualizado_por: str
 
 
 @dataclass(slots=True)

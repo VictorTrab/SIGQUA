@@ -29,6 +29,7 @@ class Abonado:
     meses_en_mora: int = 0
     deuda_total_centavos: int = 0
     tiene_plan_activo: bool = False
+    creado_en: str = ""
     actualizado_en: str = ""
 
 

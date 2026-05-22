@@ -46,6 +46,9 @@ class UsuarioSistema:
     permisos: frozenset[str] = frozenset()
     ultimo_acceso_en: str | None = None
     creado_en: str | None = None
+    actualizado_en: str | None = None
+    creado_por_nombre: str = ""
+    actualizado_por_nombre: str = ""
     observaciones: str = ""
     total_sesiones: int = 0
 

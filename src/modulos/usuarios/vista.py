@@ -39,7 +39,11 @@ from comun.ui import (
     crear_item_tabla,
     obtener_icono_tabler_coloreado,
 )
-from comun.ui.temas import TEMA_SICAP_PREDETERMINADO, obtener_paleta_tema
+from comun.ui.temas import (
+    TEMA_SICAP_PREDETERMINADO,
+    obtener_fondo_header_destacado,
+    obtener_paleta_tema,
+)
 from modulos.usuarios.entidades import (
     FormularioRol,
     FormularioUsuario,
@@ -491,14 +495,37 @@ class DialogoDetalleUsuario(DialogoBaseSicap):
             1,
         )
         grid_actividad.addWidget(
-            self._crear_campo("Sesiones registradas", str(self._usuario.total_sesiones)),
+            self._crear_campo("Creado por", self._usuario.creado_por_nombre or "Sin registro"),
             1,
             0,
         )
         grid_actividad.addWidget(
+            self._crear_campo(
+                "Ultima actualizacion",
+                self._formateador_fecha(self._usuario.actualizado_en),
+            ),
+            1,
+            1,
+        )
+        grid_actividad.addWidget(
+            self._crear_campo(
+                "Actualizado por",
+                self._usuario.actualizado_por_nombre or "Sin registro",
+            ),
+            2,
+            0,
+        )
+        grid_actividad.addWidget(
+            self._crear_campo("Sesiones registradas", str(self._usuario.total_sesiones)),
+            2,
+            1,
+        )
+        grid_actividad.addWidget(
             self._crear_campo("Intentos fallidos", str(self._usuario.intentos_fallidos)),
+            3,
+            0,
             1,
-            1,
+            2,
         )
 
         observaciones = self._crear_campo(
@@ -1091,12 +1118,12 @@ class DialogoFormularioRol(DialogoBaseSicap):
             self.styleSheet()
             + """
             QTableWidget#tablaFormularioRolUsuarios {
-                background: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                background: rgba(74, 79, 154, 0.88);
+                border: 1px solid rgba(255, 255, 255, 0.08);
                 border-radius: 14px;
             }
             QTableWidget#tablaFormularioRolUsuarios QTableCornerButton::section {
-                background: rgba(255, 255, 255, 0.08);
+                background: rgba(108, 113, 190, 0.92);
                 border: none;
             }
             QWidget#viewportTablaFormularioRolUsuarios {
@@ -1284,12 +1311,12 @@ class DialogoMatrizPermisosUsuarios(DialogoBaseSicap):
             self.styleSheet()
             + """
             QTableWidget#tablaMatrizPermisosUsuarios {
-                background: rgba(255, 255, 255, 0.06);
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                background: rgba(74, 79, 154, 0.88);
+                border: 1px solid rgba(255, 255, 255, 0.08);
                 border-radius: 18px;
             }
             QTableWidget#tablaMatrizPermisosUsuarios QTableCornerButton::section {
-                background: rgba(255, 255, 255, 0.08);
+                background: rgba(108, 113, 190, 0.92);
                 border: none;
             }
             QWidget#viewportTablaMatrizPermisosUsuarios {
@@ -1424,7 +1451,6 @@ class VistaUsuarios(QWidget):
         self._permisos_roles = list(permisos_disponibles)
         self._actualizar_filtro_roles()
         self._renderizar_tarjetas_roles()
-        self._actualizar_bloque_permisos()
 
     def mostrar_usuarios(
         self,
@@ -1570,7 +1596,7 @@ class VistaUsuarios(QWidget):
         self._tabs = QTabWidget()
         self._tabs.setObjectName("tabsUsuarios")
         self._tabs.addTab(self._crear_pestana_usuarios(), "Usuarios")
-        self._tabs.addTab(self._crear_pestana_roles(), "Roles y permisos")
+        self._tabs.addTab(self._crear_pestana_roles(), "Roles")
 
         layout.addLayout(encabezado)
         layout.addWidget(self._mensaje)
@@ -1636,45 +1662,6 @@ class VistaUsuarios(QWidget):
         fila_filtros.addWidget(self._combo_roles)
         layout_filtros.addLayout(fila_filtros)
 
-        self._panel_permisos = QFrame()
-        self._panel_permisos.setObjectName("panelPermisosUsuarios")
-        layout_permisos = QHBoxLayout(self._panel_permisos)
-        layout_permisos.setContentsMargins(16, 16, 16, 16)
-        layout_permisos.setSpacing(14)
-
-        icono = QLabel("")
-        icono.setObjectName("iconoPanelPermisosUsuarios")
-        icono.setFixedSize(40, 40)
-        icono.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icono.setPixmap(obtener_icono_tabler_coloreado("key.svg", "#69dff5", tamano=18).pixmap(18, 18))
-
-        bloque_permisos = QVBoxLayout()
-        bloque_permisos.setSpacing(4)
-        titulo_permisos = QLabel("Permisos por rol")
-        titulo_permisos.setObjectName("tituloPanelPermisosUsuarios")
-        self._texto_permisos = QLabel("")
-        self._texto_permisos.setObjectName("textoPanelPermisosUsuarios")
-        self._texto_permisos.setWordWrap(True)
-        self._lista_roles_resumen = QLabel("")
-        self._lista_roles_resumen.setObjectName("detalleRolesUsuarios")
-        self._lista_roles_resumen.setWordWrap(True)
-        bloque_permisos.addWidget(titulo_permisos)
-        bloque_permisos.addWidget(self._texto_permisos)
-        bloque_permisos.addWidget(self._lista_roles_resumen)
-
-        boton_matriz = BotonAccionContextual(
-            "Ver matriz de permisos",
-            variante="informacion",
-            centrado=True,
-            mostrar_icono=False,
-        )
-        boton_matriz.setMinimumWidth(180)
-        boton_matriz.clicked.connect(self.ver_matriz_permisos_solicitada.emit)
-
-        layout_permisos.addWidget(icono, alignment=Qt.AlignmentFlag.AlignTop)
-        layout_permisos.addLayout(bloque_permisos, 1)
-        layout_permisos.addWidget(boton_matriz, alignment=Qt.AlignmentFlag.AlignTop)
-
         panel_tabla = QFrame()
         panel_tabla.setObjectName("panelTablaUsuarios")
         layout_tabla = QVBoxLayout(panel_tabla)
@@ -1707,8 +1694,11 @@ class VistaUsuarios(QWidget):
         self._tabla.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.Interactive)
         self._tabla.setColumnWidth(6, self.ANCHO_COLUMNA_ACCIONES)
         self._tabla.verticalHeader().setDefaultSectionSize(60)
+        self._tabla.setAlternatingRowColors(True)
         self._tabla.setFrameShape(QFrame.Shape.NoFrame)
+        self._tabla.setViewportMargins(0, 0, 0, 18)
         self._tabla.viewport().setObjectName("viewportTablaUsuarios")
+        self._tabla.viewport().setAutoFillBackground(False)
 
         self._estado_vacio = QLabel("No hay usuarios que coincidan con los filtros actuales.")
         self._estado_vacio.setObjectName("estadoVacioUsuarios")
@@ -1720,7 +1710,6 @@ class VistaUsuarios(QWidget):
 
         layout.addLayout(tarjetas)
         layout.addWidget(panel_filtros)
-        layout.addWidget(self._panel_permisos)
         layout.addWidget(panel_tabla, 1)
         return pagina
 
@@ -1735,17 +1724,8 @@ class VistaUsuarios(QWidget):
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(8)
-        boton_matriz = BotonAccionContextual(
-            "Ver matriz de permisos",
-            variante="informacion",
-            centrado=True,
-            mostrar_icono=False,
-        )
-        boton_matriz.setMinimumWidth(184)
-        boton_matriz.clicked.connect(self.ver_matriz_permisos_solicitada.emit)
         boton_crear = crear_boton_operativo("Crear rol", principal=True)
         boton_crear.clicked.connect(self.nuevo_rol_solicitado.emit)
-        fila_acciones.addWidget(boton_matriz)
         fila_acciones.addWidget(boton_crear)
         encabezado.addLayout(fila_acciones)
 
@@ -1930,9 +1910,9 @@ class VistaUsuarios(QWidget):
         metricas.addWidget(self._crear_minitarjeta_rol("Usuarios", str(rol.total_usuarios)))
         metricas.addWidget(self._crear_minitarjeta_rol("Permisos", str(len(rol.permisos))))
 
-        titulo_modulos = QLabel("Acceso a modulos")
+        titulo_modulos = QLabel("Permisos por modulo")
         titulo_modulos.setObjectName("tituloMiniTarjetaRolUsuario")
-        chips_modulos = self._crear_chips_modulos(self._modulos_resumidos_rol(rol))
+        chips_modulos = self._crear_lista_permisos_modulo(rol)
 
         separador = QFrame()
         separador.setObjectName("separadorRolUsuario")
@@ -1993,19 +1973,51 @@ class VistaUsuarios(QWidget):
             layout.addWidget(adicional, len(modulos_visibles) // 3, len(modulos_visibles) % 3)
         return contenedor
 
-    def _actualizar_bloque_permisos(self) -> None:
-        activos = [rol for rol in self._roles_actuales if rol.estado == "ACTIVO"]
-        self._texto_permisos.setText(
-            f"El sistema cuenta con {len(activos)} roles visibles con permisos reales heredados desde la base local."
-        )
-        resumenes = []
-        for rol in activos[:3]:
-            modulos = self._modulos_resumidos_rol(rol)
-            etiqueta = ", ".join(modulos[:4]) if modulos else "sin modulos"
-            if len(modulos) > 4:
-                etiqueta += "..."
-            resumenes.append(f"<b>{rol.nombre}:</b> {etiqueta}")
-        self._lista_roles_resumen.setText("  •  ".join(resumenes) if resumenes else "No hay roles visibles.")
+    def _crear_lista_permisos_modulo(self, rol: RolSistema) -> QWidget:
+        contenedor = QWidget()
+        layout = QVBoxLayout(contenedor)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        for modulo, acciones in self._acciones_por_modulo_rol(rol):
+            fila = QWidget()
+            fila_layout = QHBoxLayout(fila)
+            fila_layout.setContentsMargins(0, 0, 0, 0)
+            fila_layout.setSpacing(8)
+            etiqueta_modulo = QLabel(modulo)
+            etiqueta_modulo.setObjectName("tituloModuloPermisoRolUsuario")
+            fila_layout.addWidget(etiqueta_modulo)
+            fila_layout.addWidget(self._crear_badges_acciones_rol(acciones), 1)
+            layout.addWidget(fila)
+        if layout.count() == 0:
+            vacio = QLabel("Sin permisos asignados.")
+            vacio.setObjectName("detallePermisoRolUsuario")
+            layout.addWidget(vacio)
+        return contenedor
+
+    def _crear_badges_acciones_rol(self, acciones: list[str]) -> QWidget:
+        contenedor = QWidget()
+        layout = QHBoxLayout(contenedor)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        for accion in acciones:
+            badge = QLabel(accion)
+            badge.setObjectName("badgeAccionPermisoRolUsuario")
+            layout.addWidget(badge)
+        layout.addStretch(1)
+        return contenedor
+
+    @staticmethod
+    def _acciones_por_modulo_rol(rol: RolSistema) -> list[tuple[str, list[str]]]:
+        agrupados: dict[str, list[str]] = {}
+        for permiso in rol.permisos:
+            modulo = permiso.modulo.strip()
+            if not modulo:
+                continue
+            accion = permiso.codigo.split(".")[-1].replace("_", " ").title()
+            agrupados.setdefault(modulo, [])
+            if accion not in agrupados[modulo]:
+                agrupados[modulo].append(accion)
+        return sorted(agrupados.items(), key=lambda item: item[0].casefold())
 
     @staticmethod
     def _modulos_resumidos_rol(rol: RolSistema) -> list[str]:
@@ -2028,37 +2040,40 @@ class VistaUsuarios(QWidget):
         self._mensaje.setVisible(False)
 
     def _aplicar_estilos(self) -> None:
+        paleta = self._paleta_tema
+        fondo_header_destacado = obtener_fondo_header_destacado(self._tema_actual)
         self.setStyleSheet(
-            """
-            QWidget#vistaUsuarios {
+            f"""
+            QWidget#vistaUsuarios {{
                 background: transparent;
-            }
-            QLabel#tituloModulo {
+                font-family: "{paleta["familia_tipografica"]}";
+            }}
+            QLabel#tituloModulo {{
                 color: #ffffff;
                 font-size: 19px;
                 font-weight: 900;
-            }
+            }}
             QLabel#subtituloModuloUsuarios,
             QLabel#tituloPanelPermisosUsuarios,
             QLabel#tituloRolUsuario,
-            QLabel#valorMiniTarjetaRolUsuario {
+            QLabel#valorMiniTarjetaRolUsuario {{
                 color: #ffffff;
                 font-weight: 800;
-            }
-            QLabel#subtituloModuloUsuarios {
+            }}
+            QLabel#subtituloModuloUsuarios {{
                 font-size: 18px;
-            }
+            }}
             QLabel#descripcionModulo,
             QLabel#detalleTarjetaResumenUsuario,
             QLabel#textoPanelPermisosUsuarios,
             QLabel#detalleRolesUsuarios,
             QLabel#notaRolesUsuarios,
             QLabel#descripcionRolUsuario,
-            QLabel#tituloMiniTarjetaRolUsuario {
+            QLabel#tituloMiniTarjetaRolUsuario {{
                 color: rgba(235, 242, 248, 0.76);
                 font-size: 11px;
-            }
-            QLabel#mensajeUsuarios {
+            }}
+            QLabel#mensajeUsuarios {{
                 color: #d9fff5;
                 font-size: 12px;
                 font-weight: 700;
@@ -2066,79 +2081,99 @@ class VistaUsuarios(QWidget):
                 border-radius: 12px;
                 background-color: rgba(16, 120, 98, 0.16);
                 border: 1px solid rgba(158, 231, 214, 0.26);
-            }
-            QLabel#mensajeUsuarios[error="true"] {
+            }}
+            QLabel#mensajeUsuarios[error="true"] {{
                 color: #ffd4cf;
                 background-color: rgba(180, 35, 24, 0.15);
                 border: 1px solid rgba(255, 205, 199, 0.28);
-            }
+            }}
             QFrame#panelOperativoUsuarios,
             QFrame#tarjetaResumenUsuarios,
             QFrame#panelPermisosUsuarios,
             QFrame#tarjetaRolUsuario,
-            QFrame#miniTarjetaRolUsuario {
+            QFrame#miniTarjetaRolUsuario {{
                 background: rgba(255, 255, 255, 0.10);
                 border: 1px solid rgba(255, 255, 255, 0.16);
                 border-radius: 18px;
-            }
-            QFrame#panelPermisosUsuarios {
+            }}
+            QFrame#panelPermisosUsuarios {{
                 background: rgba(79, 163, 255, 0.12);
                 border: 1px solid rgba(138, 194, 255, 0.22);
-            }
-            QFrame#tarjetaRolUsuario {
+            }}
+            QFrame#tarjetaRolUsuario {{
                 background: rgba(255, 255, 255, 0.12);
                 border-color: rgba(255, 255, 255, 0.18);
-            }
-            QFrame#panelTablaUsuarios {
-                background: rgba(255, 255, 255, 0.10);
+            }}
+            QFrame#panelOperativoUsuarios,
+            QFrame#tarjetaResumenUsuarios,
+            QFrame#miniTarjetaRolUsuario {{
+                background: {fondo_header_destacado};
+                border: 1px solid rgba(255, 255, 255, 0.16);
+            }}
+            QFrame#panelTablaUsuarios {{
+                background: {fondo_header_destacado};
                 border: 1px solid rgba(255, 255, 255, 0.16);
                 border-radius: 18px;
-            }
-            QTableWidget#tablaUsuarios {
-                background: rgba(255, 255, 255, 0.03);
+            }}
+            QTableWidget#tablaUsuarios {{
+                background: rgba(74, 79, 154, 0.88);
+                background-clip: padding;
                 border: none;
                 border-radius: 18px;
                 padding: 0 0 18px 0;
-            }
-            QWidget#viewportTablaUsuarios {
+            }}
+            QWidget#viewportTablaUsuarios {{
                 background: transparent;
                 border: none;
                 border-bottom-left-radius: 18px;
                 border-bottom-right-radius: 18px;
-            }
-            QTableWidget#tablaUsuarios QHeaderView::section {
-                background: rgba(255, 255, 255, 0.10);
+            }}
+            QTableWidget#tablaUsuarios QHeaderView::section:first {{
+                border-top-left-radius: 18px;
+            }}
+            QTableWidget#tablaUsuarios QHeaderView::section {{
+                background: rgba(108, 113, 190, 0.92);
                 color: #f7fbff;
                 border: none;
-                border-right: 1px solid rgba(255, 255, 255, 0.06);
+                border-right: 1px solid rgba(255, 255, 255, 0.08);
                 border-bottom: 1px solid rgba(255, 255, 255, 0.08);
                 padding: 10px 12px;
                 font-size: 12px;
                 font-weight: 800;
-            }
-            QTableWidget#tablaUsuarios::item {
+            }}
+            QTableWidget#tablaUsuarios QHeaderView::section:last {{
+                border-top-right-radius: 18px;
+            }}
+            QTableWidget#tablaUsuarios::item {{
                 padding: 9px 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-            }
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                background: rgba(255, 255, 255, 0.03);
+            }}
+            QTableWidget#tablaUsuarios::item:alternate {{
+                background: rgba(255, 255, 255, 0.07);
+            }}
+            QTableWidget#tablaUsuarios::item:selected {{
+                background: rgba(142, 201, 255, 0.10);
+            }}
             QLabel#iconoTarjetaResumenUsuario,
-            QLabel#iconoPanelPermisosUsuarios {
+            QLabel#iconoPanelPermisosUsuarios {{
                 background: rgba(255, 255, 255, 0.08);
                 border: 1px solid rgba(255, 255, 255, 0.10);
                 border-radius: 12px;
-            }
-            QLabel#tituloTarjetaResumenUsuario {
+            }}
+            QLabel#tituloTarjetaResumenUsuario {{
                 color: rgba(235, 242, 248, 0.72);
                 font-size: 11px;
                 font-weight: 700;
-            }
-            QLabel#valorTarjetaResumenUsuario {
+            }}
+            QLabel#valorTarjetaResumenUsuario {{
                 color: #ffffff;
                 font-size: 20px;
                 font-weight: 900;
-            }
+            }}
             QLineEdit,
             QComboBox,
-            QPlainTextEdit {
+            QPlainTextEdit {{
                 min-height: 36px;
                 border: 1px solid rgba(255, 255, 255, 0.18);
                 border-radius: 12px;
@@ -2146,33 +2181,33 @@ class VistaUsuarios(QWidget):
                 color: #f5fbff;
                 padding: 0 10px;
                 font-size: 12px;
-            }
-            QPlainTextEdit {
+            }}
+            QPlainTextEdit {{
                 min-height: 88px;
                 padding: 10px;
-            }
+            }}
             QLineEdit:focus,
             QComboBox:focus,
-            QPlainTextEdit:focus {
+            QPlainTextEdit:focus {{
                 border-color: rgba(109, 241, 220, 0.42);
                 background: rgba(255, 255, 255, 0.16);
-            }
-            QComboBox::drop-down {
+            }}
+            QComboBox::drop-down {{
                 border: none;
                 width: 24px;
                 background: rgba(255, 255, 255, 0.06);
                 border-top-right-radius: 12px;
                 border-bottom-right-radius: 12px;
-            }
-            QComboBox QAbstractItemView {
+            }}
+            QComboBox QAbstractItemView {{
                 background: rgba(29, 33, 68, 0.98);
                 color: #f5fbff;
                 border: 1px solid rgba(255, 255, 255, 0.14);
                 selection-background-color: rgba(109, 241, 220, 0.22);
                 selection-color: #ffffff;
                 padding: 6px;
-            }
-            QPushButton#chipFiltroUsuario {
+            }}
+            QPushButton#chipFiltroUsuario {{
                 min-height: 30px;
                 border-radius: 11px;
                 padding: 0 12px;
@@ -2181,91 +2216,111 @@ class VistaUsuarios(QWidget):
                 color: #ecf5ff;
                 font-size: 11px;
                 font-weight: 700;
-            }
-            QPushButton#chipFiltroUsuario:hover {
+            }}
+            QPushButton#chipFiltroUsuario:hover {{
                 background: rgba(255, 255, 255, 0.12);
-            }
-            QPushButton#chipFiltroUsuario:checked {
+            }}
+            QPushButton#chipFiltroUsuario:checked {{
                 color: #0f2d43;
                 background: #d2f4f2;
                 border-color: rgba(255, 255, 255, 0.18);
-            }
+            }}
             QLabel#badgeRolUsuario,
             QLabel#badgeEstadoUsuario,
-            QLabel#badgeRolSistemaUsuario {
+            QLabel#badgeRolSistemaUsuario {{
                 border-radius: 11px;
                 padding: 6px 10px;
                 font-size: 11px;
                 font-weight: 800;
-            }
-            QLabel#badgeRolUsuario {
+            }}
+            QLabel#badgeRolUsuario {{
                 color: #d7e4ff;
                 background: rgba(86, 124, 255, 0.16);
                 border: 1px solid rgba(157, 178, 255, 0.24);
-            }
+            }}
             QLabel#badgeRolUsuario[administrador="true"],
-            QLabel#badgeRolSistemaUsuario[sistema="true"] {
+            QLabel#badgeRolSistemaUsuario[sistema="true"] {{
                 color: #f5e1ff;
                 background: rgba(146, 101, 255, 0.16);
                 border: 1px solid rgba(207, 181, 255, 0.24);
-            }
-            QLabel#badgeEstadoUsuario {
+            }}
+            QLabel#badgeEstadoUsuario {{
                 color: #f4f8fb;
                 background: rgba(132, 146, 166, 0.22);
                 border: 1px solid rgba(255, 255, 255, 0.12);
-            }
-            QLabel#badgeEstadoUsuario[activo="true"] {
+            }}
+            QLabel#badgeEstadoUsuario[activo="true"] {{
                 color: #d9fff5;
                 background: rgba(16, 120, 98, 0.22);
                 border-color: rgba(158, 231, 214, 0.26);
-            }
-            QLabel#badgeRolSistemaUsuario {
+            }}
+            QLabel#badgeRolSistemaUsuario {{
                 color: #d9fff5;
                 background: rgba(16, 120, 98, 0.18);
                 border: 1px solid rgba(158, 231, 214, 0.22);
-            }
+            }}
             QLabel#chipModuloRolUsuario,
-            QLabel#chipModuloRolUsuarioSecundario {
+            QLabel#chipModuloRolUsuarioSecundario {{
                 border-radius: 9px;
                 padding: 5px 9px;
                 font-size: 11px;
                 font-weight: 700;
-            }
-            QLabel#chipModuloRolUsuario {
+            }}
+            QLabel#chipModuloRolUsuario {{
                 color: #d7f5ff;
                 background: rgba(44, 177, 212, 0.14);
                 border: 1px solid rgba(122, 226, 255, 0.18);
-            }
-            QLabel#chipModuloRolUsuarioSecundario {
+            }}
+            QLabel#chipModuloRolUsuarioSecundario {{
                 color: rgba(235, 242, 248, 0.82);
                 background: rgba(255, 255, 255, 0.08);
                 border: 1px solid rgba(255, 255, 255, 0.12);
-            }
-            QFrame#separadorRolUsuario {
+            }}
+            QLabel#tituloModuloPermisoRolUsuario {{
+                color: rgba(235, 242, 248, 0.82);
+                font-size: 11px;
+                font-weight: 800;
+                min-width: 140px;
+            }}
+            QLabel#detallePermisoRolUsuario {{
+                color: rgba(235, 242, 248, 0.72);
+                font-size: 11px;
+                font-weight: 700;
+            }}
+            QLabel#badgeAccionPermisoRolUsuario {{
+                border-radius: 9px;
+                padding: 4px 8px;
+                font-size: 10px;
+                font-weight: 800;
+                color: #d7f5ff;
+                background: rgba(44, 177, 212, 0.14);
+                border: 1px solid rgba(122, 226, 255, 0.18);
+            }}
+            QFrame#separadorRolUsuario {{
                 background: rgba(255, 255, 255, 0.10);
                 border: none;
-            }
-            QWidget#contenedorAccionesUsuario {
+            }}
+            QWidget#contenedorAccionesUsuario {{
                 background: transparent;
-            }
-            QToolButton#botonIconoFilaUsuario {
+            }}
+            QToolButton#botonIconoFilaUsuario {{
                 background: transparent;
                 border: none;
                 border-radius: 8px;
                 padding: 0px;
                 margin: 0px;
-            }
-            QToolButton#botonIconoFilaUsuario:hover {
+            }}
+            QToolButton#botonIconoFilaUsuario:hover {{
                 background: transparent;
                 border: none;
-            }
-            QLabel#estadoVacioUsuarios {
+            }}
+            QLabel#estadoVacioUsuarios {{
                 color: rgba(235, 242, 248, 0.76);
                 font-size: 12px;
                 font-weight: 700;
                 padding: 20px 14px;
-            }
-            QLabel#bloqueInfoRolUsuario {
+            }}
+            QLabel#bloqueInfoRolUsuario {{
                 color: #dce9ff;
                 font-size: 12px;
                 font-weight: 600;
@@ -2273,34 +2328,34 @@ class VistaUsuarios(QWidget):
                 border-radius: 12px;
                 background: rgba(79, 163, 255, 0.12);
                 border: 1px solid rgba(138, 194, 255, 0.20);
-            }
-            QTabWidget#tabsUsuarios {
+            }}
+            QTabWidget#tabsUsuarios {{
                 background: transparent;
-            }
-            QTabWidget#tabsUsuarios QWidget {
+            }}
+            QTabWidget#tabsUsuarios QWidget {{
                 background: transparent;
-            }
-            QTabWidget#tabsUsuarios::pane {
+            }}
+            QTabWidget#tabsUsuarios::pane {{
                 border: 1px solid rgba(255, 255, 255, 0.10);
                 border-radius: 18px;
                 background: rgba(255, 255, 255, 0.05);
                 margin-top: 12px;
                 padding: 10px 10px 12px 10px;
-            }
-            QScrollArea#scrollRolesUsuarios {
+            }}
+            QScrollArea#scrollRolesUsuarios {{
                 background: transparent;
                 border: none;
-            }
-            QScrollArea#scrollRolesUsuarios > QWidget > QWidget {
+            }}
+            QScrollArea#scrollRolesUsuarios > QWidget > QWidget {{
                 background: transparent;
-            }
-            QTabWidget#tabsUsuarios QTabBar {
+            }}
+            QTabWidget#tabsUsuarios QTabBar {{
                 background: rgba(255, 255, 255, 0.04);
                 border: 1px solid rgba(255, 255, 255, 0.10);
                 border-radius: 16px;
                 padding: 6px;
-            }
-            QTabWidget#tabsUsuarios QTabBar::tab {
+            }}
+            QTabWidget#tabsUsuarios QTabBar::tab {{
                 color: rgba(235, 242, 248, 0.74);
                 padding: 10px 18px;
                 margin-right: 6px;
@@ -2309,18 +2364,174 @@ class VistaUsuarios(QWidget):
                 font-size: 13px;
                 font-weight: 800;
                 background: rgba(255, 255, 255, 0.05);
-            }
-            QTabWidget#tabsUsuarios QTabBar::tab:hover {
+            }}
+            QTabWidget#tabsUsuarios QTabBar::tab:hover {{
                 background: rgba(255, 255, 255, 0.10);
                 color: #ffffff;
-            }
-            QTabWidget#tabsUsuarios QTabBar::tab:selected {
+            }}
+            QTabWidget#tabsUsuarios QTabBar::tab:selected {{
                 color: #0f2d43;
                 background: #d2f4f2;
                 border-color: rgba(109, 241, 220, 0.26);
-            }
-            QLabel {
+            }}
+            QLabel {{
                 color: #f4fbff;
-            }
+            }}
             """
         )
+        if self._tema_actual == "claro":
+            self.setStyleSheet(
+                self.styleSheet()
+                + f"""
+                QLabel#tituloModulo,
+                QLabel#subtituloModuloUsuarios,
+                QLabel#tituloPanelPermisosUsuarios,
+                QLabel#tituloRolUsuario,
+                QLabel#valorMiniTarjetaRolUsuario,
+                QLabel#valorTarjetaResumenUsuario,
+                QLabel#tituloMiniTarjetaRolUsuario,
+                QLabel#nombreUsuarioDetalle,
+                QLabel#tituloTabRolesUsuarios,
+                QLabel#estadoResumenRolesUsuarios {{
+                    color: {paleta["texto_principal"]};
+                }}
+                QLabel#descripcionModulo,
+                QLabel#detalleTarjetaResumenUsuario,
+                QLabel#textoPanelPermisosUsuarios,
+                QLabel#detalleRolesUsuarios,
+                QLabel#notaRolesUsuarios,
+                QLabel#descripcionRolUsuario,
+                QLabel#tituloTarjetaResumenUsuario,
+                QLabel#chipModuloRolUsuarioSecundario,
+                QLabel#estadoVacioUsuarios {{
+                    color: {paleta["texto_secundario"]};
+                }}
+                QLabel#mensajeUsuarios {{
+                    color: {paleta["texto_exito"]};
+                    background-color: {paleta["fondo_exito"]};
+                    border-color: {paleta["borde_exito"]};
+                }}
+                QLabel#mensajeUsuarios[error="true"] {{
+                    color: {paleta["texto_error"]};
+                    background-color: {paleta["fondo_error"]};
+                    border-color: {paleta["borde_error"]};
+                }}
+                QFrame#panelOperativoUsuarios,
+                QFrame#tarjetaResumenUsuarios,
+                QFrame#panelTablaUsuarios,
+                QFrame#tarjetaRolUsuario,
+                QFrame#miniTarjetaRolUsuario,
+                QTabWidget#tabsUsuarios::pane {{
+                    background: {paleta["fondo_superficie_suave"]};
+                    border-color: {paleta["borde_suave"]};
+                }}
+                QFrame#panelPermisosUsuarios {{
+                    background: {paleta["fondo_superficie"]};
+                    border-color: {paleta["borde_principal"]};
+                }}
+                QTableWidget#tablaUsuarios {{
+                    background: {paleta["fondo_tabla_cuerpo"]};
+                    color: {paleta["texto_input"]};
+                }}
+                QTableWidget#tablaUsuarios QHeaderView::section {{
+                    background: {paleta["fondo_tabla_header_destacado"]};
+                    color: {paleta["texto_input"]};
+                    border-right: 1px solid {paleta["borde_tabla"]};
+                    border-bottom: 1px solid {paleta["borde_tabla"]};
+                }}
+                QTableWidget#tablaUsuarios::item {{
+                    border-bottom: 1px solid {paleta["borde_tabla"]};
+                    background: {paleta["fondo_tabla_fila"]};
+                }}
+                QLabel#iconoTarjetaResumenUsuario,
+                QLabel#iconoPanelPermisosUsuarios,
+                QLabel#iconoDatoRolUsuario {{
+                    background: {paleta["fondo_superficie_muy_suave"]};
+                    border: 1px solid {paleta["borde_suave"]};
+                }}
+                QLineEdit,
+                QComboBox,
+                QPlainTextEdit {{
+                    border-color: {paleta["borde_medio"]};
+                    background: {paleta["fondo_input"]};
+                    color: {paleta["texto_input"]};
+                }}
+                QLineEdit:focus,
+                QComboBox:focus,
+                QPlainTextEdit:focus {{
+                    border-color: {paleta["borde_foco_input"]};
+                    background: {paleta["fondo_input_focus"]};
+                }}
+                QComboBox::drop-down {{
+                    background: {paleta["fondo_superficie_muy_suave"]};
+                }}
+                QComboBox QAbstractItemView {{
+                    background: {paleta["fondo_dialogo"]};
+                    color: {paleta["texto_input"]};
+                    border: 1px solid {paleta["borde_suave"]};
+                    selection-background-color: {paleta["acento_seleccion"]};
+                    selection-color: {paleta["texto_principal"]};
+                }}
+                QPushButton#chipFiltroUsuario {{
+                    background: {paleta["fondo_chip"]};
+                    border-color: {paleta["borde_suave"]};
+                    color: {paleta["texto_chip"]};
+                }}
+                QPushButton#chipFiltroUsuario:hover {{
+                    background: {paleta["fondo_chip_hover"]};
+                }}
+                QPushButton#chipFiltroUsuario:checked,
+                QTabWidget#tabsUsuarios QTabBar::tab:selected {{
+                    color: {paleta["texto_chip_activo"]};
+                    background: {paleta["fondo_chip_activo"]};
+                    border-color: {paleta["borde_chip_activo"]};
+                }}
+                QTabWidget#tabsUsuarios QTabBar {{
+                    background: {paleta["fondo_superficie_muy_suave"]};
+                    border-color: {paleta["borde_suave"]};
+                }}
+                QTabWidget#tabsUsuarios QTabBar::tab {{
+                    color: {paleta["texto_secundario"]};
+                    background: {paleta["fondo_panel_accion"]};
+                }}
+                QTabWidget#tabsUsuarios QTabBar::tab:hover {{
+                    background: {paleta["fondo_superficie"]};
+                    color: {paleta["texto_principal"]};
+                }}
+                QLabel#badgeEstadoUsuario {{
+                    color: {paleta["texto_badge"]};
+                    background: {paleta["fondo_badge"]};
+                    border-color: {paleta["borde_suave"]};
+                }}
+                QLabel#badgeEstadoUsuario[activo="true"],
+                QLabel#badgeRolSistemaUsuario {{
+                    color: {paleta["texto_exito"]};
+                    background: {paleta["fondo_exito"]};
+                    border-color: {paleta["borde_exito"]};
+                }}
+                QLabel#badgeRolUsuario {{
+                    color: {paleta["texto_badge_activo"]};
+                    background: {paleta["fondo_badge_activo"]};
+                    border-color: {paleta["borde_badge_activo"]};
+                }}
+                QLabel#badgeRolUsuario[administrador="true"],
+                QLabel#badgeRolSistemaUsuario[sistema="true"] {{
+                    color: {paleta["texto_chip_activo"]};
+                    background: {paleta["fondo_chip_activo"]};
+                    border-color: {paleta["borde_chip_activo"]};
+                }}
+                QLabel#chipModuloRolUsuario {{
+                    color: {paleta["texto_badge_activo"]};
+                    background: {paleta["fondo_badge_activo"]};
+                    border-color: {paleta["borde_badge_activo"]};
+                }}
+                QLabel#bloqueInfoRolUsuario {{
+                    color: {paleta["texto_principal"]};
+                    background: {paleta["fondo_superficie_muy_suave"]};
+                    border-color: {paleta["borde_principal"]};
+                }}
+                QLabel {{
+                    color: {paleta["texto_principal"]};
+                }}
+                """
+            )

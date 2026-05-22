@@ -42,7 +42,6 @@ class ControladorUsuarios:
         self._vista_usuarios.editar_usuario_solicitado.connect(self._editar_usuario)
         self._vista_usuarios.cambio_estado_solicitado.connect(self._cambiar_estado_usuario)
         self._vista_usuarios.gestion_acceso_solicitada.connect(self._gestionar_acceso_usuario)
-        self._vista_usuarios.ver_matriz_permisos_solicitada.connect(self._mostrar_matriz_permisos)
         self._vista_usuarios.nuevo_rol_solicitado.connect(self._crear_rol)
         self._vista_usuarios.editar_rol_solicitado.connect(self._editar_rol)
         self._vista_usuarios.cambio_estado_rol_solicitado.connect(self._cambiar_estado_rol)
@@ -188,9 +187,6 @@ class ControladorUsuarios:
         self._vista_usuarios.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
             self._refrescar()
-
-    def _mostrar_matriz_permisos(self) -> None:
-        self._vista_usuarios.mostrar_matriz_permisos(self._roles_actuales)
 
     def _crear_rol(self) -> None:
         if self._actor is None:

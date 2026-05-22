@@ -43,7 +43,9 @@ class PlanPago:
     proxima_fecha: str = ""
     estado: str = "ACTIVO"
     observaciones: str = ""
+    creado_en: str = ""
     actualizado_en: str = ""
+    creado_por_nombre: str = ""
 
     @property
     def codigo(self) -> str:

@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSpinBox,
     QTableWidget,
     QToolButton,
     QVBoxLayout,
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
 
 from comun.ui import (
     BotonAccionContextual,
+    CampoMontoMonetario,
     DialogoBaseSicap,
     DialogoMensajeSicap,
     aplicar_estilo_boton_operativo,
@@ -38,7 +40,12 @@ from comun.ui import (
     obtener_icono_tabler_coloreado,
     resolver_variante_boton_modal,
 )
-from comun.ui.temas import TEMA_SICAP_PREDETERMINADO, obtener_paleta_tema, obtener_tema_actual
+from comun.ui.temas import (
+    TEMA_SICAP_PREDETERMINADO,
+    obtener_fondo_header_destacado,
+    obtener_paleta_tema,
+    obtener_tema_actual,
+)
 from modulos.planes_pago.entidades import (
     DetallePlanPago,
     FILTRO_PLANES_ACTIVOS,
@@ -141,6 +148,7 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
     ) -> None:
         super().__init__(parent)
         self._casas = list(casas)
+        self._casas_filtradas = list(self._casas)
         self._plan = plan
         self.setMinimumWidth(620)
         self.setMinimumHeight(520)
@@ -151,11 +159,11 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
             identificador=None if self._plan is None else self._plan.identificador,
             casa_id=self._combo_casa.currentData(),
             tipo_plan=self._combo_tipo_plan.currentText(),
-            concepto_financiado=self._combo_concepto.currentText(),
-            prima_centavos=self._leer_entero(self._campo_prima.text()),
-            saldo_financiado_centavos=self._leer_entero(self._campo_saldo.text()),
-            cuota_regular_centavos=self._leer_entero(self._campo_cuota.text()),
-            cantidad_cuotas=self._leer_entero(self._campo_cantidad.text()),
+            concepto_financiado=self._combo_tipo_plan.currentText(),
+            prima_centavos=max(self._campo_prima.obtener_centavos(), 0),
+            saldo_financiado_centavos=self._campo_saldo.obtener_centavos(),
+            cuota_regular_centavos=self._campo_cuota.obtener_centavos(),
+            cantidad_cuotas=self._campo_cantidad.value(),
             estado=self._combo_estado.currentText(),
             observaciones=self._campo_observaciones.toPlainText(),
         )
@@ -190,55 +198,71 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
         descripcion.setObjectName("descripcionDialogoSicap")
         descripcion.setWordWrap(True)
 
+        self._campo_busqueda_casa = QLineEdit()
+        self._campo_busqueda_casa.setPlaceholderText("Busca por casa, abonado, DNI o barrio")
+        self._campo_busqueda_casa.textChanged.connect(self._filtrar_casas)
+        self._campo_busqueda_casa.returnPressed.connect(self._confirmar_busqueda_casa)
+        self._campo_busqueda_casa.installEventFilter(self)
         self._combo_casa = QComboBox()
-        self._combo_casa.addItem("Selecciona una casa", None)
-        for casa in self._casas:
-            self._combo_casa.addItem(casa.etiqueta, casa.casa_id)
         self._combo_tipo_plan = QComboBox()
         self._combo_tipo_plan.addItems(TIPOS_PLAN_VALIDOS)
-        self._combo_concepto = QComboBox()
-        self._combo_concepto.addItems(TIPOS_PLAN_VALIDOS)
         self._combo_estado = QComboBox()
         self._combo_estado.addItems(["ACTIVO", "FINALIZADO", "CANCELADO", "ANULADO"])
-        self._campo_prima = QLineEdit()
-        self._campo_prima.setPlaceholderText("0")
-        self._campo_saldo = QLineEdit()
-        self._campo_saldo.setPlaceholderText("35000")
-        self._campo_cuota = QLineEdit()
-        self._campo_cuota.setPlaceholderText("17500")
-        self._campo_cantidad = QLineEdit()
-        self._campo_cantidad.setPlaceholderText("2")
+        self._campo_prima = CampoMontoMonetario()
+        self._campo_saldo = CampoMontoMonetario()
+        self._campo_cuota = CampoMontoMonetario()
+        self._campo_cuota.setReadOnly(True)
+        self._campo_cuota.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._campo_cantidad = QSpinBox()
+        self._campo_cantidad.setObjectName("campoCantidadCuotasPlan")
+        self._campo_cantidad.setMinimum(1)
+        self._campo_cantidad.setMaximum(240)
+        self._campo_cantidad.setMinimumHeight(42)
+        self._campo_cantidad.setStyleSheet(
+            """
+            QSpinBox#campoCantidadCuotasPlan::up-button,
+            QSpinBox#campoCantidadCuotasPlan::down-button {
+                width: 28px;
+            }
+            """
+        )
         self._campo_observaciones = QPlainTextEdit()
         self._campo_observaciones.setFixedHeight(66)
+        self._campo_saldo.textChanged.connect(self._actualizar_cuota_automatica)
+        self._campo_cantidad.valueChanged.connect(self._actualizar_cuota_automatica)
+        self._recargar_casas()
 
         if self._plan is not None:
-            indice_casa = self._combo_casa.findData(self._plan.casa_id)
-            if indice_casa >= 0:
-                self._combo_casa.setCurrentIndex(indice_casa)
             self._combo_tipo_plan.setCurrentText(self._plan.tipo_plan)
-            self._combo_concepto.setCurrentText(self._plan.concepto_financiado)
             self._combo_estado.setCurrentText(self._plan.estado)
-            self._campo_prima.setText(str(self._plan.prima_centavos))
-            self._campo_saldo.setText(str(self._plan.saldo_financiado_centavos))
-            self._campo_cuota.setText(str(self._plan.cuota_regular_centavos))
-            self._campo_cantidad.setText(str(self._plan.cantidad_cuotas))
+            self._campo_prima.establecer_desde_centavos(self._plan.prima_centavos)
+            self._campo_saldo.establecer_desde_centavos(self._plan.saldo_financiado_centavos)
+            self._campo_cuota.establecer_desde_centavos(self._plan.cuota_regular_centavos)
+            self._campo_cantidad.setValue(max(self._plan.cantidad_cuotas, 1))
             self._campo_observaciones.setPlainText(self._plan.observaciones)
+            self._seleccionar_casa_por_id(self._plan.casa_id)
+        self._actualizar_cuota_automatica()
 
         grilla = QGridLayout()
         grilla.setHorizontalSpacing(10)
         grilla.setVerticalSpacing(8)
-        grilla.addWidget(self._crear_bloque("Casa asociada", self._combo_casa), 0, 0, 1, 2)
-        grilla.addWidget(self._crear_bloque("Tipo de plan", self._combo_tipo_plan), 1, 0)
-        grilla.addWidget(self._crear_bloque("Concepto financiado", self._combo_concepto), 1, 1)
-        grilla.addWidget(self._crear_bloque("Prima (centavos)", self._campo_prima), 2, 0)
-        grilla.addWidget(self._crear_bloque("Saldo financiado (centavos)", self._campo_saldo), 2, 1)
-        grilla.addWidget(self._crear_bloque("Cuota (centavos)", self._campo_cuota), 3, 0)
-        grilla.addWidget(self._crear_bloque("Cantidad de cuotas", self._campo_cantidad), 3, 1)
-        grilla.addWidget(self._crear_bloque("Estado", self._combo_estado), 4, 0, 1, 2)
+        grilla.addWidget(self._crear_bloque("Buscar casa", self._campo_busqueda_casa), 0, 0, 1, 2)
+        grilla.addWidget(self._crear_bloque("Casa asociada", self._combo_casa), 1, 0, 1, 2)
+        grilla.addWidget(self._crear_bloque("Tipo de plan", self._combo_tipo_plan), 2, 0)
+        grilla.addWidget(self._crear_bloque("Estado", self._combo_estado), 2, 1)
+        grilla.addWidget(self._crear_bloque("Prima", self._campo_prima), 3, 0)
+        grilla.addWidget(self._crear_bloque("Saldo financiado", self._campo_saldo), 3, 1)
+        grilla.addWidget(self._crear_bloque("Cuota mensual", self._campo_cuota), 4, 0)
+        grilla.addWidget(self._crear_bloque("Cantidad de cuotas", self._campo_cantidad), 4, 1)
+        ayuda_cuota = QLabel("Calculada automaticamente segun el saldo financiado y la cantidad de cuotas.")
+        ayuda_cuota.setObjectName("ayudaCampoDialogoSicap")
+        ayuda_cuota.setWordWrap(True)
+        ayuda_cuota.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        grilla.addWidget(ayuda_cuota, 5, 0, 1, 2)
 
         panel_principal = self._crear_panel(
             "Estructura del plan",
-            "Define el acuerdo de servicio y su estructura base. El prototipo cierra primero tipos de plan de conexion o reconexion.",
+            "Define el acuerdo de servicio y su estructura base. La casa se busca desde aqui y el sistema sincroniza internamente la estructura del plan.",
         )
         panel_principal.layout().addLayout(grilla)
 
@@ -258,6 +282,10 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
         boton_guardar = BotonAccionContextual("Guardar cambios", variante="primario", centrado=True, mostrar_icono=False)
         boton_cancelar.setMinimumWidth(132)
         boton_guardar.setMinimumWidth(160)
+        boton_cancelar.setAutoDefault(False)
+        boton_cancelar.setDefault(False)
+        boton_guardar.setAutoDefault(False)
+        boton_guardar.setDefault(False)
         boton_cancelar.clicked.connect(self.reject)
         boton_guardar.clicked.connect(self.accept)
         fila_acciones.addWidget(boton_cancelar)
@@ -271,7 +299,66 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
         self.layout_cuerpo.addWidget(self._mensaje)
         self.layout_pie.addLayout(fila_acciones)
 
-    def _crear_bloque(self, etiqueta: str, campo: QWidget) -> QWidget:
+    def _recargar_casas(self) -> None:
+        casa_seleccionada = self._combo_casa.currentData() if hasattr(self, "_combo_casa") else None
+        self._combo_casa.blockSignals(True)
+        self._combo_casa.clear()
+        self._combo_casa.addItem("Selecciona una casa", None)
+        for casa in self._casas_filtradas:
+            self._combo_casa.addItem(casa.etiqueta, casa.casa_id)
+        if casa_seleccionada is not None:
+            indice = self._combo_casa.findData(casa_seleccionada)
+            if indice >= 0:
+                self._combo_casa.setCurrentIndex(indice)
+        self._combo_casa.blockSignals(False)
+
+    def _filtrar_casas(self, texto: str) -> None:
+        termino = (texto or "").strip().casefold()
+        if not termino:
+            self._casas_filtradas = list(self._casas)
+        else:
+            self._casas_filtradas = [
+                casa
+                for casa in self._casas
+                if termino in casa.etiqueta.casefold()
+                or termino in casa.casa_codigo.casefold()
+                or termino in casa.abonado_nombre.casefold()
+                or termino in casa.abonado_dni.casefold()
+                or termino in (casa.barrio_nombre or "").casefold()
+            ]
+        self._recargar_casas()
+
+    def _seleccionar_casa_por_id(self, casa_id: int) -> None:
+        casa = next((valor for valor in self._casas if valor.casa_id == casa_id), None)
+        if casa is None:
+            return
+        self._casas_filtradas = list(self._casas)
+        self._recargar_casas()
+        indice = self._combo_casa.findData(casa_id)
+        if indice >= 0:
+            self._combo_casa.setCurrentIndex(indice)
+        self._campo_busqueda_casa.setText(casa.casa_codigo)
+
+    def _confirmar_busqueda_casa(self) -> None:
+        if self._combo_casa.count() <= 1:
+            self._mensaje.setText("No hay coincidencias para la busqueda actual.")
+            self._mensaje.setVisible(True)
+            return
+        self._combo_casa.setCurrentIndex(1)
+        self._combo_casa.setFocus(Qt.FocusReason.TabFocusReason)
+        self._mensaje.setVisible(False)
+
+    def eventFilter(self, objeto: object, evento: QEvent) -> bool:
+        if (
+            objeto is getattr(self, "_campo_busqueda_casa", None)
+            and evento.type() == QEvent.Type.KeyPress
+            and getattr(evento, "key", lambda: None)() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+        ):
+            self._confirmar_busqueda_casa()
+            return True
+        return super().eventFilter(objeto, evento)
+
+    def _crear_bloque(self, etiqueta: str, campo: QWidget, ayuda: str = "") -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -280,6 +367,11 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
         label.setObjectName("etiquetaDatoDialogoSicap")
         layout.addWidget(label)
         layout.addWidget(campo)
+        if ayuda.strip():
+            label_ayuda = QLabel(ayuda)
+            label_ayuda.setObjectName("ayudaCampoDialogoSicap")
+            label_ayuda.setWordWrap(True)
+            layout.addWidget(label_ayuda)
         return widget
 
     def _crear_panel(self, titulo: str, descripcion: str) -> QFrame:
@@ -297,12 +389,14 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
         layout_panel.addWidget(label_descripcion)
         return panel
 
-    @staticmethod
-    def _leer_entero(texto: str) -> int:
-        try:
-            return int((texto or "0").strip())
-        except ValueError:
-            return -1
+    def _actualizar_cuota_automatica(self) -> None:
+        saldo_centavos = self._campo_saldo.obtener_centavos()
+        cantidad_cuotas = self._campo_cantidad.value()
+        if saldo_centavos <= 0 or cantidad_cuotas <= 0:
+            self._campo_cuota.clear()
+            return
+        cuota_regular = saldo_centavos // cantidad_cuotas
+        self._campo_cuota.establecer_desde_centavos(cuota_regular)
 
 
 class DialogoDetallePlanPago(DialogoBaseSicap):
@@ -380,6 +474,15 @@ class DialogoDetallePlanPago(DialogoBaseSicap):
         datos.addWidget(self._crear_campo("Saldo financiado", self._formateador_moneda(plan.saldo_financiado_centavos)), 2, 1)
         datos.addWidget(self._crear_campo("Cuota", self._formateador_moneda(plan.cuota_regular_centavos)), 3, 0)
         datos.addWidget(self._crear_campo("Proxima fecha", self._formateador_fecha(plan.proxima_fecha)), 3, 1)
+        datos.addWidget(self._crear_campo("Creado", self._formateador_fecha(plan.creado_en)), 4, 0)
+        datos.addWidget(self._crear_campo("Ultima actualizacion", self._formateador_fecha(plan.actualizado_en)), 4, 1)
+        datos.addWidget(
+            self._crear_campo("Creado por", plan.creado_por_nombre or "Sin registro"),
+            5,
+            0,
+            1,
+            2,
+        )
 
         fila_metricas = QHBoxLayout()
         fila_metricas.setSpacing(12)
@@ -392,6 +495,11 @@ class DialogoDetallePlanPago(DialogoBaseSicap):
         configurar_tabla_operativa(tabla, ["Cuota", "Vencimiento", "Saldo", "Estado"])
         tabla.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         tabla.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        tabla.setAlternatingRowColors(True)
+        tabla.setFrameShape(QFrame.Shape.NoFrame)
+        tabla.setViewportMargins(0, 0, 0, 18)
+        tabla.viewport().setObjectName("viewportTablaCuotasPlan")
+        tabla.viewport().setAutoFillBackground(False)
         tabla.horizontalHeader().setStretchLastSection(True)
         tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
@@ -536,17 +644,43 @@ class DialogoDetallePlanPago(DialogoBaseSicap):
                 border-color: {'rgba(158, 231, 214, 0.26)' if oscuro else paleta['borde_badge_activo']};
             }}
             QTableWidget#tablaCuotasPlan {{
-                background: {'rgba(255,255,255,0.03)' if oscuro else paleta['fondo_superficie_muy_suave']};
+                background: {paleta['fondo_tabla_cuerpo']};
+                background-clip: padding;
                 border: none;
-                border-radius: 14px;
+                border-radius: 18px;
+                padding: 0 0 18px 0;
+            }}
+            QWidget#viewportTablaCuotasPlan {{
+                background: transparent;
+                border: none;
+                border-bottom-left-radius: 18px;
+                border-bottom-right-radius: 18px;
+            }}
+            QTableWidget#tablaCuotasPlan QHeaderView::section:first {{
+                border-top-left-radius: 18px;
             }}
             QTableWidget#tablaCuotasPlan QHeaderView::section {{
-                background: {'rgba(255,255,255,0.10)' if oscuro else paleta['fondo_tabla_header']};
+                background: {paleta['fondo_tabla_header_destacado']};
                 color: {'#f7fbff' if oscuro else paleta['texto_input']};
                 border: none;
+                border-right: 1px solid {paleta['borde_tabla']};
+                border-bottom: 1px solid {paleta['borde_tabla']};
                 padding: 10px 12px;
                 font-size: 12px;
                 font-weight: 800;
+            }}
+            QTableWidget#tablaCuotasPlan QHeaderView::section:last {{
+                border-top-right-radius: 18px;
+            }}
+            QTableWidget#tablaCuotasPlan::item {{
+                background: {paleta['fondo_tabla_fila']};
+                border-bottom: 1px solid {paleta['borde_tabla']};
+            }}
+            QTableWidget#tablaCuotasPlan::item:alternate {{
+                background: {paleta['fondo_tabla_fila_alterna']};
+            }}
+            QTableWidget#tablaCuotasPlan::item:selected {{
+                background: {paleta['fondo_tabla_seleccion']};
             }}
             """
         )
@@ -764,6 +898,7 @@ class VistaPlanesPago(QWidget):
         self._tabla.horizontalHeader().setSectionResizeMode(8, QHeaderView.ResizeMode.Interactive)
         self._tabla.setColumnWidth(8, self.ANCHO_COLUMNA_ACCIONES)
         self._tabla.verticalHeader().setDefaultSectionSize(58)
+        self._tabla.setAlternatingRowColors(True)
         self._tabla.setFrameShape(QFrame.Shape.NoFrame)
         self._tabla.setViewportMargins(0, 0, 0, self.RADIO_PANEL_TABLA)
         self._tabla.viewport().setObjectName("viewportTablaPlanes")
@@ -833,7 +968,7 @@ class VistaPlanesPago(QWidget):
             titulo="Ayuda del modulo",
             mensaje=(
                 "Este modulo sirve para consultar, crear y editar planes de pago del servicio. "
-                "La regla vigente del prototipo solo admite conexion o reconexion como concepto financiado. "
+                "La regla vigente del prototipo solo admite conexion o reconexion como tipo de plan. "
                 "Las cuotas vencidas del plan se muestran aqui como seguimiento operativo."
             ),
             parent=self,
@@ -848,6 +983,11 @@ class VistaPlanesPago(QWidget):
         radio = self.RADIO_PANEL_TABLA
         paleta = self._paleta_tema
         oscuro = self._tema_actual != "claro"
+        fondo_panel_destacado = (
+            obtener_fondo_header_destacado(self._tema_actual)
+            if oscuro
+            else paleta["fondo_superficie"]
+        )
         self.setStyleSheet(
             f"""
             QWidget#vistaPlanesPago {{
@@ -881,17 +1021,18 @@ class VistaPlanesPago(QWidget):
             }}
             QFrame#panelOperativoPlanes,
             QFrame#tarjetaResumenPlanes {{
-                background: {'rgba(255,255,255,0.10)' if oscuro else paleta['fondo_superficie']};
+                background: {fondo_panel_destacado};
                 border: 1px solid {'rgba(255,255,255,0.16)' if oscuro else paleta['borde_principal']};
                 border-radius: 18px;
             }}
             QFrame#panelTablaPlanes {{
-                background: {'rgba(255,255,255,0.10)' if oscuro else paleta['fondo_superficie']};
+                background: {fondo_panel_destacado};
                 border: 1px solid {'rgba(255,255,255,0.16)' if oscuro else paleta['borde_principal']};
                 border-radius: {radio}px;
             }}
             QTableWidget#tablaPlanes {{
-                background: {'rgba(255,255,255,0.03)' if oscuro else paleta['fondo_superficie_muy_suave']};
+                background: {paleta['fondo_tabla_cuerpo']};
+                background-clip: padding;
                 border: none;
                 border-radius: {radio}px;
                 padding: 0 0 {radio}px 0;
@@ -902,17 +1043,32 @@ class VistaPlanesPago(QWidget):
                 border-bottom-left-radius: {radio}px;
                 border-bottom-right-radius: {radio}px;
             }}
+            QTableWidget#tablaPlanes QHeaderView::section:first {{
+                border-top-left-radius: {radio}px;
+            }}
             QTableWidget#tablaPlanes QHeaderView::section {{
-                background: {'rgba(255,255,255,0.10)' if oscuro else paleta['fondo_tabla_header']};
+                background: {paleta['fondo_tabla_header_destacado']};
                 color: {'#f7fbff' if oscuro else paleta['texto_input']};
                 border: none;
+                border-right: 1px solid {paleta['borde_tabla']};
+                border-bottom: 1px solid {paleta['borde_tabla']};
                 padding: 10px 12px;
                 font-size: 12px;
                 font-weight: 800;
             }}
+            QTableWidget#tablaPlanes QHeaderView::section:last {{
+                border-top-right-radius: {radio}px;
+            }}
             QTableWidget#tablaPlanes::item {{
                 padding: 9px 12px;
-                border-bottom: 1px solid {'rgba(255,255,255,0.04)' if oscuro else paleta['borde_suave']};
+                border-bottom: 1px solid {paleta['borde_tabla']};
+                background: {paleta['fondo_tabla_fila']};
+            }}
+            QTableWidget#tablaPlanes::item:alternate {{
+                background: {paleta['fondo_tabla_fila_alterna']};
+            }}
+            QTableWidget#tablaPlanes::item:selected {{
+                background: {paleta['fondo_tabla_seleccion']};
             }}
             QLabel#iconoTarjetaResumen {{
                 background: {'rgba(255,255,255,0.08)' if oscuro else paleta['fondo_superficie_suave']};

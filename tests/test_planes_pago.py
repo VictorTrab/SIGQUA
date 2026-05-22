@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import shutil
 import sys
@@ -35,7 +35,7 @@ class TestPlanesPago(unittest.TestCase):
             )
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.gestor_base_datos.inicializar_base_datos()
+        self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
         self.repositorio = RepositorioPlanesPagoSQLite(self.gestor_base_datos)
         self.servicio = ServicioPlanesPago(self.repositorio)
 
@@ -89,7 +89,36 @@ class TestPlanesPago(unittest.TestCase):
         self.assertEqual(detalle.plan.cantidad_cuotas, 2)
         self.assertEqual(len(detalle.cuotas), 2)
         self.assertEqual(sum(cuota.monto_centavos for cuota in detalle.cuotas), 24000)
+        self.assertEqual(detalle.plan.creado_por_nombre, "Administrador del Sistema")
+
+    def test_cuota_regular_se_calcula_automaticamente_desde_saldo_y_cuotas(self) -> None:
+        resultado = self.servicio.guardar(
+            FormularioPlanPago(
+                identificador=None,
+                casa_id=1,
+                tipo_plan="RECONEXION",
+                concepto_financiado="RECONEXION",
+                prima_centavos=0,
+                saldo_financiado_centavos=10001,
+                cuota_regular_centavos=1,
+                cantidad_cuotas=3,
+                estado="ACTIVO",
+                observaciones="Plan con cuota calculada automaticamente.",
+            ),
+            actor_id=1,
+        )
+
+        self.assertTrue(resultado.exito)
+        detalle = self.servicio.obtener_detalle(2)
+        self.assertIsNotNone(detalle)
+        assert detalle is not None
+        self.assertEqual(detalle.plan.cuota_regular_centavos, 3333)
+        self.assertEqual(
+            tuple(cuota.monto_centavos for cuota in detalle.cuotas),
+            (3333, 3333, 3335),
+        )
 
 
 if __name__ == "__main__":
     unittest.main()
+

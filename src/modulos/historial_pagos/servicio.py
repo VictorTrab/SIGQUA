@@ -98,6 +98,13 @@ class ServicioHistorialPagos:
             ruta_documento=ruta,
         )
 
+    def obtener_politica_documental(self) -> tuple[bool, bool]:
+        configuracion = self._repositorio_historial.obtener_configuracion_recibo()
+        return (
+            configuracion.abrir_pdf_automaticamente,
+            configuracion.imprimir_pdf_automaticamente,
+        )
+
     @staticmethod
     def formatear_moneda(valor_centavos: int) -> str:
         return f"L {valor_centavos / 100:,.2f}"

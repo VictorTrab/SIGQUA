@@ -1,4 +1,4 @@
-"""Contratos e implementacion SQLite del modulo de usuarios."""
+﻿"""Contratos e implementacion SQLite del modulo de usuarios."""
 
 from __future__ import annotations
 
@@ -152,11 +152,16 @@ class RepositorioUsuariosSQLite:
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
                 u.creado_en,
+                u.actualizado_en,
+                COALESCE(uc.nombre_completo, uc.nombre_usuario, '') AS creado_por_nombre,
+                COALESCE(uu.nombre_completo, uu.nombre_usuario, '') AS actualizado_por_nombre,
                 COALESCE(u.observaciones, '') AS observaciones,
                 GROUP_CONCAT(DISTINCT r.nombre) AS roles_csv,
                 GROUP_CONCAT(DISTINCT p.codigo) AS permisos_csv,
                 COUNT(DISTINCT s.id) AS total_sesiones
             FROM usuarios u
+            LEFT JOIN usuarios uc ON uc.id = u.creado_por
+            LEFT JOIN usuarios uu ON uu.id = u.actualizado_por
             LEFT JOIN usuarios_roles ur ON ur.usuario_id = u.id
             LEFT JOIN roles r ON r.id = ur.rol_id
             LEFT JOIN roles_permisos rp ON rp.rol_id = r.id
@@ -178,6 +183,9 @@ class RepositorioUsuariosSQLite:
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
                 u.creado_en,
+                u.actualizado_en,
+                creado_por_nombre,
+                actualizado_por_nombre,
                 u.observaciones
             ORDER BY lower(u.nombre_usuario);
         """
@@ -198,11 +206,16 @@ class RepositorioUsuariosSQLite:
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
                 u.creado_en,
+                u.actualizado_en,
+                COALESCE(uc.nombre_completo, uc.nombre_usuario, '') AS creado_por_nombre,
+                COALESCE(uu.nombre_completo, uu.nombre_usuario, '') AS actualizado_por_nombre,
                 COALESCE(u.observaciones, '') AS observaciones,
                 GROUP_CONCAT(DISTINCT r.nombre) AS roles_csv,
                 GROUP_CONCAT(DISTINCT p.codigo) AS permisos_csv,
                 COUNT(DISTINCT s.id) AS total_sesiones
             FROM usuarios u
+            LEFT JOIN usuarios uc ON uc.id = u.creado_por
+            LEFT JOIN usuarios uu ON uu.id = u.actualizado_por
             LEFT JOIN usuarios_roles ur ON ur.usuario_id = u.id
             LEFT JOIN roles r ON r.id = ur.rol_id
             LEFT JOIN roles_permisos rp ON rp.rol_id = r.id
@@ -223,6 +236,9 @@ class RepositorioUsuariosSQLite:
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
                 u.creado_en,
+                u.actualizado_en,
+                creado_por_nombre,
+                actualizado_por_nombre,
                 u.observaciones
             ORDER BY lower(u.nombre_usuario);
         """
@@ -576,7 +592,7 @@ class RepositorioUsuariosSQLite:
                 datos_despues_json,
                 fecha_evento
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'));
+            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'));
         """
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             with conexion:
@@ -632,11 +648,16 @@ class RepositorioUsuariosSQLite:
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
                 u.creado_en,
+                u.actualizado_en,
+                COALESCE(uc.nombre_completo, uc.nombre_usuario, '') AS creado_por_nombre,
+                COALESCE(uu.nombre_completo, uu.nombre_usuario, '') AS actualizado_por_nombre,
                 COALESCE(u.observaciones, '') AS observaciones,
                 GROUP_CONCAT(DISTINCT r.nombre) AS roles_csv,
                 GROUP_CONCAT(DISTINCT p.codigo) AS permisos_csv,
                 COUNT(DISTINCT s.id) AS total_sesiones
             FROM usuarios u
+            LEFT JOIN usuarios uc ON uc.id = u.creado_por
+            LEFT JOIN usuarios uu ON uu.id = u.actualizado_por
             LEFT JOIN usuarios_roles ur ON ur.usuario_id = u.id
             LEFT JOIN roles r ON r.id = ur.rol_id
             LEFT JOIN roles_permisos rp ON rp.rol_id = r.id
@@ -657,6 +678,9 @@ class RepositorioUsuariosSQLite:
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
                 u.creado_en,
+                u.actualizado_en,
+                creado_por_nombre,
+                actualizado_por_nombre,
                 u.observaciones
             LIMIT 1;
         """
@@ -691,6 +715,10 @@ class RepositorioUsuariosSQLite:
             permisos=permisos,
             ultimo_acceso_en=str(fila["ultimo_acceso_en"]) if fila["ultimo_acceso_en"] else None,
             creado_en=str(fila["creado_en"]) if fila["creado_en"] else None,
+            actualizado_en=str(fila["actualizado_en"]) if fila["actualizado_en"] else None,
+            creado_por_nombre=str(fila["creado_por_nombre"] or ""),
+            actualizado_por_nombre=str(fila["actualizado_por_nombre"] or ""),
             observaciones=str(fila["observaciones"] or ""),
             total_sesiones=int(fila["total_sesiones"] or 0),
         )
+

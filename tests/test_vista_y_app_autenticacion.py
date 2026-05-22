@@ -66,9 +66,12 @@ from modulos.casas.entidades import (  # noqa: E402
     OpcionBarrio as OpcionBarrioCasa,
 )
 from modulos.historial_pagos.vista import VistaHistorialPagos  # noqa: E402
+from modulos.morosidad.vista import VistaMorosidad  # noqa: E402
+from modulos.pagos.vista import VistaPagos  # noqa: E402
 from modulos.planes_pago.vista import VistaPlanesPago  # noqa: E402
 from modulos.principal.vista import VistaModuloPrincipal  # noqa: E402
 from modulos.principal.entidades import AnaliticaDashboard, EstadoModuloPrincipal, ModuloNavegacion  # noqa: E402
+from modulos.reportes.vista import VistaReportes  # noqa: E402
 from modulos.usuarios.entidades import PermisoSistema, ResumenUsuarios, RolSistema, UsuarioSistema  # noqa: E402
 from modulos.usuarios.vista import VistaUsuarios  # noqa: E402
 
@@ -622,7 +625,10 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             barrio_nombre="San Jorge",
             direccion_referencia="Frente al pozo principal, pasaje norte",
             observaciones="Observacion administrativa larga para validar separacion visual.",
-            estado_servicio="SUSPENDIDO",
+            estado_servicio="ACTIVO",
+            estado_administrativo="SUSPENDIDA",
+            motivo_estado_administrativo="REVISION_ADMINISTRATIVA",
+            ha_tenido_servicio_activo=True,
             deuda_total_centavos=123450,
             meses_pendientes=4,
             meses_en_mora=2,
@@ -756,6 +762,9 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             direccion_referencia="Casa frente al parque",
             observaciones="Observacion de casa.",
             estado_servicio="ACTIVO",
+            estado_administrativo="OPERATIVA",
+            motivo_estado_administrativo="NINGUNO",
+            ha_tenido_servicio_activo=False,
         )
 
         dialogo_form_abonado = DialogoFormularioAbonado(
@@ -794,18 +803,28 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertIn("QFrame#bloqueDialogoSicap", dialogo.styleSheet())
             dialogo.close()
 
-    def test_shell_permanece_en_tema_oscuro_sin_boton_de_cambio(self) -> None:
+    def test_shell_admite_tema_claro_sin_boton_de_cambio(self) -> None:
         vista_principal = VistaModuloPrincipal()
         vista_barrios = VistaBarrios()
         vista_abonados = VistaAbonados()
         vista_casas = VistaCasas()
         vista_planes = VistaPlanesPago()
+        vista_pagos = VistaPagos()
+        vista_historial = VistaHistorialPagos()
+        vista_morosidad = VistaMorosidad()
+        vista_reportes = VistaReportes()
+        vista_usuarios = VistaUsuarios()
         vista_configuracion = VistaConfiguracion()
 
         vista_principal.registrar_modulo("barrios", vista_barrios)
         vista_principal.registrar_modulo("abonados", vista_abonados)
         vista_principal.registrar_modulo("casas", vista_casas)
         vista_principal.registrar_modulo("planes_pago", vista_planes)
+        vista_principal.registrar_modulo("pagos", vista_pagos)
+        vista_principal.registrar_modulo("historial_pagos", vista_historial)
+        vista_principal.registrar_modulo("morosidad", vista_morosidad)
+        vista_principal.registrar_modulo("reportes", vista_reportes)
+        vista_principal.registrar_modulo("usuarios", vista_usuarios)
         vista_principal.registrar_modulo("configuracion", vista_configuracion)
         vista_principal.show()
         self.aplicacion.processEvents()
@@ -813,20 +832,31 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista_principal.aplicar_tema("claro")
         self.aplicacion.processEvents()
 
-        self.assertEqual(vista_principal._tema_actual, "oscuro")
+        self.assertEqual(vista_principal._tema_actual, "claro")
         self.assertFalse(hasattr(vista_principal, "_boton_tema"))
-        self.assertEqual(vista_barrios._tema_actual, "oscuro")
-        self.assertEqual(vista_abonados._tema_actual, "oscuro")
-        self.assertEqual(vista_casas._tema_actual, "oscuro")
-        self.assertEqual(vista_planes._tema_actual, "oscuro")
-        self.assertEqual(vista_configuracion._tema_actual, "oscuro")
+        self.assertEqual(vista_barrios._tema_actual, "claro")
+        self.assertEqual(vista_abonados._tema_actual, "claro")
+        self.assertEqual(vista_casas._tema_actual, "claro")
+        self.assertEqual(vista_planes._tema_actual, "claro")
+        self.assertEqual(vista_pagos._tema_actual, "claro")
+        self.assertEqual(vista_historial._tema_actual, "claro")
+        self.assertEqual(vista_morosidad._tema_actual, "claro")
+        self.assertEqual(vista_reportes._tema_actual, "claro")
+        self.assertEqual(vista_usuarios._tema_actual, "claro")
+        self.assertEqual(vista_configuracion._tema_actual, "claro")
         self.assertNotIn("botonTemaHeader", vista_principal.styleSheet())
-        self.assertIn("#2c2966", vista_principal._paleta_tema["fondo_principal"])
+        self.assertEqual(vista_principal._paleta_tema["fondo_principal"], "#f4f7fb")
+        self.assertIn('font-family: "Segoe UI"', vista_principal.styleSheet())
         vista_principal.close()
         vista_barrios.close()
         vista_abonados.close()
         vista_casas.close()
         vista_planes.close()
+        vista_pagos.close()
+        vista_historial.close()
+        vista_morosidad.close()
+        vista_reportes.close()
+        vista_usuarios.close()
         vista_configuracion.close()
 
     def test_vistas_planes_y_configuracion_siguen_patron_visual_compartido(self) -> None:

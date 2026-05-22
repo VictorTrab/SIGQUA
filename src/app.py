@@ -335,12 +335,21 @@ def _registrar_modulos_operativos(ventana_principal: QMainWindow) -> None:
         servicio_barrios=ventana_principal.servicio_barrios,
         vista_barrios=vista_barrios,
     )
+    controlador_barrios.configurar_callback_ver_abonados(
+        lambda termino: _navegar_a_abonados_con_busqueda(ventana_principal, termino)
+    )
+    controlador_barrios.configurar_callback_ver_casas(
+        lambda termino: _navegar_a_casas_con_busqueda(ventana_principal, termino)
+    )
     vista_modulo_principal.registrar_modulo("barrios", vista_barrios)
 
     vista_abonados = VistaAbonados()
     controlador_abonados = ControladorAbonados(
         servicio_abonados=ventana_principal.servicio_abonados,
         vista_abonados=vista_abonados,
+    )
+    controlador_abonados.configurar_callback_ver_casas(
+        lambda termino: _navegar_a_casas_con_busqueda(ventana_principal, termino)
     )
     vista_modulo_principal.registrar_modulo("abonados", vista_abonados)
 
@@ -420,6 +429,42 @@ def _registrar_modulos_operativos(ventana_principal: QMainWindow) -> None:
     ventana_principal.controlador_usuarios = controlador_usuarios
     ventana_principal.vista_configuracion = vista_configuracion
     ventana_principal.controlador_configuracion = controlador_configuracion
+
+
+def _asegurar_shell_principal_visible(ventana_principal: QMainWindow) -> None:
+    """Garantiza que el shell principal sea la vista activa antes de navegar."""
+    if hasattr(ventana_principal, "vista_modulo_principal"):
+        ventana_principal.contenedor_central.setCurrentWidget(
+            ventana_principal.vista_modulo_principal
+        )
+
+
+def _navegar_a_abonados_con_busqueda(
+    ventana_principal: QMainWindow,
+    termino: str,
+) -> None:
+    """Abre abonados y aplica el filtro recibido desde otro modulo."""
+    if not hasattr(ventana_principal, "vista_modulo_principal") or not hasattr(
+        ventana_principal, "vista_abonados"
+    ):
+        return
+    _asegurar_shell_principal_visible(ventana_principal)
+    ventana_principal.vista_modulo_principal.mostrar_modulo("abonados")
+    ventana_principal.vista_abonados.aplicar_busqueda_externa(termino)
+
+
+def _navegar_a_casas_con_busqueda(
+    ventana_principal: QMainWindow,
+    termino: str,
+) -> None:
+    """Abre casas y ejecuta el filtro recibido desde otro modulo."""
+    if not hasattr(ventana_principal, "vista_modulo_principal") or not hasattr(
+        ventana_principal, "vista_casas"
+    ):
+        return
+    _asegurar_shell_principal_visible(ventana_principal)
+    ventana_principal.vista_modulo_principal.mostrar_modulo("casas")
+    ventana_principal.vista_casas.aplicar_busqueda_externa(termino)
 
 
 def _refrescar_modulos_operativos(
