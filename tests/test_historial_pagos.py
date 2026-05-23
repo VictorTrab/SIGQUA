@@ -165,8 +165,8 @@ class TestHistorialPagos(unittest.TestCase):
             "Actualizar",
             [boton.text() for boton in vista.findChildren(QPushButton)],
         )
-        vista.aplicar_tema("claro")
-        self.assertEqual(vista._tema_actual, "claro")
+        vista.aplicar_tema("tema_sicap")
+        self.assertEqual(vista._tema_actual, "tema_sicap")
         self.assertIn('font-family: "Segoe UI"', vista.styleSheet())
         vista.close()
 

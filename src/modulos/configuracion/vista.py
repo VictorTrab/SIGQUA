@@ -24,7 +24,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from comun.ui import BotonAccionContextual, CampoMontoMonetario, crear_boton_operativo
+from comun.ui import (
+    BotonAccionContextual,
+    CampoMontoMonetario,
+    crear_boton_operativo,
+)
 from comun.ui.comprobante_termico import (
     ConfiguracionDocumentoRecibo,
     DatosDocumentoRecibo,
@@ -35,6 +39,7 @@ from comun.ui.temas import (
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
     obtener_tema_actual,
+    resolver_nombre_tema,
 )
 from modulos.configuracion.entidades import EstadoConfiguracion
 
@@ -299,7 +304,7 @@ class VistaConfiguracion(QWidget):
             self._temporizador_mensaje.start(self.DURACION_MENSAJE_MS)
 
     def aplicar_tema(self, nombre_tema: str) -> None:
-        self._tema_actual = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = resolver_nombre_tema(nombre_tema)
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._aplicar_estilos()
 
@@ -314,7 +319,7 @@ class VistaConfiguracion(QWidget):
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(8)
-        boton_info = BotonAccionContextual("Informacion", variante="ayuda", centrado=True, mostrar_icono=False)
+        boton_info = BotonAccionContextual("Información", variante="ayuda", centrado=True, mostrar_icono=False)
         boton_info.setMinimumWidth(132)
         boton_info.clicked.connect(self._mostrar_ayuda)
         fila_acciones.addWidget(boton_info)
@@ -341,9 +346,9 @@ class VistaConfiguracion(QWidget):
         self._tabs.setObjectName("tabsConfiguracion")
         self._tabs.addTab(self._crear_tab_datos_junta(), "Identidad de la empresa")
         self._tabs.addTab(self._crear_tab_factura(), "Documentos y comprobantes")
-        self._tabs.addTab(self._crear_tab_parametros_cobro(), "Parametros de cobro")
+        self._tabs.addTab(self._crear_tab_parametros_cobro(), "Parámetros de cobro")
         self._tabs.addTab(self._crear_tab_operacion_respaldo(), "Control y respaldo")
-        self._tabs.addTab(self._crear_tab_informacion(), "Informacion")
+        self._tabs.addTab(self._crear_tab_informacion(), "Información")
 
         layout.addLayout(encabezado)
         layout.addWidget(self._mensaje)
@@ -1183,23 +1188,18 @@ class VistaConfiguracion(QWidget):
 
     def _aplicar_estilos(self) -> None:
         paleta = self._paleta_tema
-        oscuro = self._tema_actual != "claro"
-        fondo_panel = (
-            obtener_fondo_header_destacado(self._tema_actual)
-            if oscuro
-            else paleta["fondo_superficie"]
-        )
-        borde_panel = "rgba(255, 255, 255, 0.16)" if oscuro else paleta["borde_principal"]
-        texto_principal = "#ffffff" if oscuro else paleta["texto_principal"]
-        texto_secundario = "rgba(235, 242, 248, 0.76)" if oscuro else paleta["texto_secundario"]
-        fondo_input = "rgba(255,255,255,0.11)" if oscuro else paleta["fondo_input"]
-        borde_input = "rgba(255,255,255,0.18)" if oscuro else paleta["borde_medio"]
-        fondo_tabs = "rgba(255,255,255,0.06)" if oscuro else paleta["fondo_superficie_suave"]
-        fondo_tab_barra = "rgba(255,255,255,0.04)" if oscuro else paleta["fondo_superficie_muy_suave"]
-        fondo_tab_hover = "rgba(255,255,255,0.10)" if oscuro else paleta["fondo_superficie"]
-        fondo_tab_activo = "#d2f4f2" if oscuro else paleta["fondo_chip_activo"]
-        texto_tab_activo = "#0f2d43" if oscuro else paleta["texto_chip_activo"]
-        borde_tab_activo = "rgba(157, 239, 228, 0.34)" if oscuro else paleta["borde_chip_activo"]
+        fondo_panel = obtener_fondo_header_destacado(self._tema_actual)
+        borde_panel = str(paleta["borde_principal"])
+        texto_principal = str(paleta["texto_principal"])
+        texto_secundario = str(paleta["texto_secundario"])
+        fondo_input = str(paleta["fondo_input"])
+        borde_input = str(paleta["borde_medio"])
+        fondo_tabs = str(paleta["fondo_chip"])
+        fondo_tab_barra = str(paleta["fondo_superficie_muy_suave"])
+        fondo_tab_hover = str(paleta["fondo_chip_hover"])
+        fondo_tab_activo = str(paleta["fondo_chip_activo"])
+        texto_tab_activo = str(paleta["texto_chip_activo"])
+        borde_tab_activo = str(paleta["borde_chip_activo"])
         self.setStyleSheet(
             f"""
             QWidget#vistaConfiguracion {{
@@ -1220,18 +1220,18 @@ class VistaConfiguracion(QWidget):
                 font-weight: 600;
             }}
             QLabel#mensajeConfiguracion {{
-                color: {'#d9fff5' if oscuro else paleta['texto_exito']};
+                color: {paleta['texto_exito']};
                 font-size: 12px;
                 font-weight: 700;
                 padding: 8px 10px;
                 border-radius: 12px;
-                background-color: {'rgba(16, 120, 98, 0.16)' if oscuro else paleta['fondo_exito']};
-                border: 1px solid {'rgba(158, 231, 214, 0.26)' if oscuro else paleta['borde_exito']};
+                background-color: {paleta['fondo_exito']};
+                border: 1px solid {paleta['borde_exito']};
             }}
             QLabel#mensajeConfiguracion[error="true"] {{
-                color: {'#ffd4cf' if oscuro else paleta['texto_error']};
-                background-color: {'rgba(180, 35, 24, 0.15)' if oscuro else paleta['fondo_error']};
-                border: 1px solid {'rgba(255, 205, 199, 0.28)' if oscuro else paleta['borde_error']};
+                color: {paleta['texto_error']};
+                background-color: {paleta['fondo_error']};
+                border: 1px solid {paleta['borde_error']};
             }}
             QFrame#tarjetaResumenConfiguracion,
             QFrame#panelConfiguracion,
@@ -1241,12 +1241,12 @@ class VistaConfiguracion(QWidget):
                 border-radius: 18px;
             }}
             QFrame#previewComprobanteConfiguracion {{
-                background: #ffffff;
+                background: #E4EACC;
                 border: 1px solid #1a1a1a;
                 border-radius: 8px;
             }}
             QTextEdit#documentoPreviewComprobanteConfiguracion {{
-                background: #ffffff;
+                background: #E4EACC;
                 color: #111111;
                 border: none;
                 padding: 0;
@@ -1352,7 +1352,9 @@ class VistaConfiguracion(QWidget):
             QTabWidget#tabsConfiguracion QTabBar::tab:selected {{
                 background: {fondo_tab_activo};
                 color: {texto_tab_activo};
-                border-color: {borde_tab_activo};
+                border: 2px solid {borde_tab_activo};
+                padding-top: 11px;
+                padding-bottom: 11px;
             }}
             QTabWidget#tabsConfiguracion QTabBar::tab:!selected {{
                 margin-top: 2px;

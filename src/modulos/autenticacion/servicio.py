@@ -65,6 +65,7 @@ class ServicioAutenticacion:
                 nuevo_hash=nuevo_hash,
                 momento=marca_tiempo,
                 requiere_cambio_contrasena=usuario.requiere_cambio_contrasena,
+                contrasena_temporal_expira_en=usuario.contrasena_temporal_expira_en,
             )
             self._logger.warning(
                 "Se reemplazo el hash placeholder del usuario %s en entorno local.",
@@ -181,6 +182,28 @@ class ServicioAutenticacion:
             usuario.identificador,
             self._formatear_fecha(momento_actual),
         )
+
+        if usuario.requiere_cambio_contrasena and self._contrasena_temporal_expirada(
+            usuario.contrasena_temporal_expira_en,
+            momento_actual,
+        ):
+            self.repositorio_autenticacion.registrar_intento_login(
+                identificador=nombre_usuario,
+                resultado="FALLIDO",
+                usuario_id=usuario.identificador,
+                motivo="CONTRASENA_TEMPORAL_EXPIRADA",
+                equipo=ip_origen,
+            )
+            self._logger.warning(
+                "Acceso temporal expirado para usuario '%s'.",
+                nombre_usuario,
+            )
+            return ResultadoLogin(
+                exito=False,
+                mensaje="La contrasena temporal expiro. Solicita un nuevo acceso temporal al administrador.",
+                codigo="CONTRASENA_TEMPORAL_EXPIRADA",
+            )
+
         self.repositorio_autenticacion.registrar_intento_login(
             identificador=nombre_usuario,
             resultado="EXITOSO",
@@ -293,6 +316,7 @@ class ServicioAutenticacion:
             nuevo_hash=nuevo_hash,
             momento=marca_tiempo,
             requiere_cambio_contrasena=False,
+            contrasena_temporal_expira_en=None,
             restablecida_por_usuario_id=None,
             fecha_restablecimiento=None,
         )
@@ -332,6 +356,25 @@ class ServicioAutenticacion:
     @staticmethod
     def _formatear_fecha(fecha: datetime) -> str:
         return fecha.strftime(FORMATO_FECHA_BD)
+
+    @staticmethod
+    def _parsear_fecha(fecha_texto: str | None) -> datetime | None:
+        if not fecha_texto:
+            return None
+        try:
+            return datetime.strptime(fecha_texto, FORMATO_FECHA_BD)
+        except ValueError:
+            return None
+
+    def _contrasena_temporal_expirada(
+        self,
+        expira_en: str | None,
+        momento_actual: datetime,
+    ) -> bool:
+        fecha_expiracion = self._parsear_fecha(expira_en)
+        if fecha_expiracion is None:
+            return False
+        return momento_actual > fecha_expiracion
 
     @staticmethod
     def _generar_hash_token(token_sesion: str) -> str:

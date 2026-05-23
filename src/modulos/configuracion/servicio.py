@@ -20,6 +20,7 @@ from modulos.configuracion.entidades import (
     FacturaConfiguracion,
     IdentidadEmpresa,
     InformacionConfiguracion,
+    LaboratorioVisualConfiguracion,
     OperacionConfiguracion,
     ParametrosCobro,
     ResultadoGestionConfiguracion,
@@ -79,11 +80,25 @@ CLAVES_SISTEMA = (
     "mantenimiento.ruta_respaldos",
     "mantenimiento.dias_retencion_respaldos",
 )
+CLAVES_LABORATORIO_VISUAL = (
+    "ui.laboratorio.fondo_aplicado",
+    "ui.laboratorio.fondo_modo",
+    "ui.laboratorio.fondo_color_primario",
+    "ui.laboratorio.fondo_color_secundario",
+    "ui.laboratorio.modal_modo",
+    "ui.laboratorio.modal_color_primario",
+    "ui.laboratorio.modal_color_secundario",
+)
 FORMATOS_SALIDA_FACTURA_VALIDOS = ("PDF", "HTML", "TEXTO")
 TIPOS_PROGRAMACION_RESPALDO_VALIDOS = ("DESACTIVADO", "DIARIO", "SEMANAL")
 DIAS_SEMANA_VALIDOS = ("LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO")
 DURACIONES_SESION_HORAS_VALIDAS = (0.5, 1.0, 2.0, 4.0, 8.0, 12.0)
 MAXIMO_INTENTOS_FALLIDOS_OPERATIVO = 5
+MODOS_LABORATORIO_VISUAL_VALIDOS = ("SOLIDO", "DEGRADADO")
+COLOR_HEX_PREDETERMINADO_FONDO = "#0A1728"
+COLOR_HEX_PREDETERMINADO_FONDO_SECUNDARIO = "#1D364E"
+COLOR_HEX_PREDETERMINADO_MODAL = "#1D364E"
+COLOR_HEX_PREDETERMINADO_MODAL_SECUNDARIO = "#243F5A"
 
 
 class ServicioConfiguracion:
@@ -102,7 +117,13 @@ class ServicioConfiguracion:
         self._servicio_respaldo = servicio_respaldo
 
     def obtener_estado(self) -> EstadoConfiguracion:
-        claves = CLAVES_DATOS_EMPRESA + CLAVES_COBRO + CLAVES_FACTURA + CLAVES_SISTEMA
+        claves = (
+            CLAVES_DATOS_EMPRESA
+            + CLAVES_COBRO
+            + CLAVES_FACTURA
+            + CLAVES_SISTEMA
+            + CLAVES_LABORATORIO_VISUAL
+        )
         parametros = self._repositorio_configuracion.listar_por_claves(claves)
         correlativo_actual, ultimo_comprobante, total_comprobantes = (
             self._repositorio_configuracion.obtener_resumen_comprobantes()
@@ -244,6 +265,61 @@ class ServicioConfiguracion:
             restablecimiento_administrativo=True,
             cambio_contrasena_obligatorio=True,
         )
+        laboratorio_visual = LaboratorioVisualConfiguracion(
+            fondo_aplicado=self._a_booleano(
+                self._valor_parametro(
+                    parametros,
+                    "ui.laboratorio.fondo_aplicado",
+                    "0",
+                )
+            ),
+            fondo_modo=self._resolver_modo_laboratorio_visual(
+                self._valor_parametro(
+                    parametros,
+                    "ui.laboratorio.fondo_modo",
+                    "DEGRADADO",
+                )
+            ),
+            fondo_color_primario=self._resolver_color_hex_laboratorio_visual(
+                self._valor_parametro(
+                    parametros,
+                    "ui.laboratorio.fondo_color_primario",
+                    COLOR_HEX_PREDETERMINADO_FONDO,
+                ),
+                COLOR_HEX_PREDETERMINADO_FONDO,
+            ),
+            fondo_color_secundario=self._resolver_color_hex_laboratorio_visual(
+                self._valor_parametro(
+                    parametros,
+                    "ui.laboratorio.fondo_color_secundario",
+                    COLOR_HEX_PREDETERMINADO_FONDO_SECUNDARIO,
+                ),
+                COLOR_HEX_PREDETERMINADO_FONDO_SECUNDARIO,
+            ),
+            modal_modo=self._resolver_modo_laboratorio_visual(
+                self._valor_parametro(
+                    parametros,
+                    "ui.laboratorio.modal_modo",
+                    "SOLIDO",
+                )
+            ),
+            modal_color_primario=self._resolver_color_hex_laboratorio_visual(
+                self._valor_parametro(
+                    parametros,
+                    "ui.laboratorio.modal_color_primario",
+                    COLOR_HEX_PREDETERMINADO_MODAL,
+                ),
+                COLOR_HEX_PREDETERMINADO_MODAL,
+            ),
+            modal_color_secundario=self._resolver_color_hex_laboratorio_visual(
+                self._valor_parametro(
+                    parametros,
+                    "ui.laboratorio.modal_color_secundario",
+                    COLOR_HEX_PREDETERMINADO_MODAL_SECUNDARIO,
+                ),
+                COLOR_HEX_PREDETERMINADO_MODAL_SECUNDARIO,
+            ),
+        )
         return EstadoConfiguracion(
             identidad_empresa=IdentidadEmpresa(
                 nombre=identidad.nombre,
@@ -259,6 +335,7 @@ class ServicioConfiguracion:
             operacion=operacion,
             seguridad=seguridad,
             informacion=informacion,
+            laboratorio_visual=laboratorio_visual,
         )
 
     def guardar_datos_junta(
@@ -501,6 +578,67 @@ class ServicioConfiguracion:
             return ResultadoGestionConfiguracion(False, "No fue posible actualizar el control de respaldos.", "ERROR_SQLITE")
         return ResultadoGestionConfiguracion(True, "Control y respaldo actualizado.", "OK")
 
+    def guardar_laboratorio_visual(
+        self,
+        fondo_aplicado: bool,
+        fondo_modo: str,
+        fondo_color_primario: str,
+        fondo_color_secundario: str,
+        modal_modo: str,
+        modal_color_primario: str,
+        modal_color_secundario: str,
+        actor_id: int | None = None,
+    ) -> ResultadoGestionConfiguracion:
+        fondo_modo = self._resolver_modo_laboratorio_visual(fondo_modo)
+        modal_modo = self._resolver_modo_laboratorio_visual(modal_modo)
+        fondo_color_primario = self._resolver_color_hex_laboratorio_visual(
+            fondo_color_primario,
+            "",
+        )
+        fondo_color_secundario = self._resolver_color_hex_laboratorio_visual(
+            fondo_color_secundario,
+            "",
+        )
+        modal_color_primario = self._resolver_color_hex_laboratorio_visual(
+            modal_color_primario,
+            "",
+        )
+        modal_color_secundario = self._resolver_color_hex_laboratorio_visual(
+            modal_color_secundario,
+            "",
+        )
+
+        if not fondo_color_primario:
+            return ResultadoGestionConfiguracion(False, "Indica un color primario valido para el fondo temporal.", "VALIDACION")
+        if fondo_modo == "DEGRADADO" and not fondo_color_secundario:
+            return ResultadoGestionConfiguracion(False, "Indica un color secundario valido para el degradado del fondo temporal.", "VALIDACION")
+        if not modal_color_primario:
+            return ResultadoGestionConfiguracion(False, "Indica un color primario valido para el modal temporal.", "VALIDACION")
+        if modal_modo == "DEGRADADO" and not modal_color_secundario:
+            return ResultadoGestionConfiguracion(False, "Indica un color secundario valido para el degradado del modal temporal.", "VALIDACION")
+
+        if fondo_modo == "SOLIDO":
+            fondo_color_secundario = fondo_color_primario
+        if modal_modo == "SOLIDO":
+            modal_color_secundario = modal_color_primario
+
+        try:
+            self._repositorio_configuracion.actualizar_valores(
+                {
+                    "ui.laboratorio.fondo_aplicado": "1" if fondo_aplicado else "0",
+                    "ui.laboratorio.fondo_modo": fondo_modo,
+                    "ui.laboratorio.fondo_color_primario": fondo_color_primario,
+                    "ui.laboratorio.fondo_color_secundario": fondo_color_secundario,
+                    "ui.laboratorio.modal_modo": modal_modo,
+                    "ui.laboratorio.modal_color_primario": modal_color_primario,
+                    "ui.laboratorio.modal_color_secundario": modal_color_secundario,
+                },
+                actor_id=actor_id,
+            )
+        except Exception:
+            return ResultadoGestionConfiguracion(False, "No fue posible guardar el laboratorio visual temporal.", "ERROR_SQLITE")
+        return ResultadoGestionConfiguracion(True, "Laboratorio visual temporal actualizado.", "OK")
+
     def crear_respaldo_manual(self, actor_id: int | None = None) -> ResultadoGestionConfiguracion:
         return self._crear_respaldo("MANUAL", actor_id=actor_id)
 
@@ -688,3 +826,19 @@ class ServicioConfiguracion:
         if not ruta_path.is_absolute():
             ruta_path = self._gestor_rutas.raiz_proyecto / ruta_path
         return str(ruta_path)
+
+    @staticmethod
+    def _resolver_modo_laboratorio_visual(valor: str) -> str:
+        valor_limpio = str(valor or "").strip().upper()
+        return valor_limpio if valor_limpio in MODOS_LABORATORIO_VISUAL_VALIDOS else "SOLIDO"
+
+    @staticmethod
+    def _resolver_color_hex_laboratorio_visual(valor: str, predeterminado: str) -> str:
+        valor_limpio = str(valor or "").strip().upper()
+        if (
+            len(valor_limpio) == 7
+            and valor_limpio.startswith("#")
+            and all(caracter in "0123456789ABCDEF" for caracter in valor_limpio[1:])
+        ):
+            return valor_limpio
+        return predeterminado

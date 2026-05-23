@@ -70,7 +70,7 @@ class VistaMantenimiento(QWidget):
         layout.addStretch(1)
 
     def aplicar_tema(self, nombre_tema: str) -> None:
-        self._tema_actual = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = resolver_nombre_tema(nombre_tema)
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._aplicar_estilos()
 

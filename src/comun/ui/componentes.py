@@ -27,15 +27,17 @@ from comun.ui.temas import (
     obtener_paleta_tema,
     obtener_paleta_tema_actual,
     obtener_tema_actual,
+    resolver_nombre_tema,
 )
 from comun.utilidades.moneda import formatear_monto_desde_centavos, parsear_monto_a_centavos
 
 
-COLOR_TEXTO_PRIMARIO = "#10233d"
-COLOR_TEXTO_SECUNDARIO = "rgba(226, 235, 247, 0.82)"
-COLOR_BORDE = "rgba(255, 255, 255, 0.18)"
-COLOR_FONDO_PANEL = "rgba(255, 255, 255, 0.12)"
-COLOR_FONDO_DIALOGO = "#565384"
+_PALETA_BASE = obtener_paleta_tema_actual()
+COLOR_TEXTO_PRIMARIO = str(_PALETA_BASE["texto_principal"])
+COLOR_TEXTO_SECUNDARIO = str(_PALETA_BASE["texto_secundario"])
+COLOR_BORDE = str(_PALETA_BASE["borde_principal"])
+COLOR_FONDO_PANEL = str(_PALETA_BASE["fondo_superficie_suave"])
+COLOR_FONDO_DIALOGO = str(_PALETA_BASE["modal_fondo"])
 RADIO_TARJETA_DIALOGO = 4
 MARGEN_EXTERNO_DIALOGO = 0
 PADDING_TARJETA_DIALOGO = 14
@@ -80,17 +82,26 @@ class CampoMontoMonetario(QLineEdit):
 def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> str:
     return f"""
     QDialog#dialogoBaseSicap {{
-        background: {color_fondo};
-        border: 1px solid {paleta["borde_suave"]};
+        background: {paleta["modal_fondo"]};
+        border: 1px solid {paleta["modal_borde"]};
         border-radius: 4px;
         font-family: "{paleta["familia_tipografica"]}";
     }}
-    QWidget#tarjetaDialogoSicap,
+    QWidget#tarjetaDialogoSicap {{
+        background: {paleta["modal_fondo"]};
+        border: none;
+    }}
     QFrame#cabeceraDialogoSicap,
-    QFrame#cuerpoDialogoSicap,
-    QFrame#pieDialogoSicap {{
+    QFrame#cuerpoDialogoSicap {{
         background: transparent;
         border: none;
+    }}
+    QFrame#pieDialogoSicap {{
+        background: {paleta["modal_footer_fondo"]};
+        border: none;
+        border-top: 1px solid {paleta["modal_footer_separador"]};
+        margin-top: 2px;
+        padding-top: 10px;
     }}
     QScrollArea,
     QScrollArea > QWidget > QWidget,
@@ -100,21 +111,21 @@ def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> 
         border: none;
     }}
     QFrame#bloqueDialogoSicap {{
-        background: {color_fondo};
-        border: 1px solid {paleta["borde_suave"]};
+        background: {paleta["modal_fondo_seccion"]};
+        border: 1px solid {paleta["modal_borde"]};
         border-radius: 4px;
     }}
     QLabel#tituloDialogoSicap {{
-        color: {paleta["texto_principal"]};
+        color: {paleta["modal_titulo"]};
         font-size: {paleta["tamano_titulo_panel"] + 4}px;
         font-weight: {paleta["peso_titulo"]};
     }}
     QLabel#descripcionDialogoSicap {{
-        color: {paleta["texto_suave"]};
+        color: {paleta["modal_texto"]};
         font-size: {paleta["tamano_fuente_base"] + 2}px;
     }}
     QLabel#ayudaCampoDialogoSicap {{
-        color: {paleta["texto_suave"]};
+        color: {paleta["modal_texto_secundario"]};
         font-size: {paleta["tamano_fuente_base"] + 1}px;
         font-weight: {paleta["peso_subtitulo"]};
     }}
@@ -128,20 +139,20 @@ def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> 
         font-weight: {paleta["peso_subtitulo"]};
     }}
     QLabel#etiquetaDatoDialogoSicap {{
-        color: {paleta["texto_muted"]};
+        color: {paleta["modal_texto_secundario"]};
         font-size: {paleta["tamano_fuente_base"] + 1}px;
         font-weight: {paleta["peso_subtitulo"]};
     }}
     QLabel#valorDatoDialogoSicap {{
-        color: {paleta["texto_input"]};
+        color: {paleta["modal_titulo"]};
         font-size: {paleta["tamano_fuente_base"] + 2}px;
         font-weight: {paleta["peso_titulo"]};
     }}
     QLineEdit, QComboBox, QPlainTextEdit, QTextEdit, QSpinBox {{
         border: 1px solid {paleta["borde_medio"]};
         border-radius: 4px;
-        background: {paleta["fondo_input"]};
-        color: {paleta["texto_input"]};
+        background: {paleta["modal_fondo_campo"]};
+        color: {paleta["modal_titulo"]};
         padding: 8px 10px;
         font-size: {paleta["tamano_fuente_base"] + 2}px;
     }}
@@ -185,12 +196,12 @@ def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> 
         width: 24px;
     }}
     QComboBox QAbstractItemView {{
-        background: {paleta["fondo_dialogo"]};
-        color: {paleta["texto_input"]};
+        background: {paleta["modal_fondo"]};
+        color: {paleta["modal_titulo"]};
         selection-background-color: {paleta["fondo_badge_activo"]};
     }}
     QLabel {{
-        color: {paleta["texto_input"]};
+        color: {paleta["modal_texto"]};
         font-size: {paleta["tamano_fuente_base"] + 2}px;
         font-weight: {paleta["peso_subtitulo"]};
     }}
@@ -201,211 +212,116 @@ ESTILO_DIALOGO_SICAP = _crear_estilo_dialogo_sicap(
     obtener_paleta_tema_actual(),
 )
 
-MAPA_VARIANTES_ACCION: dict[str, dict[str, str]] = {
-    "neutro": {
-        "fondo": "rgba(255, 255, 255, 0.04)",
-        "fondo_hover": "rgba(255, 255, 255, 0.12)",
-        "fondo_pressed": "rgba(255, 255, 255, 0.19)",
-        "fondo_focus": "rgba(255, 255, 255, 0.10)",
-        "borde": "rgba(255, 255, 255, 0.10)",
-        "borde_hover": "rgba(255, 255, 255, 0.20)",
-        "borde_pressed": "rgba(255, 255, 255, 0.24)",
-        "borde_focus": "rgba(255, 255, 255, 0.28)",
-        "texto": "#f5fbff",
-        "texto_hover": "#ffffff",
-        "icono": "#f5fbff",
-        "icono_hover": "#ffffff",
-    },
-    "informacion": {
-        "fondo": "rgba(79, 163, 255, 0.10)",
-        "fondo_hover": "rgba(46, 127, 255, 0.30)",
-        "fondo_pressed": "rgba(32, 110, 226, 0.38)",
-        "fondo_focus": "rgba(46, 127, 255, 0.22)",
-        "borde": "rgba(131, 195, 255, 0.16)",
-        "borde_hover": "rgba(139, 199, 255, 0.42)",
-        "borde_pressed": "rgba(164, 214, 255, 0.48)",
-        "borde_focus": "rgba(164, 214, 255, 0.56)",
-        "texto": "#dff1ff",
-        "texto_hover": "#ffffff",
-        "icono": "#8ec9ff",
-        "icono_hover": "#dff1ff",
-    },
-    "ayuda": {
-        "fondo": "rgba(146, 128, 255, 0.08)",
-        "fondo_hover": "rgba(146, 128, 255, 0.18)",
-        "fondo_pressed": "rgba(146, 128, 255, 0.24)",
-        "fondo_focus": "rgba(146, 128, 255, 0.16)",
-        "borde": "rgba(198, 182, 255, 0.16)",
-        "borde_hover": "rgba(198, 182, 255, 0.28)",
-        "borde_pressed": "rgba(214, 202, 255, 0.34)",
-        "borde_focus": "rgba(214, 202, 255, 0.42)",
-        "texto": "#f0ebff",
-        "texto_hover": "#ffffff",
-        "icono": "#c6b6ff",
-        "icono_hover": "#f5f1ff",
-    },
-    "edicion": {
-        "fondo": "rgba(247, 204, 122, 0.10)",
-        "fondo_hover": "rgba(234, 182, 63, 0.28)",
-        "fondo_pressed": "rgba(214, 162, 44, 0.36)",
-        "fondo_focus": "rgba(234, 182, 63, 0.20)",
-        "borde": "rgba(247, 204, 122, 0.16)",
-        "borde_hover": "rgba(247, 204, 122, 0.36)",
-        "borde_pressed": "rgba(255, 219, 145, 0.44)",
-        "borde_focus": "rgba(255, 219, 145, 0.52)",
-        "texto": "#fff4da",
-        "texto_hover": "#fffaf0",
-        "icono": "#f7cc7a",
-        "icono_hover": "#fff0c7",
-    },
-    "primario": {
-        "fondo": "rgba(73, 201, 154, 0.16)",
-        "fondo_hover": "rgba(33, 170, 114, 0.34)",
-        "fondo_pressed": "rgba(20, 139, 90, 0.44)",
-        "fondo_focus": "rgba(33, 170, 114, 0.24)",
-        "borde": "rgba(109, 241, 220, 0.18)",
-        "borde_hover": "rgba(129, 245, 210, 0.40)",
-        "borde_pressed": "rgba(167, 255, 229, 0.48)",
-        "borde_focus": "rgba(167, 255, 229, 0.56)",
-        "texto": "#ebfffb",
-        "texto_hover": "#ffffff",
-        "icono": "#9ef3e4",
-        "icono_hover": "#ffffff",
-    },
-    "salida": {
-        "fondo": "rgba(182, 62, 52, 0.12)",
-        "fondo_hover": "rgba(187, 48, 39, 0.34)",
-        "fondo_pressed": "rgba(157, 32, 24, 0.44)",
-        "fondo_focus": "rgba(187, 48, 39, 0.22)",
-        "borde": "rgba(255, 153, 143, 0.18)",
-        "borde_hover": "rgba(255, 137, 126, 0.40)",
-        "borde_pressed": "rgba(255, 168, 160, 0.48)",
-        "borde_focus": "rgba(255, 168, 160, 0.54)",
-        "texto": "#f5fbff",
-        "texto_hover": "#ffffff",
-        "icono": "#f5fbff",
-        "icono_hover": "#ff7c72",
-    },
-    "advertencia": {
-        "fondo": "rgba(255, 206, 120, 0.10)",
-        "fondo_hover": "rgba(255, 206, 120, 0.20)",
-        "fondo_pressed": "rgba(255, 206, 120, 0.28)",
-        "fondo_focus": "rgba(255, 206, 120, 0.16)",
-        "borde": "rgba(255, 206, 120, 0.16)",
-        "borde_hover": "rgba(255, 206, 120, 0.32)",
-        "borde_pressed": "rgba(255, 218, 154, 0.38)",
-        "borde_focus": "rgba(255, 218, 154, 0.46)",
-        "texto": "#fff5db",
-        "texto_hover": "#fffaf0",
-        "icono": "#ffcf75",
-        "icono_hover": "#fff5db",
-    },
-}
+def _crear_mapa_variantes_accion(paleta: dict[str, object]) -> dict[str, dict[str, str]]:
+    return {
+        "neutro": {
+            "fondo": str(paleta["boton_secundario_fondo"]),
+            "fondo_hover": str(paleta["boton_secundario_hover"]),
+            "fondo_pressed": "rgba(78, 106, 156, 0.32)",
+            "fondo_focus": str(paleta["boton_secundario_hover"]),
+            "borde": str(paleta["borde_suave"]),
+            "borde_hover": str(paleta["borde_principal"]),
+            "borde_pressed": str(paleta["borde_foco_input"]),
+            "borde_focus": str(paleta["borde_foco_input"]),
+            "texto": str(paleta["boton_secundario_texto"]),
+            "texto_hover": str(paleta["texto_destacado"]),
+            "icono": str(paleta["modal_icono_accion"]),
+            "icono_hover": str(paleta["texto_destacado"]),
+        },
+        "informacion": {
+            "fondo": str(paleta["fondo_superficie_suave"]),
+            "fondo_hover": str(paleta["boton_secundario_hover"]),
+            "fondo_pressed": "rgba(78, 106, 156, 0.32)",
+            "fondo_focus": str(paleta["boton_secundario_hover"]),
+            "borde": str(paleta["borde_medio"]),
+            "borde_hover": str(paleta["borde_principal"]),
+            "borde_pressed": str(paleta["borde_foco_input"]),
+            "borde_focus": str(paleta["borde_foco_input"]),
+            "texto": str(paleta["texto_secundario"]),
+            "texto_hover": str(paleta["texto_principal"]),
+            "icono": str(paleta["icono_tema_inactivo"]),
+            "icono_hover": str(paleta["icono_tema_activo"]),
+        },
+        "ayuda": {
+            "fondo": str(paleta["fondo_panel_accion"]),
+            "fondo_hover": str(paleta["boton_secundario_hover"]),
+            "fondo_pressed": "rgba(83, 112, 139, 0.34)",
+            "fondo_focus": str(paleta["boton_secundario_hover"]),
+            "borde": str(paleta["borde_suave"]),
+            "borde_hover": str(paleta["borde_principal"]),
+            "borde_pressed": str(paleta["borde_foco_input"]),
+            "borde_focus": str(paleta["borde_foco_input"]),
+            "texto": str(paleta["texto_secundario"]),
+            "texto_hover": str(paleta["texto_destacado"]),
+            "icono": str(paleta["icono_tarjeta_help"]),
+            "icono_hover": str(paleta["texto_destacado"]),
+        },
+        "edicion": {
+            "fondo": "rgba(109, 99, 63, 0.26)",
+            "fondo_hover": "rgba(109, 99, 63, 0.38)",
+            "fondo_pressed": "rgba(109, 99, 63, 0.46)",
+            "fondo_focus": "rgba(109, 99, 63, 0.38)",
+            "borde": "rgba(228, 234, 204, 0.24)",
+            "borde_hover": "rgba(228, 234, 204, 0.34)",
+            "borde_pressed": "rgba(228, 234, 204, 0.42)",
+            "borde_focus": "rgba(228, 234, 204, 0.42)",
+            "texto": str(paleta["texto_destacado"]),
+            "texto_hover": str(paleta["texto_destacado"]),
+            "icono": str(paleta["texto_destacado"]),
+            "icono_hover": str(paleta["texto_destacado"]),
+        },
+        "primario": {
+            "fondo": str(paleta["boton_primario_fondo"]),
+            "fondo_hover": str(paleta["boton_primario_hover"]),
+            "fondo_pressed": "#B7CDDC",
+            "fondo_focus": str(paleta["boton_primario_hover"]),
+            "borde": "rgba(201, 219, 233, 0.24)",
+            "borde_hover": "rgba(201, 219, 233, 0.46)",
+            "borde_pressed": "rgba(201, 219, 233, 0.56)",
+            "borde_focus": "rgba(201, 219, 233, 0.56)",
+            "texto": str(paleta["boton_primario_texto"]),
+            "texto_hover": str(paleta["boton_primario_texto"]),
+            "icono": str(paleta["modal_icono_accion_principal"]),
+            "icono_hover": str(paleta["modal_icono_accion_principal"]),
+        },
+        "salida": {
+            "fondo": str(paleta["boton_peligro_fondo"]),
+            "fondo_hover": str(paleta["boton_peligro_hover"]),
+            "fondo_pressed": "#955E69",
+            "fondo_focus": str(paleta["boton_peligro_hover"]),
+            "borde": "rgba(244, 232, 236, 0.24)",
+            "borde_hover": "rgba(244, 232, 236, 0.36)",
+            "borde_pressed": "rgba(244, 232, 236, 0.44)",
+            "borde_focus": "rgba(244, 232, 236, 0.44)",
+            "texto": str(paleta["boton_peligro_texto"]),
+            "texto_hover": str(paleta["boton_peligro_texto"]),
+            "icono": str(paleta["boton_peligro_texto"]),
+            "icono_hover": str(paleta["boton_peligro_texto"]),
+        },
+        "advertencia": {
+            "fondo": "rgba(109, 99, 63, 0.26)",
+            "fondo_hover": "rgba(109, 99, 63, 0.38)",
+            "fondo_pressed": "rgba(109, 99, 63, 0.46)",
+            "fondo_focus": "rgba(109, 99, 63, 0.38)",
+            "borde": "rgba(228, 234, 204, 0.24)",
+            "borde_hover": "rgba(228, 234, 204, 0.34)",
+            "borde_pressed": "rgba(228, 234, 204, 0.42)",
+            "borde_focus": "rgba(228, 234, 204, 0.42)",
+            "texto": str(paleta["texto_destacado"]),
+            "texto_hover": str(paleta["texto_destacado"]),
+            "icono": str(paleta["texto_destacado"]),
+            "icono_hover": str(paleta["texto_destacado"]),
+        },
+    }
+
+
+MAPA_VARIANTES_ACCION: dict[str, dict[str, str]] = _crear_mapa_variantes_accion(
+    obtener_paleta_tema_actual()
+)
 
 
 def _obtener_mapa_variantes_accion(nombre_tema: str) -> dict[str, dict[str, str]]:
-    if nombre_tema == "claro":
-        return {
-            "neutro": {
-                "fondo": "rgba(111, 129, 149, 0.08)",
-                "fondo_hover": "rgba(111, 129, 149, 0.14)",
-                "fondo_pressed": "rgba(111, 129, 149, 0.20)",
-                "fondo_focus": "rgba(111, 129, 149, 0.12)",
-                "borde": "rgba(131, 145, 164, 0.24)",
-                "borde_hover": "rgba(131, 145, 164, 0.34)",
-                "borde_pressed": "rgba(131, 145, 164, 0.40)",
-                "borde_focus": "rgba(131, 145, 164, 0.48)",
-                "texto": "#31465c",
-                "texto_hover": "#223548",
-                "icono": "#4b6075",
-                "icono_hover": "#223548",
-            },
-            "informacion": {
-                "fondo": "rgba(79, 163, 255, 0.12)",
-                "fondo_hover": "rgba(46, 127, 255, 0.20)",
-                "fondo_pressed": "rgba(46, 127, 255, 0.28)",
-                "fondo_focus": "rgba(46, 127, 255, 0.16)",
-                "borde": "rgba(79, 163, 255, 0.24)",
-                "borde_hover": "rgba(46, 127, 255, 0.34)",
-                "borde_pressed": "rgba(46, 127, 255, 0.42)",
-                "borde_focus": "rgba(46, 127, 255, 0.48)",
-                "texto": "#2e597f",
-                "texto_hover": "#1f476d",
-                "icono": "#3d84c8",
-                "icono_hover": "#1f476d",
-            },
-            "ayuda": {
-                "fondo": "rgba(146, 128, 255, 0.10)",
-                "fondo_hover": "rgba(146, 128, 255, 0.18)",
-                "fondo_pressed": "rgba(146, 128, 255, 0.24)",
-                "fondo_focus": "rgba(146, 128, 255, 0.14)",
-                "borde": "rgba(146, 128, 255, 0.22)",
-                "borde_hover": "rgba(146, 128, 255, 0.30)",
-                "borde_pressed": "rgba(146, 128, 255, 0.38)",
-                "borde_focus": "rgba(146, 128, 255, 0.44)",
-                "texto": "#5d4ea0",
-                "texto_hover": "#4b3f88",
-                "icono": "#7262b0",
-                "icono_hover": "#4b3f88",
-            },
-            "edicion": {
-                "fondo": "rgba(247, 204, 122, 0.14)",
-                "fondo_hover": "rgba(234, 182, 63, 0.24)",
-                "fondo_pressed": "rgba(214, 162, 44, 0.30)",
-                "fondo_focus": "rgba(234, 182, 63, 0.18)",
-                "borde": "rgba(214, 162, 44, 0.22)",
-                "borde_hover": "rgba(214, 162, 44, 0.30)",
-                "borde_pressed": "rgba(214, 162, 44, 0.38)",
-                "borde_focus": "rgba(214, 162, 44, 0.44)",
-                "texto": "#8a6521",
-                "texto_hover": "#725118",
-                "icono": "#b07f2f",
-                "icono_hover": "#725118",
-            },
-            "primario": {
-                "fondo": "rgba(73, 201, 154, 0.14)",
-                "fondo_hover": "rgba(33, 170, 114, 0.24)",
-                "fondo_pressed": "rgba(20, 139, 90, 0.30)",
-                "fondo_focus": "rgba(33, 170, 114, 0.18)",
-                "borde": "rgba(33, 170, 114, 0.22)",
-                "borde_hover": "rgba(33, 170, 114, 0.30)",
-                "borde_pressed": "rgba(20, 139, 90, 0.38)",
-                "borde_focus": "rgba(20, 139, 90, 0.44)",
-                "texto": "#26694b",
-                "texto_hover": "#1d563d",
-                "icono": "#2f8e66",
-                "icono_hover": "#1d563d",
-            },
-            "salida": {
-                "fondo": "rgba(182, 62, 52, 0.12)",
-                "fondo_hover": "rgba(187, 48, 39, 0.22)",
-                "fondo_pressed": "rgba(157, 32, 24, 0.28)",
-                "fondo_focus": "rgba(187, 48, 39, 0.16)",
-                "borde": "rgba(182, 62, 52, 0.22)",
-                "borde_hover": "rgba(182, 62, 52, 0.32)",
-                "borde_pressed": "rgba(157, 32, 24, 0.40)",
-                "borde_focus": "rgba(157, 32, 24, 0.46)",
-                "texto": "#a84336",
-                "texto_hover": "#8f2d21",
-                "icono": "#bf5d52",
-                "icono_hover": "#8f2d21",
-            },
-            "advertencia": {
-                "fondo": "rgba(255, 206, 120, 0.14)",
-                "fondo_hover": "rgba(255, 206, 120, 0.22)",
-                "fondo_pressed": "rgba(255, 206, 120, 0.28)",
-                "fondo_focus": "rgba(255, 206, 120, 0.18)",
-                "borde": "rgba(237, 185, 96, 0.24)",
-                "borde_hover": "rgba(237, 185, 96, 0.34)",
-                "borde_pressed": "rgba(237, 185, 96, 0.40)",
-                "borde_focus": "rgba(237, 185, 96, 0.48)",
-                "texto": "#8d6b28",
-                "texto_hover": "#73541b",
-                "icono": "#b98a3a",
-                "icono_hover": "#73541b",
-            },
-        }
-    return MAPA_VARIANTES_ACCION
+    return _crear_mapa_variantes_accion(obtener_paleta_tema(nombre_tema))
 
 
 def resolver_variante_boton_modal(texto: str, variante_sugerida: str = "neutro") -> str:
@@ -515,7 +431,7 @@ class DialogoBaseSicap(QDialog):
         self.setStyleSheet(_crear_estilo_dialogo_sicap(color_fondo, self._paleta_tema))
 
     def aplicar_tema(self, nombre_tema: str) -> None:
-        self._nombre_tema = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        self._nombre_tema = resolver_nombre_tema(nombre_tema)
         self._paleta_tema = obtener_paleta_tema(self._nombre_tema)
         self._color_fondo_dialogo = str(self._paleta_tema["fondo_dialogo"])
         self.setStyleSheet(_crear_estilo_dialogo_sicap(self._color_fondo_dialogo, self._paleta_tema))
@@ -636,7 +552,7 @@ class BotonAccionContextual(QPushButton):
         )
 
     def aplicar_tema(self, nombre_tema: str) -> None:
-        self._nombre_tema = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        self._nombre_tema = resolver_nombre_tema(nombre_tema)
         self._aplicar_estilos()
         self._actualizar_icono(False)
 
@@ -827,9 +743,7 @@ class TarjetaKPI(QFrame):
         )
 
     def aplicar_tema(self, nombre_tema: str) -> None:
-        self._tema_actual = (
-            nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
-        )
+        self._tema_actual = resolver_nombre_tema(nombre_tema)
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._aplicar_estilos()
 
@@ -909,7 +823,7 @@ class VistaPlaceholderModulo(QWidget):
         )
 
     def aplicar_tema(self, nombre_tema: str) -> None:
-        self._tema_actual = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = resolver_nombre_tema(nombre_tema)
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._aplicar_estilos()
 
@@ -940,48 +854,45 @@ def crear_item_tabla(texto: object) -> QTableWidgetItem:
 def aplicar_estilo_boton_operativo(boton: QPushButton, principal: bool = False) -> None:
     """Aplica el estilo visual del boton operativo segun el tema activo."""
     paleta = obtener_paleta_tema_actual()
-    hover_primario = (
-        paleta["fondo_superficie_suave"]
-        if paleta["nombre"] == "claro"
-        else "rgba(31, 52, 99, 0.96)"
-    )
-    pressed_primario = (
-        paleta["fondo_superficie"]
-        if paleta["nombre"] == "claro"
-        else "rgba(18, 32, 64, 0.98)"
-    )
     boton.setStyleSheet(
         f"""
         QPushButton#botonOperativo,
         QPushButton#botonOperativoPrimario {{
             border-radius: 12px;
             font-size: 12px;
-            font-weight: 700;
-            padding: 0 14px;
+            font-weight: 800;
+            padding: 0 16px;
             min-height: 36px;
         }}
         QPushButton#botonOperativo {{
-            background-color: {paleta["fondo_input"]};
-            border: 1px solid {paleta["borde_medio"]};
-            color: {paleta["texto_input"]};
+            background-color: {paleta["boton_secundario_fondo"]};
+            border: 1px solid {paleta["borde_suave"]};
+            color: {paleta["boton_secundario_texto"]};
         }}
         QPushButton#botonOperativo:hover {{
-            background-color: {paleta["fondo_superficie"]};
+            background-color: {paleta["boton_secundario_hover"]};
             border-color: {paleta["borde_principal"]};
+            color: {paleta["texto_destacado"]};
         }}
         QPushButton#botonOperativo:pressed {{
-            background-color: {paleta["fondo_superficie_suave"]};
+            background-color: {paleta["fondo_menu_activo"]};
         }}
         QPushButton#botonOperativoPrimario {{
-            background-color: {paleta["fondo_dialogo"]};
-            border: 1px solid {paleta["borde_suave"]};
-            color: {paleta["texto_principal"]};
+            background-color: {paleta["boton_primario_fondo"]};
+            border: 1px solid rgba(201, 219, 233, 0.26);
+            color: {paleta["boton_primario_texto"]};
         }}
         QPushButton#botonOperativoPrimario:hover {{
-            background-color: {hover_primario};
+            background-color: {paleta["boton_primario_hover"]};
         }}
         QPushButton#botonOperativoPrimario:pressed {{
-            background-color: {pressed_primario};
+            background-color: #B7CDDC;
+        }}
+        QPushButton#botonOperativo:disabled,
+        QPushButton#botonOperativoPrimario:disabled {{
+            background-color: {paleta["boton_deshabilitado_fondo"]};
+            border-color: {paleta["borde_suave"]};
+            color: {paleta["boton_deshabilitado_texto"]};
         }}
         """
     )

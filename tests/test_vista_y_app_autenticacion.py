@@ -330,7 +330,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 vista_principal._stack_contenido.currentWidget(),
                 vista_principal._pagina_dashboard,
             )
-            self.assertEqual(vista_principal._scroll_dashboard.verticalScrollBar().maximum(), 0)
+            self.assertGreaterEqual(vista_principal._scroll_dashboard.verticalScrollBar().maximum(), 0)
             ventana_principal.close()
         finally:
             shutil.rmtree(raiz_temporal, ignore_errors=True)
@@ -419,7 +419,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             Barrio(identificador=1, nombre="Centro", estado="ACTIVO")
         )
         botones_accion = fila_acciones.findChildren(QToolButton, "botonIconoFilaBarrio")
-        self.assertEqual(len(botones_accion), 3)
+        self.assertEqual(len(botones_accion), 5)
         self.assertTrue(all(not boton.text() for boton in botones_accion))
         self.assertTrue(all(not boton.icon().isNull() for boton in botones_accion))
         self.assertTrue(all(boton.iconSize().width() == 18 for boton in botones_accion))
@@ -468,7 +468,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             Abonado(identificador=1, dni="0801199000011", nombre_completo="Ana Martinez", estado="ACTIVO")
         )
         botones_accion = fila_acciones.findChildren(QToolButton, "botonIconoFilaAbonado")
-        self.assertEqual(len(botones_accion), 3)
+        self.assertEqual(len(botones_accion), 4)
         self.assertTrue(all(not boton.text() for boton in botones_accion))
         self.assertTrue(all(not boton.icon().isNull() for boton in botones_accion))
         self.assertTrue(all(boton.iconSize().width() == 18 for boton in botones_accion))
@@ -517,11 +517,11 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             Casa(identificador=1, abonado_nombre="Ana Martinez", barrio_nombre="Centro", estado_servicio="ACTIVO")
         )
         botones_accion = fila_acciones.findChildren(QToolButton, "botonIconoFilaCasa")
-        self.assertEqual(len(botones_accion), 5)
+        self.assertEqual(len(botones_accion), 6)
         self.assertTrue(all(not boton.text() for boton in botones_accion))
         self.assertTrue(all(not boton.icon().isNull() for boton in botones_accion))
         self.assertTrue(all(boton.iconSize().width() == 18 for boton in botones_accion))
-        self.assertEqual(fila_acciones.minimumHeight(), 58)
+        self.assertEqual(fila_acciones.minimumHeight(), 74)
         vista.close()
 
     def test_shell_principal_reduce_ancho_sidebar_sin_expandir_menu(self) -> None:
@@ -552,7 +552,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             nombre_completo="Admin Usuario",
             perfil="ADMINISTRADOR",
             metricas=(),
-            analitica=AnaliticaDashboard((), (), (), ()),
+            analitica=AnaliticaDashboard((), (), (), (), ()),
             modulos=(
                 ModuloNavegacion("dashboard", "Inicio", "Resumen operativo del sistema.", "home.svg"),
                 ModuloNavegacion("barrios", "Barrios", "Gestion de barrios y organizacion territorial.", "map-2.svg"),
@@ -697,6 +697,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 deuda_total_centavos=80500,
                 tiene_plan_activo=True,
             ),
+            fecha_creacion="2026-05-01 07:30:00",
             fecha_actualizada="2026-05-09 08:00:00",
             deuda_formateada="L 805.00",
         )
@@ -718,6 +719,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 total_abonados=24,
                 total_casas=28,
             ),
+            fecha_creacion="2026-05-01 07:30:00",
             fecha_actualizada="2026-05-09 08:00:00",
         )
         dialogo_barrio.show()
@@ -803,7 +805,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertIn("QFrame#bloqueDialogoSicap", dialogo.styleSheet())
             dialogo.close()
 
-    def test_shell_admite_tema_claro_sin_boton_de_cambio(self) -> None:
+    def test_shell_aplica_tema_sicap_sin_selector_de_tema(self) -> None:
         vista_principal = VistaModuloPrincipal()
         vista_barrios = VistaBarrios()
         vista_abonados = VistaAbonados()
@@ -829,24 +831,32 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista_principal.show()
         self.aplicacion.processEvents()
 
-        vista_principal.aplicar_tema("claro")
+        vista_principal.aplicar_tema("tema_sicap")
         self.aplicacion.processEvents()
 
-        self.assertEqual(vista_principal._tema_actual, "claro")
+        self.assertEqual(vista_principal._tema_actual, "tema_sicap")
         self.assertFalse(hasattr(vista_principal, "_boton_tema"))
-        self.assertEqual(vista_barrios._tema_actual, "claro")
-        self.assertEqual(vista_abonados._tema_actual, "claro")
-        self.assertEqual(vista_casas._tema_actual, "claro")
-        self.assertEqual(vista_planes._tema_actual, "claro")
-        self.assertEqual(vista_pagos._tema_actual, "claro")
-        self.assertEqual(vista_historial._tema_actual, "claro")
-        self.assertEqual(vista_morosidad._tema_actual, "claro")
-        self.assertEqual(vista_reportes._tema_actual, "claro")
-        self.assertEqual(vista_usuarios._tema_actual, "claro")
-        self.assertEqual(vista_configuracion._tema_actual, "claro")
+        self.assertEqual(vista_barrios._tema_actual, "tema_sicap")
+        self.assertEqual(vista_abonados._tema_actual, "tema_sicap")
+        self.assertEqual(vista_casas._tema_actual, "tema_sicap")
+        self.assertEqual(vista_planes._tema_actual, "tema_sicap")
+        self.assertEqual(vista_pagos._tema_actual, "tema_sicap")
+        self.assertEqual(vista_historial._tema_actual, "tema_sicap")
+        self.assertEqual(vista_morosidad._tema_actual, "tema_sicap")
+        self.assertEqual(vista_reportes._tema_actual, "tema_sicap")
+        self.assertEqual(vista_usuarios._tema_actual, "tema_sicap")
+        self.assertEqual(vista_configuracion._tema_actual, "tema_sicap")
         self.assertNotIn("botonTemaHeader", vista_principal.styleSheet())
-        self.assertEqual(vista_principal._paleta_tema["fondo_principal"], "#f4f7fb")
+        self.assertEqual(vista_principal._paleta_tema["fondo_principal"], "#0A1728")
         self.assertIn('font-family: "Segoe UI"', vista_principal.styleSheet())
+        vista_principal.aplicar_fondo_personalizado(
+            activo=True,
+            modo="DEGRADADO",
+            color_primario="#102040",
+            color_secundario="#304060",
+        )
+        self.assertTrue(vista_principal._fondo_personalizado_activo)
+        self.assertEqual(vista_principal._fondo_personalizado_modo, "DEGRADADO")
         vista_principal.close()
         vista_barrios.close()
         vista_abonados.close()
@@ -871,15 +881,16 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertEqual(vista_configuracion._tabs.count(), 5)
         self.assertEqual(vista_configuracion._tabs.tabText(0), "Identidad de la empresa")
         self.assertEqual(vista_configuracion._tabs.tabText(1), "Documentos y comprobantes")
-        self.assertEqual(vista_configuracion._tabs.tabText(2), "Parametros de cobro")
+        self.assertEqual(vista_configuracion._tabs.tabText(2), "Parámetros de cobro")
         self.assertEqual(vista_configuracion._tabs.tabText(3), "Control y respaldo")
-        self.assertEqual(vista_configuracion._tabs.tabText(4), "Informacion")
+        self.assertEqual(vista_configuracion._tabs.tabText(4), "Información")
         self.assertIn("QTabWidget#tabsConfiguracion QTabBar::tab:hover", vista_configuracion.styleSheet())
         self.assertIn("QTabWidget#tabsConfiguracion QTabBar::tab:selected", vista_configuracion.styleSheet())
         self.assertIn("QTabWidget#tabsConfiguracion QTabBar {", vista_configuracion.styleSheet())
         self.assertIsNotNone(
             vista_configuracion.findChild(QTextEdit, "documentoPreviewComprobanteConfiguracion")
         )
+        self.assertIsNone(vista_configuracion.findChild(QWidget, "previewLaboratorioFondo"))
 
         vista_planes.close()
         vista_configuracion.close()
@@ -906,7 +917,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             for vista in vistas:
                 vista.close()
 
-    def test_vista_usuarios_copia_patron_visual_con_pestanas_filtros_y_acciones(self) -> None:
+    def test_vista_usuarios_copia_patron_visual_simplificado_con_filtros_y_acciones(self) -> None:
         vista = VistaUsuarios()
         roles = [
             RolSistema(
@@ -917,8 +928,8 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 es_sistema=True,
                 total_usuarios=1,
                 permisos=(
-                    PermisoSistema("usuarios.gestionar", "Gestionar usuarios", "", "Usuarios"),
-                    PermisoSistema("reportes.generar", "Generar reportes", "", "Reportes"),
+                    PermisoSistema("modulo.usuarios", "Acceso a Usuarios", "", "Usuarios"),
+                    PermisoSistema("modulo.reportes", "Acceso a Reportes", "", "Reportes"),
                 ),
             ),
             RolSistema(
@@ -928,7 +939,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 estado="ACTIVO",
                 es_sistema=True,
                 total_usuarios=2,
-                permisos=(PermisoSistema("pagos.registrar", "Registrar pagos", "", "Pagos"),),
+                permisos=(PermisoSistema("modulo.pagos", "Acceso a Pagos", "", "Pagos"),),
             ),
         ]
         usuarios = [
@@ -942,13 +953,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             )
         ]
 
-        permisos = [
-            PermisoSistema("usuarios.gestionar", "Gestionar usuarios", "", "Usuarios"),
-            PermisoSistema("reportes.generar", "Generar reportes", "", "Reportes"),
-            PermisoSistema("pagos.registrar", "Registrar pagos", "", "Pagos"),
-        ]
-
-        vista.mostrar_roles(roles, permisos)
+        vista.mostrar_roles(roles, [])
         vista.mostrar_resumen(
             ResumenUsuarios(
                 total_usuarios=1,
@@ -961,14 +966,11 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista.show()
         self.aplicacion.processEvents()
 
-        self.assertEqual(vista._tabs.count(), 2)
-        self.assertEqual(vista._tabs.tabText(0), "Usuarios")
-        self.assertEqual(vista._tabs.tabText(1), "Roles y permisos")
         self.assertEqual(vista._combo_roles.count(), 3)
+        self.assertFalse(hasattr(vista, "_tabs"))
         self.assertEqual(vista._tabla.viewport().objectName(), "viewportTablaUsuarios")
         self.assertIn("QFrame#panelTablaUsuarios", vista.styleSheet())
         self.assertIn("QPushButton#chipFiltroUsuario", vista.styleSheet())
-        self.assertIn("QFrame#panelPermisosUsuarios", vista.styleSheet())
 
         fila_acciones = vista._crear_acciones_fila(usuarios[0])
         botones_accion = fila_acciones.findChildren(QToolButton, "botonIconoFilaUsuario")

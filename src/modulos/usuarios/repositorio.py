@@ -1,4 +1,4 @@
-﻿"""Contratos e implementacion SQLite del modulo de usuarios."""
+"""Contratos e implementacion SQLite del modulo de usuarios."""
 
 from __future__ import annotations
 
@@ -6,13 +6,10 @@ from contextlib import closing
 from typing import Protocol
 
 from comun.base_datos import GestorBaseDatos
-from modulos.usuarios.entidades import (
-    FormularioRol,
-    FormularioUsuario,
-    PermisoSistema,
-    RolSistema,
-    UsuarioSistema,
-)
+from modulos.usuarios.entidades import FormularioUsuario, PermisoSistema, RolSistema, UsuarioSistema
+
+
+ROLES_VISIBLES_FIJOS = ("ADMINISTRADOR", "CAJERO", "CONSULTA")
 
 
 class RepositorioUsuarios(Protocol):
@@ -31,38 +28,7 @@ class RepositorioUsuarios(Protocol):
         """Lista usuarios tecnicos ocultos."""
 
     def listar_roles_operativos(self) -> list[RolSistema]:
-        """Lista roles visibles en el modulo de usuarios."""
-
-    def listar_permisos_operativos(self) -> list[PermisoSistema]:
-        """Lista permisos visibles para construir roles operativos."""
-
-    def obtener_rol_operativo_por_identificador(self, identificador: int) -> RolSistema | None:
-        """Obtiene un rol visible por identificador."""
-
-    def crear_rol_operativo(
-        self,
-        actor_id: int,
-        formulario: FormularioRol,
-        momento: str,
-    ) -> None:
-        """Crea un rol operativo y sincroniza sus permisos."""
-
-    def actualizar_rol_operativo(
-        self,
-        actor_id: int,
-        formulario: FormularioRol,
-        momento: str,
-    ) -> None:
-        """Actualiza un rol operativo y sincroniza sus permisos."""
-
-    def cambiar_estado_rol_operativo(
-        self,
-        actor_id: int,
-        rol_id: int,
-        nuevo_estado: str,
-        momento: str,
-    ) -> None:
-        """Actualiza el estado visible de un rol operativo."""
+        """Lista los roles fijos visibles en la interfaz."""
 
     def crear_usuario_operativo(
         self,
@@ -70,6 +36,7 @@ class RepositorioUsuarios(Protocol):
         formulario: FormularioUsuario,
         nuevo_hash: str,
         momento: str,
+        contrasena_temporal_expira_en: str,
     ) -> None:
         """Crea un usuario operativo y asigna su rol principal."""
 
@@ -96,6 +63,7 @@ class RepositorioUsuarios(Protocol):
         objetivo_id: int,
         nuevo_hash: str,
         momento: str,
+        contrasena_temporal_expira_en: str,
     ) -> None:
         """Aplica un restablecimiento administrativo de contrasena."""
 
@@ -148,6 +116,7 @@ class RepositorioUsuariosSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
+                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
@@ -179,6 +148,7 @@ class RepositorioUsuariosSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
+                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
@@ -202,6 +172,7 @@ class RepositorioUsuariosSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
+                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
@@ -232,6 +203,7 @@ class RepositorioUsuariosSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
+                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
@@ -245,7 +217,8 @@ class RepositorioUsuariosSQLite:
         return self._ejecutar_consulta_usuarios(consulta)
 
     def listar_roles_operativos(self) -> list[RolSistema]:
-        consulta_roles = """
+        placeholders = ", ".join("?" for _ in ROLES_VISIBLES_FIJOS)
+        consulta_roles = f"""
             SELECT
                 r.id,
                 r.nombre,
@@ -256,11 +229,16 @@ class RepositorioUsuariosSQLite:
             FROM roles r
             LEFT JOIN usuarios_roles ur ON ur.rol_id = r.id
             LEFT JOIN usuarios u ON u.id = ur.usuario_id AND u.eliminado_en IS NULL
-            WHERE lower(r.nombre) <> 'superadministrador'
+            WHERE r.nombre IN ({placeholders})
             GROUP BY r.id, r.nombre, r.descripcion, r.estado, r.es_sistema
-            ORDER BY r.es_sistema DESC, lower(r.nombre);
+            ORDER BY CASE r.nombre
+                WHEN 'ADMINISTRADOR' THEN 1
+                WHEN 'CAJERO' THEN 2
+                WHEN 'CONSULTA' THEN 3
+                ELSE 99
+            END;
         """
-        consulta_permisos = """
+        consulta_permisos = f"""
             SELECT
                 rp.rol_id,
                 p.codigo,
@@ -270,12 +248,12 @@ class RepositorioUsuariosSQLite:
             FROM roles_permisos rp
             INNER JOIN permisos p ON p.id = rp.permiso_id
             INNER JOIN roles r ON r.id = rp.rol_id
-            WHERE lower(r.nombre) <> 'superadministrador'
+            WHERE r.nombre IN ({placeholders})
             ORDER BY rp.rol_id, lower(p.modulo), lower(p.codigo);
         """
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            filas_roles = conexion.execute(consulta_roles).fetchall()
-            filas_permisos = conexion.execute(consulta_permisos).fetchall()
+            filas_roles = conexion.execute(consulta_roles, ROLES_VISIBLES_FIJOS).fetchall()
+            filas_permisos = conexion.execute(consulta_permisos, ROLES_VISIBLES_FIJOS).fetchall()
 
         permisos_por_rol: dict[int, list[PermisoSistema]] = {}
         for fila in filas_permisos:
@@ -302,119 +280,13 @@ class RepositorioUsuariosSQLite:
             for fila in filas_roles
         ]
 
-    def listar_permisos_operativos(self) -> list[PermisoSistema]:
-        consulta = """
-            SELECT
-                p.codigo,
-                p.nombre,
-                COALESCE(p.descripcion, '') AS descripcion,
-                p.modulo
-            FROM permisos p
-            WHERE lower(p.modulo) NOT IN ('mantenimiento', 'seguridad')
-            ORDER BY lower(p.modulo), lower(p.codigo);
-        """
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            filas = conexion.execute(consulta).fetchall()
-        return [
-            PermisoSistema(
-                codigo=str(fila["codigo"]),
-                nombre=str(fila["nombre"]),
-                descripcion=str(fila["descripcion"]),
-                modulo=str(fila["modulo"]),
-            )
-            for fila in filas
-        ]
-
-    def obtener_rol_operativo_por_identificador(self, identificador: int) -> RolSistema | None:
-        roles = self.listar_roles_operativos()
-        return next((rol for rol in roles if rol.identificador == identificador), None)
-
-    def crear_rol_operativo(
-        self,
-        actor_id: int,
-        formulario: FormularioRol,
-        momento: str,
-    ) -> None:
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            with conexion:
-                cursor = conexion.execute(
-                    """
-                    INSERT INTO roles(
-                        nombre,
-                        descripcion,
-                        es_sistema,
-                        estado,
-                        creado_en,
-                        actualizado_en
-                    )
-                    VALUES (?, ?, 0, 'ACTIVO', ?, ?);
-                    """,
-                    (
-                        formulario.nombre,
-                        formulario.descripcion,
-                        momento,
-                        momento,
-                    ),
-                )
-                rol_id = int(cursor.lastrowid)
-                self._sincronizar_permisos_rol(conexion, rol_id, formulario.permisos_codigos)
-
-    def actualizar_rol_operativo(
-        self,
-        actor_id: int,
-        formulario: FormularioRol,
-        momento: str,
-    ) -> None:
-        if formulario.identificador is None:
-            raise ValueError("Se requiere el identificador del rol.")
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            with conexion:
-                conexion.execute(
-                    """
-                    UPDATE roles
-                    SET nombre = ?,
-                        descripcion = ?,
-                        actualizado_en = ?
-                    WHERE id = ?;
-                    """,
-                    (
-                        formulario.nombre,
-                        formulario.descripcion,
-                        momento,
-                        formulario.identificador,
-                    ),
-                )
-                self._sincronizar_permisos_rol(
-                    conexion,
-                    formulario.identificador,
-                    formulario.permisos_codigos,
-                )
-
-    def cambiar_estado_rol_operativo(
-        self,
-        actor_id: int,
-        rol_id: int,
-        nuevo_estado: str,
-        momento: str,
-    ) -> None:
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            with conexion:
-                conexion.execute(
-                    """
-                    UPDATE roles
-                    SET estado = ?,
-                        actualizado_en = ?
-                    WHERE id = ?;
-                    """,
-                    (nuevo_estado, momento, rol_id),
-                )
-
     def crear_usuario_operativo(
         self,
         actor_id: int,
         formulario: FormularioUsuario,
         nuevo_hash: str,
         momento: str,
+        contrasena_temporal_expira_en: str,
     ) -> None:
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             with conexion:
@@ -428,12 +300,13 @@ class RepositorioUsuariosSQLite:
                         estado,
                         observaciones,
                         requiere_cambio_contrasena,
+                        contrasena_temporal_expira_en,
                         creado_en,
                         actualizado_en,
                         creado_por,
                         actualizado_por
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?);
+                    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?);
                     """,
                     (
                         formulario.nombre_usuario,
@@ -442,6 +315,7 @@ class RepositorioUsuariosSQLite:
                         nuevo_hash,
                         formulario.estado,
                         formulario.observaciones,
+                        contrasena_temporal_expira_en,
                         momento,
                         momento,
                         actor_id,
@@ -488,7 +362,15 @@ class RepositorioUsuariosSQLite:
                     ),
                 )
                 conexion.execute(
-                    "DELETE FROM usuarios_roles WHERE usuario_id = ?;",
+                    """
+                    DELETE FROM usuarios_roles
+                    WHERE usuario_id = ?
+                      AND rol_id IN (
+                          SELECT id
+                          FROM roles
+                          WHERE nombre IN ('ADMINISTRADOR', 'CAJERO', 'CONSULTA')
+                      );
+                    """,
                     (formulario.identificador,),
                 )
                 conexion.execute(
@@ -522,12 +404,14 @@ class RepositorioUsuariosSQLite:
         objetivo_id: int,
         nuevo_hash: str,
         momento: str,
+        contrasena_temporal_expira_en: str,
     ) -> None:
         consulta = """
             UPDATE usuarios
             SET contrasena_hash = ?,
                 ultimo_cambio_contrasena_en = ?,
                 requiere_cambio_contrasena = 1,
+                contrasena_temporal_expira_en = ?,
                 intentos_fallidos = 0,
                 bloqueado_hasta = NULL,
                 estado = 'ACTIVO',
@@ -544,6 +428,7 @@ class RepositorioUsuariosSQLite:
                     (
                         nuevo_hash,
                         momento,
+                        contrasena_temporal_expira_en,
                         momento,
                         actor_id,
                         momento,
@@ -615,24 +500,6 @@ class RepositorioUsuariosSQLite:
         return [usuario for fila in filas if (usuario := self._fila_a_usuario(fila)) is not None]
 
     @staticmethod
-    def _sincronizar_permisos_rol(
-        conexion: object,
-        rol_id: int,
-        permisos_codigos: tuple[str, ...],
-    ) -> None:
-        conexion.execute("DELETE FROM roles_permisos WHERE rol_id = ?;", (rol_id,))
-        for codigo in permisos_codigos:
-            conexion.execute(
-                """
-                INSERT INTO roles_permisos(rol_id, permiso_id)
-                SELECT ?, id
-                FROM permisos
-                WHERE codigo = ?;
-                """,
-                (rol_id, codigo),
-            )
-
-    @staticmethod
     def _consulta_usuario_detallado() -> str:
         return """
             SELECT
@@ -644,6 +511,7 @@ class RepositorioUsuariosSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
+                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
@@ -674,6 +542,7 @@ class RepositorioUsuariosSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
+                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
@@ -709,6 +578,11 @@ class RepositorioUsuariosSQLite:
             es_tecnico=bool(fila["es_tecnico"]),
             es_oculto=bool(fila["es_oculto"]),
             requiere_cambio_contrasena=bool(fila["requiere_cambio_contrasena"]),
+            contrasena_temporal_expira_en=(
+                str(fila["contrasena_temporal_expira_en"])
+                if fila["contrasena_temporal_expira_en"]
+                else None
+            ),
             intentos_fallidos=int(fila["intentos_fallidos"] or 0),
             bloqueado_hasta=fila["bloqueado_hasta"],
             roles=roles,
@@ -721,4 +595,3 @@ class RepositorioUsuariosSQLite:
             observaciones=str(fila["observaciones"] or ""),
             total_sesiones=int(fila["total_sesiones"] or 0),
         )
-

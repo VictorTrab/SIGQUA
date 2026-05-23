@@ -48,6 +48,7 @@ from comun.ui.temas import (
     TEMA_SICAP_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
+    resolver_nombre_tema,
 )
 from modulos.pagos.entidades import (
     CargoPago,
@@ -159,12 +160,12 @@ class DialogoVistaPreviaImpresionComprobante(QWidget):
             self.styleSheet()
             + f"""
             QFrame#panelTicketComprobante {{
-                background-color: #ffffff;
+                background-color: #E4EACC;
                 border: 1px solid #d4d4d8;
                 border-radius: 10px;
             }}
             QTextBrowser#visorComprobantePago {{
-                background-color: #ffffff;
+                background-color: #E4EACC;
                 border: none;
                 border-radius: 0px;
                 color: #111111;
@@ -271,7 +272,7 @@ class FlujoPagoPlan(QWidget):
 
     def aplicar_tema(self, nombre_tema: str) -> None:
         self._tema_actual = (
-            nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+            resolver_nombre_tema(nombre_tema)
         )
         self._paleta = obtener_paleta_tema(self._tema_actual)
         self._aplicar_estilos()
@@ -943,7 +944,7 @@ class FlujoPagoPlan(QWidget):
             QFrame#panelDiagnosticoPago,
             QFrame#panelFormularioPago {{
                 background-color: {fondo_panel};
-                border: 1px solid rgba(255, 255, 255, 0.16);
+                border: 1px solid rgba(83, 112, 139, 0.48);
                 border-radius: 18px;
             }}
             QLabel#breadcrumbPago,
@@ -1163,7 +1164,7 @@ class FlujoPagoActivacion(QWidget):
 
     def aplicar_tema(self, nombre_tema: str) -> None:
         self._tema_actual = (
-            nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+            resolver_nombre_tema(nombre_tema)
         )
         self._paleta = obtener_paleta_tema(self._tema_actual)
         self._aplicar_estilos()
@@ -1814,7 +1815,7 @@ class FlujoPagoActivacion(QWidget):
             QFrame#panelDiagnosticoPago,
             QFrame#panelFormularioPago {{
                 background-color: {fondo_panel};
-                border: 1px solid rgba(255, 255, 255, 0.16);
+                border: 1px solid rgba(83, 112, 139, 0.48);
                 border-radius: 18px;
             }}
             QLabel#breadcrumbPago,
@@ -2026,7 +2027,7 @@ class FlujoPagoMensual(QWidget):
 
     def aplicar_tema(self, nombre_tema: str) -> None:
         self._tema_actual = (
-            nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+            resolver_nombre_tema(nombre_tema)
         )
         self._paleta = obtener_paleta_tema(self._tema_actual)
         self._aplicar_estilos()
@@ -2729,7 +2730,7 @@ class FlujoPagoMensual(QWidget):
             QFrame#panelDiagnosticoPago,
             QFrame#panelFormularioPago {{
                 background-color: {fondo_panel};
-                border: 1px solid rgba(255, 255, 255, 0.16);
+                border: 1px solid rgba(83, 112, 139, 0.48);
                 border-radius: 18px;
             }}
             QLabel#breadcrumbPago,
@@ -3143,7 +3144,7 @@ class VistaPagos(QWidget):
 
     def aplicar_tema(self, nombre_tema: str) -> None:
         self._tema_actual = (
-            nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+            resolver_nombre_tema(nombre_tema)
         )
         self._paleta = obtener_paleta_tema(self._tema_actual)
         self._flujo_mensual.aplicar_tema(self._tema_actual)
@@ -3277,12 +3278,12 @@ class VistaPagos(QWidget):
             }}
             QLabel#badgeEstadoDocumentoPago {{
                 border-radius: 10px;
-                color: #f4f8fb;
+                color: #C9DBE9;
                 font-size: 10px;
                 font-weight: 800;
                 padding: 4px 9px;
                 background: rgba(132, 146, 166, 0.22);
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                border: 1px solid rgba(83, 112, 139, 0.30);
             }}
             QLabel#badgeEstadoDocumentoPago[activo="true"] {{
                 color: #d9fff5;
@@ -3295,7 +3296,7 @@ class VistaPagos(QWidget):
                 border: 1px solid rgba(255, 205, 199, 0.28);
             }}
             QTabWidget#tabsPagos::pane {{
-                border: 1px solid rgba(255, 255, 255, 0.16);
+                border: 1px solid rgba(83, 112, 139, 0.48);
                 border-radius: 22px;
                 background-color: {fondo_header_destacado};
                 top: -2px;
@@ -3324,7 +3325,7 @@ class VistaPagos(QWidget):
             }}
             QTabWidget#tabsPagos QTabBar::tab:selected {{
                 background-color: {paleta["acento_seleccion"]};
-                color: #ffffff;
+                color: #E4EACC;
                 border: 2px solid {paleta["borde_principal"]};
                 margin-top: 0px;
                 padding-top: 12px;

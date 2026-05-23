@@ -92,6 +92,11 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.informacion.version_sistema, "2.2.0")
         self.assertEqual(estado.seguridad.maximo_intentos_fallidos, 5)
         self.assertEqual(estado.informacion.actualizado_por, "Sistema")
+        self.assertFalse(estado.laboratorio_visual.fondo_aplicado)
+        self.assertEqual(estado.laboratorio_visual.fondo_modo, "DEGRADADO")
+        self.assertEqual(estado.laboratorio_visual.fondo_color_primario, "#0A1728")
+        self.assertEqual(estado.laboratorio_visual.modal_modo, "SOLIDO")
+        self.assertEqual(estado.laboratorio_visual.modal_color_primario, "#1D364E")
 
     def test_guardado_datos_junta_y_cobro_actualiza_base(self) -> None:
         resultado_junta = self.servicio.guardar_datos_junta(
@@ -298,6 +303,44 @@ class TestConfiguracion(unittest.TestCase):
             meses_adelanto_maximo=0,
             mora_leve_hasta_meses=3,
             mora_media_hasta_meses=3,
+            actor_id=1,
+        )
+
+        self.assertFalse(resultado.exito)
+        self.assertEqual(resultado.codigo, "VALIDACION")
+
+    def test_guardado_laboratorio_visual_actualiza_estado(self) -> None:
+        resultado = self.servicio.guardar_laboratorio_visual(
+            fondo_aplicado=True,
+            fondo_modo="degradado",
+            fondo_color_primario="#112233",
+            fondo_color_secundario="#445566",
+            modal_modo="solido",
+            modal_color_primario="#778899",
+            modal_color_secundario="#AABBCC",
+            actor_id=1,
+        )
+
+        self.assertTrue(resultado.exito)
+
+        estado = self.servicio.obtener_estado()
+        self.assertTrue(estado.laboratorio_visual.fondo_aplicado)
+        self.assertEqual(estado.laboratorio_visual.fondo_modo, "DEGRADADO")
+        self.assertEqual(estado.laboratorio_visual.fondo_color_primario, "#112233")
+        self.assertEqual(estado.laboratorio_visual.fondo_color_secundario, "#445566")
+        self.assertEqual(estado.laboratorio_visual.modal_modo, "SOLIDO")
+        self.assertEqual(estado.laboratorio_visual.modal_color_primario, "#778899")
+        self.assertEqual(estado.laboratorio_visual.modal_color_secundario, "#778899")
+
+    def test_no_permite_color_invalido_en_laboratorio_visual(self) -> None:
+        resultado = self.servicio.guardar_laboratorio_visual(
+            fondo_aplicado=False,
+            fondo_modo="SOLIDO",
+            fondo_color_primario="azul",
+            fondo_color_secundario="#445566",
+            modal_modo="DEGRADADO",
+            modal_color_primario="#778899",
+            modal_color_secundario="#AABBCC",
             actor_id=1,
         )
 

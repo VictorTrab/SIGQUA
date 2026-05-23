@@ -40,6 +40,7 @@ from comun.ui.temas import (
     TEMA_SICAP_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
+    resolver_nombre_tema,
 )
 from modulos.historial_pagos.entidades import (
     DetalleHistorialPago,
@@ -266,15 +267,17 @@ class DialogoDetalleHistorialPago(DialogoBaseSicap):
         fila_acciones.setSpacing(10)
         boton_cerrar = BotonAccionContextual(
             "Cerrar",
+            icono="x.svg",
             variante=resolver_variante_boton_modal("Cerrar", "neutro"),
             centrado=True,
-            mostrar_icono=False,
+            mostrar_icono=True,
         )
         boton_reimprimir = BotonAccionContextual(
             "Reimprimir copia",
+            icono="receipt-2.svg",
             variante=resolver_variante_boton_modal("Reimprimir copia", "informacion"),
             centrado=True,
-            mostrar_icono=False,
+            mostrar_icono=True,
         )
         boton_cerrar.setMinimumWidth(124)
         boton_reimprimir.setMinimumWidth(164)
@@ -283,7 +286,6 @@ class DialogoDetalleHistorialPago(DialogoBaseSicap):
         fila_acciones.addWidget(boton_cerrar)
         fila_acciones.addStretch(1)
         fila_acciones.addWidget(boton_reimprimir)
-        layout_panel.addLayout(fila_acciones)
 
         layout_scroll.addWidget(panel)
         scroll.setWidget(contenedor)
@@ -291,7 +293,7 @@ class DialogoDetalleHistorialPago(DialogoBaseSicap):
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
         self.layout_cuerpo.addWidget(scroll)
-        self._pie.setVisible(False)
+        self.layout_pie.addLayout(fila_acciones)
         self._aplicar_estilos()
 
     def _crear_bloque_seccion(
@@ -398,17 +400,17 @@ class DialogoDetalleHistorialPago(DialogoBaseSicap):
             }
             QFrame#panelContenidoDetalleHistorialPago,
             QFrame#seccionDetalleHistorialPago {
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                background: rgba(29, 54, 78, 0.78);
+                border: 1px solid rgba(83, 112, 139, 0.30);
                 border-radius: 16px;
             }
             QLabel#codigoHistorialDetalle {
-                color: rgba(235, 242, 248, 0.76);
+                color: #C9DBE9;
                 font-size: 11px;
                 font-weight: 800;
             }
             QLabel#nombreHistorialDetalle {
-                color: #ffffff;
+                color: #E4EACC;
                 font-size: 20px;
                 font-weight: 900;
             }
@@ -422,37 +424,37 @@ class DialogoDetalleHistorialPago(DialogoBaseSicap):
                 border: 1px solid rgba(158, 231, 214, 0.26);
             }
             QLabel#tituloSeccionDetalleHistorialPago {
-                color: #ffffff;
+                color: #E4EACC;
                 font-size: 14px;
                 font-weight: 800;
             }
             QLabel#descripcionSeccionDetalleHistorialPago,
             QLabel#etiquetaDetalleHistorialPago {
-                color: rgba(235, 242, 248, 0.76);
+                color: #C9DBE9;
                 font-size: 11px;
                 font-weight: 700;
             }
             QFrame#campoDetalleHistorialPago {
-                background: rgba(255, 255, 255, 0.04);
-                border: 1px solid rgba(255, 255, 255, 0.10);
+                background: rgba(16, 42, 64, 0.74);
+                border: 1px solid rgba(83, 112, 139, 0.30);
                 border-radius: 14px;
             }
             QLabel#valorDetalleHistorialPago {
-                color: #ffffff;
+                color: #E4EACC;
                 font-size: 13px;
                 font-weight: 700;
             }
             QTableWidget#tablaDetalleHistorialPago {
                 background: rgba(74, 79, 154, 0.88);
-                border: 1px solid rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(29, 54, 78, 0.78);
                 border-radius: 14px;
             }
             QTableWidget#tablaDetalleHistorialPago QHeaderView::section {
                 background: rgba(108, 113, 190, 0.92);
-                color: #f7fbff;
+                color: #E4EACC;
                 border: none;
-                border-right: 1px solid rgba(255, 255, 255, 0.08);
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                border-right: 1px solid rgba(29, 54, 78, 0.78);
+                border-bottom: 1px solid rgba(29, 54, 78, 0.78);
                 padding: 10px 12px;
                 font-size: 12px;
                 font-weight: 800;
@@ -582,10 +584,10 @@ class VistaHistorialPagos(QWidget):
         fila_tarjetas = QGridLayout()
         fila_tarjetas.setHorizontalSpacing(10)
         fila_tarjetas.setVerticalSpacing(10)
-        self._tarjeta_total = TarjetaResumenHistorial("receipt-2.svg", "#8ec9ff")
+        self._tarjeta_total = TarjetaResumenHistorial("receipt-2.svg", "#C9DBE9")
         self._tarjeta_hoy = TarjetaResumenHistorial("clock.svg", "#8de8c7")
         self._tarjeta_cobrado = TarjetaResumenHistorial("calendar-stats.svg", "#f7cc7a")
-        self._tarjeta_ultimo = TarjetaResumenHistorial("receipt-2.svg", "#c6b6ff")
+        self._tarjeta_ultimo = TarjetaResumenHistorial("receipt-2.svg", "#8FAFC7")
         fila_tarjetas.addWidget(self._tarjeta_total, 0, 0)
         fila_tarjetas.addWidget(self._tarjeta_hoy, 0, 1)
         fila_tarjetas.addWidget(self._tarjeta_cobrado, 0, 2)
@@ -767,7 +769,7 @@ class VistaHistorialPagos(QWidget):
 
     def aplicar_tema(self, nombre_tema: str) -> None:
         self._tema_actual = (
-            nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+            resolver_nombre_tema(nombre_tema)
         )
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         for boton in self.findChildren(BotonIconoFilaHistorial):
@@ -777,13 +779,8 @@ class VistaHistorialPagos(QWidget):
     def _aplicar_estilos(self) -> None:
         radio_panel_tabla = self.RADIO_PANEL_TABLA
         paleta = self._paleta_tema
-        oscuro = self._tema_actual != "claro"
-        fondo_panel_destacado = (
-            obtener_fondo_header_destacado(self._tema_actual)
-            if oscuro
-            else paleta["fondo_superficie_suave"]
-        )
-        borde_panel_destacado = "rgba(255, 255, 255, 0.16)" if oscuro else paleta["borde_suave"]
+        fondo_panel_destacado = obtener_fondo_header_destacado(self._tema_actual)
+        borde_panel_destacado = paleta["borde_principal"]
         self.setStyleSheet(
             f"""
             QWidget#vistaHistorialPagos {{

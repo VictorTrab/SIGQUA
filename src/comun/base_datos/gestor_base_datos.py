@@ -12,6 +12,7 @@ class GestorBaseDatos:
     """Centraliza la inicializacion y apertura segura de la base de datos."""
 
     VERSION_MIGRACION_DATOS_PRUEBA = "004"
+    VERSION_MIGRACION_USUARIOS_ROLES_FIJOS = "016"
 
     def __init__(self, gestor_rutas: GestorRutas | None = None) -> None:
         self._gestor_rutas = gestor_rutas or GestorRutas()
@@ -122,6 +123,11 @@ class GestorBaseDatos:
                     continue
 
                 script_sql = ruta_migracion.read_text(encoding="utf-8")
+                script_sql = self._preparar_script_migracion(
+                    conexion,
+                    version,
+                    script_sql,
+                )
                 with conexion:
                     conexion.executescript(script_sql)
 
@@ -140,3 +146,35 @@ class GestorBaseDatos:
                     )
         finally:
             conexion.close()
+
+    def _preparar_script_migracion(
+        self,
+        conexion: sqlite3.Connection,
+        version: str,
+        script_sql: str,
+    ) -> str:
+        """Ajusta migraciones con compatibilidad adicional para estados parciales."""
+        if (
+            version == self.VERSION_MIGRACION_USUARIOS_ROLES_FIJOS
+            and self._tabla_tiene_columna(
+                conexion,
+                tabla="usuarios",
+                columna="contrasena_temporal_expira_en",
+            )
+        ):
+            return script_sql.replace(
+                "ALTER TABLE usuarios ADD COLUMN contrasena_temporal_expira_en TEXT NULL;\n\n",
+                "",
+                1,
+            )
+        return script_sql
+
+    @staticmethod
+    def _tabla_tiene_columna(
+        conexion: sqlite3.Connection,
+        *,
+        tabla: str,
+        columna: str,
+    ) -> bool:
+        columnas = conexion.execute(f"PRAGMA table_info({tabla});").fetchall()
+        return any(str(fila[1]) == columna for fila in columnas)

@@ -73,6 +73,29 @@ class TestAutenticacion(unittest.TestCase):
         self.assertEqual(total_intentos, 1)
         self.assertIsNotNone(ultimo_acceso)
 
+    def test_login_con_contrasena_temporal_expirada_rechaza_acceso(self) -> None:
+        conexion = self.gestor_base_datos.obtener_conexion()
+        try:
+            with conexion:
+                conexion.execute(
+                    """
+                    UPDATE usuarios
+                    SET contrasena_temporal_expira_en = '2000-01-01 00:00:00',
+                        requiere_cambio_contrasena = 1,
+                        estado = 'ACTIVO'
+                    WHERE nombre_usuario = 'admin';
+                    """
+                )
+        finally:
+            conexion.close()
+
+        resultado = self.servicio.iniciar_sesion(
+            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="Admin123!")
+        )
+
+        self.assertFalse(resultado.exito)
+        self.assertEqual(resultado.codigo, "CONTRASENA_TEMPORAL_EXPIRADA")
+
     def test_login_usa_duracion_sesion_configurada(self) -> None:
         self.repositorio_configuracion.actualizar_valores(
             {"seguridad.duracion_sesion_horas": "0.5"},
@@ -189,9 +212,9 @@ class TestAutenticacion(unittest.TestCase):
 
         conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
         try:
-            ultimo_cambio, requiere = conexion.execute(
+            ultimo_cambio, requiere, expira_en = conexion.execute(
                 """
-                SELECT ultimo_cambio_contrasena_en, requiere_cambio_contrasena
+                SELECT ultimo_cambio_contrasena_en, requiere_cambio_contrasena, contrasena_temporal_expira_en
                 FROM usuarios
                 WHERE nombre_usuario = 'admin';
                 """
@@ -201,6 +224,7 @@ class TestAutenticacion(unittest.TestCase):
 
         self.assertIsNotNone(ultimo_cambio)
         self.assertEqual(requiere, 0)
+        self.assertIsNone(expira_en)
 
     def test_restablecimiento_local_falla_para_usuario_desconocido(self) -> None:
         resultado = self.servicio.restablecer_contrasena(

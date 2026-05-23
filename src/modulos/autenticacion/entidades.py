@@ -26,6 +26,7 @@ class UsuarioRegistroAutenticacion:
     es_tecnico: bool = False
     es_oculto: bool = False
     requiere_cambio_contrasena: bool = False
+    contrasena_temporal_expira_en: str | None = None
     intentos_fallidos: int = 0
     bloqueado_hasta: str | None = None
     roles: tuple[str, ...] = ()
@@ -44,6 +45,7 @@ class UsuarioAutenticado:
     es_tecnico: bool = False
     es_oculto: bool = False
     requiere_cambio_contrasena: bool = False
+    contrasena_temporal_expira_en: str | None = None
     roles: tuple[str, ...] = ()
     permisos: frozenset[str] = frozenset()
 
@@ -61,6 +63,7 @@ class UsuarioAutenticado:
             es_tecnico=usuario_registro.es_tecnico,
             es_oculto=usuario_registro.es_oculto,
             requiere_cambio_contrasena=usuario_registro.requiere_cambio_contrasena,
+            contrasena_temporal_expira_en=usuario_registro.contrasena_temporal_expira_en,
             roles=usuario_registro.roles,
             permisos=usuario_registro.permisos,
         )

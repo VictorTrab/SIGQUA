@@ -464,9 +464,9 @@ class TestPagos(unittest.TestCase):
         self.assertEqual(vista._label_estado_apertura.text(), "Abrir")
         self.assertEqual(vista._label_estado_impresion.text(), "Imprimir")
         self.assertIsInstance(vista._tabs.widget(3), vista_pagos_modulo.FlujoPagoPlan)
-        vista.aplicar_tema("claro")
-        self.assertEqual(vista._tema_actual, "claro")
-        self.assertEqual(vista._flujo_mensual._tema_actual, "claro")
+        vista.aplicar_tema("tema_sicap")
+        self.assertEqual(vista._tema_actual, "tema_sicap")
+        self.assertEqual(vista._flujo_mensual._tema_actual, "tema_sicap")
         self.assertIn('font-family: "Segoe UI"', vista.styleSheet())
 
     def test_vista_notifica_comprobante_pdf_generado(self) -> None:

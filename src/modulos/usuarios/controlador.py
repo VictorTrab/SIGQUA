@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from modulos.autenticacion.entidades import UsuarioAutenticado
-from modulos.usuarios.entidades import PermisoSistema, RolSistema, UsuarioSistema
+from modulos.usuarios.entidades import RolSistema, UsuarioSistema
 from modulos.usuarios.servicio import FILTRO_USUARIOS_TODOS, ServicioUsuarios
 from modulos.usuarios.vista import VistaUsuarios
 
@@ -18,7 +18,6 @@ class ControladorUsuarios:
         self._usuarios_actuales: list[UsuarioSistema] = []
         self._usuarios_filtrados: list[UsuarioSistema] = []
         self._roles_actuales: list[RolSistema] = []
-        self._permisos_roles: list[PermisoSistema] = []
         self._filtro_texto = ""
         self._filtro_rapido = FILTRO_USUARIOS_TODOS
         self._filtro_rol = FILTRO_USUARIOS_TODOS
@@ -42,9 +41,6 @@ class ControladorUsuarios:
         self._vista_usuarios.editar_usuario_solicitado.connect(self._editar_usuario)
         self._vista_usuarios.cambio_estado_solicitado.connect(self._cambiar_estado_usuario)
         self._vista_usuarios.gestion_acceso_solicitada.connect(self._gestionar_acceso_usuario)
-        self._vista_usuarios.nuevo_rol_solicitado.connect(self._crear_rol)
-        self._vista_usuarios.editar_rol_solicitado.connect(self._editar_rol)
-        self._vista_usuarios.cambio_estado_rol_solicitado.connect(self._cambiar_estado_rol)
 
     def _manejar_filtro_texto(self, texto: str) -> None:
         self._filtro_texto = texto.strip()
@@ -70,6 +66,13 @@ class ControladorUsuarios:
         resultado = self._servicio_usuarios.crear_usuario_operativo(self._actor, formulario)
         self._vista_usuarios.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
+            if resultado.requiere_mostrar_credencial_temporal:
+                self._vista_usuarios.mostrar_credencial_temporal(
+                    usuario=formulario.nombre_usuario,
+                    contrasena_temporal=resultado.contrasena_temporal_generada,
+                    expira_en=resultado.contrasena_temporal_expira_en,
+                    formateador_fecha=self._servicio_usuarios.formatear_fecha_hora,
+                )
             self._refrescar()
 
     def _mostrar_detalle(self, identificador: int) -> None:
@@ -167,76 +170,33 @@ class ControladorUsuarios:
             )
             return
 
-        solicitud = self._vista_usuarios.solicitar_gestion_acceso(usuario)
-        if solicitud is None:
+        accion = self._vista_usuarios.solicitar_gestion_acceso(usuario)
+        if accion is None:
             return
 
-        accion, contrasena, confirmacion = solicitud
         if accion == "desbloquear":
             resultado = self._servicio_usuarios.desbloquear_usuario_operativo(
                 actor=self._actor,
                 nombre_usuario_objetivo=usuario.nombre_usuario,
             )
-        else:
-            resultado = self._servicio_usuarios.restablecer_contrasena_administrativa(
-                actor=self._actor,
-                nombre_usuario_objetivo=usuario.nombre_usuario,
-                nueva_contrasena_temporal=contrasena,
-                confirmacion_contrasena=confirmacion,
-            )
-        self._vista_usuarios.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
-        if resultado.exito:
-            self._refrescar()
+            self._vista_usuarios.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
+            if resultado.exito:
+                self._refrescar()
+            return
 
-    def _crear_rol(self) -> None:
-        if self._actor is None:
-            self._mostrar_sin_sesion()
-            return
-        formulario = self._vista_usuarios.solicitar_datos_rol(self._permisos_roles)
-        if formulario is None:
-            return
-        resultado = self._servicio_usuarios.crear_rol_operativo(self._actor, formulario)
+        resultado = self._servicio_usuarios.restablecer_contrasena_administrativa(
+            actor=self._actor,
+            nombre_usuario_objetivo=usuario.nombre_usuario,
+        )
         self._vista_usuarios.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
-            self._refrescar()
-
-    def _editar_rol(self, rol_id: int) -> None:
-        if self._actor is None:
-            self._mostrar_sin_sesion()
-            return
-        rol = self._buscar_rol(rol_id)
-        if rol is None:
-            self._vista_usuarios.mostrar_mensaje(
-                "No fue posible encontrar el rol seleccionado.",
-                es_error=True,
-            )
-            self._refrescar()
-            return
-        formulario = self._vista_usuarios.solicitar_datos_rol(self._permisos_roles, rol=rol)
-        if formulario is None:
-            return
-        resultado = self._servicio_usuarios.actualizar_rol_operativo(self._actor, formulario)
-        self._vista_usuarios.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
-        if resultado.exito:
-            self._refrescar()
-
-    def _cambiar_estado_rol(self, rol_id: int) -> None:
-        if self._actor is None:
-            self._mostrar_sin_sesion()
-            return
-        rol = self._buscar_rol(rol_id)
-        if rol is None:
-            self._vista_usuarios.mostrar_mensaje(
-                "No fue posible encontrar el rol seleccionado.",
-                es_error=True,
-            )
-            self._refrescar()
-            return
-        if not self._vista_usuarios.confirmar_cambio_estado_rol(rol):
-            return
-        resultado = self._servicio_usuarios.cambiar_estado_rol_operativo(self._actor, rol_id)
-        self._vista_usuarios.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
-        if resultado.exito:
+            if resultado.requiere_mostrar_credencial_temporal:
+                self._vista_usuarios.mostrar_credencial_temporal(
+                    usuario=usuario.nombre_usuario,
+                    contrasena_temporal=resultado.contrasena_temporal_generada,
+                    expira_en=resultado.contrasena_temporal_expira_en,
+                    formateador_fecha=self._servicio_usuarios.formatear_fecha_hora,
+                )
             self._refrescar()
 
     def _exportar(self) -> None:
@@ -251,16 +211,14 @@ class ControladorUsuarios:
             self._usuarios_actuales = []
             self._usuarios_filtrados = []
             self._roles_actuales = []
-            self._permisos_roles = []
             self._vista_usuarios.mostrar_roles([], [])
             self._vista_usuarios.mostrar_resumen(self._servicio_usuarios.obtener_resumen([]))
             self._vista_usuarios.mostrar_usuarios([], self._servicio_usuarios.formatear_fecha_hora)
             return
 
         self._usuarios_actuales = self._servicio_usuarios.listar_usuarios_para_administracion(self._actor)
-        self._roles_actuales = self._servicio_usuarios.listar_roles_para_administracion(self._actor)
-        self._permisos_roles = self._servicio_usuarios.listar_permisos_para_roles()
-        self._vista_usuarios.mostrar_roles(self._roles_actuales, self._permisos_roles)
+        self._roles_actuales = self._servicio_usuarios.listar_roles_asignables(self._actor)
+        self._vista_usuarios.mostrar_roles(self._roles_actuales, [])
         self._vista_usuarios.mostrar_resumen(self._servicio_usuarios.obtener_resumen(self._usuarios_actuales))
         self._renderizar_usuarios_filtrados()
 
@@ -278,9 +236,6 @@ class ControladorUsuarios:
 
     def _buscar_usuario(self, identificador: int) -> UsuarioSistema | None:
         return next((usuario for usuario in self._usuarios_actuales if usuario.identificador == identificador), None)
-
-    def _buscar_rol(self, identificador: int) -> RolSistema | None:
-        return next((rol for rol in self._roles_actuales if rol.identificador == identificador), None)
 
     @staticmethod
     def _es_usuario_operable(usuario: UsuarioSistema) -> bool:

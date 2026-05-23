@@ -5,19 +5,13 @@ from __future__ import annotations
 import csv
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
+from secrets import choice
+from string import ascii_letters, digits
 
 from comun.seguridad import generar_hash_contrasena
 from modulos.autenticacion.entidades import UsuarioAutenticado
-from modulos.usuarios.entidades import (
-    FormularioRol,
-    FormularioUsuario,
-    PermisoSistema,
-    ResumenUsuarios,
-    ResultadoGestionUsuarios,
-    RolSistema,
-    UsuarioSistema,
-)
+from modulos.usuarios.entidades import FormularioUsuario, ResumenUsuarios, ResultadoGestionUsuarios, RolSistema, UsuarioSistema
 from modulos.usuarios.repositorio import RepositorioUsuarios
 
 
@@ -27,6 +21,10 @@ FILTRO_USUARIOS_TODOS = "todos"
 FILTRO_USUARIOS_ACTIVOS = "activos"
 FILTRO_USUARIOS_INACTIVOS = "inactivos"
 FILTRO_USUARIOS_ADMINISTRADORES = "administradores"
+PERMISO_MODULO_USUARIOS = "modulo.usuarios"
+MINUTOS_CONTRASENA_TEMPORAL = 10
+LONGITUD_CONTRASENA_TEMPORAL = 12
+ROLES_VISIBLES = ("ADMINISTRADOR", "CAJERO", "CONSULTA")
 
 
 class ServicioUsuarios:
@@ -45,20 +43,15 @@ class ServicioUsuarios:
             return operativos + tecnicos
         return self.repositorio_usuarios.listar_operativos_visibles()
 
-    def listar_roles_para_administracion(
-        self,
-        actor: UsuarioAutenticado,
-    ) -> list[RolSistema]:
-        return self.repositorio_usuarios.listar_roles_operativos()
-
     def listar_roles_asignables(
         self,
         actor: UsuarioAutenticado,
     ) -> list[RolSistema]:
-        return [rol for rol in self.listar_roles_para_administracion(actor) if rol.estado == "ACTIVO"]
-
-    def listar_permisos_para_roles(self) -> list[PermisoSistema]:
-        return self.repositorio_usuarios.listar_permisos_operativos()
+        return [
+            rol
+            for rol in self.repositorio_usuarios.listar_roles_operativos()
+            if rol.estado == "ACTIVO" and rol.nombre in ROLES_VISIBLES
+        ]
 
     def obtener_resumen(self, usuarios: list[UsuarioSistema]) -> ResumenUsuarios:
         hoy = datetime.now().date()
@@ -121,24 +114,28 @@ class ServicioUsuarios:
         actor: UsuarioAutenticado,
         formulario: FormularioUsuario,
     ) -> ResultadoGestionUsuarios:
-        if not actor.tiene_permiso("usuarios.gestionar") and not actor.es_superadministrador():
+        if not self._puede_gestionar_usuarios(actor):
             return ResultadoGestionUsuarios(False, "No tienes permisos para crear usuarios.", "PERMISO_DENEGADO")
 
-        validacion = self._validar_formulario(formulario, es_creacion=True)
+        validacion = self._validar_formulario(formulario)
         if validacion is not None:
             return validacion
 
         rol = self._resolver_rol_asignable(formulario.rol_id, actor)
         if rol is None:
-            return ResultadoGestionUsuarios(False, "Selecciona un rol valido para el usuario.", "VALIDACION")
+            return ResultadoGestionUsuarios(False, "Selecciona un rol visible valido.", "VALIDACION")
 
-        momento = self._formatear_fecha(datetime.now())
+        momento_actual = datetime.now()
+        momento = self._formatear_fecha(momento_actual)
+        contrasena_temporal = self._generar_contrasena_temporal()
+        expira_en = self._formatear_fecha(momento_actual + timedelta(minutes=MINUTOS_CONTRASENA_TEMPORAL))
         try:
             self.repositorio_usuarios.crear_usuario_operativo(
                 actor_id=actor.identificador,
                 formulario=formulario,
-                nuevo_hash=generar_hash_contrasena(formulario.contrasena_temporal),
+                nuevo_hash=generar_hash_contrasena(contrasena_temporal),
                 momento=momento,
+                contrasena_temporal_expira_en=expira_en,
             )
         except sqlite3.IntegrityError:
             return ResultadoGestionUsuarios(
@@ -148,8 +145,11 @@ class ServicioUsuarios:
             )
         return ResultadoGestionUsuarios(
             True,
-            "Usuario creado. Debe cambiar su contrasena temporal en el primer acceso.",
+            "Usuario creado. Comparte la contrasena temporal y solicita el cambio inmediato.",
             "OK",
+            contrasena_temporal_generada=contrasena_temporal,
+            contrasena_temporal_expira_en=expira_en,
+            requiere_mostrar_credencial_temporal=True,
         )
 
     def actualizar_usuario_operativo(
@@ -159,7 +159,7 @@ class ServicioUsuarios:
     ) -> ResultadoGestionUsuarios:
         if formulario.identificador is None:
             return ResultadoGestionUsuarios(False, "No se identifico el usuario a editar.", "VALIDACION")
-        if not actor.tiene_permiso("usuarios.gestionar") and not actor.es_superadministrador():
+        if not self._puede_gestionar_usuarios(actor):
             return ResultadoGestionUsuarios(False, "No tienes permisos para editar usuarios.", "PERMISO_DENEGADO")
 
         objetivo = self.repositorio_usuarios.obtener_por_identificador(formulario.identificador)
@@ -172,13 +172,13 @@ class ServicioUsuarios:
                 "PERMISO_DENEGADO",
             )
 
-        validacion = self._validar_formulario(formulario, es_creacion=False)
+        validacion = self._validar_formulario(formulario)
         if validacion is not None:
             return validacion
 
         rol = self._resolver_rol_asignable(formulario.rol_id, actor)
         if rol is None:
-            return ResultadoGestionUsuarios(False, "Selecciona un rol valido para el usuario.", "VALIDACION")
+            return ResultadoGestionUsuarios(False, "Selecciona un rol visible valido.", "VALIDACION")
 
         momento = self._formatear_fecha(datetime.now())
         try:
@@ -200,7 +200,7 @@ class ServicioUsuarios:
         actor: UsuarioAutenticado,
         nombre_usuario_objetivo: str,
     ) -> ResultadoGestionUsuarios:
-        if not actor.tiene_permiso("usuarios.gestionar") and not actor.es_superadministrador():
+        if not self._puede_gestionar_usuarios(actor):
             return ResultadoGestionUsuarios(False, "No tienes permisos para cambiar estados.", "PERMISO_DENEGADO")
 
         usuario_objetivo = self.repositorio_usuarios.obtener_por_nombre_usuario(nombre_usuario_objetivo.strip())
@@ -240,13 +240,11 @@ class ServicioUsuarios:
         self,
         actor: UsuarioAutenticado,
         nombre_usuario_objetivo: str,
-        nueva_contrasena_temporal: str,
-        confirmacion_contrasena: str,
     ) -> ResultadoGestionUsuarios:
-        if not actor.tiene_permiso("usuarios.restablecer_contrasena") and not actor.es_superadministrador():
+        if not self._puede_gestionar_usuarios(actor):
             return ResultadoGestionUsuarios(
                 exito=False,
-                mensaje="No tienes permisos para restablecer contrasenas.",
+                mensaje="No tienes permisos para generar acceso temporal.",
                 codigo="PERMISO_DENEGADO",
             )
 
@@ -255,27 +253,6 @@ class ServicioUsuarios:
             return ResultadoGestionUsuarios(
                 exito=False,
                 mensaje="Indica el usuario objetivo.",
-                codigo="VALIDACION",
-            )
-
-        if not nueva_contrasena_temporal or not confirmacion_contrasena:
-            return ResultadoGestionUsuarios(
-                exito=False,
-                mensaje="Completa ambos campos de contrasena temporal.",
-                codigo="VALIDACION",
-            )
-
-        if len(nueva_contrasena_temporal) < 8:
-            return ResultadoGestionUsuarios(
-                exito=False,
-                mensaje="La contrasena temporal debe tener al menos 8 caracteres.",
-                codigo="VALIDACION",
-            )
-
-        if nueva_contrasena_temporal != confirmacion_contrasena:
-            return ResultadoGestionUsuarios(
-                exito=False,
-                mensaje="Las contrasenas no coinciden.",
                 codigo="VALIDACION",
             )
 
@@ -294,19 +271,39 @@ class ServicioUsuarios:
                 codigo="PERMISO_DENEGADO",
             )
 
-        momento = self._formatear_fecha(datetime.now())
+        momento_actual = datetime.now()
+        momento = self._formatear_fecha(momento_actual)
+        contrasena_temporal = self._generar_contrasena_temporal()
+        expira_en = self._formatear_fecha(momento_actual + timedelta(minutes=MINUTOS_CONTRASENA_TEMPORAL))
         self.repositorio_usuarios.restablecer_contrasena_administrativa(
             actor_id=actor.identificador,
             objetivo_id=usuario_objetivo.identificador,
-            nuevo_hash=generar_hash_contrasena(nueva_contrasena_temporal),
+            nuevo_hash=generar_hash_contrasena(contrasena_temporal),
             momento=momento,
+            contrasena_temporal_expira_en=expira_en,
+        )
+        self.repositorio_usuarios.registrar_auditoria(
+            usuario_id=actor.identificador,
+            accion="RESTABLECER_CONTRASENA",
+            entidad="usuarios",
+            entidad_id=usuario_objetivo.identificador,
+            resumen=f"Generacion de acceso temporal para {usuario_objetivo.nombre_usuario}",
+            datos_antes_json=json.dumps(
+                {"estado": usuario_objetivo.estado, "requiere_cambio": usuario_objetivo.requiere_cambio_contrasena},
+                ensure_ascii=True,
+            ),
+            datos_despues_json=json.dumps(
+                {"estado": "ACTIVO", "requiere_cambio": True, "expira_en": expira_en},
+                ensure_ascii=True,
+            ),
         )
         return ResultadoGestionUsuarios(
             exito=True,
-            mensaje=(
-                "Contrasena temporal aplicada. El usuario debera cambiarla en su proximo acceso."
-            ),
+            mensaje="Acceso temporal generado. El usuario debe cambiarlo en su proximo acceso.",
             codigo="OK",
+            contrasena_temporal_generada=contrasena_temporal,
+            contrasena_temporal_expira_en=expira_en,
+            requiere_mostrar_credencial_temporal=True,
         )
 
     def desbloquear_usuario_operativo(
@@ -314,7 +311,7 @@ class ServicioUsuarios:
         actor: UsuarioAutenticado,
         nombre_usuario_objetivo: str,
     ) -> ResultadoGestionUsuarios:
-        if not actor.tiene_permiso("usuarios.desbloquear") and not actor.es_superadministrador():
+        if not self._puede_gestionar_usuarios(actor):
             return ResultadoGestionUsuarios(
                 exito=False,
                 mensaje="No tienes permisos para desbloquear usuarios.",
@@ -357,87 +354,6 @@ class ServicioUsuarios:
             exito=True,
             mensaje="Usuario desbloqueado correctamente.",
             codigo="OK",
-        )
-
-    def crear_rol_operativo(
-        self,
-        actor: UsuarioAutenticado,
-        formulario: FormularioRol,
-    ) -> ResultadoGestionUsuarios:
-        if not actor.tiene_permiso("usuarios.gestionar") and not actor.es_superadministrador():
-            return ResultadoGestionUsuarios(False, "No tienes permisos para crear roles.", "PERMISO_DENEGADO")
-
-        validacion = self._validar_formulario_rol(formulario)
-        if validacion is not None:
-            return validacion
-
-        momento = self._formatear_fecha(datetime.now())
-        try:
-            self.repositorio_usuarios.crear_rol_operativo(actor.identificador, formulario, momento)
-        except sqlite3.IntegrityError:
-            return ResultadoGestionUsuarios(False, "Ya existe un rol con ese nombre.", "DUPLICADO")
-        return ResultadoGestionUsuarios(True, "Rol creado correctamente.", "OK")
-
-    def actualizar_rol_operativo(
-        self,
-        actor: UsuarioAutenticado,
-        formulario: FormularioRol,
-    ) -> ResultadoGestionUsuarios:
-        if formulario.identificador is None:
-            return ResultadoGestionUsuarios(False, "No se identifico el rol a editar.", "VALIDACION")
-        if not actor.tiene_permiso("usuarios.gestionar") and not actor.es_superadministrador():
-            return ResultadoGestionUsuarios(False, "No tienes permisos para editar roles.", "PERMISO_DENEGADO")
-
-        rol = self.repositorio_usuarios.obtener_rol_operativo_por_identificador(formulario.identificador)
-        if rol is None:
-            return ResultadoGestionUsuarios(False, "El rol indicado no existe.", "ROL_NO_ENCONTRADO")
-
-        validacion = self._validar_formulario_rol(formulario)
-        if validacion is not None:
-            return validacion
-
-        momento = self._formatear_fecha(datetime.now())
-        try:
-            self.repositorio_usuarios.actualizar_rol_operativo(actor.identificador, formulario, momento)
-        except sqlite3.IntegrityError:
-            return ResultadoGestionUsuarios(False, "Ya existe un rol con ese nombre.", "DUPLICADO")
-        return ResultadoGestionUsuarios(True, "Rol actualizado correctamente.", "OK")
-
-    def cambiar_estado_rol_operativo(
-        self,
-        actor: UsuarioAutenticado,
-        rol_id: int,
-    ) -> ResultadoGestionUsuarios:
-        if not actor.tiene_permiso("usuarios.gestionar") and not actor.es_superadministrador():
-            return ResultadoGestionUsuarios(False, "No tienes permisos para cambiar estados de roles.", "PERMISO_DENEGADO")
-
-        rol = self.repositorio_usuarios.obtener_rol_operativo_por_identificador(rol_id)
-        if rol is None:
-            return ResultadoGestionUsuarios(False, "El rol indicado no existe.", "ROL_NO_ENCONTRADO")
-
-        nuevo_estado = "INACTIVO" if rol.estado == "ACTIVO" else "ACTIVO"
-        if nuevo_estado == "INACTIVO" and rol.total_usuarios > 0:
-            return ResultadoGestionUsuarios(
-                False,
-                "No se puede desactivar un rol que todavia tiene usuarios vinculados.",
-                "ROL_CON_USUARIOS",
-            )
-
-        momento = self._formatear_fecha(datetime.now())
-        self.repositorio_usuarios.cambiar_estado_rol_operativo(actor.identificador, rol_id, nuevo_estado, momento)
-        self.repositorio_usuarios.registrar_auditoria(
-            usuario_id=actor.identificador,
-            accion="CAMBIAR_ESTADO_ROL",
-            entidad="roles",
-            entidad_id=rol.identificador,
-            resumen=f"Cambio de estado del rol {rol.nombre}",
-            datos_antes_json=json.dumps({"estado": rol.estado}, ensure_ascii=True),
-            datos_despues_json=json.dumps({"estado": nuevo_estado}, ensure_ascii=True),
-        )
-        return ResultadoGestionUsuarios(
-            True,
-            f"Rol {nuevo_estado.lower()} correctamente.",
-            "OK",
         )
 
     def exportar_csv(
@@ -508,9 +424,13 @@ class ServicioUsuarios:
             return None
 
     @staticmethod
+    def _generar_contrasena_temporal() -> str:
+        alfabeto = ascii_letters + digits
+        return "".join(choice(alfabeto) for _ in range(LONGITUD_CONTRASENA_TEMPORAL))
+
+    @staticmethod
     def _validar_formulario(
         formulario: FormularioUsuario,
-        es_creacion: bool,
     ) -> ResultadoGestionUsuarios | None:
         if not formulario.nombre_completo.strip():
             return ResultadoGestionUsuarios(False, "Indica el nombre completo del usuario.", "VALIDACION")
@@ -524,40 +444,8 @@ class ServicioUsuarios:
             return ResultadoGestionUsuarios(False, "Selecciona un estado operativo valido.", "VALIDACION")
         if formulario.rol_id <= 0:
             return ResultadoGestionUsuarios(False, "Selecciona un rol valido.", "VALIDACION")
-        if es_creacion:
-            if not formulario.contrasena_temporal or not formulario.confirmacion_contrasena:
-                return ResultadoGestionUsuarios(
-                    False,
-                    "Completa la contrasena temporal y su confirmacion.",
-                    "VALIDACION",
-                )
-            if len(formulario.contrasena_temporal) < 8:
-                return ResultadoGestionUsuarios(
-                    False,
-                    "La contrasena temporal debe tener al menos 8 caracteres.",
-                    "VALIDACION",
-                )
-            if formulario.contrasena_temporal != formulario.confirmacion_contrasena:
-                return ResultadoGestionUsuarios(False, "Las contrasenas no coinciden.", "VALIDACION")
         return None
 
-    def _validar_formulario_rol(
-        self,
-        formulario: FormularioRol,
-    ) -> ResultadoGestionUsuarios | None:
-        if not formulario.nombre.strip():
-            return ResultadoGestionUsuarios(False, "Indica el nombre del rol.", "VALIDACION")
-        if not formulario.descripcion.strip():
-            return ResultadoGestionUsuarios(False, "Indica una descripcion breve del rol.", "VALIDACION")
-
-        permisos_disponibles = {permiso.codigo for permiso in self.listar_permisos_para_roles()}
-        seleccionados = tuple(
-            codigo
-            for codigo in formulario.permisos_codigos
-            if codigo in permisos_disponibles
-        )
-        if not seleccionados:
-            return ResultadoGestionUsuarios(False, "Selecciona al menos un permiso para el rol.", "VALIDACION")
-        if len(seleccionados) != len(formulario.permisos_codigos):
-            return ResultadoGestionUsuarios(False, "El formulario contiene permisos no permitidos.", "VALIDACION")
-        return None
+    @staticmethod
+    def _puede_gestionar_usuarios(actor: UsuarioAutenticado) -> bool:
+        return actor.es_superadministrador() or actor.tiene_permiso(PERMISO_MODULO_USUARIOS)

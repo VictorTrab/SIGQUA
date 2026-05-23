@@ -206,6 +206,42 @@ class TestMigracionesBaseDatos(unittest.TestCase):
         self.assertEqual(configuracion[0], "0")
         self.assertEqual(conceptos, {"CONEXION", "MENSUALIDAD_PRORRATEADA"})
 
+    def test_migracion_016_se_recupera_si_la_columna_ya_existe_pero_falta_la_version(self) -> None:
+        ruta_migraciones_origen = RAIZ_PROYECTO / "database" / "migrations"
+        for ruta in ruta_migraciones_origen.glob("*.sql"):
+            destino = self.raiz_temporal / "database" / "migrations" / ruta.name
+            destino.write_text(ruta.read_text(encoding="utf-8"), encoding="utf-8")
+
+        gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
+        gestor = GestorBaseDatos(gestor_rutas)
+        ruta_db = gestor.inicializar_base_datos(incluir_datos_prueba=True)
+
+        with closing(sqlite3.connect(ruta_db)) as conexion:
+            columnas_usuarios = {
+                fila[1] for fila in conexion.execute("PRAGMA table_info(usuarios);").fetchall()
+            }
+            version_016 = conexion.execute(
+                "SELECT 1 FROM esquema_migraciones WHERE version = '016' LIMIT 1;"
+            ).fetchone()
+            self.assertIn("contrasena_temporal_expira_en", columnas_usuarios)
+            self.assertIsNotNone(version_016)
+
+            conexion.execute("DELETE FROM esquema_migraciones WHERE version = '016';")
+            conexion.commit()
+
+        gestor.inicializar_base_datos(incluir_datos_prueba=True)
+
+        with closing(sqlite3.connect(ruta_db)) as conexion:
+            version_016_recuperada = conexion.execute(
+                "SELECT 1 FROM esquema_migraciones WHERE version = '016' LIMIT 1;"
+            ).fetchone()
+            columnas_usuarios = {
+                fila[1] for fila in conexion.execute("PRAGMA table_info(usuarios);").fetchall()
+            }
+
+        self.assertIn("contrasena_temporal_expira_en", columnas_usuarios)
+        self.assertIsNotNone(version_016_recuperada)
+
 
 if __name__ == "__main__":
     unittest.main()

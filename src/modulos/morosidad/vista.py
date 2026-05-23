@@ -39,6 +39,7 @@ from comun.ui.temas import (
     TEMA_SICAP_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
+    resolver_nombre_tema,
 )
 from modulos.morosidad.entidades import (
     DetalleMorosidad,
@@ -205,22 +206,23 @@ class DialogoDetalleMorosidad(DialogoBaseSicap):
         fila_acciones = QHBoxLayout()
         boton_cerrar = BotonAccionContextual(
             "Cerrar",
+            icono="x.svg",
             variante=resolver_variante_boton_modal("Cerrar", "neutro"),
             centrado=True,
-            mostrar_icono=False,
+            mostrar_icono=True,
         )
         boton_emitir = BotonAccionContextual(
             "Emitir deuda",
+            icono="receipt-2.svg",
             variante=resolver_variante_boton_modal("Emitir deuda", "informacion"),
             centrado=True,
-            mostrar_icono=False,
+            mostrar_icono=True,
         )
         boton_cerrar.clicked.connect(self.reject)
         boton_emitir.clicked.connect(self._solicitar_documento)
         fila_acciones.addWidget(boton_cerrar)
         fila_acciones.addStretch(1)
         fila_acciones.addWidget(boton_emitir)
-        layout_panel.addLayout(fila_acciones)
 
         layout_scroll.addWidget(panel)
         layout_scroll.addStretch(1)
@@ -228,7 +230,7 @@ class DialogoDetalleMorosidad(DialogoBaseSicap):
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
         self.layout_cuerpo.addWidget(scroll)
-        self._pie.setVisible(False)
+        self.layout_pie.addLayout(fila_acciones)
         self._aplicar_estilos()
 
     def _crear_seccion_campos(self, titulo: str, filas: tuple[tuple[str, str], ...]) -> QFrame:
@@ -454,9 +456,10 @@ class DialogoSeleccionDocumentoMorosidad(DialogoBaseSicap):
         )
         boton_emitir = BotonAccionContextual(
             "Generar documento",
+            icono="receipt-2.svg",
             variante=resolver_variante_boton_modal("Generar documento", "informacion"),
             centrado=True,
-            mostrar_icono=False,
+            mostrar_icono=True,
         )
         boton_cancelar.clicked.connect(self.reject)
         boton_emitir.clicked.connect(self._validar_y_aceptar)
@@ -469,8 +472,7 @@ class DialogoSeleccionDocumentoMorosidad(DialogoBaseSicap):
         self.layout_cabecera.addWidget(descripcion)
         self.layout_cuerpo.addWidget(total)
         self.layout_cuerpo.addWidget(panel)
-        self.layout_cuerpo.addLayout(fila)
-        self._pie.setVisible(False)
+        self.layout_pie.addLayout(fila)
 
     def _alternar_total(self, estado: int) -> None:
         self._emitir_total = estado == int(Qt.CheckState.Checked.value)
@@ -730,7 +732,7 @@ class VistaMorosidad(QWidget):
 
     def aplicar_tema(self, nombre_tema: str) -> None:
         self._tema_actual = (
-            nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+            resolver_nombre_tema(nombre_tema)
         )
         self._paleta = obtener_paleta_tema(self._tema_actual)
         for boton in self.findChildren(BotonIconoFilaMorosidad):
@@ -739,13 +741,8 @@ class VistaMorosidad(QWidget):
 
     def _aplicar_estilos(self) -> None:
         paleta = self._paleta
-        oscuro = self._tema_actual != "claro"
-        fondo_panel_destacado = (
-            obtener_fondo_header_destacado(self._tema_actual)
-            if oscuro
-            else paleta["fondo_superficie_suave"]
-        )
-        borde_panel_destacado = "rgba(255, 255, 255, 0.16)" if oscuro else paleta["borde_suave"]
+        fondo_panel_destacado = obtener_fondo_header_destacado(self._tema_actual)
+        borde_panel_destacado = paleta["borde_principal"]
         self.setStyleSheet(
             f"""
             QWidget#vistaMorosidad {{

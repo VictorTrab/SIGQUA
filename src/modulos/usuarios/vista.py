@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Callable, Iterable
 
 from PySide6.QtCore import QElapsedTimer, QEvent, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
@@ -23,7 +24,6 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
-    QTabWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -43,9 +43,9 @@ from comun.ui.temas import (
     TEMA_SICAP_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
+    resolver_nombre_tema,
 )
 from modulos.usuarios.entidades import (
-    FormularioRol,
     FormularioUsuario,
     PermisoSistema,
     ResumenUsuarios,
@@ -167,9 +167,9 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
         super().__init__(parent)
         self._roles = list(roles)
         self._usuario = usuario
-        self.setMinimumWidth(660)
-        self.setMinimumHeight(600)
+        self.setMinimumWidth(700)
         self._construir_ui()
+        self.resize(700, 520)
 
     def obtener_formulario(self) -> FormularioUsuario:
         return FormularioUsuario(
@@ -180,8 +180,6 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
             estado=self._combo_estado.currentData() or self._combo_estado.currentText(),
             rol_id=int(self._combo_rol.currentData() or 0),
             observaciones=self._campo_observaciones.toPlainText().strip(),
-            contrasena_temporal=self._campo_contrasena.text(),
-            confirmacion_contrasena=self._campo_confirmacion.text(),
         )
 
     def accept(self) -> None:
@@ -198,13 +196,6 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
         if formulario.rol_id <= 0:
             self._mostrar_error("Selecciona un rol visible para continuar.")
             return
-        if self._usuario is None:
-            if not formulario.contrasena_temporal or not formulario.confirmacion_contrasena:
-                self._mostrar_error("Completa la contrasena temporal y su confirmacion.")
-                return
-            if formulario.contrasena_temporal != formulario.confirmacion_contrasena:
-                self._mostrar_error("Las contrasenas no coinciden.")
-                return
         self._mensaje.setVisible(False)
         super().accept()
 
@@ -217,7 +208,7 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
         descripcion.setObjectName("descripcionDialogoSicap")
         descripcion.setWordWrap(True)
 
-        panel_datos = self._crear_panel("Datos principales", "Informacion base de la cuenta operativa.")
+        panel_datos = self._crear_panel("Datos principales", "Información base de la cuenta operativa.")
         grid_datos = QGridLayout()
         grid_datos.setHorizontalSpacing(12)
         grid_datos.setVerticalSpacing(12)
@@ -240,7 +231,7 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
 
         panel_seguridad = self._crear_panel(
             "Rol y seguridad",
-            "Asigna un unico rol visible. Los permisos reales se heredan desde ese rol.",
+            "Asigna un unico rol visible. El acceso temporal se genera automaticamente al guardar.",
         )
         grid_seguridad = QGridLayout()
         grid_seguridad.setHorizontalSpacing(12)
@@ -253,35 +244,16 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
             self._combo_rol.addItem(rol.nombre, rol.identificador)
         self._combo_rol.blockSignals(False)
 
-        self._campo_contrasena = QLineEdit()
-        self._campo_contrasena.setEchoMode(QLineEdit.EchoMode.Password)
-        self._campo_contrasena.setPlaceholderText("Contrasena temporal")
-        self._campo_confirmacion = QLineEdit()
-        self._campo_confirmacion.setEchoMode(QLineEdit.EchoMode.Password)
-        self._campo_confirmacion.setPlaceholderText("Confirmar contrasena")
-
         grid_seguridad.addWidget(self._crear_bloque("Rol", self._combo_rol), 0, 0, 1, 2)
-        grid_seguridad.addWidget(
-            self._crear_bloque("Contrasena temporal", self._campo_contrasena),
-            1,
-            0,
-        )
-        grid_seguridad.addWidget(
-            self._crear_bloque("Confirmar contrasena", self._campo_confirmacion),
-            1,
-            1,
-        )
         panel_seguridad.layout().addLayout(grid_seguridad)
-
-        if self._usuario is not None:
-            self._campo_contrasena.setDisabled(True)
-            self._campo_confirmacion.setDisabled(True)
-            ayuda = QLabel(
-                "Para cambiar la contrasena usa la accion de restablecimiento desde la tabla del modulo."
-            )
-            ayuda.setObjectName("descripcionDialogoSicap")
-            ayuda.setWordWrap(True)
-            panel_seguridad.layout().addWidget(ayuda)
+        ayuda = QLabel(
+            "El sistema generara una contrasena temporal de un solo uso con vigencia corta."
+            if self._usuario is None
+            else "Para cambiar la contrasena usa la accion de acceso temporal desde la tabla del modulo."
+        )
+        ayuda.setObjectName("descripcionDialogoSicap")
+        ayuda.setWordWrap(True)
+        panel_seguridad.layout().addWidget(ayuda)
 
         self._resumen_rol = QLabel("")
         self._resumen_rol.setObjectName("bloqueInfoRolUsuario")
@@ -295,7 +267,7 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
         )
         self._campo_observaciones = QPlainTextEdit()
         self._campo_observaciones.setPlaceholderText("Observaciones")
-        self._campo_observaciones.setFixedHeight(86)
+        self._campo_observaciones.setFixedHeight(72)
         panel_observaciones.layout().addWidget(self._campo_observaciones)
 
         self._mensaje = QLabel("")
@@ -336,8 +308,12 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
 
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(panel_datos)
-        self.layout_cuerpo.addWidget(panel_seguridad)
+        fila_paneles = QHBoxLayout()
+        fila_paneles.setSpacing(10)
+        fila_paneles.addWidget(panel_datos, 1)
+        fila_paneles.addWidget(panel_seguridad, 1)
+
+        self.layout_cuerpo.addLayout(fila_paneles)
         self.layout_cuerpo.addWidget(panel_observaciones)
         self.layout_cuerpo.addWidget(self._mensaje)
         self.layout_pie.addLayout(fila_acciones)
@@ -347,8 +323,8 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
         panel = QFrame()
         panel.setObjectName("bloqueDialogoSicap")
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
         label_titulo = QLabel(titulo)
         label_titulo.setObjectName("etiquetaDatoDialogoSicap")
         label_descripcion = QLabel(descripcion)
@@ -362,7 +338,7 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
         bloque = QWidget()
         layout = QVBoxLayout(bloque)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(3)
         label = QLabel(etiqueta)
         label.setObjectName("etiquetaDatoDialogoSicap")
         layout.addWidget(label)
@@ -414,9 +390,9 @@ class DialogoDetalleUsuario(DialogoBaseSicap):
         self._usuario = usuario
         self._formateador_fecha = formateador_fecha
         self._accion_resultado = "cerrar"
-        self.setMinimumWidth(700)
-        self.setMinimumHeight(540)
+        self.setMinimumWidth(660)
         self._construir_ui()
+        self.resize(660, 500)
 
     @property
     def accion_resultado(self) -> str:
@@ -501,7 +477,7 @@ class DialogoDetalleUsuario(DialogoBaseSicap):
         )
         grid_actividad.addWidget(
             self._crear_campo(
-                "Ultima actualizacion",
+                "Última actualización",
                 self._formateador_fecha(self._usuario.actualizado_en),
             ),
             1,
@@ -537,15 +513,17 @@ class DialogoDetalleUsuario(DialogoBaseSicap):
         fila_acciones.setSpacing(10)
         boton_cerrar = BotonAccionContextual(
             "Cerrar",
+            icono="x.svg",
             variante="neutro",
             centrado=True,
-            mostrar_icono=False,
+            mostrar_icono=True,
         )
         boton_editar = BotonAccionContextual(
             "Editar",
+            icono="edit.svg",
             variante="edicion",
             centrado=True,
-            mostrar_icono=False,
+            mostrar_icono=True,
         )
         boton_cerrar.setMinimumWidth(124)
         boton_editar.setMinimumWidth(124)
@@ -577,14 +555,13 @@ class DialogoDetalleUsuario(DialogoBaseSicap):
                 [observaciones],
             )
         )
-        layout_panel.addLayout(fila_acciones)
         layout_scroll.addWidget(panel)
         scroll.setWidget(contenedor)
 
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
         self.layout_cuerpo.addWidget(scroll)
-        self._pie.setVisible(False)
+        self.layout_pie.addLayout(fila_acciones)
         self._aplicar_estilos()
 
     def _crear_seccion(
@@ -643,19 +620,19 @@ class DialogoDetalleUsuario(DialogoBaseSicap):
             QFrame#panelDetalleUsuario,
             QFrame#seccionDetalleUsuario,
             QFrame#campoDetalleUsuario {
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                background: rgba(29, 54, 78, 0.78);
+                border: 1px solid rgba(83, 112, 139, 0.30);
                 border-radius: 16px;
             }
             QLabel#codigoDetalleUsuario,
             QLabel#etiquetaDetalleUsuario,
             QLabel#descripcionSeccionDetalleUsuario {
-                color: rgba(235, 242, 248, 0.72);
+                color: #C9DBE9;
             }
             QLabel#nombreDetalleUsuario,
             QLabel#tituloSeccionDetalleUsuario,
             QLabel#valorDetalleUsuario {
-                color: #f7fbff;
+                color: #E4EACC;
             }
             QLabel#codigoDetalleUsuario {
                 font-size: 12px;
@@ -678,38 +655,38 @@ class DialogoDetalleUsuario(DialogoBaseSicap):
                 padding: 6px 10px;
                 font-size: 11px;
                 font-weight: 800;
-                color: #f4f8fb;
+                color: #C9DBE9;
                 background: rgba(132, 146, 166, 0.22);
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                border: 1px solid rgba(83, 112, 139, 0.30);
             }
             QLabel#badgeEstadoUsuarioDetalle[activo="true"] {
-                color: #d9fff5;
-                background: rgba(16, 120, 98, 0.22);
-                border-color: rgba(158, 231, 214, 0.26);
+                color: #E4EACC;
+                background: rgba(31, 79, 94, 0.96);
+                border-color: rgba(201, 219, 233, 0.26);
             }
             """
         )
 
 
 class DialogoGestionAccesoUsuario(DialogoBaseSicap):
-    """Modal para restablecer contrasena o desbloquear una cuenta."""
+    """Modal para generar acceso temporal o desbloquear una cuenta."""
 
     def __init__(self, usuario: UsuarioSistema, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._usuario = usuario
-        self._resultado: tuple[str, str, str] | None = None
-        self.setMinimumWidth(520)
-        self.setMinimumHeight(390)
+        self._resultado: str | None = None
+        self.setMinimumWidth(500)
         self._construir_ui()
+        self.resize(500, 280)
 
-    def obtener_resultado(self) -> tuple[str, str, str] | None:
+    def obtener_resultado(self) -> str | None:
         return self._resultado
 
     def _construir_ui(self) -> None:
-        titulo = QLabel("Gestion de acceso")
+        titulo = QLabel("Gestión de acceso")
         titulo.setObjectName("tituloDialogoSicap")
         descripcion = QLabel(
-            "Aplica un restablecimiento administrativo o desbloquea la cuenta si quedo bloqueada."
+            "Genera una contrasena temporal de 10 minutos o desbloquea la cuenta si quedo bloqueada."
         )
         descripcion.setObjectName("descripcionDialogoSicap")
         descripcion.setWordWrap(True)
@@ -727,16 +704,6 @@ class DialogoGestionAccesoUsuario(DialogoBaseSicap):
         etiqueta_usuario.setWordWrap(True)
         layout_panel.addWidget(etiqueta_usuario)
 
-        self._campo_contrasena = QLineEdit()
-        self._campo_contrasena.setEchoMode(QLineEdit.EchoMode.Password)
-        self._campo_contrasena.setPlaceholderText("Contrasena temporal")
-        self._campo_confirmacion = QLineEdit()
-        self._campo_confirmacion.setEchoMode(QLineEdit.EchoMode.Password)
-        self._campo_confirmacion.setPlaceholderText("Confirmar contrasena")
-
-        layout_panel.addWidget(self._crear_bloque("Nueva contrasena temporal", self._campo_contrasena))
-        layout_panel.addWidget(self._crear_bloque("Confirmacion", self._campo_confirmacion))
-
         contexto = []
         if self._usuario.requiere_cambio_contrasena:
             contexto.append("La cuenta ya tiene cambio obligatorio de contrasena pendiente.")
@@ -745,7 +712,7 @@ class DialogoGestionAccesoUsuario(DialogoBaseSicap):
                 f"Intentos fallidos actuales: {self._usuario.intentos_fallidos}. Puedes desbloquear la cuenta."
             )
         else:
-            contexto.append("La cuenta no esta bloqueada, pero puedes aplicar un nuevo acceso temporal.")
+            contexto.append("La cuenta no esta bloqueada, pero puedes generar un nuevo acceso temporal.")
 
         nota = QLabel(" ".join(contexto))
         nota.setObjectName("descripcionDialogoSicap")
@@ -765,7 +732,7 @@ class DialogoGestionAccesoUsuario(DialogoBaseSicap):
             mostrar_icono=False,
         )
         boton_restablecer = BotonAccionContextual(
-            "Restablecer contrasena",
+            "Generar acceso temporal",
             variante="primario",
             centrado=True,
             mostrar_icono=False,
@@ -806,16 +773,11 @@ class DialogoGestionAccesoUsuario(DialogoBaseSicap):
         return bloque
 
     def _confirmar_restablecimiento(self) -> None:
-        contrasena = self._campo_contrasena.text()
-        confirmacion = self._campo_confirmacion.text()
-        if not contrasena or not confirmacion:
-            self._mostrar_error("Completa ambos campos para restablecer la contrasena.")
-            return
-        self._resultado = ("restablecer", contrasena, confirmacion)
+        self._resultado = "restablecer"
         self.accept()
 
     def _confirmar_desbloqueo(self) -> None:
-        self._resultado = ("desbloquear", "", "")
+        self._resultado = "desbloquear"
         self.accept()
 
     def _mostrar_error(self, mensaje: str) -> None:
@@ -823,557 +785,116 @@ class DialogoGestionAccesoUsuario(DialogoBaseSicap):
         self._mensaje.setVisible(True)
 
 
-class DialogoFormularioRol(DialogoBaseSicap):
-    """Modal para crear o editar roles visibles."""
-
-    ORDEN_ACCIONES = ("VER", "GESTIONAR", "REGISTRAR", "GENERAR", "ANULAR")
+class DialogoCredencialTemporal(DialogoBaseSicap):
+    """Muestra una credencial temporal generada automaticamente."""
 
     def __init__(
         self,
-        permisos_disponibles: Iterable[PermisoSistema],
-        rol: RolSistema | None = None,
+        usuario: str,
+        contrasena_temporal: str,
+        expira_en: str | None,
+        formateador_fecha: Callable[[str | None], str],
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self._rol = rol
-        self._permisos_disponibles = list(permisos_disponibles)
-        self._permisos_seleccionados = {permiso.codigo for permiso in rol.permisos} if rol else set()
-        self._botones_permisos: dict[str, QPushButton] = {}
-        self._botones_modulo: dict[str, QPushButton] = {}
-        self.setMinimumWidth(760)
-        self.setMinimumHeight(620)
+        self._usuario = usuario
+        self._contrasena_temporal = contrasena_temporal
+        self._expira_en = expira_en
+        self._formateador_fecha = formateador_fecha
+        self.setMinimumWidth(500)
         self._construir_ui()
-
-    def obtener_formulario(self) -> FormularioRol:
-        return FormularioRol(
-            identificador=None if self._rol is None else self._rol.identificador,
-            nombre=self._campo_nombre.text().strip(),
-            descripcion=self._campo_descripcion.toPlainText().strip(),
-            permisos_codigos=tuple(sorted(self._permisos_seleccionados)),
-        )
-
-    def accept(self) -> None:
-        formulario = self.obtener_formulario()
-        if not formulario.nombre:
-            self._mostrar_error("Indica el nombre del rol.")
-            return
-        if not formulario.descripcion:
-            self._mostrar_error("Indica la descripcion del rol.")
-            return
-        if not formulario.permisos_codigos:
-            self._mostrar_error("Selecciona al menos un permiso para el rol.")
-            return
-        self._mensaje.setVisible(False)
-        super().accept()
+        self.resize(500, 320)
 
     def _construir_ui(self) -> None:
-        titulo = QLabel("Editar rol" if self._rol else "Crear nuevo rol")
+        titulo = QLabel("Acceso temporal generado")
         titulo.setObjectName("tituloDialogoSicap")
         descripcion = QLabel(
-            "Define el nombre, la descripcion y los permisos operativos visibles del rol."
+            "Comparte esta credencial solo con el usuario. Se muestra una sola vez y obliga cambio inmediato."
         )
         descripcion.setObjectName("descripcionDialogoSicap")
         descripcion.setWordWrap(True)
 
-        panel_datos = self._crear_panel(
-            "Datos del rol",
-            "Configura el nombre visible y una descripcion corta del alcance operativo.",
-        )
-        self._campo_nombre = QLineEdit()
-        self._campo_nombre.setPlaceholderText("Ej: Supervisor, Recepcion, Auditor")
-        self._campo_descripcion = QPlainTextEdit()
-        self._campo_descripcion.setPlaceholderText("Describe el alcance de este rol")
-        self._campo_descripcion.setFixedHeight(72)
-        panel_datos.layout().addWidget(self._crear_bloque("Nombre del rol", self._campo_nombre))
-        panel_datos.layout().addWidget(self._crear_bloque("Descripcion", self._campo_descripcion))
-
-        panel_permisos = self._crear_panel(
-            "Permisos por modulo",
-            "La matriz se adapta a los permisos reales del sistema. Usa \"Todos\" para marcar o quitar los de un modulo.",
-        )
-        self._tabla_permisos = QTableWidget()
-        self._tabla_permisos.setObjectName("tablaFormularioRolUsuarios")
-        self._tabla_permisos.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self._tabla_permisos.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        self._tabla_permisos.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._tabla_permisos.setFrameShape(QFrame.Shape.NoFrame)
-        self._tabla_permisos.viewport().setObjectName("viewportTablaFormularioRolUsuarios")
-        self._construir_tabla_permisos()
-        panel_permisos.layout().addWidget(self._tabla_permisos)
-
-        ayuda = QLabel(
-            "Los usuarios vinculados a este rol heredaran automaticamente los permisos seleccionados."
-        )
-        ayuda.setObjectName("descripcionDialogoSicap")
-        ayuda.setWordWrap(True)
-        panel_permisos.layout().addWidget(ayuda)
-
-        if self._rol is not None and self._rol.es_sistema:
-            nota_sistema = QLabel(
-                "Rol de sistema: evita quitar permisos que dejen sin flujo operativo a usuarios ya asignados."
-            )
-            nota_sistema.setObjectName("notaRolSistemaModal")
-            nota_sistema.setWordWrap(True)
-            panel_permisos.layout().addWidget(nota_sistema)
-
-        self._mensaje = QLabel("")
-        self._mensaje.setObjectName("mensajeErrorDialogoSicap")
-        self._mensaje.setVisible(False)
-
-        fila_acciones = QHBoxLayout()
-        fila_acciones.setSpacing(10)
-        boton_cancelar = BotonAccionContextual(
-            "Cancelar",
-            variante="neutro",
-            centrado=True,
-            mostrar_icono=False,
-        )
-        boton_guardar = BotonAccionContextual(
-            "Guardar cambios" if self._rol else "Crear rol",
-            variante="primario",
-            centrado=True,
-            mostrar_icono=False,
-        )
-        boton_cancelar.setMinimumWidth(126)
-        boton_guardar.setMinimumWidth(152)
-        boton_cancelar.clicked.connect(self.reject)
-        boton_guardar.clicked.connect(self.accept)
-        fila_acciones.addWidget(boton_cancelar)
-        fila_acciones.addStretch(1)
-        fila_acciones.addWidget(boton_guardar)
-
-        if self._rol is not None:
-            self._campo_nombre.setText(self._rol.nombre)
-            self._campo_descripcion.setPlainText(self._rol.descripcion)
-
-        self.layout_cabecera.addWidget(titulo)
-        self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(panel_datos)
-        self.layout_cuerpo.addWidget(panel_permisos)
-        self.layout_cuerpo.addWidget(self._mensaje)
-        self.layout_pie.addLayout(fila_acciones)
-        self._aplicar_estilos()
-
-    def _construir_tabla_permisos(self) -> None:
-        acciones_disponibles = self._acciones_disponibles()
-        columnas = ["Modulo"] + [self._texto_accion(accion) for accion in acciones_disponibles] + ["Todos"]
-        modulos = self._permisos_por_modulo()
-        self._tabla_permisos.setColumnCount(len(columnas))
-        self._tabla_permisos.setRowCount(len(modulos))
-        configurar_tabla_operativa(self._tabla_permisos, columnas)
-        self._tabla_permisos.horizontalHeader().setStretchLastSection(False)
-        self._tabla_permisos.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        for indice in range(1, len(columnas)):
-            self._tabla_permisos.horizontalHeader().setSectionResizeMode(indice, QHeaderView.ResizeMode.ResizeToContents)
-        self._tabla_permisos.verticalHeader().setDefaultSectionSize(48)
-
-        for fila, (modulo, permisos) in enumerate(modulos):
-            self._tabla_permisos.setItem(fila, 0, crear_item_tabla(modulo))
-            for offset, accion in enumerate(acciones_disponibles, start=1):
-                permiso = next((item for item in permisos if self._accion_permiso(item) == accion), None)
-                if permiso is None:
-                    vacio = QLabel("—")
-                    vacio.setObjectName("celdaVaciaPermisoRol")
-                    vacio.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    self._tabla_permisos.setCellWidget(fila, offset, vacio)
-                    continue
-                boton = self._crear_boton_permiso(permiso.codigo)
-                self._tabla_permisos.setCellWidget(fila, offset, self._centrar_widget(boton))
-            boton_todos = QPushButton("Todos")
-            boton_todos.setObjectName("botonTodosPermisosRol")
-            boton_todos.setCursor(Qt.CursorShape.PointingHandCursor)
-            boton_todos.clicked.connect(lambda checked=False, nombre_modulo=modulo: self._alternar_modulo(nombre_modulo))
-            self._botones_modulo[modulo] = boton_todos
-            self._tabla_permisos.setCellWidget(
-                fila,
-                len(columnas) - 1,
-                self._centrar_widget(boton_todos),
-            )
-            self._actualizar_boton_modulo(modulo)
-
-    def _crear_panel(self, titulo: str, descripcion: str) -> QFrame:
         panel = QFrame()
         panel.setObjectName("bloqueDialogoSicap")
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
-        label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("etiquetaDatoDialogoSicap")
-        label_descripcion = QLabel(descripcion)
-        label_descripcion.setObjectName("descripcionDialogoSicap")
-        label_descripcion.setWordWrap(True)
-        layout.addWidget(label_titulo)
-        layout.addWidget(label_descripcion)
-        return panel
+        layout_panel = QVBoxLayout(panel)
+        layout_panel.setContentsMargins(16, 16, 16, 16)
+        layout_panel.setSpacing(10)
 
-    def _crear_bloque(self, etiqueta: str, widget: QWidget) -> QWidget:
-        bloque = QWidget()
-        layout = QVBoxLayout(bloque)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-        label = QLabel(etiqueta)
-        label.setObjectName("etiquetaDatoDialogoSicap")
-        layout.addWidget(label)
-        layout.addWidget(widget)
-        return bloque
+        usuario_label = QLabel(f"<b>{self._usuario}</b>")
+        usuario_label.setObjectName("descripcionDialogoSicap")
+        layout_panel.addWidget(usuario_label)
 
-    def _crear_boton_permiso(self, codigo_permiso: str) -> QPushButton:
-        boton = QPushButton("✓")
-        boton.setObjectName("botonPermisoRol")
-        boton.setCursor(Qt.CursorShape.PointingHandCursor)
-        boton.setCheckable(True)
-        boton.setChecked(codigo_permiso in self._permisos_seleccionados)
-        boton.clicked.connect(
-            lambda checked=False, codigo=codigo_permiso: self._alternar_permiso(codigo)
+        bloque_contrasena = QFrame()
+        bloque_contrasena.setObjectName("bloqueCredencialTemporal")
+        layout_contrasena = QVBoxLayout(bloque_contrasena)
+        layout_contrasena.setContentsMargins(14, 14, 14, 14)
+        layout_contrasena.setSpacing(6)
+        etiqueta = QLabel("Contrasena temporal")
+        etiqueta.setObjectName("etiquetaDatoDialogoSicap")
+        valor = QLabel(self._contrasena_temporal)
+        valor.setObjectName("valorCredencialTemporal")
+        layout_contrasena.addWidget(etiqueta)
+        layout_contrasena.addWidget(valor)
+        layout_panel.addWidget(bloque_contrasena)
+
+        info = QLabel(
+            f"Expira: {self._formateador_fecha(self._expira_en)}"
+            if self._expira_en
+            else "Expiracion: Sin registro"
         )
-        self._botones_permisos[codigo_permiso] = boton
-        self._actualizar_boton_permiso(codigo_permiso)
-        return boton
+        info.setObjectName("descripcionDialogoSicap")
+        info.setWordWrap(True)
+        layout_panel.addWidget(info)
 
-    @staticmethod
-    def _centrar_widget(widget: QWidget) -> QWidget:
-        contenedor = QWidget()
-        layout = QHBoxLayout(contenedor)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(widget, alignment=Qt.AlignmentFlag.AlignCenter)
-        return contenedor
-
-    def _alternar_permiso(self, codigo_permiso: str) -> None:
-        if codigo_permiso in self._permisos_seleccionados:
-            self._permisos_seleccionados.remove(codigo_permiso)
-        else:
-            self._permisos_seleccionados.add(codigo_permiso)
-        self._actualizar_boton_permiso(codigo_permiso)
-        modulo = self._modulo_de_permiso(codigo_permiso)
-        if modulo:
-            self._actualizar_boton_modulo(modulo)
-
-    def _alternar_modulo(self, modulo: str) -> None:
-        permisos_modulo = [permiso.codigo for permiso in self._permisos_disponibles if permiso.modulo == modulo]
-        todos_marcados = all(codigo in self._permisos_seleccionados for codigo in permisos_modulo)
-        for codigo in permisos_modulo:
-            if todos_marcados:
-                self._permisos_seleccionados.discard(codigo)
-            else:
-                self._permisos_seleccionados.add(codigo)
-            self._actualizar_boton_permiso(codigo)
-        self._actualizar_boton_modulo(modulo)
-
-    def _actualizar_boton_permiso(self, codigo_permiso: str) -> None:
-        boton = self._botones_permisos.get(codigo_permiso)
-        if boton is None:
-            return
-        activo = codigo_permiso in self._permisos_seleccionados
-        boton.setChecked(activo)
-        boton.setProperty("activo", activo)
-        boton.style().unpolish(boton)
-        boton.style().polish(boton)
-
-    def _actualizar_boton_modulo(self, modulo: str) -> None:
-        boton = self._botones_modulo.get(modulo)
-        if boton is None:
-            return
-        permisos_modulo = [permiso.codigo for permiso in self._permisos_disponibles if permiso.modulo == modulo]
-        todos_marcados = bool(permisos_modulo) and all(
-            codigo in self._permisos_seleccionados for codigo in permisos_modulo
-        )
-        boton.setText("Quitar" if todos_marcados else "Todos")
-        boton.setProperty("activo", todos_marcados)
-        boton.style().unpolish(boton)
-        boton.style().polish(boton)
-
-    def _permisos_por_modulo(self) -> list[tuple[str, list[PermisoSistema]]]:
-        agrupados: dict[str, list[PermisoSistema]] = {}
-        for permiso in self._permisos_disponibles:
-            agrupados.setdefault(permiso.modulo, []).append(permiso)
-        return sorted(agrupados.items(), key=lambda item: item[0].casefold())
-
-    def _acciones_disponibles(self) -> list[str]:
-        acciones = {self._accion_permiso(permiso) for permiso in self._permisos_disponibles}
-        ordenadas = [accion for accion in self.ORDEN_ACCIONES if accion in acciones]
-        restantes = sorted(acciones.difference(self.ORDEN_ACCIONES))
-        return ordenadas + restantes
-
-    @staticmethod
-    def _accion_permiso(permiso: PermisoSistema) -> str:
-        return permiso.codigo.split(".")[-1].replace("_", " ").upper()
-
-    @staticmethod
-    def _texto_accion(accion: str) -> str:
-        return accion.title()
-
-    def _modulo_de_permiso(self, codigo_permiso: str) -> str:
-        for permiso in self._permisos_disponibles:
-            if permiso.codigo == codigo_permiso:
-                return permiso.modulo
-        return ""
-
-    def _mostrar_error(self, mensaje: str) -> None:
-        self._mensaje.setText(mensaje)
-        self._mensaje.setVisible(True)
-
-    def _aplicar_estilos(self) -> None:
-        self.setStyleSheet(
-            self.styleSheet()
-            + """
-            QTableWidget#tablaFormularioRolUsuarios {
-                background: rgba(74, 79, 154, 0.88);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 14px;
-            }
-            QTableWidget#tablaFormularioRolUsuarios QTableCornerButton::section {
-                background: rgba(108, 113, 190, 0.92);
-                border: none;
-            }
-            QWidget#viewportTablaFormularioRolUsuarios {
-                background: transparent;
-                border: none;
-            }
-            QPushButton#botonPermisoRol {
-                min-width: 28px;
-                min-height: 28px;
-                max-width: 28px;
-                max-height: 28px;
-                border-radius: 9px;
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                background: rgba(255, 255, 255, 0.08);
-                color: rgba(235, 242, 248, 0.42);
-                font-size: 12px;
-                font-weight: 900;
-            }
-            QPushButton#botonPermisoRol[activo="true"] {
-                color: #d9fff5;
-                background: rgba(16, 120, 98, 0.20);
-                border: 1px solid rgba(158, 231, 214, 0.28);
-            }
-            QPushButton#botonTodosPermisosRol {
-                min-height: 28px;
-                border-radius: 9px;
-                padding: 0 10px;
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                background: rgba(255, 255, 255, 0.08);
-                color: #ebf4ff;
-                font-size: 11px;
-                font-weight: 800;
-            }
-            QPushButton#botonTodosPermisosRol[activo="true"] {
-                color: #f5e1ff;
-                background: rgba(146, 101, 255, 0.16);
-                border: 1px solid rgba(207, 181, 255, 0.24);
-            }
-            QLabel#celdaVaciaPermisoRol {
-                color: rgba(235, 242, 248, 0.46);
-                font-size: 12px;
-                font-weight: 700;
-            }
-            QLabel#notaRolSistemaModal {
-                color: #efe2ff;
-                font-size: 11px;
-                font-weight: 700;
-                padding: 8px 10px;
-                border-radius: 10px;
-                background: rgba(146, 101, 255, 0.14);
-                border: 1px solid rgba(207, 181, 255, 0.22);
-            }
-            """
-        )
-
-
-class DialogoMatrizPermisosUsuarios(DialogoBaseSicap):
-    """Matriz visual de permisos reales por rol."""
-
-    def __init__(self, roles: Iterable[RolSistema], parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._roles = [rol for rol in roles if rol.estado == "ACTIVO"]
-        self.setMinimumWidth(980)
-        self.setMinimumHeight(720)
-        self._construir_ui()
-
-    def _construir_ui(self) -> None:
-        titulo = QLabel("Matriz de permisos por rol")
-        titulo.setObjectName("tituloDialogoSicap")
-        descripcion = QLabel(
-            "Los permisos mostrados corresponden al modelo real del sistema y no a una matriz CRUD generica."
-        )
-        descripcion.setObjectName("descripcionDialogoSicap")
-        descripcion.setWordWrap(True)
-
-        leyenda = QLabel(
-            "Cada celda muestra acciones reales como VER, GESTIONAR, REGISTRAR o GENERAR, agrupadas por modulo."
-        )
-        leyenda.setObjectName("descripcionDialogoSicap")
-        leyenda.setWordWrap(True)
-
-        tabla = QTableWidget()
-        tabla.setObjectName("tablaMatrizPermisosUsuarios")
-        modulos = self._modulos_visibles()
-        columnas = 1 + len(self._roles)
-        tabla.setColumnCount(columnas)
-        tabla.setRowCount(len(modulos))
-        encabezados = ["Modulo"] + [rol.nombre for rol in self._roles]
-        configurar_tabla_operativa(tabla, encabezados)
-        tabla.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        tabla.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        tabla.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        tabla.horizontalHeader().setStretchLastSection(False)
-        tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        for indice in range(1, columnas):
-            tabla.horizontalHeader().setSectionResizeMode(indice, QHeaderView.ResizeMode.Stretch)
-        tabla.verticalHeader().setDefaultSectionSize(64)
-        tabla.setFrameShape(QFrame.Shape.NoFrame)
-        tabla.viewport().setObjectName("viewportTablaMatrizPermisosUsuarios")
-
-        for fila, modulo in enumerate(modulos):
-            tabla.setItem(fila, 0, crear_item_tabla(modulo))
-            for columna, rol in enumerate(self._roles, start=1):
-                tabla.setCellWidget(fila, columna, self._crear_celda_permisos(rol, modulo))
+        advertencia = QLabel("Guardala ahora. Despues de cerrar esta ventana ya no se volvera a mostrar.")
+        advertencia.setObjectName("descripcionDialogoSicap")
+        advertencia.setWordWrap(True)
+        layout_panel.addWidget(advertencia)
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(10)
-        fila_acciones.addStretch(1)
         boton_cerrar = BotonAccionContextual(
             "Cerrar",
+            icono="x.svg",
+            variante="neutro",
+            centrado=True,
+            mostrar_icono=True,
+        )
+        boton_copiar = BotonAccionContextual(
+            "Copiar",
             variante="primario",
             centrado=True,
             mostrar_icono=False,
         )
-        boton_cerrar.setMinimumWidth(140)
         boton_cerrar.clicked.connect(self.accept)
+        boton_copiar.clicked.connect(self._copiar_contrasena)
         fila_acciones.addWidget(boton_cerrar)
+        fila_acciones.addStretch(1)
+        fila_acciones.addWidget(boton_copiar)
 
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(leyenda)
-        self.layout_cuerpo.addWidget(tabla)
+        self.layout_cuerpo.addWidget(panel)
         self.layout_pie.addLayout(fila_acciones)
         self._aplicar_estilos()
 
-    def _modulos_visibles(self) -> list[str]:
-        modulos = {
-            permiso.modulo.strip()
-            for rol in self._roles
-            for permiso in rol.permisos
-            if permiso.modulo.strip()
-        }
-        return sorted(modulos, key=str.casefold)
-
-    def _crear_celda_permisos(self, rol: RolSistema, modulo: str) -> QWidget:
-        contenedor = QWidget()
-        layout = QHBoxLayout(contenedor)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(6)
-        layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-
-        etiquetas = self._resumir_acciones_modulo(rol, modulo)
-        if not etiquetas:
-            etiqueta_vacia = QLabel("Sin acceso")
-            etiqueta_vacia.setObjectName("badgePermisoSinAcceso")
-            layout.addWidget(etiqueta_vacia)
-            layout.addStretch(1)
-            return contenedor
-
-        for texto, color in etiquetas:
-            badge = QLabel(texto)
-            badge.setObjectName("badgePermisoRol")
-            badge.setProperty("color", color)
-            badge.style().unpolish(badge)
-            badge.style().polish(badge)
-            layout.addWidget(badge)
-        layout.addStretch(1)
-        return contenedor
-
-    @staticmethod
-    def _resumir_acciones_modulo(rol: RolSistema, modulo: str) -> list[tuple[str, str]]:
-        acciones: list[tuple[str, str]] = []
-        colores = {
-            "VER": "cyan",
-            "GESTIONAR": "purple",
-            "REGISTRAR": "green",
-            "GENERAR": "blue",
-            "RESPALDO": "orange",
-            "LOGS": "red",
-            "AUDITAR": "indigo",
-        }
-        vistos: set[str] = set()
-        for permiso in rol.permisos:
-            if permiso.modulo.strip().casefold() != modulo.casefold():
-                continue
-            accion = permiso.codigo.split(".")[-1].replace("_", " ").upper()
-            if accion in vistos:
-                continue
-            vistos.add(accion)
-            acciones.append((accion, colores.get(accion, "gris")))
-        return acciones
+    def _copiar_contrasena(self) -> None:
+        QGuiApplication.clipboard().setText(self._contrasena_temporal)
 
     def _aplicar_estilos(self) -> None:
         self.setStyleSheet(
             self.styleSheet()
             + """
-            QTableWidget#tablaMatrizPermisosUsuarios {
-                background: rgba(74, 79, 154, 0.88);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 18px;
+            QFrame#bloqueCredencialTemporal {
+                background: rgba(36, 63, 90, 0.84);
+                border: 1px solid rgba(83, 112, 139, 0.48);
+                border-radius: 16px;
             }
-            QTableWidget#tablaMatrizPermisosUsuarios QTableCornerButton::section {
-                background: rgba(108, 113, 190, 0.92);
-                border: none;
-            }
-            QWidget#viewportTablaMatrizPermisosUsuarios {
-                background: transparent;
-                border: none;
-            }
-            QLabel#badgePermisoRol,
-            QLabel#badgePermisoSinAcceso {
-                border-radius: 10px;
-                padding: 4px 8px;
-                font-size: 10px;
-                font-weight: 800;
-            }
-            QLabel#badgePermisoSinAcceso {
-                color: rgba(235, 242, 248, 0.7);
-                background: rgba(132, 146, 166, 0.18);
-                border: 1px solid rgba(255, 255, 255, 0.10);
-            }
-            QLabel#badgePermisoRol[color="cyan"] {
-                color: #d5f7ff;
-                background: rgba(44, 177, 212, 0.18);
-                border: 1px solid rgba(122, 226, 255, 0.22);
-            }
-            QLabel#badgePermisoRol[color="purple"] {
-                color: #efe2ff;
-                background: rgba(146, 101, 255, 0.18);
-                border: 1px solid rgba(195, 169, 255, 0.22);
-            }
-            QLabel#badgePermisoRol[color="green"] {
-                color: #d9fff5;
-                background: rgba(16, 120, 98, 0.18);
-                border: 1px solid rgba(158, 231, 214, 0.26);
-            }
-            QLabel#badgePermisoRol[color="blue"] {
-                color: #dce9ff;
-                background: rgba(79, 163, 255, 0.18);
-                border: 1px solid rgba(140, 194, 255, 0.26);
-            }
-            QLabel#badgePermisoRol[color="orange"] {
-                color: #ffefd5;
-                background: rgba(255, 170, 44, 0.18);
-                border: 1px solid rgba(255, 210, 152, 0.24);
-            }
-            QLabel#badgePermisoRol[color="red"] {
-                color: #ffd9d5;
-                background: rgba(255, 98, 92, 0.18);
-                border: 1px solid rgba(255, 175, 170, 0.24);
-            }
-            QLabel#badgePermisoRol[color="indigo"] {
-                color: #e2e5ff;
-                background: rgba(112, 127, 255, 0.18);
-                border: 1px solid rgba(174, 183, 255, 0.24);
-            }
-            QLabel#badgePermisoRol[color="gris"] {
-                color: #eef4ff;
-                background: rgba(132, 146, 166, 0.18);
-                border: 1px solid rgba(255, 255, 255, 0.10);
+            QLabel#valorCredencialTemporal {
+                color: #E4EACC;
+                font-size: 24px;
+                font-weight: 900;
+                letter-spacing: 0px;
             }
             """
         )
@@ -1394,10 +915,6 @@ class VistaUsuarios(QWidget):
     editar_usuario_solicitado = Signal(int)
     cambio_estado_solicitado = Signal(int)
     gestion_acceso_solicitada = Signal(int)
-    ver_matriz_permisos_solicitada = Signal()
-    nuevo_rol_solicitado = Signal()
-    editar_rol_solicitado = Signal(int)
-    cambio_estado_rol_solicitado = Signal(int)
 
     def __init__(self) -> None:
         super().__init__()
@@ -1405,7 +922,6 @@ class VistaUsuarios(QWidget):
         self._tema_actual = TEMA_SICAP_PREDETERMINADO
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._roles_actuales: list[RolSistema] = []
-        self._permisos_roles: list[PermisoSistema] = []
         self._filtro_rol_actual = FILTRO_USUARIOS_TODOS
         self._temporizador_mensaje = QTimer(self)
         self._temporizador_mensaje.setSingleShot(True)
@@ -1414,7 +930,7 @@ class VistaUsuarios(QWidget):
         self._aplicar_estilos()
 
     def aplicar_tema(self, nombre_tema: str) -> None:
-        self._tema_actual = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = resolver_nombre_tema(nombre_tema)
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._aplicar_estilos()
         for boton in (self._boton_exportar, self._boton_nuevo):
@@ -1448,9 +964,8 @@ class VistaUsuarios(QWidget):
         permisos_disponibles: Iterable[PermisoSistema],
     ) -> None:
         self._roles_actuales = list(roles)
-        self._permisos_roles = list(permisos_disponibles)
+        _ = tuple(permisos_disponibles)
         self._actualizar_filtro_roles()
-        self._renderizar_tarjetas_roles()
 
     def mostrar_usuarios(
         self,
@@ -1488,18 +1003,6 @@ class VistaUsuarios(QWidget):
         dialogo = DialogoFormularioUsuario(roles=roles, usuario=usuario, parent=self)
         return dialogo.obtener_formulario() if dialogo.exec() == QDialog.DialogCode.Accepted else None
 
-    def solicitar_datos_rol(
-        self,
-        permisos_disponibles: Iterable[PermisoSistema],
-        rol: RolSistema | None = None,
-    ) -> FormularioRol | None:
-        dialogo = DialogoFormularioRol(
-            permisos_disponibles=permisos_disponibles,
-            rol=rol,
-            parent=self,
-        )
-        return dialogo.obtener_formulario() if dialogo.exec() == QDialog.DialogCode.Accepted else None
-
     def mostrar_detalle_usuario(
         self,
         usuario: UsuarioSistema,
@@ -1509,14 +1012,26 @@ class VistaUsuarios(QWidget):
         dialogo.exec()
         return dialogo.accion_resultado
 
-    def solicitar_gestion_acceso(self, usuario: UsuarioSistema) -> tuple[str, str, str] | None:
+    def solicitar_gestion_acceso(self, usuario: UsuarioSistema) -> str | None:
         dialogo = DialogoGestionAccesoUsuario(usuario=usuario, parent=self)
         if dialogo.exec() != QDialog.DialogCode.Accepted:
             return None
         return dialogo.obtener_resultado()
 
-    def mostrar_matriz_permisos(self, roles: Iterable[RolSistema]) -> None:
-        DialogoMatrizPermisosUsuarios(roles=roles, parent=self).exec()
+    def mostrar_credencial_temporal(
+        self,
+        usuario: str,
+        contrasena_temporal: str,
+        expira_en: str | None,
+        formateador_fecha: Callable[[str | None], str],
+    ) -> None:
+        DialogoCredencialTemporal(
+            usuario=usuario,
+            contrasena_temporal=contrasena_temporal,
+            expira_en=expira_en,
+            formateador_fecha=formateador_fecha,
+            parent=self,
+        ).exec()
 
     def confirmar_cambio_estado_usuario(self, usuario: UsuarioSistema) -> bool:
         accion = "desactivar" if usuario.estado == "ACTIVO" else "activar"
@@ -1529,22 +1044,6 @@ class VistaUsuarios(QWidget):
                 ("Usuario", usuario.nombre_usuario),
                 ("Nombre", usuario.nombre_completo),
                 ("Estado actual", usuario.estado.title()),
-            ),
-            texto_confirmar=accion.title(),
-            variante_confirmar="peligro" if accion == "desactivar" else "primario",
-            parent=self,
-        )
-        return dialogo.exec() == QDialog.DialogCode.Accepted
-
-    def confirmar_cambio_estado_rol(self, rol: RolSistema) -> bool:
-        accion = "desactivar" if rol.estado == "ACTIVO" else "activar"
-        dialogo = DialogoConfirmacionSicap(
-            titulo=f"Confirmar {accion} rol",
-            descripcion="Esta accion cambiara el estado operativo del rol seleccionado.",
-            detalles=(
-                ("Rol", rol.nombre),
-                ("Estado actual", rol.estado.title()),
-                ("Usuarios vinculados", str(rol.total_usuarios)),
             ),
             texto_confirmar=accion.title(),
             variante_confirmar="peligro" if accion == "desactivar" else "primario",
@@ -1570,7 +1069,7 @@ class VistaUsuarios(QWidget):
         encabezado.setSpacing(12)
         bloque_titulo = QVBoxLayout()
         bloque_titulo.setSpacing(4)
-        descripcion = QLabel("Gestion de usuarios, roles visibles y control de acceso operativo.")
+        descripcion = QLabel("Gestión de usuarios, roles fijos visibles y control de acceso operativo.")
         descripcion.setObjectName("descripcionModulo")
         descripcion.setWordWrap(True)
         bloque_titulo.addWidget(descripcion)
@@ -1593,14 +1092,9 @@ class VistaUsuarios(QWidget):
         self._mensaje.setVisible(False)
         self._mensaje.setWordWrap(True)
 
-        self._tabs = QTabWidget()
-        self._tabs.setObjectName("tabsUsuarios")
-        self._tabs.addTab(self._crear_pestana_usuarios(), "Usuarios")
-        self._tabs.addTab(self._crear_pestana_roles(), "Roles")
-
         layout.addLayout(encabezado)
         layout.addWidget(self._mensaje)
-        layout.addWidget(self._tabs, 1)
+        layout.addWidget(self._crear_pestana_usuarios(), 1)
 
     def _crear_pestana_usuarios(self) -> QWidget:
         pagina = QWidget()
@@ -1611,10 +1105,10 @@ class VistaUsuarios(QWidget):
         tarjetas = QGridLayout()
         tarjetas.setHorizontalSpacing(10)
         tarjetas.setVerticalSpacing(10)
-        self._tarjeta_total = TarjetaResumenUsuario("user.svg", "#8ec9ff")
-        self._tarjeta_activos = TarjetaResumenUsuario("circle-check.svg", "#8de8c7")
-        self._tarjeta_admins = TarjetaResumenUsuario("key.svg", "#7ce5f4")
-        self._tarjeta_accesos = TarjetaResumenUsuario("clock.svg", "#93b8ff")
+        self._tarjeta_total = TarjetaResumenUsuario("user.svg", "#C9DBE9")
+        self._tarjeta_activos = TarjetaResumenUsuario("circle-check.svg", "#C9DBE9")
+        self._tarjeta_admins = TarjetaResumenUsuario("key.svg", "#E4EACC")
+        self._tarjeta_accesos = TarjetaResumenUsuario("clock.svg", "#8FAFC7")
         tarjetas.addWidget(self._tarjeta_total, 0, 0)
         tarjetas.addWidget(self._tarjeta_activos, 0, 1)
         tarjetas.addWidget(self._tarjeta_admins, 0, 2)
@@ -1713,45 +1207,6 @@ class VistaUsuarios(QWidget):
         layout.addWidget(panel_tabla, 1)
         return pagina
 
-    def _crear_pestana_roles(self) -> QWidget:
-        pagina = QWidget()
-        layout = QVBoxLayout(pagina)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-
-        encabezado = QHBoxLayout()
-        encabezado.addStretch(1)
-
-        fila_acciones = QHBoxLayout()
-        fila_acciones.setSpacing(8)
-        boton_crear = crear_boton_operativo("Crear rol", principal=True)
-        boton_crear.clicked.connect(self.nuevo_rol_solicitado.emit)
-        fila_acciones.addWidget(boton_crear)
-        encabezado.addLayout(fila_acciones)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setObjectName("scrollRolesUsuarios")
-
-        contenedor = QWidget()
-        self._layout_tarjetas_roles = QGridLayout(contenedor)
-        self._layout_tarjetas_roles.setContentsMargins(0, 0, 0, 0)
-        self._layout_tarjetas_roles.setHorizontalSpacing(12)
-        self._layout_tarjetas_roles.setVerticalSpacing(12)
-        scroll.setWidget(contenedor)
-
-        self._nota_roles = QLabel(
-            "Los roles visibles se asignan desde el formulario de usuarios. El superadministrador tecnico permanece fuera del flujo operativo y no se edita aqui."
-        )
-        self._nota_roles.setObjectName("notaRolesUsuarios")
-        self._nota_roles.setWordWrap(True)
-
-        layout.addLayout(encabezado)
-        layout.addWidget(scroll, 1)
-        layout.addWidget(self._nota_roles)
-        return pagina
-
     def _crear_item_usuario(self, texto: str, usuario: UsuarioSistema) -> QTableWidgetItem:
         item = crear_item_tabla(texto)
         item.setData(Qt.ItemDataRole.UserRole, usuario)
@@ -1794,14 +1249,14 @@ class VistaUsuarios(QWidget):
         layout.setSpacing(10)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        boton_detalle = BotonIconoFilaUsuario("eye.svg", "#4fa3ff", "Ver informacion")
-        boton_editar = BotonIconoFilaUsuario("user.svg", "#4fa3ff", "Editar usuario")
+        boton_detalle = BotonIconoFilaUsuario("eye.svg", "#E4EACC", "Ver informacion")
+        boton_editar = BotonIconoFilaUsuario("user.svg", "#E4EACC", "Editar usuario")
         boton_estado = BotonIconoFilaUsuario(
             "lock.svg" if usuario.estado == "ACTIVO" else "circle-check.svg",
-            "#ff625c" if usuario.estado == "ACTIVO" else "#4fa3ff",
+            "#E4EACC" if usuario.estado == "ACTIVO" else "#8FAFC7",
             "Desactivar" if usuario.estado == "ACTIVO" else "Activar",
         )
-        boton_seguridad = BotonIconoFilaUsuario("key.svg", "#93b8ff", "Gestionar acceso")
+        boton_seguridad = BotonIconoFilaUsuario("key.svg", "#8FAFC7", "Gestionar acceso")
 
         boton_detalle.clicked.connect(
             lambda checked=False, identificador=usuario.identificador: self.detalle_usuario_solicitado.emit(
@@ -1845,192 +1300,6 @@ class VistaUsuarios(QWidget):
         self._combo_roles.setCurrentIndex(indice if indice >= 0 else 0)
         self._combo_roles.blockSignals(False)
 
-    def _renderizar_tarjetas_roles(self) -> None:
-        while self._layout_tarjetas_roles.count():
-            item = self._layout_tarjetas_roles.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-
-        for indice, rol in enumerate(self._roles_actuales):
-            fila = indice // 2
-            columna = indice % 2
-            self._layout_tarjetas_roles.addWidget(self._crear_tarjeta_rol(rol), fila, columna)
-        if not self._roles_actuales:
-            vacio = QLabel("No hay roles visibles para este perfil.")
-            vacio.setObjectName("estadoVacioUsuarios")
-            vacio.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self._layout_tarjetas_roles.addWidget(vacio, 0, 0)
-
-    def _crear_tarjeta_rol(self, rol: RolSistema) -> QFrame:
-        tarjeta = QFrame()
-        tarjeta.setObjectName("tarjetaRolUsuario")
-        layout = QVBoxLayout(tarjeta)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
-
-        fila = QHBoxLayout()
-        fila.setSpacing(8)
-        bloque_titulo = QVBoxLayout()
-        bloque_titulo.setSpacing(4)
-        fila_titulo = QHBoxLayout()
-        fila_titulo.setSpacing(8)
-        titulo = QLabel(rol.nombre)
-        titulo.setObjectName("tituloRolUsuario")
-        badge = QLabel("Sistema" if rol.es_sistema else rol.estado.title())
-        badge.setObjectName("badgeRolSistemaUsuario")
-        badge.setProperty("sistema", rol.es_sistema)
-        badge.style().unpolish(badge)
-        badge.style().polish(badge)
-        fila_titulo.addWidget(titulo)
-        fila_titulo.addWidget(badge, alignment=Qt.AlignmentFlag.AlignLeft)
-        fila_titulo.addStretch(1)
-        descripcion = QLabel(rol.descripcion or "Rol sin descripcion.")
-        descripcion.setObjectName("descripcionRolUsuario")
-        descripcion.setWordWrap(True)
-        bloque_titulo.addLayout(fila_titulo)
-        bloque_titulo.addWidget(descripcion)
-
-        boton_estado = BotonIconoFilaUsuario(
-            "lock.svg" if rol.estado == "ACTIVO" else "circle-check.svg",
-            "#ff625c" if rol.estado == "ACTIVO" else "#4fa3ff",
-            "Desactivar rol" if rol.estado == "ACTIVO" else "Activar rol",
-        )
-        boton_estado.clicked.connect(
-            lambda checked=False, identificador=rol.identificador: self.cambio_estado_rol_solicitado.emit(
-                int(identificador)
-            )
-        )
-
-        fila.addLayout(bloque_titulo, 1)
-        fila.addWidget(boton_estado, alignment=Qt.AlignmentFlag.AlignTop)
-
-        metricas = QHBoxLayout()
-        metricas.setSpacing(12)
-        metricas.addWidget(self._crear_minitarjeta_rol("Usuarios", str(rol.total_usuarios)))
-        metricas.addWidget(self._crear_minitarjeta_rol("Permisos", str(len(rol.permisos))))
-
-        titulo_modulos = QLabel("Permisos por modulo")
-        titulo_modulos.setObjectName("tituloMiniTarjetaRolUsuario")
-        chips_modulos = self._crear_lista_permisos_modulo(rol)
-
-        separador = QFrame()
-        separador.setObjectName("separadorRolUsuario")
-        separador.setFixedHeight(1)
-
-        fila_acciones = QHBoxLayout()
-        fila_acciones.setSpacing(8)
-        boton_editar = BotonAccionContextual(
-            "Editar",
-            variante="edicion",
-            centrado=True,
-            mostrar_icono=False,
-        )
-        boton_editar.clicked.connect(
-            lambda checked=False, identificador=rol.identificador: self.editar_rol_solicitado.emit(
-                int(identificador)
-            )
-        )
-        fila_acciones.addWidget(boton_editar)
-        fila_acciones.addStretch(1)
-
-        layout.addLayout(fila)
-        layout.addLayout(metricas)
-        layout.addWidget(titulo_modulos)
-        layout.addWidget(chips_modulos)
-        layout.addWidget(separador)
-        layout.addLayout(fila_acciones)
-        return tarjeta
-
-    def _crear_minitarjeta_rol(self, titulo: str, valor: str) -> QFrame:
-        tarjeta = QFrame()
-        tarjeta.setObjectName("miniTarjetaRolUsuario")
-        layout = QVBoxLayout(tarjeta)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(3)
-        label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("tituloMiniTarjetaRolUsuario")
-        label_valor = QLabel(valor)
-        label_valor.setObjectName("valorMiniTarjetaRolUsuario")
-        layout.addWidget(label_titulo)
-        layout.addWidget(label_valor)
-        return tarjeta
-
-    def _crear_chips_modulos(self, modulos: list[str]) -> QWidget:
-        contenedor = QWidget()
-        layout = QGridLayout(contenedor)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setHorizontalSpacing(6)
-        layout.setVerticalSpacing(6)
-        modulos_visibles = modulos[:6]
-        for indice, modulo in enumerate(modulos_visibles):
-            chip = QLabel(modulo)
-            chip.setObjectName("chipModuloRolUsuario")
-            layout.addWidget(chip, indice // 3, indice % 3)
-        if len(modulos) > 6:
-            adicional = QLabel(f"+{len(modulos) - 6}")
-            adicional.setObjectName("chipModuloRolUsuarioSecundario")
-            layout.addWidget(adicional, len(modulos_visibles) // 3, len(modulos_visibles) % 3)
-        return contenedor
-
-    def _crear_lista_permisos_modulo(self, rol: RolSistema) -> QWidget:
-        contenedor = QWidget()
-        layout = QVBoxLayout(contenedor)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
-        for modulo, acciones in self._acciones_por_modulo_rol(rol):
-            fila = QWidget()
-            fila_layout = QHBoxLayout(fila)
-            fila_layout.setContentsMargins(0, 0, 0, 0)
-            fila_layout.setSpacing(8)
-            etiqueta_modulo = QLabel(modulo)
-            etiqueta_modulo.setObjectName("tituloModuloPermisoRolUsuario")
-            fila_layout.addWidget(etiqueta_modulo)
-            fila_layout.addWidget(self._crear_badges_acciones_rol(acciones), 1)
-            layout.addWidget(fila)
-        if layout.count() == 0:
-            vacio = QLabel("Sin permisos asignados.")
-            vacio.setObjectName("detallePermisoRolUsuario")
-            layout.addWidget(vacio)
-        return contenedor
-
-    def _crear_badges_acciones_rol(self, acciones: list[str]) -> QWidget:
-        contenedor = QWidget()
-        layout = QHBoxLayout(contenedor)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
-        for accion in acciones:
-            badge = QLabel(accion)
-            badge.setObjectName("badgeAccionPermisoRolUsuario")
-            layout.addWidget(badge)
-        layout.addStretch(1)
-        return contenedor
-
-    @staticmethod
-    def _acciones_por_modulo_rol(rol: RolSistema) -> list[tuple[str, list[str]]]:
-        agrupados: dict[str, list[str]] = {}
-        for permiso in rol.permisos:
-            modulo = permiso.modulo.strip()
-            if not modulo:
-                continue
-            accion = permiso.codigo.split(".")[-1].replace("_", " ").title()
-            agrupados.setdefault(modulo, [])
-            if accion not in agrupados[modulo]:
-                agrupados[modulo].append(accion)
-        return sorted(agrupados.items(), key=lambda item: item[0].casefold())
-
-    @staticmethod
-    def _modulos_resumidos_rol(rol: RolSistema) -> list[str]:
-        modulos: list[str] = []
-        vistos: set[str] = set()
-        for permiso in rol.permisos:
-            nombre = permiso.modulo.strip()
-            if not nombre or nombre in vistos:
-                continue
-            vistos.add(nombre)
-            modulos.append(nombre)
-        return modulos
-
     def _emitir_filtro_rol(self) -> None:
         self._filtro_rol_actual = str(self._combo_roles.currentData() or FILTRO_USUARIOS_TODOS)
         self.filtro_rol_cambiado.emit(self._filtro_rol_actual)
@@ -2049,74 +1318,42 @@ class VistaUsuarios(QWidget):
                 font-family: "{paleta["familia_tipografica"]}";
             }}
             QLabel#tituloModulo {{
-                color: #ffffff;
+                color: {paleta["texto_principal"]};
                 font-size: 19px;
                 font-weight: 900;
             }}
-            QLabel#subtituloModuloUsuarios,
-            QLabel#tituloPanelPermisosUsuarios,
-            QLabel#tituloRolUsuario,
-            QLabel#valorMiniTarjetaRolUsuario {{
-                color: #ffffff;
-                font-weight: 800;
-            }}
-            QLabel#subtituloModuloUsuarios {{
-                font-size: 18px;
-            }}
             QLabel#descripcionModulo,
-            QLabel#detalleTarjetaResumenUsuario,
-            QLabel#textoPanelPermisosUsuarios,
-            QLabel#detalleRolesUsuarios,
-            QLabel#notaRolesUsuarios,
-            QLabel#descripcionRolUsuario,
-            QLabel#tituloMiniTarjetaRolUsuario {{
-                color: rgba(235, 242, 248, 0.76);
+            QLabel#detalleTarjetaResumenUsuario {{
+                color: {paleta["texto_secundario"]};
                 font-size: 11px;
             }}
             QLabel#mensajeUsuarios {{
-                color: #d9fff5;
+                color: {paleta["texto_exito"]};
                 font-size: 12px;
                 font-weight: 700;
                 padding: 8px 10px;
                 border-radius: 12px;
-                background-color: rgba(16, 120, 98, 0.16);
-                border: 1px solid rgba(158, 231, 214, 0.26);
+                background-color: {paleta["fondo_exito"]};
+                border: 1px solid {paleta["borde_exito"]};
             }}
             QLabel#mensajeUsuarios[error="true"] {{
-                color: #ffd4cf;
-                background-color: rgba(180, 35, 24, 0.15);
-                border: 1px solid rgba(255, 205, 199, 0.28);
+                color: {paleta["texto_error"]};
+                background-color: {paleta["fondo_error"]};
+                border: 1px solid {paleta["borde_error"]};
             }}
             QFrame#panelOperativoUsuarios,
-            QFrame#tarjetaResumenUsuarios,
-            QFrame#panelPermisosUsuarios,
-            QFrame#tarjetaRolUsuario,
-            QFrame#miniTarjetaRolUsuario {{
-                background: rgba(255, 255, 255, 0.10);
-                border: 1px solid rgba(255, 255, 255, 0.16);
-                border-radius: 18px;
-            }}
-            QFrame#panelPermisosUsuarios {{
-                background: rgba(79, 163, 255, 0.12);
-                border: 1px solid rgba(138, 194, 255, 0.22);
-            }}
-            QFrame#tarjetaRolUsuario {{
-                background: rgba(255, 255, 255, 0.12);
-                border-color: rgba(255, 255, 255, 0.18);
-            }}
-            QFrame#panelOperativoUsuarios,
-            QFrame#tarjetaResumenUsuarios,
-            QFrame#miniTarjetaRolUsuario {{
+            QFrame#tarjetaResumenUsuarios {{
                 background: {fondo_header_destacado};
-                border: 1px solid rgba(255, 255, 255, 0.16);
+                border: 1px solid {paleta["borde_principal"]};
+                border-radius: 18px;
             }}
             QFrame#panelTablaUsuarios {{
                 background: {fondo_header_destacado};
-                border: 1px solid rgba(255, 255, 255, 0.16);
+                border: 1px solid {paleta["borde_principal"]};
                 border-radius: 18px;
             }}
             QTableWidget#tablaUsuarios {{
-                background: rgba(74, 79, 154, 0.88);
+                background: {paleta["fondo_tabla_cuerpo"]};
                 background-clip: padding;
                 border: none;
                 border-radius: 18px;
@@ -2132,11 +1369,11 @@ class VistaUsuarios(QWidget):
                 border-top-left-radius: 18px;
             }}
             QTableWidget#tablaUsuarios QHeaderView::section {{
-                background: rgba(108, 113, 190, 0.92);
-                color: #f7fbff;
+                background: {paleta["fondo_tabla_header_destacado"]};
+                color: {paleta["texto_principal"]};
                 border: none;
-                border-right: 1px solid rgba(255, 255, 255, 0.08);
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                border-right: 1px solid {paleta["borde_suave"]};
+                border-bottom: 1px solid {paleta["borde_suave"]};
                 padding: 10px 12px;
                 font-size: 12px;
                 font-weight: 800;
@@ -2146,28 +1383,27 @@ class VistaUsuarios(QWidget):
             }}
             QTableWidget#tablaUsuarios::item {{
                 padding: 9px 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-                background: rgba(255, 255, 255, 0.03);
+                border-bottom: 1px solid {paleta["borde_suave"]};
+                background: {paleta["fondo_tabla_fila"]};
             }}
             QTableWidget#tablaUsuarios::item:alternate {{
-                background: rgba(255, 255, 255, 0.07);
+                background: {paleta["fondo_tabla_fila_alterna"]};
             }}
             QTableWidget#tablaUsuarios::item:selected {{
-                background: rgba(142, 201, 255, 0.10);
+                background: {paleta["fondo_tabla_seleccion"]};
             }}
-            QLabel#iconoTarjetaResumenUsuario,
-            QLabel#iconoPanelPermisosUsuarios {{
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.10);
+            QLabel#iconoTarjetaResumenUsuario {{
+                background: {paleta["fondo_superficie_suave"]};
+                border: 1px solid {paleta["borde_suave"]};
                 border-radius: 12px;
             }}
             QLabel#tituloTarjetaResumenUsuario {{
-                color: rgba(235, 242, 248, 0.72);
+                color: {paleta["texto_secundario"]};
                 font-size: 11px;
                 font-weight: 700;
             }}
             QLabel#valorTarjetaResumenUsuario {{
-                color: #ffffff;
+                color: {paleta["texto_principal"]};
                 font-size: 20px;
                 font-weight: 900;
             }}
@@ -2175,130 +1411,82 @@ class VistaUsuarios(QWidget):
             QComboBox,
             QPlainTextEdit {{
                 min-height: 36px;
-                border: 1px solid rgba(255, 255, 255, 0.18);
+                border: 1px solid {paleta["borde_medio"]};
                 border-radius: 12px;
-                background: rgba(255, 255, 255, 0.11);
-                color: #f5fbff;
+                background: {paleta["fondo_input"]};
+                color: {paleta["texto_input"]};
                 padding: 0 10px;
                 font-size: 12px;
             }}
             QPlainTextEdit {{
-                min-height: 88px;
+                min-height: 72px;
                 padding: 10px;
             }}
             QLineEdit:focus,
             QComboBox:focus,
             QPlainTextEdit:focus {{
-                border-color: rgba(109, 241, 220, 0.42);
-                background: rgba(255, 255, 255, 0.16);
+                border-color: {paleta["borde_foco_input"]};
+                background: {paleta["fondo_input_focus"]};
             }}
             QComboBox::drop-down {{
                 border: none;
                 width: 24px;
-                background: rgba(255, 255, 255, 0.06);
+                background: {paleta["fondo_chip"]};
                 border-top-right-radius: 12px;
                 border-bottom-right-radius: 12px;
             }}
             QComboBox QAbstractItemView {{
-                background: rgba(29, 33, 68, 0.98);
-                color: #f5fbff;
-                border: 1px solid rgba(255, 255, 255, 0.14);
-                selection-background-color: rgba(109, 241, 220, 0.22);
-                selection-color: #ffffff;
+                background: {paleta["fondo_input"]};
+                color: {paleta["texto_input"]};
+                border: 1px solid {paleta["borde_suave"]};
+                selection-background-color: {paleta["acento_seleccion"]};
+                selection-color: {paleta["texto_principal"]};
                 padding: 6px;
             }}
             QPushButton#chipFiltroUsuario {{
                 min-height: 30px;
                 border-radius: 11px;
                 padding: 0 12px;
-                background: rgba(255, 255, 255, 0.06);
-                border: 1px solid rgba(255, 255, 255, 0.14);
-                color: #ecf5ff;
+                background: {paleta["fondo_chip"]};
+                border: 1px solid {paleta["borde_suave"]};
+                color: {paleta["texto_chip"]};
                 font-size: 11px;
                 font-weight: 700;
             }}
             QPushButton#chipFiltroUsuario:hover {{
-                background: rgba(255, 255, 255, 0.12);
+                background: {paleta["fondo_chip_hover"]};
             }}
             QPushButton#chipFiltroUsuario:checked {{
-                color: #0f2d43;
-                background: #d2f4f2;
-                border-color: rgba(255, 255, 255, 0.18);
+                color: {paleta["texto_chip_activo"]};
+                background: {paleta["fondo_chip_activo"]};
+                border-color: {paleta["borde_chip_activo"]};
             }}
             QLabel#badgeRolUsuario,
-            QLabel#badgeEstadoUsuario,
-            QLabel#badgeRolSistemaUsuario {{
+            QLabel#badgeEstadoUsuario {{
                 border-radius: 11px;
                 padding: 6px 10px;
                 font-size: 11px;
                 font-weight: 800;
             }}
             QLabel#badgeRolUsuario {{
-                color: #d7e4ff;
-                background: rgba(86, 124, 255, 0.16);
-                border: 1px solid rgba(157, 178, 255, 0.24);
+                color: {paleta["texto_badge"]};
+                background: {paleta["fondo_badge"]};
+                border: 1px solid {paleta["borde_suave"]};
             }}
-            QLabel#badgeRolUsuario[administrador="true"],
-            QLabel#badgeRolSistemaUsuario[sistema="true"] {{
-                color: #f5e1ff;
-                background: rgba(146, 101, 255, 0.16);
-                border: 1px solid rgba(207, 181, 255, 0.24);
+            QLabel#badgeRolUsuario[administrador="true"] {{
+                color: {paleta["texto_principal"]};
+                background: {paleta["fondo_chip_activo"]};
+                border: 1px solid {paleta["borde_chip_activo"]};
             }}
             QLabel#badgeEstadoUsuario {{
-                color: #f4f8fb;
-                background: rgba(132, 146, 166, 0.22);
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                color: {paleta["texto_badge"]};
+                background: {paleta["fondo_badge"]};
+                border: 1px solid {paleta["borde_suave"]};
             }}
             QLabel#badgeEstadoUsuario[activo="true"] {{
-                color: #d9fff5;
-                background: rgba(16, 120, 98, 0.22);
-                border-color: rgba(158, 231, 214, 0.26);
-            }}
-            QLabel#badgeRolSistemaUsuario {{
-                color: #d9fff5;
-                background: rgba(16, 120, 98, 0.18);
-                border: 1px solid rgba(158, 231, 214, 0.22);
-            }}
-            QLabel#chipModuloRolUsuario,
-            QLabel#chipModuloRolUsuarioSecundario {{
-                border-radius: 9px;
-                padding: 5px 9px;
-                font-size: 11px;
-                font-weight: 700;
-            }}
-            QLabel#chipModuloRolUsuario {{
-                color: #d7f5ff;
-                background: rgba(44, 177, 212, 0.14);
-                border: 1px solid rgba(122, 226, 255, 0.18);
-            }}
-            QLabel#chipModuloRolUsuarioSecundario {{
-                color: rgba(235, 242, 248, 0.82);
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.12);
-            }}
-            QLabel#tituloModuloPermisoRolUsuario {{
-                color: rgba(235, 242, 248, 0.82);
-                font-size: 11px;
-                font-weight: 800;
-                min-width: 140px;
-            }}
-            QLabel#detallePermisoRolUsuario {{
-                color: rgba(235, 242, 248, 0.72);
-                font-size: 11px;
-                font-weight: 700;
-            }}
-            QLabel#badgeAccionPermisoRolUsuario {{
-                border-radius: 9px;
-                padding: 4px 8px;
-                font-size: 10px;
-                font-weight: 800;
-                color: #d7f5ff;
-                background: rgba(44, 177, 212, 0.14);
-                border: 1px solid rgba(122, 226, 255, 0.18);
-            }}
-            QFrame#separadorRolUsuario {{
-                background: rgba(255, 255, 255, 0.10);
-                border: none;
+                color: {paleta["texto_principal"]};
+                background: {paleta["fondo_badge_activo"]};
+                border-color: {paleta["borde_badge_activo"]};
             }}
             QWidget#contenedorAccionesUsuario {{
                 background: transparent;
@@ -2315,223 +1503,22 @@ class VistaUsuarios(QWidget):
                 border: none;
             }}
             QLabel#estadoVacioUsuarios {{
-                color: rgba(235, 242, 248, 0.76);
+                color: {paleta["texto_secundario"]};
                 font-size: 12px;
                 font-weight: 700;
                 padding: 20px 14px;
             }}
             QLabel#bloqueInfoRolUsuario {{
-                color: #dce9ff;
+                color: {paleta["texto_secundario"]};
                 font-size: 12px;
                 font-weight: 600;
                 padding: 12px 14px;
                 border-radius: 12px;
-                background: rgba(79, 163, 255, 0.12);
-                border: 1px solid rgba(138, 194, 255, 0.20);
-            }}
-            QTabWidget#tabsUsuarios {{
-                background: transparent;
-            }}
-            QTabWidget#tabsUsuarios QWidget {{
-                background: transparent;
-            }}
-            QTabWidget#tabsUsuarios::pane {{
-                border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 18px;
-                background: rgba(255, 255, 255, 0.05);
-                margin-top: 12px;
-                padding: 10px 10px 12px 10px;
-            }}
-            QScrollArea#scrollRolesUsuarios {{
-                background: transparent;
-                border: none;
-            }}
-            QScrollArea#scrollRolesUsuarios > QWidget > QWidget {{
-                background: transparent;
-            }}
-            QTabWidget#tabsUsuarios QTabBar {{
-                background: rgba(255, 255, 255, 0.04);
-                border: 1px solid rgba(255, 255, 255, 0.10);
-                border-radius: 16px;
-                padding: 6px;
-            }}
-            QTabWidget#tabsUsuarios QTabBar::tab {{
-                color: rgba(235, 242, 248, 0.74);
-                padding: 10px 18px;
-                margin-right: 6px;
-                border: 1px solid transparent;
-                border-radius: 12px;
-                font-size: 13px;
-                font-weight: 800;
-                background: rgba(255, 255, 255, 0.05);
-            }}
-            QTabWidget#tabsUsuarios QTabBar::tab:hover {{
-                background: rgba(255, 255, 255, 0.10);
-                color: #ffffff;
-            }}
-            QTabWidget#tabsUsuarios QTabBar::tab:selected {{
-                color: #0f2d43;
-                background: #d2f4f2;
-                border-color: rgba(109, 241, 220, 0.26);
+                background: {paleta["fondo_panel_accion"]};
+                border: 1px solid {paleta["borde_principal"]};
             }}
             QLabel {{
-                color: #f4fbff;
+                color: {paleta["texto_principal"]};
             }}
             """
         )
-        if self._tema_actual == "claro":
-            self.setStyleSheet(
-                self.styleSheet()
-                + f"""
-                QLabel#tituloModulo,
-                QLabel#subtituloModuloUsuarios,
-                QLabel#tituloPanelPermisosUsuarios,
-                QLabel#tituloRolUsuario,
-                QLabel#valorMiniTarjetaRolUsuario,
-                QLabel#valorTarjetaResumenUsuario,
-                QLabel#tituloMiniTarjetaRolUsuario,
-                QLabel#nombreUsuarioDetalle,
-                QLabel#tituloTabRolesUsuarios,
-                QLabel#estadoResumenRolesUsuarios {{
-                    color: {paleta["texto_principal"]};
-                }}
-                QLabel#descripcionModulo,
-                QLabel#detalleTarjetaResumenUsuario,
-                QLabel#textoPanelPermisosUsuarios,
-                QLabel#detalleRolesUsuarios,
-                QLabel#notaRolesUsuarios,
-                QLabel#descripcionRolUsuario,
-                QLabel#tituloTarjetaResumenUsuario,
-                QLabel#chipModuloRolUsuarioSecundario,
-                QLabel#estadoVacioUsuarios {{
-                    color: {paleta["texto_secundario"]};
-                }}
-                QLabel#mensajeUsuarios {{
-                    color: {paleta["texto_exito"]};
-                    background-color: {paleta["fondo_exito"]};
-                    border-color: {paleta["borde_exito"]};
-                }}
-                QLabel#mensajeUsuarios[error="true"] {{
-                    color: {paleta["texto_error"]};
-                    background-color: {paleta["fondo_error"]};
-                    border-color: {paleta["borde_error"]};
-                }}
-                QFrame#panelOperativoUsuarios,
-                QFrame#tarjetaResumenUsuarios,
-                QFrame#panelTablaUsuarios,
-                QFrame#tarjetaRolUsuario,
-                QFrame#miniTarjetaRolUsuario,
-                QTabWidget#tabsUsuarios::pane {{
-                    background: {paleta["fondo_superficie_suave"]};
-                    border-color: {paleta["borde_suave"]};
-                }}
-                QFrame#panelPermisosUsuarios {{
-                    background: {paleta["fondo_superficie"]};
-                    border-color: {paleta["borde_principal"]};
-                }}
-                QTableWidget#tablaUsuarios {{
-                    background: {paleta["fondo_tabla_cuerpo"]};
-                    color: {paleta["texto_input"]};
-                }}
-                QTableWidget#tablaUsuarios QHeaderView::section {{
-                    background: {paleta["fondo_tabla_header_destacado"]};
-                    color: {paleta["texto_input"]};
-                    border-right: 1px solid {paleta["borde_tabla"]};
-                    border-bottom: 1px solid {paleta["borde_tabla"]};
-                }}
-                QTableWidget#tablaUsuarios::item {{
-                    border-bottom: 1px solid {paleta["borde_tabla"]};
-                    background: {paleta["fondo_tabla_fila"]};
-                }}
-                QLabel#iconoTarjetaResumenUsuario,
-                QLabel#iconoPanelPermisosUsuarios,
-                QLabel#iconoDatoRolUsuario {{
-                    background: {paleta["fondo_superficie_muy_suave"]};
-                    border: 1px solid {paleta["borde_suave"]};
-                }}
-                QLineEdit,
-                QComboBox,
-                QPlainTextEdit {{
-                    border-color: {paleta["borde_medio"]};
-                    background: {paleta["fondo_input"]};
-                    color: {paleta["texto_input"]};
-                }}
-                QLineEdit:focus,
-                QComboBox:focus,
-                QPlainTextEdit:focus {{
-                    border-color: {paleta["borde_foco_input"]};
-                    background: {paleta["fondo_input_focus"]};
-                }}
-                QComboBox::drop-down {{
-                    background: {paleta["fondo_superficie_muy_suave"]};
-                }}
-                QComboBox QAbstractItemView {{
-                    background: {paleta["fondo_dialogo"]};
-                    color: {paleta["texto_input"]};
-                    border: 1px solid {paleta["borde_suave"]};
-                    selection-background-color: {paleta["acento_seleccion"]};
-                    selection-color: {paleta["texto_principal"]};
-                }}
-                QPushButton#chipFiltroUsuario {{
-                    background: {paleta["fondo_chip"]};
-                    border-color: {paleta["borde_suave"]};
-                    color: {paleta["texto_chip"]};
-                }}
-                QPushButton#chipFiltroUsuario:hover {{
-                    background: {paleta["fondo_chip_hover"]};
-                }}
-                QPushButton#chipFiltroUsuario:checked,
-                QTabWidget#tabsUsuarios QTabBar::tab:selected {{
-                    color: {paleta["texto_chip_activo"]};
-                    background: {paleta["fondo_chip_activo"]};
-                    border-color: {paleta["borde_chip_activo"]};
-                }}
-                QTabWidget#tabsUsuarios QTabBar {{
-                    background: {paleta["fondo_superficie_muy_suave"]};
-                    border-color: {paleta["borde_suave"]};
-                }}
-                QTabWidget#tabsUsuarios QTabBar::tab {{
-                    color: {paleta["texto_secundario"]};
-                    background: {paleta["fondo_panel_accion"]};
-                }}
-                QTabWidget#tabsUsuarios QTabBar::tab:hover {{
-                    background: {paleta["fondo_superficie"]};
-                    color: {paleta["texto_principal"]};
-                }}
-                QLabel#badgeEstadoUsuario {{
-                    color: {paleta["texto_badge"]};
-                    background: {paleta["fondo_badge"]};
-                    border-color: {paleta["borde_suave"]};
-                }}
-                QLabel#badgeEstadoUsuario[activo="true"],
-                QLabel#badgeRolSistemaUsuario {{
-                    color: {paleta["texto_exito"]};
-                    background: {paleta["fondo_exito"]};
-                    border-color: {paleta["borde_exito"]};
-                }}
-                QLabel#badgeRolUsuario {{
-                    color: {paleta["texto_badge_activo"]};
-                    background: {paleta["fondo_badge_activo"]};
-                    border-color: {paleta["borde_badge_activo"]};
-                }}
-                QLabel#badgeRolUsuario[administrador="true"],
-                QLabel#badgeRolSistemaUsuario[sistema="true"] {{
-                    color: {paleta["texto_chip_activo"]};
-                    background: {paleta["fondo_chip_activo"]};
-                    border-color: {paleta["borde_chip_activo"]};
-                }}
-                QLabel#chipModuloRolUsuario {{
-                    color: {paleta["texto_badge_activo"]};
-                    background: {paleta["fondo_badge_activo"]};
-                    border-color: {paleta["borde_badge_activo"]};
-                }}
-                QLabel#bloqueInfoRolUsuario {{
-                    color: {paleta["texto_principal"]};
-                    background: {paleta["fondo_superficie_muy_suave"]};
-                    border-color: {paleta["borde_principal"]};
-                }}
-                QLabel {{
-                    color: {paleta["texto_principal"]};
-                }}
-                """
-            )

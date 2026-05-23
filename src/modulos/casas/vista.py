@@ -43,6 +43,7 @@ from comun.ui.temas import (
     TEMA_SICAP_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
+    resolver_nombre_tema,
 )
 from modulos.casas.entidades import (
     Casa,
@@ -700,9 +701,10 @@ class DialogoHistorialPropietariosCasa(DialogoBaseSicap):
 
         boton_cerrar = BotonAccionContextual(
             "Cerrar",
+            icono="x.svg",
             variante=resolver_variante_boton_modal("Cerrar", "neutro"),
             centrado=True,
-            mostrar_icono=False,
+            mostrar_icono=True,
         )
         boton_cerrar.clicked.connect(self.accept)
 
@@ -1006,48 +1008,49 @@ class DialogoDetalleCasa(DialogoBaseSicap):
         reactivacion = self._crear_campo_detalle(
             "Reactivacion fisica",
             (
-                "Resolver desde Pagos > Conexión/Reconexion."
+                "Resolver desde Pagos > Conexion/Reconexion."
                 if casa.estado_servicio == ESTADO_SERVICIO_CORTADO
                 else "Disponible desde la accion Cortar servicio cuando corresponda."
             ),
         )
         reactivacion.setObjectName("campoDetalleCasaAmplio")
 
-        separador = QFrame()
-        separador.setObjectName("separadorDetalleCasa")
-        separador.setFixedHeight(1)
-
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(10)
         boton_cerrar = BotonAccionContextual(
             "Cerrar",
+            icono="x.svg",
             variante=resolver_variante_boton_modal("Cerrar", "neutro"),
             centrado=True,
-            mostrar_icono=False,
+            mostrar_icono=True,
         )
         boton_historial = BotonAccionContextual(
             "Ver historial",
+            icono="clock.svg",
             variante="informacion",
             centrado=True,
-            mostrar_icono=False,
+            mostrar_icono=True,
         )
         boton_dueno = BotonAccionContextual(
             "Cambiar dueno",
+            icono="user.svg",
             variante="edicion",
             centrado=True,
-            mostrar_icono=False,
+            mostrar_icono=True,
         )
         boton_editar = BotonAccionContextual(
             "Editar",
+            icono="edit.svg",
             variante="edicion",
             centrado=True,
-            mostrar_icono=False,
+            mostrar_icono=True,
         )
         boton_corte = BotonAccionContextual(
             "Cortar servicio",
+            icono="alert-triangle.svg",
             variante="salida",
             centrado=True,
-            mostrar_icono=False,
+            mostrar_icono=True,
         )
         boton_cerrar.clicked.connect(self.reject)
         boton_historial.clicked.connect(self._abrir_historial)
@@ -1087,15 +1090,13 @@ class DialogoDetalleCasa(DialogoBaseSicap):
                 [historial, observaciones, reactivacion],
             )
         )
-        layout_panel.addWidget(separador)
-        layout_panel.addLayout(fila_acciones)
         layout_scroll.addWidget(panel_detalle)
         scroll.setWidget(contenedor_scroll)
 
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
         self.layout_cuerpo.addWidget(scroll)
-        self._pie.setVisible(False)
+        self.layout_pie.addLayout(fila_acciones)
         self._aplicar_estilos()
 
     def _crear_encabezado_seccion_detalle(self, titulo: str, descripcion: str) -> QWidget:
@@ -1497,7 +1498,7 @@ class VistaCasas(QWidget):
 
     def aplicar_tema(self, nombre_tema: str) -> None:
         self._tema_actual = (
-            nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+            resolver_nombre_tema(nombre_tema)
         )
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._aplicar_estilos()
@@ -1690,10 +1691,10 @@ class VistaCasas(QWidget):
         fila_tarjetas = QGridLayout()
         fila_tarjetas.setHorizontalSpacing(10)
         fila_tarjetas.setVerticalSpacing(10)
-        self._tarjeta_total = TarjetaResumenCasa("home.svg", "#8ec9ff")
+        self._tarjeta_total = TarjetaResumenCasa("home.svg", "#C9DBE9")
         self._tarjeta_activos = TarjetaResumenCasa("circle-check.svg", "#8de8c7")
         self._tarjeta_con_deuda = TarjetaResumenCasa("alert-triangle.svg", "#f7cc7a")
-        self._tarjeta_morosos = TarjetaResumenCasa("clock.svg", "#c6b6ff")
+        self._tarjeta_morosos = TarjetaResumenCasa("clock.svg", "#8FAFC7")
         fila_tarjetas.addWidget(self._tarjeta_total, 0, 0)
         fila_tarjetas.addWidget(self._tarjeta_activos, 0, 1)
         fila_tarjetas.addWidget(self._tarjeta_con_deuda, 0, 2)
@@ -1916,14 +1917,14 @@ class VistaCasas(QWidget):
                 background: transparent;
             }
             QLabel#tituloModulo {
-                color: #ffffff;
+                color: #E4EACC;
                 font-size: 19px;
                 font-weight: 900;
             }
             QLabel#descripcionModulo,
             QLabel#textoPieCasas,
             QLabel#detalleTarjetaResumen {
-                color: rgba(235, 242, 248, 0.76);
+                color: #C9DBE9;
                 font-size: 11px;
                 font-weight: 600;
             }
@@ -1946,14 +1947,14 @@ class VistaCasas(QWidget):
                 background: """
             + fondo_header_destacado
             + """;
-                border: 1px solid rgba(255, 255, 255, 0.16);
+                border: 1px solid rgba(83, 112, 139, 0.48);
                 border-radius: 18px;
             }
             QFrame#panelTablaCasas {
                 background: """
             + fondo_header_destacado
             + """;
-                border: 1px solid rgba(255, 255, 255, 0.16);
+                border: 1px solid rgba(83, 112, 139, 0.48);
                 border-radius: """
             + str(radio_panel_tabla)
             + """px;
@@ -1990,7 +1991,7 @@ class VistaCasas(QWidget):
                 background: """
             + self._paleta_tema["fondo_tabla_header_destacado"]
             + """;
-                color: #f7fbff;
+                color: #E4EACC;
                 border: none;
                 border-right: 1px solid """
             + self._paleta_tema["borde_tabla"]
@@ -2027,59 +2028,59 @@ class VistaCasas(QWidget):
             + """;
             }
             QLabel#iconoTarjetaResumen {
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.10);
+                background: rgba(29, 54, 78, 0.78);
+                border: 1px solid rgba(83, 112, 139, 0.30);
                 border-radius: 12px;
             }
             QLabel#tituloTarjetaResumen {
-                color: rgba(235, 242, 248, 0.72);
+                color: #C9DBE9;
                 font-size: 11px;
                 font-weight: 700;
             }
             QLabel#valorTarjetaResumen {
-                color: #ffffff;
+                color: #E4EACC;
                 font-size: 20px;
                 font-weight: 900;
             }
             QLineEdit {
                 min-height: 36px;
-                border: 1px solid rgba(255, 255, 255, 0.18);
+                border: 1px solid rgba(83, 112, 139, 0.55);
                 border-radius: 12px;
-                background: rgba(255, 255, 255, 0.11);
-                color: #f5fbff;
+                background: rgba(16, 42, 64, 0.98);
+                color: #E4EACC;
                 padding: 0 10px;
                 font-size: 12px;
             }
             QLineEdit:focus {
-                border-color: rgba(109, 241, 220, 0.42);
-                background: rgba(255, 255, 255, 0.16);
+                border-color: rgba(201, 219, 233, 0.55);
+                background: rgba(83, 112, 139, 0.48);
             }
             QPushButton#chipFiltroCasa {
                 min-height: 30px;
                 border-radius: 11px;
                 padding: 0 12px;
-                background: rgba(255, 255, 255, 0.06);
-                border: 1px solid rgba(255, 255, 255, 0.14);
+                background: rgba(29, 54, 78, 0.88);
+                border: 1px solid rgba(83, 112, 139, 0.30);
                 color: #ecf5ff;
                 font-size: 11px;
                 font-weight: 700;
             }
             QPushButton#chipFiltroCasa:hover {
-                background: rgba(255, 255, 255, 0.12);
+                background: rgba(83, 112, 139, 0.30);
             }
             QPushButton#chipFiltroCasa:checked {
-                color: #0f2d43;
-                background: #d2f4f2;
-                border-color: rgba(255, 255, 255, 0.18);
+                color: #E4EACC;
+                background: #4E6A9C;
+                border-color: rgba(83, 112, 139, 0.55);
             }
             QLabel#badgeEstadoCasa {
                 border-radius: 11px;
                 padding: 6px 10px;
                 font-size: 11px;
                 font-weight: 800;
-                color: #f4f8fb;
+                color: #C9DBE9;
                 background: rgba(132, 146, 166, 0.22);
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                border: 1px solid rgba(83, 112, 139, 0.30);
             }
             QLabel#badgeEstadoCasa[activo="true"] {
                 color: #d9fff5;
@@ -2091,9 +2092,9 @@ class VistaCasas(QWidget):
                 padding: 5px 8px;
                 font-size: 10px;
                 font-weight: 800;
-                color: #f4f8fb;
+                color: #C9DBE9;
                 background: rgba(132, 146, 166, 0.18);
-                border: 1px solid rgba(255, 255, 255, 0.10);
+                border: 1px solid rgba(83, 112, 139, 0.30);
             }
             QLabel#badgeEstadoCasaSecundario[activo="true"] {
                 color: #d9fff5;
@@ -2115,114 +2116,13 @@ class VistaCasas(QWidget):
                 border: none;
             }
             QLabel#estadoVacioCasas {
-                color: rgba(235, 242, 248, 0.76);
+                color: #C9DBE9;
                 font-size: 12px;
                 font-weight: 700;
                 padding: 20px 14px;
             }
             QLabel {
-                color: #f4fbff;
+                color: #E4EACC;
             }
             """
         )
-        if self._tema_actual == "claro":
-            paleta = self._paleta_tema
-            self.setStyleSheet(
-                self.styleSheet()
-                + f"""
-                QWidget {{
-                    background: transparent;
-                }}
-                QLabel#tituloModulo,
-                QLabel#valorTarjetaResumen,
-                QLabel#nombreCasaDetalle {{
-                    color: {paleta["texto_principal"]};
-                }}
-                QLabel#descripcionModulo,
-                QLabel#detalleTarjetaResumen,
-                QLabel#textoPieCasas,
-                QLabel#etiquetaDetalleCasa {{
-                    color: {paleta["texto_secundario"]};
-                }}
-                QLabel#mensajeCasas[error="false"] {{
-                    color: {paleta["texto_exito"]};
-                    background-color: {paleta["fondo_exito"]};
-                    border: 1px solid {paleta["borde_exito"]};
-                }}
-                QLabel#mensajeCasas[error="true"] {{
-                    color: {paleta["texto_error"]};
-                    background-color: {paleta["fondo_error"]};
-                    border: 1px solid {paleta["borde_error"]};
-                }}
-                QFrame#panelOperativoCasas,
-                QFrame#panelTablaCasas,
-                QFrame#tarjetaResumenCasas {{
-                    background: {paleta["fondo_superficie"]};
-                    border: 1px solid {paleta["borde_principal"]};
-                }}
-                QTableWidget#tablaCasas {{
-                    background: {paleta["fondo_superficie_muy_suave"]};
-                    /*
-                    Tema claro pendiente:
-                    background: {paleta["fondo_tabla_cuerpo"]};
-                    alternate-background-color: {paleta["fondo_tabla_fila_alterna"]};
-                    */
-                }}
-                QTableWidget#tablaCasas QHeaderView::section {{
-                    background: {paleta["fondo_tabla_header"]};
-                    /* Tema claro pendiente: background: {paleta["fondo_tabla_header_destacado"]}; */
-                    color: {paleta["texto_input"]};
-                    border-right: 1px solid {paleta["borde_suave"]};
-                    border-bottom: 1px solid {paleta["borde_suave"]};
-                }}
-                QLineEdit {{
-                    border: 1px solid {paleta["borde_medio"]};
-                    background: {paleta["fondo_input"]};
-                    color: {paleta["texto_input"]};
-                }}
-                QLineEdit:focus {{
-                    border-color: {paleta["borde_foco_input"]};
-                    background: {paleta["fondo_input_focus"]};
-                }}
-                QPushButton#chipFiltroCasa {{
-                    background: {paleta["fondo_chip"]};
-                    border: 1px solid {paleta["borde_suave"]};
-                    color: {paleta["texto_chip"]};
-                }}
-                QPushButton#chipFiltroCasa:hover {{
-                    background: {paleta["fondo_chip_hover"]};
-                }}
-                QPushButton#chipFiltroCasa:checked {{
-                    color: {paleta["texto_chip_activo"]};
-                    background: {paleta["fondo_chip_activo"]};
-                    border-color: {paleta["borde_chip_activo"]};
-                }}
-                QLabel#badgeEstadoCasa {{
-                    color: {paleta["texto_badge"]};
-                    background: {paleta["fondo_badge"]};
-                    border: 1px solid {paleta["borde_suave"]};
-                }}
-                QLabel#badgeEstadoCasa[activo="true"] {{
-                    color: {paleta["texto_badge_activo"]};
-                    background: {paleta["fondo_badge_activo"]};
-                    border-color: {paleta["borde_badge_activo"]};
-                }}
-                QLabel#badgeEstadoCasaSecundario {{
-                    color: {paleta["texto_badge"]};
-                    background: {paleta["fondo_badge"]};
-                    border: 1px solid {paleta["borde_suave"]};
-                }}
-                QLabel#badgeEstadoCasaSecundario[activo="true"] {{
-                    color: {paleta["texto_badge_activo"]};
-                    background: {paleta["fondo_badge_activo"]};
-                    border-color: {paleta["borde_badge_activo"]};
-                }}
-                QLabel#estadoVacioCasas {{
-                    color: {paleta["texto_secundario"]};
-                }}
-                QLabel#tituloTarjetaResumen,
-                QLabel#codigoCasaDetalle {{
-                    color: {paleta["texto_panel_secundario"]};
-                }}
-                """
-            )

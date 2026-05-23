@@ -128,6 +128,19 @@ class InformacionConfiguracion:
 
 
 @dataclass(slots=True)
+class LaboratorioVisualConfiguracion:
+    """Configuracion temporal para explorar fondos y modales."""
+
+    fondo_aplicado: bool
+    fondo_modo: str
+    fondo_color_primario: str
+    fondo_color_secundario: str
+    modal_modo: str
+    modal_color_primario: str
+    modal_color_secundario: str
+
+
+@dataclass(slots=True)
 class EstadoConfiguracion:
     """Estado agregado mostrado en la UI de configuracion."""
 
@@ -137,6 +150,7 @@ class EstadoConfiguracion:
     operacion: OperacionConfiguracion
     seguridad: SeguridadConfiguracion
     informacion: InformacionConfiguracion
+    laboratorio_visual: LaboratorioVisualConfiguracion
 
     @property
     def datos_junta(self) -> IdentidadEmpresa:

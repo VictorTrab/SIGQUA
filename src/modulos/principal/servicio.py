@@ -8,18 +8,18 @@ from modulos.principal.repositorio import RepositorioModuloPrincipal
 
 
 MODULOS_OPERATIVOS = (
-    ModuloNavegacion("dashboard", "Inicio", "Resumen operativo del sistema y tablero principal.", "home.svg"),
-    ModuloNavegacion("barrios", "Barrios", "Gestion de barrios y organizacion territorial.", "map-2.svg"),
-    ModuloNavegacion("usuarios", "Usuarios", "Gestion de usuarios, acceso y roles operativos.", "users.svg", "usuarios.gestionar"),
-    ModuloNavegacion("abonados", "Abonados", "Registro de abonados y seguimiento administrativo.", "id.svg"),
-    ModuloNavegacion("casas", "Casas", "Control de viviendas, servicio y relacion con abonados.", "home-2.svg"),
-    ModuloNavegacion("pagos", "Pagos", "Cobro mensual, conceptos operativos y comprobantes.", "receipt-2.svg"),
-    ModuloNavegacion("historial_pagos", "Historial de pagos", "Consulta comprobantes emitidos y reimpresion operativa.", "clock.svg"),
-    ModuloNavegacion("morosidad", "Morosidad", "Seguimiento de deuda vencida y riesgo de cobro.", "urgent.svg"),
-    ModuloNavegacion("planes_pago", "Planes de pago", "Acuerdos, cuotas y saldos financiados.", "calendar-stats.svg"),
-    ModuloNavegacion("reportes", "Reportes", "Consultas administrativas, indicadores y exportaciones.", "chart-bar.svg"),
-    ModuloNavegacion("configuracion", "Configuracion", "Parametros operativos, comprobantes y control local.", "settings-2.svg"),
-    ModuloNavegacion("mantenimiento", "Mantenimiento", "Herramientas tecnicas sensibles y soporte avanzado.", "tool.svg", "mantenimiento.ver", True),
+    ModuloNavegacion("dashboard", "Inicio", "Resumen operativo del sistema y tablero principal.", "home.svg", "modulo.dashboard"),
+    ModuloNavegacion("barrios", "Barrios", "Gestión de barrios y organización territorial.", "map-2.svg", "modulo.barrios"),
+    ModuloNavegacion("usuarios", "Usuarios", "Gestión de usuarios, acceso y roles operativos.", "users.svg", "modulo.usuarios"),
+    ModuloNavegacion("abonados", "Abonados", "Registro de abonados y seguimiento administrativo.", "id.svg", "modulo.abonados"),
+    ModuloNavegacion("casas", "Casas", "Control de viviendas, servicio y relación con abonados.", "home-2.svg", "modulo.casas"),
+    ModuloNavegacion("pagos", "Pagos", "Cobro mensual, conceptos operativos y comprobantes.", "receipt-2.svg", "modulo.pagos"),
+    ModuloNavegacion("historial_pagos", "Historial de pagos", "Consulta comprobantes emitidos y reimpresión operativa.", "clock.svg", "modulo.historial_pagos"),
+    ModuloNavegacion("morosidad", "Morosidad", "Seguimiento de deuda vencida y riesgo de cobro.", "urgent.svg", "modulo.morosidad"),
+    ModuloNavegacion("planes_pago", "Planes de pago", "Acuerdos, cuotas y saldos financiados.", "calendar-stats.svg", "modulo.planes_pago"),
+    ModuloNavegacion("reportes", "Reportes", "Consultas administrativas, indicadores y exportaciones.", "chart-bar.svg", "modulo.reportes"),
+    ModuloNavegacion("configuracion", "Configuración", "Parámetros operativos, comprobantes y control local.", "settings-2.svg", "modulo.configuracion"),
+    ModuloNavegacion("mantenimiento", "Mantenimiento", "Herramientas técnicas sensibles y soporte avanzado.", "tool.svg", "mantenimiento.ver", True),
 )
 
 
@@ -50,9 +50,11 @@ class ServicioModuloPrincipal:
     def _resolver_perfil(usuario: UsuarioAutenticado) -> str:
         if usuario.es_superadministrador():
             return "SUPERADMINISTRADOR"
-        if usuario.tiene_permiso("usuarios.gestionar"):
+        if "ADMINISTRADOR" in usuario.roles:
             return "ADMINISTRADOR"
-        return "OPERATIVO"
+        if "CAJERO" in usuario.roles:
+            return "CAJERO"
+        return "CONSULTA"
 
     @staticmethod
     def _puede_ver_modulo(usuario: UsuarioAutenticado, modulo: ModuloNavegacion) -> bool:

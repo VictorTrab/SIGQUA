@@ -21,6 +21,7 @@ from comun.ui.temas import (
     TEMA_SICAP_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
+    resolver_nombre_tema,
 )
 from modulos.reportes.entidades import EstadoReportes, TablaReporte
 
@@ -214,20 +215,15 @@ class VistaReportes(QWidget):
 
     def aplicar_tema(self, nombre_tema: str) -> None:
         self._tema_actual = (
-            nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+            resolver_nombre_tema(nombre_tema)
         )
         self._paleta = obtener_paleta_tema(self._tema_actual)
         self._aplicar_estilos()
 
     def _aplicar_estilos(self) -> None:
         paleta = self._paleta
-        oscuro = self._tema_actual != "claro"
-        fondo_panel_destacado = (
-            obtener_fondo_header_destacado(self._tema_actual)
-            if oscuro
-            else paleta["fondo_superficie_suave"]
-        )
-        borde_panel_destacado = "rgba(255, 255, 255, 0.16)" if oscuro else paleta["borde_suave"]
+        fondo_panel_destacado = obtener_fondo_header_destacado(self._tema_actual)
+        borde_panel_destacado = paleta["borde_principal"]
         self.setStyleSheet(
             f"""
             QWidget#vistaReportes {{

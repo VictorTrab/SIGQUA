@@ -45,6 +45,7 @@ from comun.ui.temas import (
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
     obtener_tema_actual,
+    resolver_nombre_tema,
 )
 from modulos.planes_pago.entidades import (
     DetallePlanPago,
@@ -475,7 +476,7 @@ class DialogoDetallePlanPago(DialogoBaseSicap):
         datos.addWidget(self._crear_campo("Cuota", self._formateador_moneda(plan.cuota_regular_centavos)), 3, 0)
         datos.addWidget(self._crear_campo("Proxima fecha", self._formateador_fecha(plan.proxima_fecha)), 3, 1)
         datos.addWidget(self._crear_campo("Creado", self._formateador_fecha(plan.creado_en)), 4, 0)
-        datos.addWidget(self._crear_campo("Ultima actualizacion", self._formateador_fecha(plan.actualizado_en)), 4, 1)
+        datos.addWidget(self._crear_campo("Última actualización", self._formateador_fecha(plan.actualizado_en)), 4, 1)
         datos.addWidget(
             self._crear_campo("Creado por", plan.creado_por_nombre or "Sin registro"),
             5,
@@ -520,8 +521,8 @@ class DialogoDetallePlanPago(DialogoBaseSicap):
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(10)
-        boton_cerrar = BotonAccionContextual("Cerrar", variante="neutro", centrado=True, mostrar_icono=False)
-        boton_editar = BotonAccionContextual("Editar", variante="edicion", centrado=True, mostrar_icono=False)
+        boton_cerrar = BotonAccionContextual("Cerrar", icono="x.svg", variante="neutro", centrado=True, mostrar_icono=True)
+        boton_editar = BotonAccionContextual("Editar", icono="edit.svg", variante="edicion", centrado=True, mostrar_icono=True)
         boton_cerrar.setMinimumWidth(124)
         boton_editar.setMinimumWidth(124)
         boton_cerrar.clicked.connect(self.reject)
@@ -535,14 +536,13 @@ class DialogoDetallePlanPago(DialogoBaseSicap):
         layout_panel.addWidget(self._crear_seccion("Estado financiero", "Cuotas pendientes, mora y saldo vivo del plan.", [fila_metricas]))
         layout_panel.addWidget(self._crear_seccion("Cuotas del plan", "Detalle de cada cuota actualmente registrada.", [tabla]))
         layout_panel.addWidget(self._crear_seccion("Cargos vinculados", "Cargos reales de la casa que el plan intenta cubrir cuando aplica.", [cargos]))
-        layout_panel.addLayout(fila_acciones)
         layout_scroll.addWidget(panel)
         scroll.setWidget(contenedor)
 
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
         self.layout_cuerpo.addWidget(scroll)
-        self._pie.setVisible(False)
+        self.layout_pie.addLayout(fila_acciones)
         self._aplicar_estilos_detalle()
 
     def _solicitar_edicion(self) -> None:
@@ -601,7 +601,6 @@ class DialogoDetallePlanPago(DialogoBaseSicap):
 
     def _aplicar_estilos_detalle(self) -> None:
         paleta = self._paleta_tema
-        oscuro = self._tema_actual != "claro"
         self.setStyleSheet(
             self.styleSheet()
             + f"""
@@ -613,35 +612,35 @@ class DialogoDetallePlanPago(DialogoBaseSicap):
             QFrame#seccionDetallePlan,
             QFrame#campoDetallePlan,
             QFrame#tarjetaMiniDetallePlan {{
-                background: {'rgba(255,255,255,0.08)' if oscuro else paleta['fondo_superficie']};
-                border: 1px solid {'rgba(255,255,255,0.12)' if oscuro else paleta['borde_principal']};
+                background: {paleta['fondo_superficie']};
+                border: 1px solid {paleta['borde_principal']};
                 border-radius: 14px;
             }}
             QLabel#codigoPlanDetalle,
             QLabel#etiquetaDetallePlan,
             QLabel#descripcionSeccionDetallePlan,
             QLabel#textoCargosPlan {{
-                color: {'rgba(235,242,248,0.76)' if oscuro else paleta['texto_secundario']};
+                color: {paleta['texto_secundario']};
             }}
             QLabel#nombrePlanDetalle,
             QLabel#valorDetallePlan,
             QLabel#valorTarjetaMiniDetallePlan,
             QLabel#tituloSeccionDetallePlan {{
-                color: {'#ffffff' if oscuro else paleta['texto_principal']};
+                color: {paleta['texto_principal']};
             }}
             QLabel#badgeDetallePlan {{
                 border-radius: 11px;
                 padding: 6px 10px;
                 font-size: 11px;
                 font-weight: 800;
-                color: {'#f4f8fb' if oscuro else paleta['texto_badge']};
-                background: {'rgba(132, 146, 166, 0.22)' if oscuro else paleta['fondo_badge']};
-                border: 1px solid {'rgba(255,255,255,0.12)' if oscuro else paleta['borde_suave']};
+                color: {paleta['texto_badge']};
+                background: {paleta['fondo_badge']};
+                border: 1px solid {paleta['borde_suave']};
             }}
             QLabel#badgeDetallePlan[activo="true"] {{
-                color: {'#d9fff5' if oscuro else paleta['texto_badge_activo']};
-                background: {'rgba(16, 120, 98, 0.22)' if oscuro else paleta['fondo_badge_activo']};
-                border-color: {'rgba(158, 231, 214, 0.26)' if oscuro else paleta['borde_badge_activo']};
+                color: {paleta['texto_badge_activo']};
+                background: {paleta['fondo_badge_activo']};
+                border-color: {paleta['borde_badge_activo']};
             }}
             QTableWidget#tablaCuotasPlan {{
                 background: {paleta['fondo_tabla_cuerpo']};
@@ -661,7 +660,7 @@ class DialogoDetallePlanPago(DialogoBaseSicap):
             }}
             QTableWidget#tablaCuotasPlan QHeaderView::section {{
                 background: {paleta['fondo_tabla_header_destacado']};
-                color: {'#f7fbff' if oscuro else paleta['texto_input']};
+                color: {paleta['texto_input']};
                 border: none;
                 border-right: 1px solid {paleta['borde_tabla']};
                 border-bottom: 1px solid {paleta['borde_tabla']};
@@ -745,7 +744,7 @@ class VistaPlanesPago(QWidget):
         self._label_paginacion.setText(
             f"Mostrando {pagina.indice_inicio}-{pagina.indice_fin} de {pagina.total_registros} registros"
         )
-        self._label_numero_pagina.setText(f"Pagina {pagina.pagina_actual} de {pagina.total_paginas}")
+        self._label_numero_pagina.setText(f"Página {pagina.pagina_actual} de {pagina.total_paginas}")
         self._boton_pagina_anterior.setEnabled(pagina.pagina_actual > 1)
         self._boton_pagina_siguiente.setEnabled(pagina.pagina_actual < pagina.total_paginas)
 
@@ -791,7 +790,7 @@ class VistaPlanesPago(QWidget):
         return ruta
 
     def aplicar_tema(self, nombre_tema: str) -> None:
-        self._tema_actual = nombre_tema if nombre_tema in ("oscuro", "claro") else TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = resolver_nombre_tema(nombre_tema)
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._aplicar_estilos()
 
@@ -802,7 +801,7 @@ class VistaPlanesPago(QWidget):
         encabezado = QHBoxLayout()
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(8)
-        boton_info = BotonAccionContextual("Informacion", variante="ayuda", centrado=True, mostrar_icono=False)
+        boton_info = BotonAccionContextual("Información", variante="ayuda", centrado=True, mostrar_icono=False)
         boton_exportar = crear_boton_operativo("Exportar")
         boton_nuevo = crear_boton_operativo("Nuevo plan", principal=True)
         boton_info.clicked.connect(self._mostrar_ayuda)
@@ -823,10 +822,10 @@ class VistaPlanesPago(QWidget):
         tarjetas = QGridLayout()
         tarjetas.setHorizontalSpacing(10)
         tarjetas.setVerticalSpacing(10)
-        self._tarjeta_total = TarjetaResumenPlanPago("key.svg", "#8ec9ff")
+        self._tarjeta_total = TarjetaResumenPlanPago("key.svg", "#C9DBE9")
         self._tarjeta_activos = TarjetaResumenPlanPago("circle-check.svg", "#8de8c7")
         self._tarjeta_mora = TarjetaResumenPlanPago("clock.svg", "#f7cc7a")
-        self._tarjeta_saldo = TarjetaResumenPlanPago("alert-triangle.svg", "#c6b6ff")
+        self._tarjeta_saldo = TarjetaResumenPlanPago("alert-triangle.svg", "#8FAFC7")
         tarjetas.addWidget(self._tarjeta_total, 0, 0)
         tarjetas.addWidget(self._tarjeta_activos, 0, 1)
         tarjetas.addWidget(self._tarjeta_mora, 0, 2)
@@ -873,7 +872,7 @@ class VistaPlanesPago(QWidget):
         configurar_tabla_operativa(
             self._tabla,
             [
-                "Codigo",
+                "Código",
                 "Casa",
                 "Abonado",
                 "Tipo",
@@ -916,7 +915,7 @@ class VistaPlanesPago(QWidget):
         pie.addStretch(1)
         self._boton_pagina_anterior = crear_boton_operativo("Anterior")
         self._boton_pagina_siguiente = crear_boton_operativo("Siguiente")
-        self._label_numero_pagina = QLabel("Pagina 1 de 1")
+        self._label_numero_pagina = QLabel("Página 1 de 1")
         self._label_numero_pagina.setObjectName("textoPiePlanes")
         self._boton_pagina_anterior.clicked.connect(lambda: self.pagina_cambiada.emit(max(1, self._pagina_actual - 1)))
         self._boton_pagina_siguiente.clicked.connect(lambda: self.pagina_cambiada.emit(self._pagina_actual + 1))
@@ -982,52 +981,47 @@ class VistaPlanesPago(QWidget):
     def _aplicar_estilos(self) -> None:
         radio = self.RADIO_PANEL_TABLA
         paleta = self._paleta_tema
-        oscuro = self._tema_actual != "claro"
-        fondo_panel_destacado = (
-            obtener_fondo_header_destacado(self._tema_actual)
-            if oscuro
-            else paleta["fondo_superficie"]
-        )
+        fondo_panel_destacado = obtener_fondo_header_destacado(self._tema_actual)
         self.setStyleSheet(
             f"""
             QWidget#vistaPlanesPago {{
                 background: transparent;
             }}
             QLabel#tituloModulo {{
-                color: {'#ffffff' if oscuro else paleta['texto_principal']};
+                color: {paleta['texto_principal']};
                 font-size: 19px;
                 font-weight: 900;
             }}
             QLabel#descripcionModulo,
             QLabel#textoPiePlanes,
             QLabel#detalleTarjetaResumen {{
-                color: {'rgba(235, 242, 248, 0.76)' if oscuro else paleta['texto_secundario']};
+                color: {paleta['texto_secundario']};
                 font-size: 11px;
                 font-weight: 600;
             }}
             QLabel#mensajePlanes {{
-                color: {'#d9fff5' if oscuro else paleta['texto_exito']};
+                color: {paleta['texto_exito']};
                 font-size: 12px;
                 font-weight: 700;
                 padding: 8px 10px;
                 border-radius: 12px;
-                background-color: {'rgba(16, 120, 98, 0.16)' if oscuro else paleta['fondo_exito']};
-                border: 1px solid {'rgba(158, 231, 214, 0.26)' if oscuro else paleta['borde_exito']};
+                background-color: {paleta['fondo_exito']};
+                border: 1px solid {paleta['borde_exito']};
             }}
             QLabel#mensajePlanes[error="true"] {{
-                color: {'#ffd4cf' if oscuro else paleta['texto_error']};
-                background-color: {'rgba(180, 35, 24, 0.15)' if oscuro else paleta['fondo_error']};
-                border: 1px solid {'rgba(255, 205, 199, 0.28)' if oscuro else paleta['borde_error']};
+                color: {paleta['texto_error']};
+                background-color: {paleta['fondo_error']};
+                border: 1px solid {paleta['borde_error']};
             }}
             QFrame#panelOperativoPlanes,
             QFrame#tarjetaResumenPlanes {{
                 background: {fondo_panel_destacado};
-                border: 1px solid {'rgba(255,255,255,0.16)' if oscuro else paleta['borde_principal']};
+                border: 1px solid {paleta['borde_principal']};
                 border-radius: 18px;
             }}
             QFrame#panelTablaPlanes {{
                 background: {fondo_panel_destacado};
-                border: 1px solid {'rgba(255,255,255,0.16)' if oscuro else paleta['borde_principal']};
+                border: 1px solid {paleta['borde_principal']};
                 border-radius: {radio}px;
             }}
             QTableWidget#tablaPlanes {{
@@ -1048,7 +1042,7 @@ class VistaPlanesPago(QWidget):
             }}
             QTableWidget#tablaPlanes QHeaderView::section {{
                 background: {paleta['fondo_tabla_header_destacado']};
-                color: {'#f7fbff' if oscuro else paleta['texto_input']};
+                color: {paleta['texto_input']};
                 border: none;
                 border-right: 1px solid {paleta['borde_tabla']};
                 border-bottom: 1px solid {paleta['borde_tabla']};
@@ -1071,26 +1065,26 @@ class VistaPlanesPago(QWidget):
                 background: {paleta['fondo_tabla_seleccion']};
             }}
             QLabel#iconoTarjetaResumen {{
-                background: {'rgba(255,255,255,0.08)' if oscuro else paleta['fondo_superficie_suave']};
-                border: 1px solid {'rgba(255,255,255,0.10)' if oscuro else paleta['borde_suave']};
+                background: {paleta['fondo_superficie_suave']};
+                border: 1px solid {paleta['borde_suave']};
                 border-radius: 12px;
             }}
             QLabel#tituloTarjetaResumen {{
-                color: {'rgba(235,242,248,0.72)' if oscuro else paleta['texto_secundario']};
+                color: {paleta['texto_secundario']};
                 font-size: 11px;
                 font-weight: 700;
             }}
             QLabel#valorTarjetaResumen {{
-                color: {'#ffffff' if oscuro else paleta['texto_principal']};
+                color: {paleta['texto_principal']};
                 font-size: 20px;
                 font-weight: 900;
             }}
             QLineEdit {{
                 min-height: 36px;
-                border: 1px solid {'rgba(255,255,255,0.18)' if oscuro else paleta['borde_medio']};
+                border: 1px solid {paleta['borde_medio']};
                 border-radius: 12px;
-                background: {'rgba(255,255,255,0.11)' if oscuro else paleta['fondo_input']};
-                color: {'#f5fbff' if oscuro else paleta['texto_input']};
+                background: {paleta['fondo_input']};
+                color: {paleta['texto_input']};
                 padding: 0 10px;
                 font-size: 12px;
             }}
@@ -1098,30 +1092,30 @@ class VistaPlanesPago(QWidget):
                 min-height: 30px;
                 border-radius: 11px;
                 padding: 0 12px;
-                background: {'rgba(255,255,255,0.06)' if oscuro else paleta['fondo_chip']};
-                border: 1px solid {'rgba(255,255,255,0.14)' if oscuro else paleta['borde_suave']};
-                color: {'#ecf5ff' if oscuro else paleta['texto_chip']};
+                background: {paleta['fondo_chip']};
+                border: 1px solid {paleta['borde_suave']};
+                color: {paleta['texto_chip']};
                 font-size: 11px;
                 font-weight: 700;
             }}
             QPushButton#chipFiltroPlan:checked {{
-                color: {'#0f2d43' if oscuro else paleta['texto_chip_activo']};
-                background: {'#d2f4f2' if oscuro else paleta['fondo_chip_activo']};
-                border-color: {'rgba(255,255,255,0.18)' if oscuro else paleta['borde_chip_activo']};
+                color: {paleta['texto_chip_activo']};
+                background: {paleta['fondo_chip_activo']};
+                border-color: {paleta['borde_chip_activo']};
             }}
             QLabel#badgeEstadoPlan {{
                 border-radius: 11px;
                 padding: 6px 10px;
                 font-size: 11px;
                 font-weight: 800;
-                color: {'#f4f8fb' if oscuro else paleta['texto_badge']};
-                background: {'rgba(132,146,166,0.22)' if oscuro else paleta['fondo_badge']};
-                border: 1px solid {'rgba(255,255,255,0.12)' if oscuro else paleta['borde_suave']};
+                color: {paleta['texto_badge']};
+                background: {paleta['fondo_badge']};
+                border: 1px solid {paleta['borde_suave']};
             }}
             QLabel#badgeEstadoPlan[activo="true"] {{
-                color: {'#d9fff5' if oscuro else paleta['texto_badge_activo']};
-                background: {'rgba(16,120,98,0.22)' if oscuro else paleta['fondo_badge_activo']};
-                border-color: {'rgba(158,231,214,0.26)' if oscuro else paleta['borde_badge_activo']};
+                color: {paleta['texto_badge_activo']};
+                background: {paleta['fondo_badge_activo']};
+                border-color: {paleta['borde_badge_activo']};
             }}
             QWidget#contenedorAccionesPlan {{
                 background: transparent;
@@ -1132,7 +1126,7 @@ class VistaPlanesPago(QWidget):
                 border-radius: 8px;
             }}
             QLabel#estadoVacioPlanes {{
-                color: {'rgba(235,242,248,0.76)' if oscuro else paleta['texto_secundario']};
+                color: {paleta['texto_secundario']};
                 font-size: 12px;
                 font-weight: 700;
                 padding: 20px 14px;
