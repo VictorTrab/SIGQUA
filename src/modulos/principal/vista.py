@@ -137,12 +137,12 @@ class TarjetaMetricaEjecutiva(QFrame):
         self.setObjectName("tarjetaMetricaEjecutiva")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setMinimumHeight(112)
-        self.setMaximumHeight(128)
+        self.setMinimumHeight(122)
+        self.setMaximumHeight(132)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 13, 16, 13)
-        layout.setSpacing(8)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(9)
 
         fila_superior = QHBoxLayout()
         fila_superior.setContentsMargins(0, 0, 0, 0)
@@ -449,7 +449,7 @@ class GraficoBarrasHorizontalesDashboard(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def actualizar(self, categorias: tuple[CategoriaDashboard, ...]) -> None:
-        self._categorias = tuple(categorias[:6])
+        self._categorias = tuple(sorted(categorias, key=lambda categoria: categoria.valor, reverse=True)[:6])
         self.update()
 
     def aplicar_tema(self, nombre_tema: str) -> None:
@@ -558,7 +558,7 @@ class LeyendaDonutDeuda(QFrame):
             self._layout.addWidget(vacio)
             self._layout.addStretch(1)
             return
-        for categoria in self._categorias:
+        for categoria in (categoria for categoria in self._categorias if categoria.valor > 0):
             self._layout.addWidget(self._crear_fila(categoria, total))
         self._layout.addStretch(1)
 
@@ -1898,19 +1898,19 @@ class VistaModuloPrincipal(QWidget):
         if ancho >= ANCHO_RUPTURA_DASHBOARD_AMPLIO:
             self._modo_dashboard_actual = "amplio"
             self._aplicar_alturas_paneles_dashboard(
-                tendencia=264,
-                ranking=242,
-                estados=264,
-                distribucion=264,
-                insights=242,
+                tendencia=285,
+                ranking=255,
+                estados=245,
+                distribucion=245,
+                insights=255,
             )
             self._panel_ranking.setMaximumWidth(limite_expandido)
             self._panel_insights.setMaximumWidth(limite_expandido)
-            self._layout_paneles_dashboard.addWidget(self._panel_tendencia, 0, 0, 1, 2)
-            self._layout_paneles_dashboard.addWidget(self._panel_estados, 0, 2)
-            self._layout_paneles_dashboard.addWidget(self._panel_distribucion, 0, 3)
-            self._layout_paneles_dashboard.addWidget(self._panel_ranking, 1, 0, 1, 2)
-            self._layout_paneles_dashboard.addWidget(self._panel_insights, 1, 2, 1, 2)
+            self._layout_paneles_dashboard.addWidget(self._panel_tendencia, 0, 0, 1, 4)
+            self._layout_paneles_dashboard.addWidget(self._panel_estados, 1, 0, 1, 2)
+            self._layout_paneles_dashboard.addWidget(self._panel_distribucion, 1, 2, 1, 2)
+            self._layout_paneles_dashboard.addWidget(self._panel_ranking, 2, 0, 1, 2)
+            self._layout_paneles_dashboard.addWidget(self._panel_insights, 2, 2, 1, 2)
             self._layout_paneles_dashboard.setColumnStretch(0, 2)
             self._layout_paneles_dashboard.setColumnStretch(1, 2)
             self._layout_paneles_dashboard.setColumnStretch(2, 2)
@@ -1923,11 +1923,11 @@ class VistaModuloPrincipal(QWidget):
         if ancho >= ANCHO_RUPTURA_DASHBOARD_MEDIO:
             self._modo_dashboard_actual = "medio"
             self._aplicar_alturas_paneles_dashboard(
-                tendencia=268,
-                ranking=248,
-                estados=238,
-                distribucion=238,
-                insights=260,
+                tendencia=280,
+                ranking=255,
+                estados=245,
+                distribucion=245,
+                insights=270,
             )
             self._layout_paneles_dashboard.addWidget(self._panel_tendencia, 0, 0, 1, 2)
             self._layout_paneles_dashboard.addWidget(self._panel_estados, 1, 0)
@@ -1940,11 +1940,11 @@ class VistaModuloPrincipal(QWidget):
 
         self._modo_dashboard_actual = "compacto"
         self._aplicar_alturas_paneles_dashboard(
-            tendencia=260,
-            ranking=238,
-            estados=230,
-            distribucion=232,
-            insights=270,
+            tendencia=270,
+            ranking=255,
+            estados=240,
+            distribucion=240,
+            insights=300,
         )
         self._layout_paneles_dashboard.addWidget(self._panel_tendencia, 0, 0)
         self._layout_paneles_dashboard.addWidget(self._panel_estados, 1, 0)
@@ -2096,7 +2096,7 @@ class VistaModuloPrincipal(QWidget):
                 item.widget().deleteLater()
         self._tarjetas_insight.clear()
 
-        for insight in insights:
+        for insight in insights[:5]:
             indice = len(self._tarjetas_insight)
             tarjeta = TarjetaInsight(self._tema_actual)
             tarjeta.actualizar(insight)
@@ -2151,6 +2151,7 @@ class VistaModuloPrincipal(QWidget):
         actual.setColor(color_linea)
         actual.setPen(QPen(color_linea, 3.2))
         actual.setPointsVisible(True)
+        actual.setMarkerSize(7.0)
 
         referencia = QLineSeries()
         referencia.setName("Promedio")
@@ -2158,6 +2159,8 @@ class VistaModuloPrincipal(QWidget):
         pen_referencia = QPen(color_promedio, 2.0)
         pen_referencia.setStyle(Qt.PenStyle.DotLine)
         referencia.setPen(pen_referencia)
+        referencia.setPointsVisible(True)
+        referencia.setMarkerSize(5.0)
 
         valores = [punto.valor for punto in serie]
         promedio = fmean(valores) if valores else 0.0
@@ -2174,6 +2177,7 @@ class VistaModuloPrincipal(QWidget):
             mostrar_leyenda=True,
             alineacion_leyenda=Qt.AlignmentFlag.AlignTop,
         )
+        chart.setMargins(QMargins(4, 8, 4, 0))
 
         eje_x = QBarCategoryAxis()
         eje_x.append([punto.etiqueta for punto in serie])
@@ -2183,7 +2187,7 @@ class VistaModuloPrincipal(QWidget):
 
         eje_y = QValueAxis()
         maximo = max(valores + [promedio, 1.0])
-        eje_y.setRange(0, maximo * 1.25)
+        eje_y.setRange(0, maximo * 1.4)
         eje_y.setTickCount(5)
         eje_y.setMinorTickCount(1)
         eje_y.setLabelsColor(QColor(str(self._paleta_tema["grafica_texto_suave"])))
