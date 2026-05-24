@@ -7,11 +7,8 @@ from statistics import fmean
 
 from PySide6.QtCharts import (
     QBarCategoryAxis,
-    QBarSeries,
-    QBarSet,
     QChart,
     QChartView,
-    QHorizontalBarSeries,
     QLineSeries,
     QPieSeries,
     QValueAxis,
@@ -23,6 +20,7 @@ from PySide6.QtCore import (
     QPauseAnimation,
     QPoint,
     QPropertyAnimation,
+    QRectF,
     QSequentialAnimationGroup,
     QSize,
     Qt,
@@ -37,7 +35,6 @@ from PySide6.QtGui import (
     QPaintEvent,
     QPainter,
     QPen,
-    QPixmap,
     QResizeEvent,
 )
 from PySide6.QtWidgets import (
@@ -91,11 +88,33 @@ ANCHO_MINIMO_SHELL_PRINCIPAL = 960
 ALTO_MINIMO_SHELL_PRINCIPAL = 640
 ANCHO_RUPTURA_DASHBOARD_AMPLIO = 1320
 ANCHO_RUPTURA_DASHBOARD_MEDIO = 980
-ANCHO_RUPTURA_METRICAS_4_COLUMNAS = 1660
-ANCHO_RUPTURA_METRICAS_3_COLUMNAS = 1080
+ANCHO_RUPTURA_METRICAS_6_COLUMNAS = 1120
+ANCHO_RUPTURA_METRICAS_4_COLUMNAS = 980
+ANCHO_RUPTURA_METRICAS_3_COLUMNAS = 820
 ANCHO_RUPTURA_METRICAS_2_COLUMNAS = 760
 COLOR_GRADIENTE_MARCA_INICIAL = "#22d3a6"
 COLOR_GRADIENTE_MARCA_FINAL = "#E4EACC"
+
+
+def _crear_color_qt(valor: object, fallback: str = "#C9DBE9") -> QColor:
+    """Convierte colores de paleta CSS a QColor para pintado manual."""
+    texto = str(valor).strip()
+    color = QColor(texto)
+    if color.isValid():
+        return color
+    if texto.startswith("rgba(") and texto.endswith(")"):
+        partes = [parte.strip() for parte in texto[5:-1].split(",")]
+        if len(partes) == 4:
+            try:
+                rojo = int(float(partes[0]))
+                verde = int(float(partes[1]))
+                azul = int(float(partes[2]))
+                alpha_bruto = float(partes[3])
+                alpha = int(alpha_bruto * 255) if alpha_bruto <= 1 else int(alpha_bruto)
+                return QColor(rojo, verde, azul, max(0, min(255, alpha)))
+            except ValueError:
+                pass
+    return QColor(fallback)
 
 
 class TarjetaMetricaEjecutiva(QFrame):
@@ -116,33 +135,31 @@ class TarjetaMetricaEjecutiva(QFrame):
         self._etiqueta_contexto = etiqueta_contexto
         self._tema_actual = nombre_tema
         self.setObjectName("tarjetaMetricaEjecutiva")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setMinimumHeight(130)
+        self.setMinimumHeight(112)
+        self.setMaximumHeight(128)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(10)
+        layout.setContentsMargins(16, 13, 16, 13)
+        layout.setSpacing(8)
 
         fila_superior = QHBoxLayout()
         fila_superior.setContentsMargins(0, 0, 0, 0)
-        fila_superior.setSpacing(10)
+        fila_superior.setSpacing(8)
 
-        self._insignia = QLabel("")
-        self._insignia.setObjectName("insigniaMetricaEjecutiva")
-        self._insignia.setFixedSize(42, 42)
-        self._insignia.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._titulo = QLabel("")
+        self._titulo.setObjectName("tituloMetricaEjecutiva")
+        self._titulo.setWordWrap(True)
 
         self._chip = QLabel(etiqueta_contexto.upper())
         self._chip.setObjectName("chipMetricaEjecutiva")
         self._chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        fila_superior.addWidget(self._insignia)
+        fila_superior.addWidget(self._titulo, 1)
         fila_superior.addStretch(1)
         fila_superior.addWidget(self._chip)
 
-        self._titulo = QLabel("")
-        self._titulo.setObjectName("tituloMetricaEjecutiva")
-        self._titulo.setWordWrap(True)
         self._valor = QLabel("")
         self._valor.setObjectName("valorMetricaEjecutiva")
         self._detalle = QLabel("")
@@ -152,7 +169,6 @@ class TarjetaMetricaEjecutiva(QFrame):
         layout.addLayout(fila_superior)
         layout.addWidget(self._titulo)
         layout.addWidget(self._valor)
-        layout.addStretch(1)
         layout.addWidget(self._detalle)
         self._aplicar_estilo()
 
@@ -163,65 +179,41 @@ class TarjetaMetricaEjecutiva(QFrame):
 
     def _aplicar_estilo(self) -> None:
         paleta = obtener_paleta_tema(self._tema_actual)
-        color_base = QColor(self._color_fondo)
-        color_acento = QColor(self._color_acento)
-        tono_superior = QColor(color_base)
-        tono_superior.setAlpha(184)
-        tono_inferior = QColor(228, 234, 204, 126)
-        borde = QColor(color_acento)
-        borde.setAlpha(130)
-        fondo_insignia = QColor(color_acento)
-        fondo_insignia.setAlpha(66)
-        chip_fondo = QColor(color_base)
-        chip_fondo.setAlpha(116)
-
-        self._insignia.setPixmap(
-            obtener_icono_tabler_coloreado(self._icono, self._color_acento, tamano=20).pixmap(20, 20)
-        )
-        self.setStyleSheet(
+        self._chip.setStyleSheet(
             f"""
-            QFrame#tarjetaMetricaEjecutiva {{
-                background: qlineargradient(
-                    x1: 0, y1: 0,
-                    x2: 1, y2: 1,
-                    stop: 0 rgba({tono_superior.red()}, {tono_superior.green()}, {tono_superior.blue()}, {tono_superior.alpha()}),
-                    stop: 1 rgba({tono_inferior.red()}, {tono_inferior.green()}, {tono_inferior.blue()}, {tono_inferior.alpha()})
-                );
-                border: 1px solid rgba({borde.red()}, {borde.green()}, {borde.blue()}, {borde.alpha()});
-                border-radius: 20px;
-            }}
-            QLabel#insigniaMetricaEjecutiva {{
-                background: rgba({fondo_insignia.red()}, {fondo_insignia.green()}, {fondo_insignia.blue()}, {fondo_insignia.alpha()});
-                border: 1px solid rgba({borde.red()}, {borde.green()}, {borde.blue()}, {min(255, borde.alpha() + 24)});
-                border-radius: 14px;
-            }}
-            QLabel#chipMetricaEjecutiva {{
-                background: rgba({chip_fondo.red()}, {chip_fondo.green()}, {chip_fondo.blue()}, {chip_fondo.alpha()});
-                color: {paleta["texto_panel_principal"]};
-                border: 1px solid rgba({borde.red()}, {borde.green()}, {borde.blue()}, {max(70, borde.alpha() - 10)});
-                border-radius: 11px;
-                padding: 4px 9px;
-                font-size: 10px;
-                font-weight: 800;
-                letter-spacing: 0.08em;
-            }}
-            QLabel#tituloMetricaEjecutiva {{
-                color: {paleta["texto_panel_principal"]};
-                font-size: 12px;
-                font-weight: 800;
-            }}
-            QLabel#valorMetricaEjecutiva {{
-                color: {paleta["texto_panel_fuerte"]};
-                font-size: 31px;
-                font-weight: 900;
-            }}
-            QLabel#detalleMetricaEjecutiva {{
-                color: {paleta["texto_panel_detalle"]};
-                font-size: 11px;
-                font-weight: 700;
-            }}
+            background: {self._color_fondo};
+            color: {paleta["texto_destacado"]};
+            border: 1px solid {self._color_acento};
+            border-radius: 10px;
+            padding: 3px 8px;
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
             """
         )
+        self._titulo.setStyleSheet(
+            f"color: {paleta['texto_panel_secundario']}; font-size: 11px; font-weight: 800;"
+        )
+        self._valor.setStyleSheet(
+            f"color: {paleta['texto_panel_fuerte']}; font-size: 28px; font-weight: 900;"
+        )
+        self._detalle.setStyleSheet(
+            f"color: {paleta['texto_panel_secundario']}; font-size: 10px; font-weight: 700;"
+        )
+        self.update()
+
+    def paintEvent(self, evento: QPaintEvent) -> None:
+        paleta = obtener_paleta_tema(self._tema_actual)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        recta = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        degradado = QLinearGradient(recta.topLeft(), recta.bottomRight())
+        degradado.setColorAt(0.0, QColor(self._color_fondo))
+        degradado.setColorAt(1.0, QColor(str(paleta["fondo_superficie_muy_suave"])))
+        painter.setBrush(QBrush(degradado))
+        painter.setPen(QPen(QColor(self._color_acento), 1))
+        painter.drawRoundedRect(recta, 16, 16)
+        painter.end()
 
     def aplicar_tema(self, nombre_tema: str) -> None:
         self._tema_actual = nombre_tema
@@ -260,12 +252,25 @@ class FilaRanking(QFrame):
 class TarjetaInsight(QWidget):
     """Tarjeta compacta para lecturas rapidas del panel."""
 
-    def __init__(self) -> None:
+    def __init__(self, nombre_tema: str = TEMA_SICAP_PREDETERMINADO) -> None:
         super().__init__()
+        self._tema_actual = nombre_tema
+        self._icono_actual = "info-circle.svg"
+        self._color_actual = "#C9DBE9"
         self.setObjectName("tarjetaInsight")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 14, 16, 14)
-        layout.setSpacing(3)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(9)
+
+        self._insignia = QLabel("")
+        self._insignia.setObjectName("insigniaInsight")
+        self._insignia.setFixedSize(34, 34)
+        self._insignia.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        contenido = QVBoxLayout()
+        contenido.setContentsMargins(0, 0, 0, 0)
+        contenido.setSpacing(2)
 
         self._titulo = QLabel("")
         self._titulo.setObjectName("insightTitulo")
@@ -275,14 +280,323 @@ class TarjetaInsight(QWidget):
         self._detalle.setObjectName("insightDetalle")
         self._detalle.setWordWrap(True)
 
-        layout.addWidget(self._titulo)
-        layout.addWidget(self._valor)
-        layout.addWidget(self._detalle)
+        contenido.addWidget(self._titulo)
+        contenido.addWidget(self._valor)
+        contenido.addWidget(self._detalle)
+        layout.addWidget(self._insignia, alignment=Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(contenido, 1)
 
     def actualizar(self, insight: InsightDashboard) -> None:
+        self._icono_actual, self._color_actual = self._resolver_visual_insight(insight.titulo)
         self._titulo.setText(insight.titulo)
         self._valor.setText(insight.valor)
         self._detalle.setText(insight.detalle)
+        self._aplicar_estilo()
+
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._tema_actual = resolver_nombre_tema(nombre_tema)
+        self._aplicar_estilo()
+
+    @staticmethod
+    def _resolver_visual_insight(titulo: str) -> tuple[str, str]:
+        texto = titulo.lower()
+        if "comprometidos" in texto:
+            return "alert-triangle.svg", "#F87171"
+        if "pagos" in texto:
+            return "receipt-2.svg", "#38BDF8"
+        if "cargos" in texto:
+            return "urgent.svg", "#FBBF24"
+        if "planes" in texto:
+            return "calendar-stats.svg", "#A78BFA"
+        if "ultimo" in texto:
+            return "clock.svg", "#35E6A8"
+        return "info-circle.svg", "#C9DBE9"
+
+    def _aplicar_estilo(self) -> None:
+        color = QColor(self._color_actual)
+        fondo = QColor(color)
+        fondo.setAlpha(44)
+        borde = QColor(color)
+        borde.setAlpha(112)
+        self._insignia.setPixmap(
+            obtener_icono_tabler_coloreado(self._icono_actual, self._color_actual, tamano=18).pixmap(18, 18)
+        )
+        self._insignia.setStyleSheet(
+            f"""
+            QLabel#insigniaInsight {{
+                background: rgba({fondo.red()}, {fondo.green()}, {fondo.blue()}, {fondo.alpha()});
+                border: 1px solid rgba({borde.red()}, {borde.green()}, {borde.blue()}, {borde.alpha()});
+                border-radius: 12px;
+            }}
+            """
+        )
+
+
+class GraficoBarrasEstadoServicio(QWidget):
+    """Grafico compacto de barras por estado operativo del servicio."""
+
+    def __init__(self, nombre_tema: str = TEMA_SICAP_PREDETERMINADO) -> None:
+        super().__init__()
+        self._tema_actual = nombre_tema
+        self._paleta = obtener_paleta_tema(nombre_tema)
+        self._categorias: tuple[CategoriaDashboard, ...] = ()
+        self.setObjectName("graficoEstadoServicio")
+        self.setMinimumHeight(160)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+    def actualizar(self, categorias: tuple[CategoriaDashboard, ...]) -> None:
+        self._categorias = tuple(categorias)
+        self.update()
+
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._tema_actual = resolver_nombre_tema(nombre_tema)
+        self._paleta = obtener_paleta_tema(self._tema_actual)
+        self.update()
+
+    def paintEvent(self, evento: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        recta = QRectF(self.contentsRect()).adjusted(8, 8, -8, -8)
+        datos = tuple(c for c in self._categorias if c.valor >= 0)
+        if not datos or sum(c.valor for c in datos) <= 0:
+            self._dibujar_estado_vacio(
+                painter,
+                recta,
+                "Sin casas registradas para mostrar estado del servicio.",
+            )
+            painter.end()
+            return
+
+        area = QRectF(recta.left() + 32, recta.top() + 18, recta.width() - 42, recta.height() - 50)
+        maximo = max((c.valor for c in datos), default=1.0) or 1.0
+        self._dibujar_grilla(painter, area, maximo)
+        paso = area.width() / max(1, len(datos))
+        ancho_barra = min(46.0, paso * 0.52)
+        fuente_valor = QFont(str(self._paleta["familia_tipografica"]), 9, QFont.Weight.Bold)
+        fuente_etiqueta = QFont(str(self._paleta["familia_tipografica"]), 8, QFont.Weight.DemiBold)
+
+        for indice, categoria in enumerate(datos):
+            alto = max(3.0, (categoria.valor / maximo) * area.height())
+            x = area.left() + indice * paso + (paso - ancho_barra) / 2
+            barra = QRectF(x, area.bottom() - alto, ancho_barra, alto)
+            color = QColor(self._color_estado(categoria.etiqueta))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(color))
+            painter.drawRoundedRect(barra, 8, 8)
+
+            painter.setFont(fuente_valor)
+            painter.setPen(QColor(str(self._paleta["grafica_texto_fuerte"])))
+            painter.drawText(
+                QRectF(x - 18, barra.top() - 22, ancho_barra + 36, 18),
+                Qt.AlignmentFlag.AlignCenter,
+                f"{int(categoria.valor):,}",
+            )
+            painter.setFont(fuente_etiqueta)
+            painter.setPen(QColor(str(self._paleta["grafica_texto_suave"])))
+            etiqueta = painter.fontMetrics().elidedText(
+                categoria.etiqueta.title(),
+                Qt.TextElideMode.ElideRight,
+                int(max(40, paso - 8)),
+            )
+            painter.drawText(
+                QRectF(area.left() + indice * paso, area.bottom() + 8, paso, 24),
+                Qt.AlignmentFlag.AlignCenter,
+                etiqueta,
+            )
+        painter.end()
+
+    def _color_estado(self, etiqueta: str) -> str:
+        texto = etiqueta.lower()
+        if "activa" in texto:
+            return str(self._paleta["grafica_barra_activo"])
+        if "cortada" in texto:
+            return str(self._paleta["grafica_barra_cortado"])
+        if "suspendida" in texto:
+            return str(self._paleta["grafica_barra_suspendido"])
+        if "reconexion" in texto:
+            return str(self._paleta["grafica_barra_reconexion"])
+        return str(self._paleta["grafica_barra_inactivo"])
+
+    def _dibujar_grilla(self, painter: QPainter, area: QRectF, maximo: float) -> None:
+        painter.setPen(QPen(_crear_color_qt(self._paleta["grafica_grid_fuerte"], "#8FAFC7"), 1))
+        fuente = QFont(str(self._paleta["familia_tipografica"]), 8, QFont.Weight.DemiBold)
+        painter.setFont(fuente)
+        for indice in range(5):
+            y = area.bottom() - (area.height() * indice / 4)
+            painter.drawLine(int(area.left()), int(y), int(area.right()), int(y))
+            valor = int(maximo * indice / 4)
+            painter.setPen(QColor(str(self._paleta["grafica_texto_suave"])))
+            painter.drawText(QRectF(area.left() - 34, y - 9, 28, 18), Qt.AlignmentFlag.AlignRight, str(valor))
+            painter.setPen(QPen(_crear_color_qt(self._paleta["grafica_grid_fuerte"], "#8FAFC7"), 1))
+
+    def _dibujar_estado_vacio(self, painter: QPainter, recta: QRectF, mensaje: str) -> None:
+        painter.setPen(QColor(str(self._paleta["grafica_texto_suave"])))
+        painter.setFont(QFont(str(self._paleta["familia_tipografica"]), 10, QFont.Weight.DemiBold))
+        painter.drawText(recta, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, mensaje)
+
+
+class GraficoBarrasHorizontalesDashboard(QWidget):
+    """Grafico horizontal para ranking de deuda por barrio."""
+
+    def __init__(self, nombre_tema: str = TEMA_SICAP_PREDETERMINADO) -> None:
+        super().__init__()
+        self._tema_actual = nombre_tema
+        self._paleta = obtener_paleta_tema(nombre_tema)
+        self._categorias: tuple[CategoriaDashboard, ...] = ()
+        self.setObjectName("graficoDeudaBarrio")
+        self.setMinimumHeight(162)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+    def actualizar(self, categorias: tuple[CategoriaDashboard, ...]) -> None:
+        self._categorias = tuple(categorias[:6])
+        self.update()
+
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._tema_actual = resolver_nombre_tema(nombre_tema)
+        self._paleta = obtener_paleta_tema(self._tema_actual)
+        self.update()
+
+    def paintEvent(self, evento: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        recta = QRectF(self.contentsRect()).adjusted(8, 4, -8, -6)
+        datos = tuple(c for c in self._categorias if c.valor > 0)
+        if not datos:
+            self._dibujar_estado_vacio(painter, recta, "No hay deuda pendiente por barrio.")
+            painter.end()
+            return
+
+        label_ancho = min(152.0, max(94.0, recta.width() * 0.28))
+        valor_ancho = 92.0
+        area = QRectF(recta.left() + label_ancho, recta.top() + 8, recta.width() - label_ancho - valor_ancho, recta.height() - 18)
+        maximo = max(c.valor for c in datos)
+        alto_fila = area.height() / max(1, len(datos))
+        alto_barra = min(20.0, alto_fila * 0.48)
+        fuente = QFont(str(self._paleta["familia_tipografica"]), 9, QFont.Weight.DemiBold)
+        painter.setFont(fuente)
+
+        for indice, categoria in enumerate(datos):
+            centro_y = area.top() + indice * alto_fila + alto_fila / 2
+            texto_barrio = painter.fontMetrics().elidedText(
+                categoria.etiqueta,
+                Qt.TextElideMode.ElideRight,
+                int(label_ancho - 12),
+            )
+            painter.setPen(QColor(str(self._paleta["grafica_texto_fuerte"])))
+            painter.drawText(
+                QRectF(recta.left(), centro_y - 12, label_ancho - 10, 24),
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                texto_barrio,
+            )
+            fondo = QRectF(area.left(), centro_y - alto_barra / 2, area.width(), alto_barra)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(str(self._paleta["fondo_superficie_muy_suave"])))
+            painter.drawRoundedRect(fondo, 8, 8)
+            ancho = max(4.0, area.width() * categoria.valor / maximo)
+            barra = QRectF(area.left(), centro_y - alto_barra / 2, ancho, alto_barra)
+            degradado = QLinearGradient(barra.left(), barra.top(), barra.right(), barra.top())
+            degradado.setColorAt(0.0, QColor(str(self._paleta["grafica_deuda_barra_inicio"])))
+            degradado.setColorAt(1.0, QColor(str(self._paleta["grafica_deuda_barra_fin"])))
+            painter.setBrush(QBrush(degradado))
+            painter.drawRoundedRect(barra, 8, 8)
+            painter.setPen(QColor(str(self._paleta["grafica_texto_suave"])))
+            painter.drawText(
+                QRectF(area.right() + 8, centro_y - 12, valor_ancho - 8, 24),
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                self._formatear_moneda(categoria.valor),
+            )
+
+        painter.setPen(QPen(_crear_color_qt(self._paleta["grafica_grid_fuerte"], "#8FAFC7"), 1))
+        painter.drawLine(int(area.left()), int(area.bottom() + 4), int(area.right()), int(area.bottom() + 4))
+        painter.end()
+
+    @staticmethod
+    def _formatear_moneda(valor: float) -> str:
+        return f"L {valor:,.2f}"
+
+    def _dibujar_estado_vacio(self, painter: QPainter, recta: QRectF, mensaje: str) -> None:
+        painter.setPen(QColor(str(self._paleta["grafica_texto_suave"])))
+        painter.setFont(QFont(str(self._paleta["familia_tipografica"]), 10, QFont.Weight.DemiBold))
+        painter.drawText(recta, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, mensaje)
+
+
+class LeyendaDonutDeuda(QFrame):
+    """Lista compacta para acompanar el donut de antiguedad de deuda."""
+
+    def __init__(self, nombre_tema: str = TEMA_SICAP_PREDETERMINADO) -> None:
+        super().__init__()
+        self._tema_actual = nombre_tema
+        self._paleta = obtener_paleta_tema(nombre_tema)
+        self._categorias: tuple[CategoriaDashboard, ...] = ()
+        self.setObjectName("leyendaDonutDeuda")
+        self.setMinimumWidth(174)
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(9, 7, 9, 7)
+        self._layout.setSpacing(5)
+
+    def actualizar(self, categorias: tuple[CategoriaDashboard, ...]) -> None:
+        self._categorias = tuple(categorias)
+        self._reconstruir()
+
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        self._tema_actual = resolver_nombre_tema(nombre_tema)
+        self._paleta = obtener_paleta_tema(self._tema_actual)
+        self._reconstruir()
+
+    def _reconstruir(self) -> None:
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()
+        total = sum(c.valor for c in self._categorias)
+        if total <= 0:
+            vacio = QLabel("Sin deuda vencida registrada.")
+            vacio.setObjectName("leyendaDonutTexto")
+            vacio.setWordWrap(True)
+            self._layout.addWidget(vacio)
+            self._layout.addStretch(1)
+            return
+        for categoria in self._categorias:
+            self._layout.addWidget(self._crear_fila(categoria, total))
+        self._layout.addStretch(1)
+
+    def _crear_fila(self, categoria: CategoriaDashboard, total: float) -> QWidget:
+        fila = QWidget()
+        fila.setObjectName("filaLeyendaDonut")
+        layout = QHBoxLayout(fila)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        swatch = QFrame()
+        swatch.setFixedSize(10, 10)
+        swatch.setObjectName("swatchLeyendaDonut")
+        swatch.setStyleSheet(
+            f"QFrame#swatchLeyendaDonut {{ background: {self._color_rango(categoria.etiqueta)}; border-radius: 5px; }}"
+        )
+        texto = QLabel(categoria.etiqueta)
+        texto.setObjectName("leyendaDonutTexto")
+        valor = QLabel(f"{self._formatear_moneda(categoria.valor)} | {categoria.valor / total * 100:.0f}%")
+        valor.setObjectName("leyendaDonutValor")
+        valor.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(swatch)
+        layout.addWidget(texto, 1)
+        layout.addWidget(valor)
+        return fila
+
+    def _color_rango(self, etiqueta: str) -> str:
+        texto = etiqueta.lower()
+        if "0-30" in texto:
+            return str(self._paleta["grafica_donut_0_30"])
+        if "31-60" in texto:
+            return str(self._paleta["grafica_donut_31_60"])
+        if "61-90" in texto:
+            return str(self._paleta["grafica_donut_61_90"])
+        return str(self._paleta["grafica_donut_90_mas"])
+
+    @staticmethod
+    def _formatear_moneda(valor: float) -> str:
+        return f"L {valor:,.2f}"
 
 
 class EtiquetaMarcaGradiente(QLabel):
@@ -1089,6 +1403,10 @@ class VistaModuloPrincipal(QWidget):
         self._reconstruir_sidebar(estado.modulos)
         self._mostrar_metricas(estado)
         self._mostrar_analitica(estado.analitica)
+        if hasattr(self, "_label_actualizacion_dashboard"):
+            self._label_actualizacion_dashboard.setText(
+                f"Ultima actualizacion: {datetime.now().strftime('%d/%m/%Y %I:%M %p')}"
+            )
         self._boton_mantenimiento.setVisible(estado.puede_abrir_mantenimiento)
         self._panel_acciones_sidebar.setVisible(estado.puede_abrir_mantenimiento)
         self.mostrar_modulo("dashboard")
@@ -1128,6 +1446,14 @@ class VistaModuloPrincipal(QWidget):
     def _aplicar_tema_a_descendientes(self) -> None:
         for tarjeta in self._tarjetas_metricas.values():
             tarjeta.aplicar_tema(self._tema_actual)
+        for tarjeta in self._tarjetas_insight:
+            tarjeta.aplicar_tema(self._tema_actual)
+        if hasattr(self, "_grafica_estados"):
+            self._grafica_estados.aplicar_tema(self._tema_actual)
+        if hasattr(self, "_grafica_barrios"):
+            self._grafica_barrios.aplicar_tema(self._tema_actual)
+        if hasattr(self, "_leyenda_distribucion"):
+            self._leyenda_distribucion.aplicar_tema(self._tema_actual)
         self._panel_perfil_usuario.aplicar_tema(self._tema_actual)
         for boton in self.findChildren(BotonAccionContextual):
             boton.aplicar_tema(self._tema_actual)
@@ -1315,25 +1641,25 @@ class VistaModuloPrincipal(QWidget):
         )
         self._contenido_dashboard.setAutoFillBackground(False)
         layout = QVBoxLayout(self._contenido_dashboard)
-        layout.setContentsMargins(0, 4, 0, 6)
-        layout.setSpacing(18)
+        layout.setContentsMargins(0, 2, 0, 4)
+        layout.setSpacing(10)
 
         self._grid_metricas = QGridLayout()
-        self._grid_metricas.setHorizontalSpacing(12)
-        self._grid_metricas.setVerticalSpacing(12)
+        self._grid_metricas.setHorizontalSpacing(10)
+        self._grid_metricas.setVerticalSpacing(10)
         layout.addLayout(self._grid_metricas)
 
         self._layout_paneles_dashboard = QGridLayout()
-        self._layout_paneles_dashboard.setHorizontalSpacing(14)
-        self._layout_paneles_dashboard.setVerticalSpacing(14)
+        self._layout_paneles_dashboard.setHorizontalSpacing(10)
+        self._layout_paneles_dashboard.setVerticalSpacing(10)
         layout.addLayout(self._layout_paneles_dashboard)
 
         self._panel_tendencia = QFrame()
         self._panel_tendencia.setObjectName("tarjetaPanel")
         self._panel_tendencia.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         layout_tendencia = QVBoxLayout(self._panel_tendencia)
-        layout_tendencia.setContentsMargins(18, 16, 18, 16)
-        layout_tendencia.setSpacing(10)
+        layout_tendencia.setContentsMargins(14, 12, 14, 12)
+        layout_tendencia.setSpacing(6)
 
         self._titulo_tendencia = QLabel("Rendimiento de recaudacion")
         self._titulo_tendencia.setObjectName("tituloPanel")
@@ -1345,7 +1671,7 @@ class VistaModuloPrincipal(QWidget):
         )
 
         self._grafica_tendencia = self._crear_chart_view()
-        self._grafica_tendencia.setMinimumHeight(228)
+        self._grafica_tendencia.setMinimumHeight(176)
         layout_tendencia.addWidget(self._grafica_tendencia, 1)
 
         self._panel_ranking = QFrame()
@@ -1353,8 +1679,8 @@ class VistaModuloPrincipal(QWidget):
         self._panel_ranking.setMinimumWidth(224)
         self._panel_ranking.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         layout_ranking = QVBoxLayout(self._panel_ranking)
-        layout_ranking.setContentsMargins(18, 16, 18, 16)
-        layout_ranking.setSpacing(10)
+        layout_ranking.setContentsMargins(14, 12, 14, 12)
+        layout_ranking.setSpacing(6)
         titulo_ranking = QLabel("Deuda por barrio")
         titulo_ranking.setObjectName("tituloPanel")
         self._agregar_cabecera_panel_dashboard(
@@ -1363,16 +1689,16 @@ class VistaModuloPrincipal(QWidget):
             "Zonas con mayor concentracion de saldo pendiente.",
             "Top zonas",
         )
-        self._grafica_barrios = self._crear_chart_view()
-        self._grafica_barrios.setMinimumHeight(220)
+        self._grafica_barrios = GraficoBarrasHorizontalesDashboard(self._tema_actual)
+        self._grafica_barrios.setMinimumHeight(166)
         layout_ranking.addWidget(self._grafica_barrios, 1)
 
         self._panel_estados = QFrame()
         self._panel_estados.setObjectName("tarjetaPanel")
         self._panel_estados.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         layout_estados = QVBoxLayout(self._panel_estados)
-        layout_estados.setContentsMargins(18, 16, 18, 16)
-        layout_estados.setSpacing(10)
+        layout_estados.setContentsMargins(14, 12, 14, 12)
+        layout_estados.setSpacing(6)
         titulo_estados = QLabel("Estado del servicio")
         titulo_estados.setObjectName("tituloPanel")
         self._agregar_cabecera_panel_dashboard(
@@ -1381,8 +1707,8 @@ class VistaModuloPrincipal(QWidget):
             "Distribucion de casas segun su condicion operativa actual.",
             "Servicios",
         )
-        self._grafica_estados = self._crear_chart_view()
-        self._grafica_estados.setMinimumHeight(206)
+        self._grafica_estados = GraficoBarrasEstadoServicio(self._tema_actual)
+        self._grafica_estados.setMinimumHeight(166)
         layout_estados.addWidget(self._grafica_estados, 1)
 
         self._panel_insights = QFrame()
@@ -1390,8 +1716,8 @@ class VistaModuloPrincipal(QWidget):
         self._panel_insights.setMinimumWidth(248)
         self._panel_insights.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         layout_insights = QVBoxLayout(self._panel_insights)
-        layout_insights.setContentsMargins(18, 16, 18, 16)
-        layout_insights.setSpacing(10)
+        layout_insights.setContentsMargins(14, 12, 14, 12)
+        layout_insights.setSpacing(6)
         titulo_insights = QLabel("Lecturas clave")
         titulo_insights.setObjectName("tituloPanel")
         self._agregar_cabecera_panel_dashboard(
@@ -1400,8 +1726,9 @@ class VistaModuloPrincipal(QWidget):
             "Señales ejecutivas para decidir rapido y con contexto.",
             "Ejecutivo",
         )
-        self._layout_insights = QVBoxLayout()
-        self._layout_insights.setSpacing(10)
+        self._layout_insights = QGridLayout()
+        self._layout_insights.setHorizontalSpacing(8)
+        self._layout_insights.setVerticalSpacing(8)
         layout_insights.addLayout(self._layout_insights)
         layout_insights.addStretch(1)
 
@@ -1409,8 +1736,8 @@ class VistaModuloPrincipal(QWidget):
         self._panel_distribucion.setObjectName("tarjetaPanel")
         self._panel_distribucion.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         layout_distribucion = QVBoxLayout(self._panel_distribucion)
-        layout_distribucion.setContentsMargins(18, 16, 18, 16)
-        layout_distribucion.setSpacing(10)
+        layout_distribucion.setContentsMargins(14, 12, 14, 12)
+        layout_distribucion.setSpacing(6)
         titulo_distribucion = QLabel("Antiguedad de deuda")
         titulo_distribucion.setObjectName("tituloPanel")
         self._agregar_cabecera_panel_dashboard(
@@ -1420,8 +1747,29 @@ class VistaModuloPrincipal(QWidget):
             "Mora",
         )
         self._grafica_distribucion = self._crear_chart_view()
-        self._grafica_distribucion.setMinimumHeight(206)
-        layout_distribucion.addWidget(self._grafica_distribucion, 1)
+        self._grafica_distribucion.setMinimumHeight(166)
+        self._leyenda_distribucion = LeyendaDonutDeuda(self._tema_actual)
+        contenedor_distribucion = QWidget()
+        contenedor_distribucion.setObjectName("contenedorDistribucionDeuda")
+        layout_contenedor_distribucion = QHBoxLayout(contenedor_distribucion)
+        layout_contenedor_distribucion.setContentsMargins(0, 0, 0, 0)
+        layout_contenedor_distribucion.setSpacing(10)
+        layout_contenedor_distribucion.addWidget(self._grafica_distribucion, 2)
+        layout_contenedor_distribucion.addWidget(self._leyenda_distribucion, 1)
+        layout_distribucion.addWidget(contenedor_distribucion, 1)
+
+        self._footer_dashboard = QFrame()
+        self._footer_dashboard.setObjectName("footerDashboard")
+        layout_footer = QHBoxLayout(self._footer_dashboard)
+        layout_footer.setContentsMargins(12, 6, 12, 6)
+        layout_footer.setSpacing(8)
+        self._label_actualizacion_dashboard = QLabel(
+            f"Ultima actualizacion: {datetime.now().strftime('%d/%m/%Y %I:%M %p')}"
+        )
+        self._label_actualizacion_dashboard.setObjectName("textoFooterDashboard")
+        layout_footer.addWidget(self._label_actualizacion_dashboard)
+        layout_footer.addStretch(1)
+        layout.addWidget(self._footer_dashboard)
 
         self._scroll_dashboard.setWidget(self._contenido_dashboard)
         layout_pagina.addWidget(self._scroll_dashboard)
@@ -1453,12 +1801,12 @@ class VistaModuloPrincipal(QWidget):
     @staticmethod
     def _resolver_visual_metrica(codigo: str) -> tuple[str, str, str, str]:
         mapa = {
-            "ingresos_hoy": ("receipt-2.svg", "#66d7ff", "#d8edff", "Hoy"),
-            "ingresos_mes": ("chart-bar.svg", "#9db6ff", "#e5e9ff", "Mensual"),
-            "deuda": ("urgent.svg", "#ffb86c", "#ffe7cf", "Cobranza"),
-            "casas_mora": ("alert-triangle.svg", "#ff8f8f", "#ffe0e6", "Alerta"),
-            "abonados_activos": ("users.svg", "#66d7ff", "#d8edff", "Registro"),
-            "casas_activas": ("home-2.svg", "#72e3c0", "#daf8ec", "Servicio"),
+            "ingresos_hoy": ("receipt-2.svg", "#38BDF8", "#153B5A", "Hoy"),
+            "ingresos_mes": ("chart-bar.svg", "#2F9BFF", "#163862", "Mensual"),
+            "deuda": ("urgent.svg", "#FBBF24", "#4D3B18", "Cobranza"),
+            "casas_mora": ("alert-triangle.svg", "#F87171", "#563039", "Alerta"),
+            "abonados_activos": ("users.svg", "#35E6A8", "#173F36", "Registro"),
+            "casas_activas": ("home-2.svg", "#2DD4BF", "#173F3E", "Servicio"),
         }
         return mapa.get(codigo, ("chart-bar.svg", "#C9DBE9", "#e4efff", "Resumen"))
 
@@ -1489,8 +1837,9 @@ class VistaModuloPrincipal(QWidget):
     def _mostrar_analitica(self, analitica: AnaliticaDashboard) -> None:
         self._construir_insights(analitica.insights)
         self._grafica_tendencia.setChart(self._crear_chart_tendencia(analitica.recaudacion_mensual))
-        self._grafica_estados.setChart(self._crear_chart_estados(analitica.estados_servicio))
-        self._grafica_barrios.setChart(self._crear_chart_deuda_por_barrio(analitica.deuda_por_barrio))
+        self._grafica_estados.actualizar(analitica.estados_servicio)
+        self._grafica_barrios.actualizar(analitica.deuda_por_barrio)
+        self._leyenda_distribucion.actualizar(analitica.antiguedad_deuda)
         self._grafica_distribucion.setChart(
             self._crear_chart_distribucion_deuda(analitica.antiguedad_deuda)
         )
@@ -1518,7 +1867,9 @@ class VistaModuloPrincipal(QWidget):
             self._grid_metricas.takeAt(0)
 
         ancho = self._ancho_disponible_dashboard()
-        if ancho >= ANCHO_RUPTURA_METRICAS_4_COLUMNAS:
+        if ancho >= ANCHO_RUPTURA_METRICAS_6_COLUMNAS:
+            columnas_metricas = min(6, max(1, len(self._orden_metricas)))
+        elif ancho >= ANCHO_RUPTURA_METRICAS_4_COLUMNAS:
             columnas_metricas = 4
         elif ancho >= ANCHO_RUPTURA_METRICAS_3_COLUMNAS:
             columnas_metricas = 3
@@ -1547,22 +1898,23 @@ class VistaModuloPrincipal(QWidget):
         if ancho >= ANCHO_RUPTURA_DASHBOARD_AMPLIO:
             self._modo_dashboard_actual = "amplio"
             self._aplicar_alturas_paneles_dashboard(
-                tendencia=324,
-                ranking=290,
-                estados=324,
-                distribucion=290,
-                insights=338,
+                tendencia=264,
+                ranking=242,
+                estados=264,
+                distribucion=264,
+                insights=242,
             )
             self._panel_ranking.setMaximumWidth(limite_expandido)
             self._panel_insights.setMaximumWidth(limite_expandido)
             self._layout_paneles_dashboard.addWidget(self._panel_tendencia, 0, 0, 1, 2)
             self._layout_paneles_dashboard.addWidget(self._panel_estados, 0, 2)
-            self._layout_paneles_dashboard.addWidget(self._panel_ranking, 1, 0)
-            self._layout_paneles_dashboard.addWidget(self._panel_distribucion, 1, 1)
-            self._layout_paneles_dashboard.addWidget(self._panel_insights, 1, 2)
-            self._layout_paneles_dashboard.setColumnStretch(0, 3)
-            self._layout_paneles_dashboard.setColumnStretch(1, 3)
+            self._layout_paneles_dashboard.addWidget(self._panel_distribucion, 0, 3)
+            self._layout_paneles_dashboard.addWidget(self._panel_ranking, 1, 0, 1, 2)
+            self._layout_paneles_dashboard.addWidget(self._panel_insights, 1, 2, 1, 2)
+            self._layout_paneles_dashboard.setColumnStretch(0, 2)
+            self._layout_paneles_dashboard.setColumnStretch(1, 2)
             self._layout_paneles_dashboard.setColumnStretch(2, 2)
+            self._layout_paneles_dashboard.setColumnStretch(3, 2)
             return
 
         self._panel_ranking.setMaximumWidth(limite_expandido)
@@ -1571,11 +1923,11 @@ class VistaModuloPrincipal(QWidget):
         if ancho >= ANCHO_RUPTURA_DASHBOARD_MEDIO:
             self._modo_dashboard_actual = "medio"
             self._aplicar_alturas_paneles_dashboard(
-                tendencia=308,
-                ranking=272,
-                estados=252,
-                distribucion=252,
-                insights=322,
+                tendencia=268,
+                ranking=248,
+                estados=238,
+                distribucion=238,
+                insights=260,
             )
             self._layout_paneles_dashboard.addWidget(self._panel_tendencia, 0, 0, 1, 2)
             self._layout_paneles_dashboard.addWidget(self._panel_estados, 1, 0)
@@ -1588,11 +1940,11 @@ class VistaModuloPrincipal(QWidget):
 
         self._modo_dashboard_actual = "compacto"
         self._aplicar_alturas_paneles_dashboard(
-            tendencia=292,
-            ranking=258,
-            estados=236,
-            distribucion=236,
-            insights=336,
+            tendencia=260,
+            ranking=238,
+            estados=230,
+            distribucion=232,
+            insights=270,
         )
         self._layout_paneles_dashboard.addWidget(self._panel_tendencia, 0, 0)
         self._layout_paneles_dashboard.addWidget(self._panel_estados, 1, 0)
@@ -1745,10 +2097,14 @@ class VistaModuloPrincipal(QWidget):
         self._tarjetas_insight.clear()
 
         for insight in insights:
-            tarjeta = TarjetaInsight()
+            indice = len(self._tarjetas_insight)
+            tarjeta = TarjetaInsight(self._tema_actual)
             tarjeta.actualizar(insight)
             self._tarjetas_insight.append(tarjeta)
-            self._layout_insights.addWidget(tarjeta)
+            fila, columna = divmod(indice, 2)
+            self._layout_insights.addWidget(tarjeta, fila, columna)
+        self._layout_insights.setColumnStretch(0, 1)
+        self._layout_insights.setColumnStretch(1, 1)
 
     def _crear_fuente_chart(self, tamano: int, peso: int = 500) -> QFont:
         fuente = QFont(str(self._paleta_tema["familia_tipografica"]), tamano)
@@ -1769,7 +2125,7 @@ class VistaModuloPrincipal(QWidget):
         chart.setBackgroundPen(QPen(QColor(0, 0, 0, 0), 0))
         chart.setDropShadowEnabled(False)
         chart.setBackgroundRoundness(0)
-        chart.setMargins(QMargins(4, 4, 4, 4))
+        chart.setMargins(QMargins(2, 0, 2, 0))
         chart.setPlotAreaBackgroundVisible(False)
         legend = chart.legend()
         legend.setVisible(mostrar_leyenda)
@@ -1783,21 +2139,23 @@ class VistaModuloPrincipal(QWidget):
         self,
         serie_base: tuple[PuntoSerieDashboard, ...],
     ) -> QChart:
-        serie = serie_base or (
-            PuntoSerieDashboard("Ene", 0.0),
-            PuntoSerieDashboard("Feb", 0.0),
-            PuntoSerieDashboard("Mar", 0.0),
-        )
+        serie = serie_base or ()
+        if not serie or not any(punto.valor > 0 for punto in serie):
+            return self._crear_chart_estado_vacio(
+                "Sin recaudacion registrada en el periodo seleccionado."
+            )
 
         actual = QLineSeries()
-        actual.setName("Actual")
-        color_linea = QColor(str(self._paleta_tema["grafica_linea"]))
+        actual.setName("Recaudado")
+        color_linea = QColor(str(self._paleta_tema["grafica_linea_actual"]))
         actual.setColor(color_linea)
-        actual.setPen(QPen(color_linea, 2.6))
+        actual.setPen(QPen(color_linea, 3.2))
+        actual.setPointsVisible(True)
 
         referencia = QLineSeries()
         referencia.setName("Promedio")
-        pen_referencia = QPen(QColor(str(self._paleta_tema["icono_tarjeta_info"])), 2.0)
+        color_promedio = QColor(str(self._paleta_tema["grafica_linea_promedio"]))
+        pen_referencia = QPen(color_promedio, 2.0)
         pen_referencia.setStyle(Qt.PenStyle.DotLine)
         referencia.setPen(pen_referencia)
 
@@ -1806,7 +2164,7 @@ class VistaModuloPrincipal(QWidget):
 
         for indice, punto in enumerate(serie):
             actual.append(indice, punto.valor)
-            referencia.append(indice, (punto.valor * 0.45) + (promedio * 0.55))
+            referencia.append(indice, promedio)
 
         chart = QChart()
         chart.addSeries(actual)
@@ -1819,7 +2177,7 @@ class VistaModuloPrincipal(QWidget):
 
         eje_x = QBarCategoryAxis()
         eje_x.append([punto.etiqueta for punto in serie])
-        eje_x.setLabelsColor(QColor(str(self._paleta_tema["grafica_texto"])))
+        eje_x.setLabelsColor(QColor(str(self._paleta_tema["grafica_texto_suave"])))
         eje_x.setGridLineVisible(False)
         eje_x.setLabelsFont(self._crear_fuente_chart(8, 600))
 
@@ -1828,9 +2186,9 @@ class VistaModuloPrincipal(QWidget):
         eje_y.setRange(0, maximo * 1.25)
         eje_y.setTickCount(5)
         eje_y.setMinorTickCount(1)
-        eje_y.setLabelsColor(QColor(str(self._paleta_tema["grafica_texto"])))
-        eje_y.setGridLineColor(QColor(str(self._paleta_tema["grafica_grid"])))
-        eje_y.setLabelFormat("%.0f")
+        eje_y.setLabelsColor(QColor(str(self._paleta_tema["grafica_texto_suave"])))
+        eje_y.setGridLineColor(_crear_color_qt(self._paleta_tema["grafica_grid_fuerte"], "#8FAFC7"))
+        eje_y.setLabelFormat("L %.0f")
         eje_y.setLabelsFont(self._crear_fuente_chart(8, 600))
 
         chart.addAxis(eje_x, Qt.AlignmentFlag.AlignBottom)
@@ -1841,105 +2199,55 @@ class VistaModuloPrincipal(QWidget):
         referencia.attachAxis(eje_y)
         return chart
 
-    def _crear_chart_estados(self, categorias: tuple[CategoriaDashboard, ...]) -> QChart:
-        datos = categorias or (CategoriaDashboard("Sin datos", 0.0),)
-        barset = QBarSet("Casas")
-        colores = list(self._paleta_tema["grafica_pie_colores"])
-        for indice, categoria in enumerate(datos):
-            barset.append(categoria.valor)
-            if indice < len(colores):
-                barset.setColor(QColor(colores[indice]))
-
-        serie = QBarSeries()
-        serie.append(barset)
-        chart = QChart()
-        chart.addSeries(serie)
-        self._aplicar_estilo_chart(chart, mostrar_leyenda=False)
-
-        eje_x = QBarCategoryAxis()
-        eje_x.append([categoria.etiqueta.title() for categoria in datos])
-        eje_x.setLabelsColor(QColor(str(self._paleta_tema["grafica_texto"])))
-        eje_x.setGridLineVisible(False)
-        eje_x.setLabelsFont(self._crear_fuente_chart(8, 600))
-
-        eje_y = QValueAxis()
-        maximo = max((categoria.valor for categoria in datos), default=1.0) or 1.0
-        eje_y.setRange(0, maximo * 1.25)
-        eje_y.setTickCount(5)
-        eje_y.setMinorTickCount(1)
-        eje_y.setLabelsColor(QColor(str(self._paleta_tema["grafica_texto"])))
-        eje_y.setGridLineColor(QColor(str(self._paleta_tema["grafica_grid"])))
-        eje_y.setLabelFormat("%.0f")
-        eje_y.setLabelsFont(self._crear_fuente_chart(8, 600))
-
-        chart.addAxis(eje_x, Qt.AlignmentFlag.AlignBottom)
-        chart.addAxis(eje_y, Qt.AlignmentFlag.AlignLeft)
-        serie.attachAxis(eje_x)
-        serie.attachAxis(eje_y)
-        return chart
-
-    def _crear_chart_deuda_por_barrio(
-        self,
-        categorias: tuple[CategoriaDashboard, ...],
-    ) -> QChart:
-        datos = categorias or (CategoriaDashboard("Sin deuda", 0.0),)
-        barset = QBarSet("Deuda")
-        color_barra = QColor(str(self._paleta_tema["grafica_barras"]))
-        barset.setColor(color_barra)
-        for categoria in datos:
-            barset.append(max(categoria.valor, 0.0))
-
-        serie = QHorizontalBarSeries()
-        serie.append(barset)
-        chart = QChart()
-        chart.addSeries(serie)
-        self._aplicar_estilo_chart(chart, mostrar_leyenda=False)
-
-        eje_y = QBarCategoryAxis()
-        eje_y.append([categoria.etiqueta for categoria in datos])
-        eje_y.setLabelsColor(QColor(str(self._paleta_tema["grafica_texto"])))
-        eje_y.setLabelsFont(self._crear_fuente_chart(8, 600))
-        eje_y.setGridLineVisible(False)
-
-        eje_x = QValueAxis()
-        maximo = max((categoria.valor for categoria in datos), default=1.0) or 1.0
-        eje_x.setRange(0, maximo * 1.18)
-        eje_x.setTickCount(5)
-        eje_x.setMinorTickCount(1)
-        eje_x.setLabelsColor(QColor(str(self._paleta_tema["grafica_texto"])))
-        eje_x.setGridLineColor(QColor(str(self._paleta_tema["grafica_grid"])))
-        eje_x.setLabelsFont(self._crear_fuente_chart(8, 600))
-        eje_x.setLabelFormat("L %.0f")
-
-        chart.addAxis(eje_y, Qt.AlignmentFlag.AlignLeft)
-        chart.addAxis(eje_x, Qt.AlignmentFlag.AlignBottom)
-        serie.attachAxis(eje_y)
-        serie.attachAxis(eje_x)
-        return chart
-
     def _crear_chart_distribucion_deuda(
         self,
         categorias: tuple[CategoriaDashboard, ...],
     ) -> QChart:
-        datos = categorias or (CategoriaDashboard("Sin deuda", 1.0),)
+        datos = tuple(categoria for categoria in categorias if categoria.valor > 0)
+        if not datos:
+            return self._crear_chart_estado_vacio("Sin deuda vencida registrada.")
+
         serie = QPieSeries()
-        serie.setHoleSize(0.58)
-        colores = list(self._paleta_tema["grafica_pie_colores"])
-        for indice, categoria in enumerate(datos):
-            trozo = serie.append(categoria.etiqueta, max(categoria.valor, 0.01))
-            trozo.setColor(QColor(colores[indice % len(colores)]))
-            trozo.setLabelVisible(False)
+        serie.setHoleSize(0.48)
+        total = sum(categoria.valor for categoria in datos)
+        for categoria in datos:
+            trozo = serie.append(categoria.etiqueta, categoria.valor)
+            trozo.setColor(QColor(self._color_rango_antiguedad(categoria.etiqueta)))
+            trozo.setLabelVisible(total > 0 and categoria.valor / total >= 0.16)
+            trozo.setLabel(f"{categoria.valor / total * 100:.0f}%")
+            trozo.setLabelColor(QColor(str(self._paleta_tema["grafica_texto_fuerte"])))
+            trozo.setLabelFont(self._crear_fuente_chart(8, 800))
             trozo.setBorderColor(QColor(str(self._paleta_tema["grafica_borde_trozo"])))
             trozo.setBorderWidth(1)
+            if "61-90" in categoria.etiqueta or "90" in categoria.etiqueta:
+                trozo.setExploded(True)
+                trozo.setExplodeDistanceFactor(0.04)
 
         chart = QChart()
         chart.addSeries(serie)
         self._aplicar_estilo_chart(
             chart,
-            mostrar_leyenda=True,
-            alineacion_leyenda=Qt.AlignmentFlag.AlignRight,
+            mostrar_leyenda=False,
         )
         return chart
+
+    def _crear_chart_estado_vacio(self, mensaje: str) -> QChart:
+        chart = QChart()
+        self._aplicar_estilo_chart(chart, mostrar_leyenda=False)
+        chart.setTitle(mensaje)
+        chart.setTitleFont(self._crear_fuente_chart(10, 700))
+        chart.setTitleBrush(QBrush(QColor(str(self._paleta_tema["grafica_texto_suave"]))))
+        return chart
+
+    def _color_rango_antiguedad(self, etiqueta: str) -> str:
+        texto = etiqueta.lower()
+        if "0-30" in texto:
+            return str(self._paleta_tema["grafica_donut_0_30"])
+        if "31-60" in texto:
+            return str(self._paleta_tema["grafica_donut_31_60"])
+        if "61-90" in texto:
+            return str(self._paleta_tema["grafica_donut_61_90"])
+        return str(self._paleta_tema["grafica_donut_90_mas"])
 
     @staticmethod
     def _crear_chart_view() -> QChartView:
@@ -2028,9 +2336,24 @@ class VistaModuloPrincipal(QWidget):
                 border-radius: 22px;
             }}
             QFrame#tarjetaPanel {{
-                background: {paleta["fondo_superficie"]};
-                border: 1px solid {paleta["borde_principal"]};
-                border-radius: 24px;
+                background: qlineargradient(
+                    x1: 0, y1: 0, x2: 1, y2: 1,
+                    stop: 0 {paleta["tarjeta_panel_stop_1"]},
+                    stop: 0.52 {paleta["tarjeta_panel_stop_2"]},
+                    stop: 1 {paleta["tarjeta_panel_stop_3"]}
+                );
+                border: 1px solid {paleta["borde_medio"]};
+                border-radius: 14px;
+            }}
+            QFrame#footerDashboard {{
+                background: {paleta["fondo_superficie_muy_suave"]};
+                border: 1px solid {paleta["borde_suave"]};
+                border-radius: 9px;
+            }}
+            QLabel#textoFooterDashboard {{
+                color: {paleta["texto_panel_secundario"]};
+                font-size: {paleta["tamano_fuente_base"]}px;
+                font-weight: 700;
             }}
             QWidget#encabezadoSidebar,
             QWidget#contenedorNavegacionSidebar,
@@ -2096,8 +2419,8 @@ class VistaModuloPrincipal(QWidget):
             }}
             QLabel#descripcionPanel,
             QLabel#tabsSuaves {{
-                color: {paleta["texto_panel_detalle"]};
-                font-size: {paleta["tamano_fuente_base"] + 2}px;
+                color: {paleta["texto_panel_secundario"]};
+                font-size: {paleta["tamano_fuente_base"] + 1}px;
                 font-weight: {paleta["peso_cuerpo"]};
             }}
             QLabel#tituloPrincipal {{
@@ -2119,16 +2442,16 @@ class VistaModuloPrincipal(QWidget):
             }}
             QLabel#tituloPanel {{
                 color: {paleta["texto_panel_principal"]};
-                font-size: {paleta["tamano_titulo_panel"] + 1}px;
+                font-size: {paleta["tamano_titulo_panel"]}px;
                 font-weight: {paleta["peso_titulo"]};
             }}
             QLabel#badgePanelDashboard {{
-                background: {paleta["fondo_badge"]};
+                background: {paleta["fondo_badge_activo"]};
                 color: {paleta["texto_badge"]};
                 border: 1px solid {paleta["borde_badge_activo"]};
-                border-radius: 11px;
-                padding: 4px 10px;
-                font-size: 10px;
+                border-radius: 10px;
+                padding: 3px 9px;
+                font-size: 9px;
                 font-weight: 800;
                 letter-spacing: 0.06em;
             }}
@@ -2161,23 +2484,49 @@ class VistaModuloPrincipal(QWidget):
                 font-weight: 900;
             }}
             QWidget#tarjetaInsight {{
-                background: {paleta["fondo_superficie_suave"]};
+                background: {paleta["fondo_superficie_muy_suave"]};
                 border: 1px solid {paleta["borde_suave"]};
-                border-radius: 16px;
+                border-radius: 10px;
+            }}
+            QWidget#tarjetaInsight:hover {{
+                background: {paleta["fondo_superficie_suave"]};
+                border-color: {paleta["borde_medio"]};
+            }}
+            QLabel#insigniaInsight {{
+                border-radius: 13px;
             }}
             QLabel#insightTitulo {{
                 color: {paleta["texto_panel_secundario"]};
-                font-size: {paleta["tamano_fuente_base"] + 2}px;
+                font-size: {paleta["tamano_fuente_base"]}px;
                 font-weight: {paleta["peso_subtitulo"]};
             }}
             QLabel#insightValor {{
                 color: {paleta["texto_panel_fuerte"]};
-                font-size: 22px;
+                font-size: 14px;
                 font-weight: {paleta["peso_titulo"]};
             }}
             QLabel#insightDetalle {{
                 color: {paleta["texto_panel_detalle"]};
-                font-size: {paleta["tamano_fuente_base"] + 1}px;
+                font-size: {paleta["tamano_fuente_base"]}px;
+            }}
+            QWidget#contenedorDistribucionDeuda {{
+                background: transparent;
+                border: none;
+            }}
+            QFrame#leyendaDonutDeuda {{
+                background: {paleta["fondo_superficie_muy_suave"]};
+                border: 1px solid {paleta["borde_suave"]};
+                border-radius: 10px;
+            }}
+            QLabel#leyendaDonutTexto {{
+                color: {paleta["texto_panel_secundario"]};
+                font-size: {paleta["tamano_fuente_base"]}px;
+                font-weight: 700;
+            }}
+            QLabel#leyendaDonutValor {{
+                color: {paleta["texto_panel_fuerte"]};
+                font-size: {paleta["tamano_fuente_base"]}px;
+                font-weight: 900;
             }}
             QFrame#filaRanking {{
                 background: transparent;
