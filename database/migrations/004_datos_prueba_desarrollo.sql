@@ -1,4 +1,4 @@
-﻿BEGIN;
+BEGIN;
 
 -- ============================================================
 -- 1. Regla de semilla
@@ -27,7 +27,7 @@ VALUES
 (
     'cajero_demo',
     'Cajero de Prueba',
-    'cajero.demo@sicap.local',
+    'cajero.demo@sigqua.local',
     'scrypt$c081b3c0b1cabcfd1e173ac2293394ee$d3c88ce38c9accabda7c2beeef20c9cb0be9bf8a1014f702cc83d90c83fb8d7e8904a200712554282f89cdc1f6adc9fb2b3544f3732c7fabea9b6357a051a94d',
     'ACTIVO',
     0,
@@ -40,7 +40,7 @@ VALUES
 (
     'consulta_demo',
     'Consulta de Prueba',
-    'consulta.demo@sicap.local',
+    'consulta.demo@sigqua.local',
     'scrypt$c081b3c0b1cabcfd1e173ac2293394ee$d3c88ce38c9accabda7c2beeef20c9cb0be9bf8a1014f702cc83d90c83fb8d7e8904a200712554282f89cdc1f6adc9fb2b3544f3732c7fabea9b6357a051a94d',
     'ACTIVO',
     0,
@@ -746,7 +746,7 @@ END;
 INSERT INTO esquema_migraciones(version, descripcion, checksum)
 VALUES (
     '004',
-    'Carga de datos de prueba para desarrollo local y validacion visual de SICAP',
+    'Carga de datos de prueba para desarrollo local y validacion visual de SIGQUA',
     NULL
 );
 

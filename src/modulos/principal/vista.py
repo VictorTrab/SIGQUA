@@ -1,7 +1,8 @@
-"""Vista del shell principal de SICAP."""
+"""Vista del shell principal de SIGQUA."""
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from statistics import fmean
 
@@ -57,17 +58,18 @@ from PySide6.QtWidgets import (
 from comun.configuracion.gestor_rutas import GestorRutas
 from comun.ui import (
     BotonAccionContextual,
-    DialogoConfirmacionSicap,
-    DialogoMensajeSicap,
+    DialogoConfirmacionSigqua,
+    DialogoMensajeSigqua,
     VistaPlaceholderModulo,
     aplicar_estilo_boton_operativo,
     crear_boton_operativo,
     obtener_icono_tabler_coloreado,
+    obtener_pixmap_marca,
     resolver_variante_boton_modal,
 )
 from comun.ui.componentes import COLOR_FONDO_DIALOGO
 from comun.ui.temas import (
-    TEMA_SICAP_PREDETERMINADO,
+    TEMA_SIGQUA_PREDETERMINADO,
     establecer_tema_actual,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
@@ -126,7 +128,7 @@ class TarjetaMetricaEjecutiva(QFrame):
         color_acento: str,
         color_fondo: str,
         etiqueta_contexto: str,
-        nombre_tema: str = TEMA_SICAP_PREDETERMINADO,
+        nombre_tema: str = TEMA_SIGQUA_PREDETERMINADO,
     ) -> None:
         super().__init__()
         self._icono = icono
@@ -137,11 +139,11 @@ class TarjetaMetricaEjecutiva(QFrame):
         self.setObjectName("tarjetaMetricaEjecutiva")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setMinimumHeight(122)
-        self.setMaximumHeight(132)
+        self.setMinimumHeight(142)
+        self.setMaximumHeight(154)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setContentsMargins(16, 16, 16, 15)
         layout.setSpacing(9)
 
         fila_superior = QHBoxLayout()
@@ -167,7 +169,6 @@ class TarjetaMetricaEjecutiva(QFrame):
         self._detalle.setWordWrap(True)
 
         layout.addLayout(fila_superior)
-        layout.addWidget(self._titulo)
         layout.addWidget(self._valor)
         layout.addWidget(self._detalle)
         self._aplicar_estilo()
@@ -252,25 +253,30 @@ class FilaRanking(QFrame):
 class TarjetaInsight(QWidget):
     """Tarjeta compacta para lecturas rapidas del panel."""
 
-    def __init__(self, nombre_tema: str = TEMA_SICAP_PREDETERMINADO) -> None:
+    def __init__(self, nombre_tema: str = TEMA_SIGQUA_PREDETERMINADO) -> None:
         super().__init__()
         self._tema_actual = nombre_tema
         self._icono_actual = "info-circle.svg"
         self._color_actual = "#C9DBE9"
         self.setObjectName("tarjetaInsight")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        sombra = QGraphicsDropShadowEffect(self)
+        sombra.setBlurRadius(16)
+        sombra.setOffset(0, 4)
+        sombra.setColor(QColor(0, 0, 0, 72))
+        self.setGraphicsEffect(sombra)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(9)
+        layout.setContentsMargins(12, 11, 12, 11)
+        layout.setSpacing(11)
 
         self._insignia = QLabel("")
         self._insignia.setObjectName("insigniaInsight")
-        self._insignia.setFixedSize(34, 34)
+        self._insignia.setFixedSize(38, 38)
         self._insignia.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         contenido = QVBoxLayout()
         contenido.setContentsMargins(0, 0, 0, 0)
-        contenido.setSpacing(2)
+        contenido.setSpacing(5)
 
         self._titulo = QLabel("")
         self._titulo.setObjectName("insightTitulo")
@@ -288,9 +294,10 @@ class TarjetaInsight(QWidget):
 
     def actualizar(self, insight: InsightDashboard) -> None:
         self._icono_actual, self._color_actual = self._resolver_visual_insight(insight.titulo)
-        self._titulo.setText(insight.titulo)
-        self._valor.setText(insight.valor)
-        self._detalle.setText(insight.detalle)
+        self._titulo.setText("" if self._titulo_se_repite_en_valor(insight.titulo) else insight.titulo)
+        self._titulo.setVisible(not self._titulo_se_repite_en_valor(insight.titulo))
+        self._valor.setText(self._formatear_valor_visible(insight.titulo, insight.valor))
+        self._detalle.setText(self._resumir_detalle(insight.titulo, insight.detalle))
         self._aplicar_estilo()
 
     def aplicar_tema(self, nombre_tema: str) -> None:
@@ -331,11 +338,47 @@ class TarjetaInsight(QWidget):
             """
         )
 
+    @staticmethod
+    def _resumir_detalle(titulo: str, detalle: str) -> str:
+        texto = detalle.strip()
+        if "ultimo pago" in titulo.lower():
+            texto = texto.split(" por ", 1)[0].strip()
+            coincidencia_fecha = re.search(r"\d{2}/\d{2}/\d{4}", texto)
+            if coincidencia_fecha is not None:
+                nombre = texto[: coincidencia_fecha.start()].strip()
+                for separador in ("\u00c2\u00b7", "\u00b7", "?", "|", "-"):
+                    nombre = nombre.replace(separador, " ")
+                nombre = " ".join(nombre.split())
+                texto = f"{nombre} - {coincidencia_fecha.group(0)}" if nombre else coincidencia_fecha.group(0)
+        if len(texto) <= 92:
+            return texto
+        return f"{texto[:89].rstrip()}..."
+
+    @staticmethod
+    def _formatear_valor_visible(titulo: str, valor: str) -> str:
+        titulo_normalizado = titulo.strip().lower()
+        valor_limpio = valor.strip()
+        if titulo_normalizado == "servicios comprometidos":
+            return f"{valor_limpio} {'servicio comprometido' if valor_limpio == '1' else 'servicios comprometidos'}"
+        if titulo_normalizado == "cargos pendientes":
+            return f"{valor_limpio} {'cargo pendiente' if valor_limpio == '1' else 'cargos pendientes'}"
+        if titulo_normalizado == "planes de pago activos":
+            return f"{valor_limpio} {'plan activo' if valor_limpio == '1' else 'planes activos'}"
+        return valor_limpio
+
+    @staticmethod
+    def _titulo_se_repite_en_valor(titulo: str) -> bool:
+        return titulo.strip().lower() in {
+            "servicios comprometidos",
+            "cargos pendientes",
+            "planes de pago activos",
+        }
+
 
 class GraficoBarrasEstadoServicio(QWidget):
     """Grafico compacto de barras por estado operativo del servicio."""
 
-    def __init__(self, nombre_tema: str = TEMA_SICAP_PREDETERMINADO) -> None:
+    def __init__(self, nombre_tema: str = TEMA_SIGQUA_PREDETERMINADO) -> None:
         super().__init__()
         self._tema_actual = nombre_tema
         self._paleta = obtener_paleta_tema(nombre_tema)
@@ -439,7 +482,7 @@ class GraficoBarrasEstadoServicio(QWidget):
 class GraficoBarrasHorizontalesDashboard(QWidget):
     """Grafico horizontal para ranking de deuda por barrio."""
 
-    def __init__(self, nombre_tema: str = TEMA_SICAP_PREDETERMINADO) -> None:
+    def __init__(self, nombre_tema: str = TEMA_SIGQUA_PREDETERMINADO) -> None:
         super().__init__()
         self._tema_actual = nombre_tema
         self._paleta = obtener_paleta_tema(nombre_tema)
@@ -525,16 +568,23 @@ class GraficoBarrasHorizontalesDashboard(QWidget):
 class LeyendaDonutDeuda(QFrame):
     """Lista compacta para acompanar el donut de antiguedad de deuda."""
 
-    def __init__(self, nombre_tema: str = TEMA_SICAP_PREDETERMINADO) -> None:
+    def __init__(self, nombre_tema: str = TEMA_SIGQUA_PREDETERMINADO) -> None:
         super().__init__()
         self._tema_actual = nombre_tema
         self._paleta = obtener_paleta_tema(nombre_tema)
         self._categorias: tuple[CategoriaDashboard, ...] = ()
         self.setObjectName("leyendaDonutDeuda")
-        self.setMinimumWidth(174)
+        self.setMinimumWidth(210)
+        self.setMaximumWidth(270)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Maximum)
+        sombra = QGraphicsDropShadowEffect(self)
+        sombra.setBlurRadius(18)
+        sombra.setOffset(0, 6)
+        sombra.setColor(QColor(0, 0, 0, 90))
+        self.setGraphicsEffect(sombra)
         self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(9, 7, 9, 7)
-        self._layout.setSpacing(5)
+        self._layout.setContentsMargins(12, 10, 12, 10)
+        self._layout.setSpacing(7)
 
     def actualizar(self, categorias: tuple[CategoriaDashboard, ...]) -> None:
         self._categorias = tuple(categorias)
@@ -556,18 +606,19 @@ class LeyendaDonutDeuda(QFrame):
             vacio.setObjectName("leyendaDonutTexto")
             vacio.setWordWrap(True)
             self._layout.addWidget(vacio)
-            self._layout.addStretch(1)
+            self.setMaximumHeight(74)
             return
-        for categoria in (categoria for categoria in self._categorias if categoria.valor > 0):
+        visibles = tuple(categoria for categoria in self._categorias if categoria.valor > 0)
+        for categoria in visibles:
             self._layout.addWidget(self._crear_fila(categoria, total))
-        self._layout.addStretch(1)
+        self.setMaximumHeight(max(82, 30 + len(visibles) * 30))
 
     def _crear_fila(self, categoria: CategoriaDashboard, total: float) -> QWidget:
         fila = QWidget()
         fila.setObjectName("filaLeyendaDonut")
         layout = QHBoxLayout(fila)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(9)
         swatch = QFrame()
         swatch.setFixedSize(10, 10)
         swatch.setObjectName("swatchLeyendaDonut")
@@ -581,7 +632,7 @@ class LeyendaDonutDeuda(QFrame):
         valor.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         layout.addWidget(swatch)
         layout.addWidget(texto, 1)
-        layout.addWidget(valor)
+        layout.addWidget(valor, 0)
         return fila
 
     def _color_rango(self, etiqueta: str) -> str:
@@ -600,7 +651,7 @@ class LeyendaDonutDeuda(QFrame):
 
 
 class EtiquetaMarcaGradiente(QLabel):
-    """Renderiza el nombre SICAP con degradado similar al login."""
+    """Renderiza el nombre SIGQUA con degradado similar al login."""
 
     def __init__(self, texto: str) -> None:
         super().__init__(texto)
@@ -750,7 +801,7 @@ class PanelPerfilUsuario(QFrame):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SIGQUA_PREDETERMINADO
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self.setObjectName("panelPerfilUsuario")
         self.setWindowFlags(
@@ -847,7 +898,7 @@ class PanelPerfilUsuario(QFrame):
         self._boton_acerca.clicked.connect(
             lambda: self._mostrar_informacion(
                 "Acerca del sistema",
-                "SICAP\nVersi\u00f3n 2.0.0\nSistema de control administrativo",
+                "SIGQUA\nVersi\u00f3n 2.0.0\nSistema de control administrativo",
                 "info-circle.svg",
                 "informacion",
             )
@@ -864,13 +915,13 @@ class PanelPerfilUsuario(QFrame):
         layout_pie.setContentsMargins(12, 12, 12, 12)
         layout_pie.setSpacing(2)
 
-        etiqueta_sistema = QLabel("SICAP")
+        etiqueta_sistema = QLabel("SIGQUA")
         etiqueta_sistema.setObjectName("sistemaPanelPerfil")
         etiqueta_version = QLabel("Versi\u00f3n 2.0.0")
         etiqueta_version.setObjectName("detallePanelPerfil")
         etiqueta_institucion = QLabel("Sistema de control administrativo")
         etiqueta_institucion.setObjectName("detallePanelPerfil")
-        etiqueta_desarrollado = QLabel("Desarrollado por Proyecto SICAP")
+        etiqueta_desarrollado = QLabel("Desarrollado por Proyecto SIGQUA")
         etiqueta_desarrollado.setObjectName("detallePanelPerfil")
         layout_pie.addWidget(etiqueta_sistema)
         layout_pie.addWidget(etiqueta_version)
@@ -1015,7 +1066,7 @@ class PanelPerfilUsuario(QFrame):
         variante: str,
     ) -> None:
         self.hide()
-        DialogoMensajeSicap(
+        DialogoMensajeSigqua(
             titulo,
             mensaje,
             icono=icono,
@@ -1025,7 +1076,7 @@ class PanelPerfilUsuario(QFrame):
 
     def _emitir_cierre_sesion(self) -> None:
         self.hide()
-        dialogo = DialogoConfirmacionSicap(
+        dialogo = DialogoConfirmacionSigqua(
             titulo="Confirmar cierre de sesi\u00f3n",
             descripcion=(
                 "Vas a cerrar la sesi\u00f3n actual en este equipo. "
@@ -1277,9 +1328,9 @@ class VistaModuloPrincipal(QWidget):
         self._gestor_rutas = GestorRutas()
         self.setObjectName("vistaModuloPrincipal")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SIGQUA_PREDETERMINADO
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
-        self._correo_usuario_actual = "soporte@sicap.local"
+        self._correo_usuario_actual = "soporte@sigqua.local"
         self._modulo_activo = "dashboard"
         self._modulos_sidebar: dict[str, ModuloNavegacion] = {}
         self._botones_modulos: dict[str, QPushButton] = {}
@@ -1387,7 +1438,7 @@ class VistaModuloPrincipal(QWidget):
         self._stack_contenido.addWidget(widget)
 
     def preparar_perfil_usuario(self, correo: str) -> None:
-        self._correo_usuario_actual = correo.strip() or "soporte@sicap.local"
+        self._correo_usuario_actual = correo.strip() or "soporte@sigqua.local"
 
     def mostrar_estado(self, estado: EstadoModuloPrincipal) -> None:
         self._ultimo_estado_mostrado = estado
@@ -1401,17 +1452,46 @@ class VistaModuloPrincipal(QWidget):
             estado_sesion="Activa en este equipo",
         )
         self._reconstruir_sidebar(estado.modulos)
-        self._mostrar_metricas(estado)
-        self._mostrar_analitica(estado.analitica)
-        if hasattr(self, "_label_actualizacion_dashboard"):
-            self._label_actualizacion_dashboard.setText(
-                f"Ultima actualizacion: {datetime.now().strftime('%d/%m/%Y %I:%M %p')}"
-            )
+        self.actualizar_dashboard(estado)
         self._boton_mantenimiento.setVisible(estado.puede_abrir_mantenimiento)
         self._panel_acciones_sidebar.setVisible(estado.puede_abrir_mantenimiento)
         self.mostrar_modulo("dashboard")
         self._actualizar_disposicion_dashboard()
         self._animar_aparicion_dashboard()
+
+    def actualizar_dashboard(self, estado: EstadoModuloPrincipal) -> None:
+        self._ultimo_estado_mostrado = estado
+        self._mostrar_metricas(estado)
+        self._mostrar_analitica(estado.analitica)
+        self._actualizar_texto_ultima_actualizacion()
+        self.establecer_dashboard_pendiente_actualizacion(False)
+        self._actualizar_disposicion_dashboard()
+
+    def establecer_dashboard_pendiente_actualizacion(self, pendiente: bool) -> None:
+        boton_inicio = self._botones_modulos.get("dashboard")
+        if boton_inicio is not None:
+            boton_inicio.setProperty("dashboardPendienteActualizacion", pendiente)
+            boton_inicio.style().unpolish(boton_inicio)
+            boton_inicio.style().polish(boton_inicio)
+        if hasattr(self, "_label_estado_dashboard"):
+            self._label_estado_dashboard.setText("Cambios pendientes" if pendiente else "")
+            self._label_estado_dashboard.setProperty("estado", "pendiente" if pendiente else "normal")
+            self._label_estado_dashboard.style().unpolish(self._label_estado_dashboard)
+            self._label_estado_dashboard.style().polish(self._label_estado_dashboard)
+
+    def mostrar_resultado_actualizacion_dashboard(self, mensaje: str, *, error: bool = False) -> None:
+        if not hasattr(self, "_label_estado_dashboard"):
+            return
+        self._label_estado_dashboard.setText(mensaje)
+        self._label_estado_dashboard.setProperty("estado", "error" if error else "normal")
+        self._label_estado_dashboard.style().unpolish(self._label_estado_dashboard)
+        self._label_estado_dashboard.style().polish(self._label_estado_dashboard)
+
+    def _actualizar_texto_ultima_actualizacion(self) -> None:
+        if hasattr(self, "_label_actualizacion_dashboard"):
+            self._label_actualizacion_dashboard.setText(
+                f"Ultima actualizacion: {datetime.now().strftime('%d/%m/%Y %I:%M %p')}"
+            )
 
     @staticmethod
     def _resolver_saludo(momento: datetime | None = None) -> str:
@@ -1661,7 +1741,7 @@ class VistaModuloPrincipal(QWidget):
         layout_tendencia.setContentsMargins(14, 12, 14, 12)
         layout_tendencia.setSpacing(6)
 
-        self._titulo_tendencia = QLabel("Rendimiento de recaudacion")
+        self._titulo_tendencia = QLabel("Recaudacion")
         self._titulo_tendencia.setObjectName("tituloPanel")
         self._agregar_cabecera_panel_dashboard(
             layout_tendencia,
@@ -1727,10 +1807,9 @@ class VistaModuloPrincipal(QWidget):
             "Ejecutivo",
         )
         self._layout_insights = QGridLayout()
-        self._layout_insights.setHorizontalSpacing(8)
-        self._layout_insights.setVerticalSpacing(8)
-        layout_insights.addLayout(self._layout_insights)
-        layout_insights.addStretch(1)
+        self._layout_insights.setHorizontalSpacing(10)
+        self._layout_insights.setVerticalSpacing(10)
+        layout_insights.addLayout(self._layout_insights, 1)
 
         self._panel_distribucion = QFrame()
         self._panel_distribucion.setObjectName("tarjetaPanel")
@@ -1753,9 +1832,13 @@ class VistaModuloPrincipal(QWidget):
         contenedor_distribucion.setObjectName("contenedorDistribucionDeuda")
         layout_contenedor_distribucion = QHBoxLayout(contenedor_distribucion)
         layout_contenedor_distribucion.setContentsMargins(0, 0, 0, 0)
-        layout_contenedor_distribucion.setSpacing(10)
-        layout_contenedor_distribucion.addWidget(self._grafica_distribucion, 2)
-        layout_contenedor_distribucion.addWidget(self._leyenda_distribucion, 1)
+        layout_contenedor_distribucion.setSpacing(14)
+        layout_contenedor_distribucion.addWidget(self._grafica_distribucion, 1)
+        layout_contenedor_distribucion.addWidget(
+            self._leyenda_distribucion,
+            0,
+            alignment=Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
+        )
         layout_distribucion.addWidget(contenedor_distribucion, 1)
 
         self._footer_dashboard = QFrame()
@@ -1767,7 +1850,11 @@ class VistaModuloPrincipal(QWidget):
             f"Ultima actualizacion: {datetime.now().strftime('%d/%m/%Y %I:%M %p')}"
         )
         self._label_actualizacion_dashboard.setObjectName("textoFooterDashboard")
+        self._label_estado_dashboard = QLabel("")
+        self._label_estado_dashboard.setObjectName("textoEstadoDashboard")
+        self._label_estado_dashboard.setProperty("estado", "normal")
         layout_footer.addWidget(self._label_actualizacion_dashboard)
+        layout_footer.addWidget(self._label_estado_dashboard)
         layout_footer.addStretch(1)
         layout.addWidget(self._footer_dashboard)
 
@@ -1902,7 +1989,7 @@ class VistaModuloPrincipal(QWidget):
                 ranking=255,
                 estados=245,
                 distribucion=245,
-                insights=255,
+                insights=270,
             )
             self._panel_ranking.setMaximumWidth(limite_expandido)
             self._panel_insights.setMaximumWidth(limite_expandido)
@@ -2033,6 +2120,7 @@ class VistaModuloPrincipal(QWidget):
         boton.setObjectName("botonSidebar")
         boton.setProperty("tipoSidebar", tipo)
         boton.setProperty("iconoSidebar", modulo.icono)
+        boton.setProperty("dashboardPendienteActualizacion", False)
         boton.setIcon(
             obtener_icono_tabler_coloreado(
                 modulo.icono,
@@ -2048,32 +2136,37 @@ class VistaModuloPrincipal(QWidget):
         encabezado = QWidget()
         encabezado.setObjectName("encabezadoSidebar")
         layout = QVBoxLayout(encabezado)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(4, 2, 4, 8)
         layout.setSpacing(0)
 
-        contenedor = QFrame()
-        contenedor.setObjectName("contenedorMarcaSidebar")
-        layout_contenedor = QVBoxLayout(contenedor)
-        layout_contenedor.setContentsMargins(16, 14, 16, 12)
-        layout_contenedor.setSpacing(2)
-
-        titulo = EtiquetaMarcaGradiente("SICAP")
-        titulo.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
-        titulo.setContentsMargins(0, 0, 0, 0)
-        subtitulo = QLabel("Sistema de Control Administrativo")
-        subtitulo.setObjectName("subtituloMarca")
-        subtitulo.setWordWrap(True)
-        subtitulo.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-
-        bloque_texto = QVBoxLayout()
-        bloque_texto.setContentsMargins(0, 0, 0, 0)
-        bloque_texto.setSpacing(1)
-        bloque_texto.addWidget(titulo)
-        bloque_texto.addWidget(subtitulo)
-
-        layout_contenedor.addLayout(bloque_texto)
-        layout.addWidget(contenedor)
+        logo_marca = self._crear_logo_marca_sidebar()
+        if logo_marca is not None:
+            layout.addWidget(logo_marca, 0, Qt.AlignmentFlag.AlignHCenter)
+        else:
+            titulo = EtiquetaMarcaGradiente("SIGQUA")
+            titulo.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
+            titulo.setContentsMargins(0, 0, 0, 0)
+            layout.addWidget(titulo)
         return encabezado
+
+    def _crear_logo_marca_sidebar(self) -> QLabel | None:
+        ruta_logo = self._gestor_rutas.obtener_ruta_logo_marca()
+        if not ruta_logo.exists():
+            return None
+
+        pixmap_logo = obtener_pixmap_marca(
+            ruta_marca=ruta_logo,
+            ancho_logico=166,
+            factor_escala=self.devicePixelRatioF(),
+        )
+        if pixmap_logo.isNull():
+            return None
+
+        label_logo = QLabel()
+        label_logo.setObjectName("logoSidebar")
+        label_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label_logo.setPixmap(pixmap_logo)
+        return label_logo
 
     @staticmethod
     def _resolver_categoria_sidebar(codigo_modulo: str) -> str:
@@ -2096,15 +2189,45 @@ class VistaModuloPrincipal(QWidget):
                 item.widget().deleteLater()
         self._tarjetas_insight.clear()
 
-        for insight in insights[:5]:
+        insights_visibles = self._seleccionar_insights_dashboard(insights)
+        for insight in insights_visibles:
             indice = len(self._tarjetas_insight)
             tarjeta = TarjetaInsight(self._tema_actual)
             tarjeta.actualizar(insight)
+            tarjeta.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             self._tarjetas_insight.append(tarjeta)
             fila, columna = divmod(indice, 2)
             self._layout_insights.addWidget(tarjeta, fila, columna)
         self._layout_insights.setColumnStretch(0, 1)
         self._layout_insights.setColumnStretch(1, 1)
+        for fila in range(2):
+            self._layout_insights.setRowStretch(fila, 1)
+
+    @staticmethod
+    def _seleccionar_insights_dashboard(
+        insights: tuple[InsightDashboard, ...],
+    ) -> tuple[InsightDashboard, ...]:
+        orden = (
+            "servicios comprometidos",
+            "cargos pendientes",
+            "planes de pago activos",
+            "ultimo pago registrado",
+        )
+        por_titulo = {insight.titulo.strip().lower(): insight for insight in insights}
+        seleccionados = [
+            por_titulo[titulo]
+            for titulo in orden
+            if titulo in por_titulo
+        ]
+        if len(seleccionados) < 4:
+            for insight in insights:
+                titulo = insight.titulo.strip().lower()
+                if titulo == "pagos registrados hoy" or insight in seleccionados:
+                    continue
+                seleccionados.append(insight)
+                if len(seleccionados) == 4:
+                    break
+        return tuple(seleccionados[:4])
 
     def _crear_fuente_chart(self, tamano: int, peso: int = 500) -> QFont:
         fuente = QFont(str(self._paleta_tema["familia_tipografica"]), tamano)
@@ -2212,20 +2335,20 @@ class VistaModuloPrincipal(QWidget):
             return self._crear_chart_estado_vacio("Sin deuda vencida registrada.")
 
         serie = QPieSeries()
-        serie.setHoleSize(0.48)
+        serie.setHoleSize(0.42)
+        serie.setPieSize(0.86)
+        serie.setHorizontalPosition(0.5)
+        serie.setVerticalPosition(0.5)
         total = sum(categoria.valor for categoria in datos)
         for categoria in datos:
             trozo = serie.append(categoria.etiqueta, categoria.valor)
             trozo.setColor(QColor(self._color_rango_antiguedad(categoria.etiqueta)))
-            trozo.setLabelVisible(total > 0 and categoria.valor / total >= 0.16)
+            trozo.setLabelVisible(total > 0 and categoria.valor / total >= 0.22)
             trozo.setLabel(f"{categoria.valor / total * 100:.0f}%")
             trozo.setLabelColor(QColor(str(self._paleta_tema["grafica_texto_fuerte"])))
             trozo.setLabelFont(self._crear_fuente_chart(8, 800))
             trozo.setBorderColor(QColor(str(self._paleta_tema["grafica_borde_trozo"])))
             trozo.setBorderWidth(1)
-            if "61-90" in categoria.etiqueta or "90" in categoria.etiqueta:
-                trozo.setExploded(True)
-                trozo.setExplodeDistanceFactor(0.04)
 
         chart = QChart()
         chart.addSeries(serie)
@@ -2359,6 +2482,18 @@ class VistaModuloPrincipal(QWidget):
                 font-size: {paleta["tamano_fuente_base"]}px;
                 font-weight: 700;
             }}
+            QLabel#textoEstadoDashboard {{
+                color: {paleta["texto_panel_detalle"]};
+                font-size: {paleta["tamano_fuente_base"]}px;
+                font-weight: 800;
+                padding-left: 8px;
+            }}
+            QLabel#textoEstadoDashboard[estado="pendiente"] {{
+                color: #6DF1DC;
+            }}
+            QLabel#textoEstadoDashboard[estado="error"] {{
+                color: #FCA5A5;
+            }}
             QWidget#encabezadoSidebar,
             QWidget#contenedorNavegacionSidebar,
             QScrollArea#scrollNavegacionSidebar {{
@@ -2446,7 +2581,7 @@ class VistaModuloPrincipal(QWidget):
             }}
             QLabel#tituloPanel {{
                 color: {paleta["texto_panel_principal"]};
-                font-size: {paleta["tamano_titulo_panel"]}px;
+                font-size: {paleta["tamano_titulo_panel"] + 3}px;
                 font-weight: {paleta["peso_titulo"]};
             }}
             QLabel#badgePanelDashboard {{
@@ -2487,40 +2622,50 @@ class VistaModuloPrincipal(QWidget):
                 color: {paleta["texto_menu_activo"]};
                 font-weight: 900;
             }}
+            QPushButton#botonSidebar[dashboardPendienteActualizacion="true"] {{
+                background: rgba(45, 212, 191, 0.14);
+                border-color: rgba(109, 241, 220, 0.62);
+                color: {paleta["texto_menu_activo"]};
+            }}
+            QPushButton#botonSidebar[dashboardPendienteActualizacion="true"][activo="true"] {{
+                background: rgba(45, 212, 191, 0.18);
+                border-color: rgba(109, 241, 220, 0.78);
+                color: {paleta["texto_menu_activo"]};
+            }}
             QWidget#tarjetaInsight {{
-                background: {paleta["fondo_superficie_muy_suave"]};
-                border: 1px solid {paleta["borde_suave"]};
-                border-radius: 10px;
+                background: rgba(5, 20, 35, 0.46);
+                border: 1px solid rgba(120, 210, 255, 0.16);
+                border-radius: 14px;
             }}
             QWidget#tarjetaInsight:hover {{
-                background: {paleta["fondo_superficie_suave"]};
-                border-color: {paleta["borde_medio"]};
+                background: rgba(8, 32, 52, 0.58);
+                border-color: rgba(120, 210, 255, 0.24);
             }}
             QLabel#insigniaInsight {{
-                border-radius: 13px;
+                border-radius: 14px;
             }}
             QLabel#insightTitulo {{
                 color: {paleta["texto_panel_secundario"]};
-                font-size: {paleta["tamano_fuente_base"]}px;
+                font-size: {paleta["tamano_fuente_base"] + 1}px;
                 font-weight: {paleta["peso_subtitulo"]};
             }}
             QLabel#insightValor {{
                 color: {paleta["texto_panel_fuerte"]};
-                font-size: 14px;
+                font-size: 15px;
                 font-weight: {paleta["peso_titulo"]};
             }}
             QLabel#insightDetalle {{
                 color: {paleta["texto_panel_detalle"]};
-                font-size: {paleta["tamano_fuente_base"]}px;
+                font-size: {paleta["tamano_fuente_base"] + 1}px;
             }}
             QWidget#contenedorDistribucionDeuda {{
                 background: transparent;
                 border: none;
             }}
             QFrame#leyendaDonutDeuda {{
-                background: {paleta["fondo_superficie_muy_suave"]};
-                border: 1px solid {paleta["borde_suave"]};
-                border-radius: 10px;
+                background: rgba(5, 20, 35, 0.46);
+                border: 1px solid rgba(120, 210, 255, 0.18);
+                border-radius: 14px;
             }}
             QLabel#leyendaDonutTexto {{
                 color: {paleta["texto_panel_secundario"]};

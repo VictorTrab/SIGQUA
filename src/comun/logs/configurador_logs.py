@@ -1,4 +1,4 @@
-"""Configuracion centralizada de logs para SICAP."""
+"""Configuracion centralizada de logs para SIGQUA."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from pathlib import Path
 from comun.configuracion.gestor_rutas import GestorRutas
 
 
-NOMBRE_LOGGER_SICAP = "sicap"
+NOMBRE_LOGGER_SIGQUA = "sigqua"
 FORMATO_LOGS = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-LOGGER_SICAP_BASE = logging.getLogger(NOMBRE_LOGGER_SICAP)
+LOGGER_SIGQUA_BASE = logging.getLogger(NOMBRE_LOGGER_SIGQUA)
 
-if not LOGGER_SICAP_BASE.handlers:
-    LOGGER_SICAP_BASE.addHandler(logging.NullHandler())
-LOGGER_SICAP_BASE.propagate = False
+if not LOGGER_SIGQUA_BASE.handlers:
+    LOGGER_SIGQUA_BASE.addHandler(logging.NullHandler())
+LOGGER_SIGQUA_BASE.propagate = False
 
 
 def configurar_logs_basicos(
@@ -27,14 +27,14 @@ def configurar_logs_basicos(
     gestor_rutas = gestor_rutas or GestorRutas()
     gestor_rutas.obtener_ruta_logs().mkdir(parents=True, exist_ok=True)
 
-    logger_principal = LOGGER_SICAP_BASE
+    logger_principal = LOGGER_SIGQUA_BASE
     logger_principal.setLevel(nivel)
     logger_principal.propagate = False
 
-    ruta_log = gestor_rutas.obtener_ruta_logs() / "sicap.log"
-    ruta_actual = Path(getattr(logger_principal, "_ruta_log_sicap", ruta_log))
+    ruta_log = gestor_rutas.obtener_ruta_logs() / "sigqua.log"
+    ruta_actual = Path(getattr(logger_principal, "_ruta_log_sigqua", ruta_log))
 
-    if getattr(logger_principal, "_sicap_logs_configurados", False) and ruta_actual == ruta_log:
+    if getattr(logger_principal, "_sigqua_logs_configurados", False) and ruta_actual == ruta_log:
         return logger_principal
 
     _cerrar_handlers(logger_principal)
@@ -56,16 +56,16 @@ def configurar_logs_basicos(
 
     logger_principal.addHandler(handler_consola)
     logger_principal.addHandler(handler_archivo)
-    logger_principal._sicap_logs_configurados = True  # type: ignore[attr-defined]
-    logger_principal._ruta_log_sicap = str(ruta_log)  # type: ignore[attr-defined]
+    logger_principal._sigqua_logs_configurados = True  # type: ignore[attr-defined]
+    logger_principal._ruta_log_sigqua = str(ruta_log)  # type: ignore[attr-defined]
     return logger_principal
 
 
-def obtener_logger_sicap(nombre: str | None = None) -> logging.Logger:
-    """Devuelve un logger hijo del namespace principal de SICAP."""
+def obtener_logger_sigqua(nombre: str | None = None) -> logging.Logger:
+    """Devuelve un logger hijo del namespace principal de SIGQUA."""
     if not nombre:
-        return logging.getLogger(NOMBRE_LOGGER_SICAP)
-    return logging.getLogger(f"{NOMBRE_LOGGER_SICAP}.{nombre}")
+        return logging.getLogger(NOMBRE_LOGGER_SIGQUA)
+    return logging.getLogger(f"{NOMBRE_LOGGER_SIGQUA}.{nombre}")
 
 
 def _cerrar_handlers(logger: logging.Logger) -> None:

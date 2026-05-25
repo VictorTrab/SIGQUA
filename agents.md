@@ -1,8 +1,8 @@
-# Reglas globales del agente Codex para SICAP
+# Reglas globales del agente Codex para SIGQUA
 Fecha de actualizacion: 2026-05-07
 
 ## Proposito
-Este archivo define las reglas globales y obligatorias para trabajar SICAP con Codex.
+Este archivo define las reglas globales y obligatorias para trabajar SIGQUA con Codex.
 
 ## Contexto base
 - Tipo de proyecto: aplicacion de escritorio para gestion administrativa de la Junta de Agua de Yarumela.
@@ -85,9 +85,9 @@ Consultar segun el tipo de tarea:
 - `agents/codex/roles/especialista_soporte_operativo.md`
 - `agents/codex/roles/documentador_tecnico.md`
 - `agents/codex/roles/asegurador_calidad.md`
-- `agents/codex/skills/desarrollo_sicap/SKILL.md`
-- `agents/codex/skills/cierre_tarea_sicap/SKILL.md`
-- `agents/codex/skills/seguridad-sicap/SKILL.md`
+- `agents/codex/skills/desarrollo_sigqua/SKILL.md`
+- `agents/codex/skills/cierre_tarea_sigqua/SKILL.md`
+- `agents/codex/skills/seguridad-sigqua/SKILL.md`
 - `agents/codex/skills/mejora_ui_faseada_figma_mcp/SKILL.md`
 - `agents/codex/skills/interfaz_visual_premium_pyside6/SKILL.md`
 - `agents/codex/skills/documentacion_en_boveda/SKILL.md`

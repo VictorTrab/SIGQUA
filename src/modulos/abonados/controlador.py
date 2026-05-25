@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
+from comun.actualizaciones import bus_actualizaciones_modulos
 from modulos.autenticacion.entidades import UsuarioAutenticado
 from modulos.abonados.entidades import Abonado, FILTRO_ABONADOS_TODOS
 from modulos.abonados.servicio import ServicioAbonados
@@ -121,6 +122,11 @@ class ControladorAbonados:
         self._vista_abonados.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
             self._refrescar()
+            bus_actualizaciones_modulos.emitir(
+                "abonados",
+                ("dashboard", "casas", "morosidad", "reportes"),
+                "Abonados actualizados.",
+            )
 
     def _confirmar_cambio_estado(self, abonado_id: int) -> None:
         abonado = self._servicio_abonados.obtener_por_id(abonado_id)
@@ -143,6 +149,11 @@ class ControladorAbonados:
         self._vista_abonados.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
             self._refrescar()
+            bus_actualizaciones_modulos.emitir(
+                "abonados",
+                ("dashboard", "casas", "morosidad", "reportes"),
+                "Abonados actualizados.",
+            )
 
     def _exportar(self) -> None:
         ruta_destino = self._vista_abonados.solicitar_ruta_exportacion()

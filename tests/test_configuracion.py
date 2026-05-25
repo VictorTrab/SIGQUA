@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import shutil
@@ -156,7 +156,7 @@ class TestConfiguracion(unittest.TestCase):
             mostrar_direccion=True,
             mostrar_identificador_fiscal=True,
             firma_habilitada=True,
-            firma_nombre="Administracion SICAP",
+            firma_nombre="Administracion SIGQUA",
             firma_cargo="Encargado de caja",
             firma_identificador="0801-01-0001",
             firma_texto_apoyo="Documento validado para uso interno.",
@@ -188,7 +188,7 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.factura.formato_salida, "HTML")
         self.assertTrue(estado.factura.mostrar_identificador_fiscal)
         self.assertTrue(estado.factura.firma_habilitada)
-        self.assertEqual(estado.factura.firma_nombre, "Administracion SICAP")
+        self.assertEqual(estado.factura.firma_nombre, "Administracion SIGQUA")
         self.assertFalse(estado.factura.abrir_pdf_automaticamente)
         self.assertTrue(estado.factura.imprimir_pdf_automaticamente)
         self.assertTrue(estado.operacion.respaldo_automatico)
@@ -217,11 +217,11 @@ class TestConfiguracion(unittest.TestCase):
         self.assertTrue(resultado.exito)
         estado = self.servicio.obtener_estado()
         ruta_respaldo = Path(estado.operacion.ruta_respaldos_principal)
-        archivos = list(ruta_respaldo.rglob("SICAP_RESPALDO_*.zip"))
+        archivos = list(ruta_respaldo.rglob("SIGQUA_RESPALDO_*.zip"))
         self.assertTrue(archivos)
         with zipfile.ZipFile(archivos[0], "r") as archivo_zip:
             nombres = archivo_zip.namelist()
-            self.assertIn("sicap.db", nombres)
+            self.assertIn("sigqua.db", nombres)
             self.assertIn("manifiesto.json", nombres)
             manifiesto = json.loads(archivo_zip.read("manifiesto.json").decode("utf-8"))
         self.assertEqual(manifiesto["tipo_respaldo"], "MANUAL")

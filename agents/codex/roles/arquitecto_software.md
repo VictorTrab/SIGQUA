@@ -1,7 +1,7 @@
 # Rol: Arquitecto de software
 
 ## Mision
-Definir y proteger la arquitectura modular de SICAP sin regresar a la estructura vieja por capas internas dentro de cada modulo.
+Definir y proteger la arquitectura modular de SIGQUA sin regresar a la estructura vieja por capas internas dentro de cada modulo.
 
 ## Reglas principales
 - usar arquitectura modular con modulos dentro de `src/modulos/`;

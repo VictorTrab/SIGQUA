@@ -22,14 +22,14 @@ from modulos.abonados.vista import DialogoFormularioAbonado  # noqa: E402
 from comun.ui.componentes import (  # noqa: E402
     MARGEN_EXTERNO_DIALOGO,
     RADIO_TARJETA_DIALOGO,
-    DialogoConfirmacionSicap,
-    DialogoMensajeSicap,
+    DialogoConfirmacionSigqua,
+    DialogoMensajeSigqua,
 )
 from modulos.barrios.entidades import Barrio  # noqa: E402
 from modulos.barrios.vista import DialogoDetalleBarrio, DialogoFormularioBarrio  # noqa: E402
 
 
-class TestDialogosSicap(unittest.TestCase):
+class TestDialogosSigqua(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.aplicacion = QApplication.instance() or QApplication([])
@@ -48,7 +48,7 @@ class TestDialogosSicap(unittest.TestCase):
 
     def test_dialogo_mensaje_usa_fondo_opaco_y_tarjeta_alineada(self) -> None:
         dialogo, _ = self._capturar_dialogo(
-            DialogoMensajeSicap(
+            DialogoMensajeSigqua(
                 "Aviso",
                 "Mensaje de prueba para validar transparencias y recorte redondeado.",
             )
@@ -65,7 +65,7 @@ class TestDialogosSicap(unittest.TestCase):
     def test_dialogo_formulario_y_confirmacion_reutilizan_tarjeta_opaca_sin_mascara_top_level(self) -> None:
         dialogo_formulario, _ = self._capturar_dialogo(DialogoFormularioBarrio())
         dialogo_confirmacion, _ = self._capturar_dialogo(
-            DialogoConfirmacionSicap(
+            DialogoConfirmacionSigqua(
                 "Confirmar accion",
                 "Descripcion de prueba.",
                 detalles=(("Campo", "Valor"),),
@@ -84,7 +84,7 @@ class TestDialogosSicap(unittest.TestCase):
 
     def test_dialogos_compactos_eliminan_iconos_en_botones(self) -> None:
         dialogos = [
-            DialogoMensajeSicap("Aviso", "Mensaje breve para revisar acciones compactas."),
+            DialogoMensajeSigqua("Aviso", "Mensaje breve para revisar acciones compactas."),
             DialogoFormularioAbonado(barrios=[OpcionBarrio(1, "Centro")]),
         ]
 
@@ -95,7 +95,7 @@ class TestDialogosSicap(unittest.TestCase):
             self.assertLessEqual(dialogo.layout_cuerpo.spacing(), 10)
             dialogo.close()
 
-    def test_dialogo_detalle_barrio_unifica_panel_y_acciones_en_un_mismo_bloque(self) -> None:
+    def test_dialogo_detalle_barrio_mantiene_panel_y_acciones_operativas(self) -> None:
         barrio = Barrio(
             identificador=1,
             nombre="Centro",
@@ -108,19 +108,18 @@ class TestDialogosSicap(unittest.TestCase):
         dialogo, _ = self._capturar_dialogo(
             DialogoDetalleBarrio(
                 barrio=barrio,
+                fecha_creacion="08/05/2026 07:30 AM",
                 fecha_actualizada="08/05/2026 08:00 AM",
             )
         )
 
         panel_contenido = dialogo.findChild(type(dialogo._cuerpo), "panelContenidoDetalleBarrio")
-        separador = dialogo.findChild(type(dialogo._cuerpo), "separadorDetalleBarrio")
         observaciones = dialogo.findChild(type(dialogo._cuerpo), "campoDetalleBarrioAmplio")
 
         self.assertIsNotNone(panel_contenido)
-        self.assertIsNotNone(separador)
         self.assertIsNotNone(observaciones)
-        self.assertFalse(dialogo._pie.isVisible())
-        self.assertEqual(dialogo.layout_pie.count(), 0)
+        self.assertTrue(dialogo._pie.isVisible())
+        self.assertGreater(dialogo.layout_pie.count(), 0)
         self.assertIn("panelContenidoDetalleBarrio", dialogo.styleSheet())
         self.assertIn(f"border-radius: {RADIO_TARJETA_DIALOGO}px;", dialogo.styleSheet())
         dialogo.close()

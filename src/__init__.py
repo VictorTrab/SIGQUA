@@ -1,1 +1,1 @@
-"""Paquete principal de SICAP."""
+"""Paquete principal de SIGQUA."""

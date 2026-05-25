@@ -27,8 +27,8 @@ from PySide6.QtWidgets import (
 
 from comun.ui import (
     BotonAccionContextual,
-    DialogoBaseSicap,
-    DialogoMensajeSicap,
+    DialogoBaseSigqua,
+    DialogoMensajeSigqua,
     configurar_tabla_operativa,
     crear_boton_operativo,
     crear_item_tabla,
@@ -36,7 +36,7 @@ from comun.ui import (
     resolver_variante_boton_modal,
 )
 from comun.ui.temas import (
-    TEMA_SICAP_PREDETERMINADO,
+    TEMA_SIGQUA_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
     resolver_nombre_tema,
@@ -137,7 +137,7 @@ class BotonIconoFilaMorosidad(QToolButton):
         self.setIcon(obtener_icono_tabler_coloreado(self._icono, color_icono, tamano=18))
 
 
-class DialogoDetalleMorosidad(DialogoBaseSicap):
+class DialogoDetalleMorosidad(DialogoBaseSigqua):
     """Detalle operativo del abonado en mora."""
 
     def __init__(
@@ -162,11 +162,11 @@ class DialogoDetalleMorosidad(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Detalle de morosidad")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Consulta las casas vinculadas al abonado, el vencimiento más antiguo y la deuda operativa actual."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         scroll = QScrollArea()
@@ -404,7 +404,7 @@ class DialogoDetalleMorosidad(DialogoBaseSicap):
         )
 
 
-class DialogoSeleccionDocumentoMorosidad(DialogoBaseSicap):
+class DialogoSeleccionDocumentoMorosidad(DialogoBaseSigqua):
     """Permite elegir casas especificas o emitir deuda total del abonado."""
 
     def __init__(self, detalle: DetalleMorosidad, parent: QWidget | None = None) -> None:
@@ -424,11 +424,11 @@ class DialogoSeleccionDocumentoMorosidad(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Emitir documento de deuda")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Selecciona casas específicas del abonado o genera el consolidado total con toda la deuda vigente."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         total = QCheckBox("Emitir deuda total del abonado")
@@ -482,7 +482,7 @@ class DialogoSeleccionDocumentoMorosidad(DialogoBaseSicap):
     def _validar_y_aceptar(self) -> None:
         emitir_total, casas = self.seleccion
         if not emitir_total and not casas:
-            DialogoMensajeSicap(
+            DialogoMensajeSigqua(
                 titulo="Seleccion requerida",
                 mensaje="Selecciona al menos una casa o usa la opcion de total del abonado.",
                 texto_boton="Entendido",
@@ -506,7 +506,7 @@ class VistaMorosidad(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("vistaMorosidad")
-        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SIGQUA_PREDETERMINADO
         self._paleta = obtener_paleta_tema(self._tema_actual)
         self._timer_mensaje = QTimer(self)
         self._timer_mensaje.setSingleShot(True)

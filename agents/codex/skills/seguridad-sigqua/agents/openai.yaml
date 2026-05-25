@@ -1,0 +1,4 @@
+interface:
+  display_name: "Seguridad SIGQUA"
+  short_description: "Controles de seguridad para SIGQUA"
+  default_prompt: "Usa $seguridad-sigqua para revisar riesgos de seguridad en SIGQUA antes de implementar o cerrar un cambio."

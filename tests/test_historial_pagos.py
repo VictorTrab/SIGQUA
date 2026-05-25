@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import shutil
@@ -165,8 +165,8 @@ class TestHistorialPagos(unittest.TestCase):
             "Actualizar",
             [boton.text() for boton in vista.findChildren(QPushButton)],
         )
-        vista.aplicar_tema("tema_sicap")
-        self.assertEqual(vista._tema_actual, "tema_sicap")
+        vista.aplicar_tema("tema_sigqua")
+        self.assertEqual(vista._tema_actual, "tema_sigqua")
         self.assertIn('font-family: "Segoe UI"', vista.styleSheet())
         vista.close()
 

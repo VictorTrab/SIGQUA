@@ -6,7 +6,7 @@ Fecha de actualizacion: 2026-05-07
 - Esta skill asume las reglas globales de `AGENTS.md`.
 - Usar junto con la skill de mejora UI basada en Figma MCP.
 - Aplicar antes de implementar cualquier pantalla nueva o al refactorizar una existente.
-- Pensada para SICAP, PySide6, escritorio administrativo y desarrollo por fases.
+- Pensada para SIGQUA, PySide6, escritorio administrativo y desarrollo por fases.
 
 ## Objetivo
 Guiar a Codex para crear interfaces bonitas, agradables, consistentes y sin errores de visualizacion.
@@ -162,7 +162,7 @@ Eliminar:
 - No invertir colores manualmente sin revisar estados y elevacion.
 
 ### 15. Pensar en escritorio real
-Como SICAP es una app de escritorio:
+Como SIGQUA es una app de escritorio:
 - aprovechar ancho para claridad, no para llenar por llenar;
 - usar paneles, tablas y formularios con buena distribucion;
 - evitar pantallas tipo movil estiradas;

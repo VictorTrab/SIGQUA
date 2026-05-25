@@ -31,8 +31,8 @@ from PySide6.QtWidgets import (
 from comun.ui import (
     BotonAccionContextual,
     CampoMontoMonetario,
-    DialogoBaseSicap,
-    DialogoMensajeSicap,
+    DialogoBaseSigqua,
+    DialogoMensajeSigqua,
     aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
     crear_boton_operativo,
@@ -41,7 +41,7 @@ from comun.ui import (
     resolver_variante_boton_modal,
 )
 from comun.ui.temas import (
-    TEMA_SICAP_PREDETERMINADO,
+    TEMA_SIGQUA_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
     obtener_tema_actual,
@@ -140,7 +140,7 @@ class BotonIconoFilaPlan(QToolButton):
         self.setIcon(obtener_icono_tabler_coloreado(self._icono, color, tamano=18))
 
 
-class DialogoFormularioPlanPago(DialogoBaseSicap):
+class DialogoFormularioPlanPago(DialogoBaseSigqua):
     def __init__(
         self,
         casas: Iterable[OpcionCasaPlanPago],
@@ -192,11 +192,11 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Editar plan de pago" if self._plan else "Nuevo plan de pago")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Crea o ajusta planes asociados solo a conexion o reconexion segun la regla cerrada vigente."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         self._campo_busqueda_casa = QLineEdit()
@@ -256,7 +256,7 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
         grilla.addWidget(self._crear_bloque("Cuota mensual", self._campo_cuota), 4, 0)
         grilla.addWidget(self._crear_bloque("Cantidad de cuotas", self._campo_cantidad), 4, 1)
         ayuda_cuota = QLabel("Calculada automaticamente segun el saldo financiado y la cantidad de cuotas.")
-        ayuda_cuota.setObjectName("ayudaCampoDialogoSicap")
+        ayuda_cuota.setObjectName("ayudaCampoDialogoSigqua")
         ayuda_cuota.setWordWrap(True)
         ayuda_cuota.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         grilla.addWidget(ayuda_cuota, 5, 0, 1, 2)
@@ -274,7 +274,7 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
         panel_notas.layout().addWidget(self._crear_bloque("Notas del plan", self._campo_observaciones))
 
         self._mensaje = QLabel("")
-        self._mensaje.setObjectName("mensajeErrorDialogoSicap")
+        self._mensaje.setObjectName("mensajeErrorDialogoSigqua")
         self._mensaje.setVisible(False)
 
         fila_acciones = QHBoxLayout()
@@ -365,26 +365,26 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
         label = QLabel(etiqueta)
-        label.setObjectName("etiquetaDatoDialogoSicap")
+        label.setObjectName("etiquetaDatoDialogoSigqua")
         layout.addWidget(label)
         layout.addWidget(campo)
         if ayuda.strip():
             label_ayuda = QLabel(ayuda)
-            label_ayuda.setObjectName("ayudaCampoDialogoSicap")
+            label_ayuda.setObjectName("ayudaCampoDialogoSigqua")
             label_ayuda.setWordWrap(True)
             layout.addWidget(label_ayuda)
         return widget
 
     def _crear_panel(self, titulo: str, descripcion: str) -> QFrame:
         panel = QFrame()
-        panel.setObjectName("bloqueDialogoSicap")
+        panel.setObjectName("bloqueDialogoSigqua")
         layout_panel = QVBoxLayout(panel)
         layout_panel.setContentsMargins(12, 12, 12, 12)
         layout_panel.setSpacing(8)
         label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("etiquetaDatoDialogoSicap")
+        label_titulo.setObjectName("etiquetaDatoDialogoSigqua")
         label_descripcion = QLabel(descripcion)
-        label_descripcion.setObjectName("descripcionDialogoSicap")
+        label_descripcion.setObjectName("descripcionDialogoSigqua")
         label_descripcion.setWordWrap(True)
         layout_panel.addWidget(label_titulo)
         layout_panel.addWidget(label_descripcion)
@@ -400,7 +400,7 @@ class DialogoFormularioPlanPago(DialogoBaseSicap):
         self._campo_cuota.establecer_desde_centavos(cuota_regular)
 
 
-class DialogoDetallePlanPago(DialogoBaseSicap):
+class DialogoDetallePlanPago(DialogoBaseSigqua):
     def __init__(
         self,
         detalle: DetallePlanPago,
@@ -426,11 +426,11 @@ class DialogoDetallePlanPago(DialogoBaseSicap):
     def _construir_ui(self) -> None:
         plan = self._detalle.plan
         titulo = QLabel("Detalle de plan de pago")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Consulta estructura, cuotas, saldo pendiente y conceptos vinculados del plan."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
         scroll = QScrollArea()
         scroll.setObjectName("scrollDetallePlan")
@@ -963,7 +963,7 @@ class VistaPlanesPago(QWidget):
         return contenedor
 
     def _mostrar_ayuda(self) -> None:
-        dialogo = DialogoMensajeSicap(
+        dialogo = DialogoMensajeSigqua(
             titulo="Ayuda del modulo",
             mensaje=(
                 "Este modulo sirve para consultar, crear y editar planes de pago del servicio. "

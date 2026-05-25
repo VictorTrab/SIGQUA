@@ -7,7 +7,7 @@ import hashlib
 from logging import Logger
 from secrets import token_urlsafe
 
-from comun.logs import obtener_logger_sicap
+from comun.logs import obtener_logger_sigqua
 from comun.seguridad import es_hash_scrypt_valido, generar_hash_contrasena, verificar_contrasena
 from modulos.configuracion.repositorio import RepositorioConfiguracionSQLite
 from modulos.autenticacion.entidades import (
@@ -37,7 +37,7 @@ class ServicioAutenticacion:
         self.repositorio_autenticacion = repositorio_autenticacion
         self.duracion_sesion_horas = duracion_sesion_horas
         self._repositorio_configuracion = repositorio_configuracion
-        self._logger: Logger = obtener_logger_sicap("autenticacion.servicio")
+        self._logger: Logger = obtener_logger_sigqua("autenticacion.servicio")
 
     def asegurar_usuario_admin_desarrollo(self) -> None:
         """Repara instalaciones locales que aun conservan hashes placeholder."""

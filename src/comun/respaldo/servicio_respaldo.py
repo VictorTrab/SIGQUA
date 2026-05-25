@@ -1,4 +1,4 @@
-"""Backend seguro de respaldo local para SICAP."""
+"""Backend seguro de respaldo local para SIGQUA."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from comun.configuracion.gestor_rutas import GestorRutas
 
 
 FORMATO_FECHA_RESPALDO = "%Y-%m-%d %H:%M:%S"
-NOMBRE_TAREA_RESPALDO = "SICAP-RespaldoAutomatico"
+NOMBRE_TAREA_RESPALDO = "SIGQUA-RespaldoAutomatico"
 TIPOS_PROGRAMACION_VALIDOS = ("DESACTIVADO", "DIARIO", "SEMANAL")
 DIAS_SEMANA_VALIDOS = ("LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO")
 
@@ -189,7 +189,7 @@ class ServicioRespaldoLocal:
             return False, "La carpeta de respaldo no puede ser el mismo archivo de base de datos."
         try:
             ruta_normalizada.mkdir(parents=True, exist_ok=True)
-            with tempfile.NamedTemporaryFile(prefix="sicap_probe_", dir=ruta_normalizada, delete=False) as temporal:
+            with tempfile.NamedTemporaryFile(prefix="sigqua_probe_", dir=ruta_normalizada, delete=False) as temporal:
                 ruta_temporal = Path(temporal.name)
             ruta_temporal.unlink(missing_ok=True)
         except Exception:
@@ -213,12 +213,12 @@ class ServicioRespaldoLocal:
                 configuracion.ruta_secundaria,
                 configuracion.organizar_por_periodo,
             )
-        nombre_base = f"SICAP_RESPALDO_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        nombre_base = f"SIGQUA_RESPALDO_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         extension = ".zip" if configuracion.comprimir_zip else ".db"
         nombre_archivo = f"{nombre_base}{extension}"
 
-        with tempfile.TemporaryDirectory(prefix="sicap_respaldo_") as directorio_temporal:
-            ruta_temporal_db = Path(directorio_temporal) / "sicap.db"
+        with tempfile.TemporaryDirectory(prefix="sigqua_respaldo_") as directorio_temporal:
+            ruta_temporal_db = Path(directorio_temporal) / "sigqua.db"
             self._copiar_base_segura(ruta_temporal_db)
             self._validar_base_generada(ruta_temporal_db)
 
@@ -239,7 +239,7 @@ class ServicioRespaldoLocal:
                     compression=zipfile.ZIP_DEFLATED,
                     allowZip64=True,
                 ) as archivo_zip:
-                    archivo_zip.write(ruta_temporal_db, arcname="sicap.db")
+                    archivo_zip.write(ruta_temporal_db, arcname="sigqua.db")
                     archivo_zip.writestr(
                         "manifiesto.json",
                         json.dumps(manifiesto, ensure_ascii=True, indent=2),
@@ -293,7 +293,7 @@ class ServicioRespaldoLocal:
             directorio = Path(ruta_base).expanduser()
             if not directorio.exists():
                 continue
-            for archivo in directorio.rglob("SICAP_RESPALDO_*"):
+            for archivo in directorio.rglob("SIGQUA_RESPALDO_*"):
                 if not archivo.is_file():
                     continue
                 if datetime.fromtimestamp(archivo.stat().st_mtime) < limite:

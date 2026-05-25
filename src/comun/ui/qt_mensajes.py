@@ -1,4 +1,4 @@
-"""Filtro centralizado para mensajes ruidosos de Qt en SICAP."""
+"""Filtro centralizado para mensajes ruidosos de Qt en SIGQUA."""
 
 from __future__ import annotations
 

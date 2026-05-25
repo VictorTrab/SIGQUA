@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import csv
 import shutil
@@ -430,7 +430,7 @@ class TestControladorCasas(unittest.TestCase):
             identificador=9,
             nombre_usuario="admin",
             nombre_completo="Administrador",
-            correo="admin@sicap.local",
+            correo="admin@sigqua.local",
             estado="ACTIVO",
         )
 

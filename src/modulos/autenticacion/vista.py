@@ -17,7 +17,6 @@ from PySide6.QtGui import (
     QLinearGradient,
     QPaintEvent,
     QPainter,
-    QPixmap,
     QRadialGradient,
 )
 from PySide6.QtWidgets import (
@@ -36,25 +35,29 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from comun.configuracion.gestor_rutas import GestorRutas
+from comun.configuracion.gestor_rutas import VERSION_SISTEMA, GestorRutas
 from comun.ui import (
     obtener_icono_tabler_coloreado,
+    obtener_pixmap_marca,
     obtener_pixmap_tabler_coloreado,
 )
 from modulos.autenticacion.entidades import SesionIniciada, UsuarioAutenticado
 
 
 ANCHO_MAXIMO_TARJETA = 520
-COLOR_GRADIENTE_INICIAL = "#1abc9c"
-COLOR_GRADIENTE_FINAL = "#1f2c51"
-COLOR_ICONO_INPUT = "#486278"
-COLOR_ICONO_PRIMARIO = "#E4EACC"
-COLOR_ICONO_SECUNDARIO = "#17324d"
-COLOR_ICONO_ESTADO = "#1f2c51"
-COLOR_ICONO_ADVERTENCIA = "#d14343"
-COLOR_AURORA_CLARA = QColor(255, 255, 255, 42)
-COLOR_AURORA_TURQUESA = QColor(109, 241, 220, 78)
-COLOR_AURORA_AZUL = QColor(95, 168, 255, 62)
+COLOR_GRADIENTE_INICIAL = "#0A1728"
+COLOR_GRADIENTE_FINAL = "#1D364E"
+COLOR_ICONO_INPUT = "#8FAFC7"
+COLOR_ICONO_PRIMARIO = "#0A1728"
+COLOR_ICONO_SECUNDARIO = "#C9DBE9"
+COLOR_ICONO_ESTADO = "#C9DBE9"
+COLOR_ICONO_ADVERTENCIA = "#FBBF24"
+COLOR_AURORA_CLARA = QColor(201, 219, 233, 22)
+COLOR_AURORA_TURQUESA = QColor(56, 189, 248, 38)
+COLOR_AURORA_AZUL = QColor(53, 230, 168, 26)
+TAMANO_ICONO_ACCION_INPUT = 18
+TAMANO_AREA_ACCION_INPUT = 30
+DESPLAZAMIENTO_ACCION_DERECHA_INPUT = 18
 
 
 def _interpolar_color(color_inicial: QColor, color_final: QColor, progreso: float) -> QColor:
@@ -82,9 +85,10 @@ class CampoAnimado(QLineEdit):
         self._sombra = QGraphicsDropShadowEffect(self)
         self._sombra.setOffset(0, 8)
         self._sombra.setBlurRadius(16)
-        self._sombra.setColor(QColor(26, 188, 156, 0))
+        self._sombra.setColor(QColor(56, 189, 248, 0))
         self.setGraphicsEffect(self._sombra)
         self._aplicar_estilo_animado()
+        QTimer.singleShot(0, self._ajustar_accion_derecha)
 
     def focusInEvent(self, evento) -> None:
         super().focusInEvent(evento)
@@ -113,38 +117,58 @@ class CampoAnimado(QLineEdit):
         self._animacion_realce.start()
 
     def _ajustar_accion_derecha(self) -> None:
-        if self._desplazamiento_accion_derecha <= 0:
-            return
-
         botones_accion = [
             boton for boton in self.findChildren(QToolButton) if boton.isVisible()
         ]
         if not botones_accion:
             return
 
+        for boton in botones_accion:
+            boton.setAutoRaise(True)
+            boton.setCursor(Qt.CursorShape.PointingHandCursor)
+            boton.setFixedSize(TAMANO_AREA_ACCION_INPUT, TAMANO_AREA_ACCION_INPUT)
+            boton.setIconSize(QSize(TAMANO_ICONO_ACCION_INPUT, TAMANO_ICONO_ACCION_INPUT))
+            boton.move(boton.x(), max(0, (self.height() - boton.height()) // 2))
+
+        if self._desplazamiento_accion_derecha <= 0:
+            return
+
         boton_derecho = max(botones_accion, key=lambda boton: boton.x())
         posicion_x = self.width() - boton_derecho.width() - self._desplazamiento_accion_derecha
-        boton_derecho.move(max(0, posicion_x), boton_derecho.y())
+        boton_derecho.move(max(0, posicion_x), max(0, (self.height() - boton_derecho.height()) // 2))
 
     def _actualizar_progreso_realce(self, valor: object) -> None:
         self._progreso_realce = float(valor)
         self._aplicar_estilo_animado()
 
     def _aplicar_estilo_animado(self) -> None:
-        borde = _interpolar_color(QColor(178, 201, 223, 242), QColor(26, 188, 156, 250), self._progreso_realce)
-        fondo = _interpolar_color(QColor(255, 255, 255, 143), QColor(255, 255, 255, 209), self._progreso_realce)
-        sombra = _interpolar_color(QColor(26, 188, 156, 0), QColor(26, 188, 156, 58), self._progreso_realce)
+        borde = _interpolar_color(
+            QColor(83, 112, 139, 132),
+            QColor(0, 166, 214, 232),
+            self._progreso_realce,
+        )
+        fondo = _interpolar_color(
+            QColor(16, 42, 64, 228),
+            QColor(29, 54, 78, 242),
+            self._progreso_realce,
+        )
+        sombra = _interpolar_color(
+            QColor(0, 166, 214, 0),
+            QColor(0, 166, 214, 46),
+            self._progreso_realce,
+        )
         self._sombra.setBlurRadius(16 + (self._progreso_realce * 12))
         self._sombra.setColor(sombra)
         self.setStyleSheet(
             "QLineEdit {"
             "min-height: 46px;"
-            "padding: 0 16px;"
+            "padding: 0 18px;"
             f"border: 1px solid rgba({borde.red()}, {borde.green()}, {borde.blue()}, {borde.alpha()});"
             "border-radius: 16px;"
             f"background-color: rgba({fondo.red()}, {fondo.green()}, {fondo.blue()}, {fondo.alpha()});"
-            "color: #10233d;"
-            "selection-background-color: #cfe3ff;"
+            "color: #EAF2F8;"
+            "selection-background-color: #4E6A9C;"
+            "selection-color: #EAF2F8;"
             "font-size: 13px;"
             "}"
         )
@@ -165,7 +189,7 @@ class BotonAnimado(QPushButton):
         self._sombra = QGraphicsDropShadowEffect(self)
         self._sombra.setOffset(0, 10)
         self._sombra.setBlurRadius(18)
-        self._sombra.setColor(QColor(16, 35, 61, 0))
+        self._sombra.setColor(QColor(10, 23, 40, 0))
         self.setGraphicsEffect(self._sombra)
         self._aplicar_estilo_animado()
 
@@ -202,11 +226,15 @@ class BotonAnimado(QPushButton):
         self._aplicar_estilo_secundario()
 
     def _aplicar_estilo_primario(self) -> None:
-        base = QColor(23, 39, 75, 240)
-        hover = QColor(28, 48, 92, 250)
-        pressed = QColor(18, 31, 59, 255)
+        base = QColor(0, 166, 214, 246)
+        hover = QColor(39, 196, 239, 255)
+        pressed = QColor(0, 140, 184, 255)
         color_actual = self._color_por_progreso(base, hover, pressed)
-        sombra = _interpolar_color(QColor(16, 35, 61, 0), QColor(16, 35, 61, 70), min(self._progreso_interaccion, 1.0))
+        sombra = _interpolar_color(
+            QColor(0, 166, 214, 0),
+            QColor(0, 166, 214, 54),
+            min(self._progreso_interaccion, 1.0),
+        )
         self._sombra.setBlurRadius(18 + min(self._progreso_interaccion, 1.0) * 10)
         self._sombra.setColor(sombra)
         self.setStyleSheet(
@@ -215,7 +243,7 @@ class BotonAnimado(QPushButton):
             "border: none;"
             "border-radius: 16px;"
             f"background-color: rgba({color_actual.red()}, {color_actual.green()}, {color_actual.blue()}, {color_actual.alpha()});"
-            "color: #E4EACC;"
+            "color: #0A1728;"
             "font-size: 13px;"
             "font-weight: 700;"
             "padding: 0 18px;"
@@ -223,15 +251,19 @@ class BotonAnimado(QPushButton):
         )
 
     def _aplicar_estilo_secundario(self) -> None:
-        base_fondo = QColor(255, 255, 255, 107)
-        hover_fondo = QColor(255, 255, 255, 163)
-        pressed_fondo = QColor(241, 247, 252, 214)
-        base_borde = QColor(182, 202, 221, 235)
-        hover_borde = QColor(166, 194, 216, 245)
-        pressed_borde = QColor(145, 178, 205, 250)
+        base_fondo = QColor(36, 63, 90, 224)
+        hover_fondo = QColor(45, 76, 104, 242)
+        pressed_fondo = QColor(29, 54, 78, 255)
+        base_borde = QColor(83, 112, 139, 132)
+        hover_borde = QColor(143, 175, 199, 172)
+        pressed_borde = QColor(201, 219, 233, 196)
         fondo_actual = self._color_por_progreso(base_fondo, hover_fondo, pressed_fondo)
         borde_actual = self._color_por_progreso(base_borde, hover_borde, pressed_borde)
-        sombra = _interpolar_color(QColor(16, 35, 61, 0), QColor(16, 35, 61, 28), min(self._progreso_interaccion, 1.0))
+        sombra = _interpolar_color(
+            QColor(10, 23, 40, 0),
+            QColor(10, 23, 40, 72),
+            min(self._progreso_interaccion, 1.0),
+        )
         self._sombra.setBlurRadius(14 + min(self._progreso_interaccion, 1.0) * 6)
         self._sombra.setColor(sombra)
         self.setStyleSheet(
@@ -240,7 +272,7 @@ class BotonAnimado(QPushButton):
             f"border: 1px solid rgba({borde_actual.red()}, {borde_actual.green()}, {borde_actual.blue()}, {borde_actual.alpha()});"
             "border-radius: 16px;"
             f"background-color: rgba({fondo_actual.red()}, {fondo_actual.green()}, {fondo_actual.blue()}, {fondo_actual.alpha()});"
-            "color: #17324d;"
+            "color: #EAF2F8;"
             "font-size: 13px;"
             "font-weight: 600;"
             "padding: 0 18px;"
@@ -418,6 +450,8 @@ class VistaAutenticacion(QWidget):
         self._label_pie_login.setObjectName("pieLogin")
         self._label_pie_login.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._label_pie_login.setWordWrap(True)
+        self._label_pie_login.setText(f"Versión {VERSION_SISTEMA}")
+        contenido.addWidget(self._label_pie_login)
         return pagina
 
     def _construir_pagina_olvido(self) -> QWidget:
@@ -579,16 +613,37 @@ class VistaAutenticacion(QWidget):
         if not ruta_logo.exists():
             return
 
-        pixmap_logo = QPixmap(str(ruta_logo))
+        pixmap_logo = obtener_pixmap_marca(
+            ruta_marca=ruta_logo,
+            ancho_logico=248,
+            factor_escala=self.devicePixelRatioF(),
+        )
         if pixmap_logo.isNull():
             return
 
+        bloque_marca = QWidget()
+        bloque_marca.setObjectName("bloqueMarcaLogin")
+        layout_marca = QVBoxLayout(bloque_marca)
+        layout_marca.setContentsMargins(0, 0, 0, 4)
+        layout_marca.setSpacing(2)
+
         label_logo = QLabel()
+        label_logo.setObjectName("logoMarcaLogin")
         label_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label_logo.setPixmap(
-            pixmap_logo.scaledToWidth(94, Qt.TransformationMode.SmoothTransformation)
-        )
-        tarjeta.layout().addWidget(label_logo)
+        label_logo.setPixmap(pixmap_logo)
+        brillo_logo = QGraphicsDropShadowEffect(label_logo)
+        brillo_logo.setBlurRadius(18)
+        brillo_logo.setOffset(0, 0)
+        brillo_logo.setColor(QColor(0, 166, 214, 56))
+        label_logo.setGraphicsEffect(brillo_logo)
+        layout_marca.addWidget(label_logo)
+
+        lema = QLabel("Sistema Integrado de Gestión para Juntas de Agua")
+        lema.setObjectName("lemaMarcaLogin")
+        lema.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lema.setWordWrap(True)
+        layout_marca.addWidget(lema)
+        tarjeta.layout().addWidget(bloque_marca)
 
     def _agregar_encabezado(
         self,
@@ -648,7 +703,7 @@ class VistaAutenticacion(QWidget):
     ) -> QLineEdit:
         campo = CampoAnimado()
         campo.setPlaceholderText(placeholder)
-        campo.setClearButtonEnabled(not es_password)
+        campo.setClearButtonEnabled(False)
         campo.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         campo.addAction(
             obtener_icono_tabler_coloreado(icono, COLOR_ICONO_INPUT, tamano=18),
@@ -657,16 +712,41 @@ class VistaAutenticacion(QWidget):
         if es_password:
             campo.setEchoMode(QLineEdit.EchoMode.Password)
             accion_visibilidad = campo.addAction(
-                obtener_icono_tabler_coloreado("eye.svg", COLOR_ICONO_INPUT, tamano=18),
+                obtener_icono_tabler_coloreado(
+                    "eye.svg",
+                    COLOR_ICONO_INPUT,
+                    tamano=TAMANO_ICONO_ACCION_INPUT,
+                ),
                 QLineEdit.ActionPosition.TrailingPosition,
             )
-            campo.configurar_desplazamiento_accion_derecha(14)
+            accion_visibilidad.setObjectName("accionVisibilidadContrasena")
+            campo.configurar_desplazamiento_accion_derecha(DESPLAZAMIENTO_ACCION_DERECHA_INPUT)
             accion_visibilidad.setToolTip("Mostrar contraseña")
             accion_visibilidad.triggered.connect(
                 lambda checked=False, line_edit=campo, accion=accion_visibilidad: (
                     self._alternar_visibilidad_contrasena(line_edit, accion)
                 )
             )
+        else:
+            accion_limpiar = campo.addAction(
+                obtener_icono_tabler_coloreado(
+                    "x.svg",
+                    COLOR_ICONO_INPUT,
+                    tamano=TAMANO_ICONO_ACCION_INPUT,
+                ),
+                QLineEdit.ActionPosition.TrailingPosition,
+            )
+            accion_limpiar.setObjectName("accionLimpiarCampo")
+            accion_limpiar.setToolTip("Limpiar campo")
+            accion_limpiar.setVisible(False)
+            accion_limpiar.triggered.connect(campo.clear)
+            campo.textChanged.connect(
+                lambda texto, accion=accion_limpiar, line_edit=campo: (
+                    accion.setVisible(bool(texto)),
+                    QTimer.singleShot(0, line_edit._ajustar_accion_derecha),
+                )
+            )
+            campo.configurar_desplazamiento_accion_derecha(DESPLAZAMIENTO_ACCION_DERECHA_INPUT)
         return campo
 
     def _crear_boton_primario(
@@ -704,35 +784,35 @@ class VistaAutenticacion(QWidget):
     @staticmethod
     def _crear_sombra_tarjeta() -> QGraphicsDropShadowEffect:
         sombra = QGraphicsDropShadowEffect()
-        sombra.setBlurRadius(72)
+        sombra.setBlurRadius(78)
         sombra.setOffset(0, 22)
-        sombra.setColor(QColor(10, 24, 46, 86))
+        sombra.setColor(QColor(3, 10, 22, 118))
         return sombra
 
     def _pintar_auroras(self, painter: QPainter) -> None:
         ancho = max(self.width(), 1)
         alto = max(self.height(), 1)
 
-        aurora_izquierda = QRadialGradient(ancho * 0.18, alto * 0.2, ancho * 0.35)
+        aurora_izquierda = QRadialGradient(ancho * 0.17, alto * 0.18, ancho * 0.26)
         aurora_izquierda.setColorAt(0.0, COLOR_AURORA_TURQUESA)
-        aurora_izquierda.setColorAt(0.5, QColor(109, 241, 220, 26))
-        aurora_izquierda.setColorAt(1.0, QColor(109, 241, 220, 0))
+        aurora_izquierda.setColorAt(0.42, QColor(56, 189, 248, 14))
+        aurora_izquierda.setColorAt(1.0, QColor(56, 189, 248, 0))
         painter.setBrush(aurora_izquierda)
-        painter.drawEllipse(int(ancho * -0.02), int(alto * -0.1), int(ancho * 0.55), int(alto * 0.62))
+        painter.drawEllipse(int(ancho * 0.0), int(alto * -0.04), int(ancho * 0.38), int(alto * 0.42))
 
-        aurora_derecha = QRadialGradient(ancho * 0.82, alto * 0.18, ancho * 0.32)
+        aurora_derecha = QRadialGradient(ancho * 0.84, alto * 0.16, ancho * 0.24)
         aurora_derecha.setColorAt(0.0, COLOR_AURORA_AZUL)
-        aurora_derecha.setColorAt(0.45, QColor(95, 168, 255, 20))
-        aurora_derecha.setColorAt(1.0, QColor(95, 168, 255, 0))
+        aurora_derecha.setColorAt(0.45, QColor(53, 230, 168, 10))
+        aurora_derecha.setColorAt(1.0, QColor(53, 230, 168, 0))
         painter.setBrush(aurora_derecha)
-        painter.drawEllipse(int(ancho * 0.56), int(alto * -0.08), int(ancho * 0.42), int(alto * 0.46))
+        painter.drawEllipse(int(ancho * 0.62), int(alto * -0.02), int(ancho * 0.32), int(alto * 0.34))
 
-        halo_central = QRadialGradient(ancho * 0.5, alto * 0.52, ancho * 0.24)
+        halo_central = QRadialGradient(ancho * 0.5, alto * 0.52, ancho * 0.18)
         halo_central.setColorAt(0.0, COLOR_AURORA_CLARA)
-        halo_central.setColorAt(0.6, QColor(255, 255, 255, 10))
-        halo_central.setColorAt(1.0, QColor(255, 255, 255, 0))
+        halo_central.setColorAt(0.58, QColor(201, 219, 233, 6))
+        halo_central.setColorAt(1.0, QColor(201, 219, 233, 0))
         painter.setBrush(halo_central)
-        painter.drawEllipse(int(ancho * 0.29), int(alto * 0.2), int(ancho * 0.42), int(alto * 0.46))
+        painter.drawEllipse(int(ancho * 0.36), int(alto * 0.28), int(ancho * 0.28), int(alto * 0.32))
 
     @staticmethod
     def _alternar_visibilidad_contrasena(campo: QLineEdit, accion_visibilidad: object) -> None:
@@ -740,14 +820,22 @@ class VistaAutenticacion(QWidget):
         if es_visible:
             campo.setEchoMode(QLineEdit.EchoMode.Password)
             accion_visibilidad.setIcon(
-                obtener_icono_tabler_coloreado("eye.svg", COLOR_ICONO_INPUT, tamano=18)
+                obtener_icono_tabler_coloreado(
+                    "eye.svg",
+                    COLOR_ICONO_INPUT,
+                    tamano=TAMANO_ICONO_ACCION_INPUT,
+                )
             )
             accion_visibilidad.setToolTip("Mostrar contraseña")
             return
 
         campo.setEchoMode(QLineEdit.EchoMode.Normal)
         accion_visibilidad.setIcon(
-            obtener_icono_tabler_coloreado("eye-off.svg", COLOR_ICONO_INPUT, tamano=18)
+            obtener_icono_tabler_coloreado(
+                "eye-off.svg",
+                COLOR_ICONO_INPUT,
+                tamano=TAMANO_ICONO_ACCION_INPUT,
+            )
         )
         accion_visibilidad.setToolTip("Ocultar contraseña")
 
@@ -760,9 +848,9 @@ class VistaAutenticacion(QWidget):
         return label
 
     def _mostrar_mensaje(self, label: QLabel, mensaje: str, es_exito: bool) -> None:
-        color_borde = "#0f9f6e" if es_exito else "#d14343"
-        color_texto = "#0f5132" if es_exito else "#8f1d1d"
-        color_fondo = "#ebfff5" if es_exito else "#fff3f3"
+        color_borde = "rgba(201, 219, 233, 0.24)" if es_exito else "rgba(228, 234, 204, 0.22)"
+        color_texto = "#C9DBE9" if es_exito else "#E4EACC"
+        color_fondo = "rgba(45, 90, 104, 0.28)" if es_exito else "rgba(104, 61, 71, 0.24)"
         label.setStyleSheet(
             "QLabel {"
             f"border: 1px solid {color_borde};"
@@ -878,26 +966,38 @@ class VistaAutenticacion(QWidget):
             QWidget#contenedorVidrioAutenticacion {
                 background: transparent;
             }
+            QWidget#bloqueMarcaLogin {
+                background: transparent;
+            }
             QFrame#fondoBlurTarjeta {
-                background: rgba(255, 255, 255, 54);
-                border: 1px solid rgba(255, 255, 255, 78);
+                background: rgba(10, 23, 40, 58);
+                border: 1px solid rgba(143, 175, 199, 62);
                 border-radius: 32px;
             }
             QFrame#tarjetaAutenticacion {
                 background: qlineargradient(
                     x1: 0, y1: 0,
                     x2: 1, y2: 1,
-                    stop: 0 rgba(255, 255, 255, 156),
-                    stop: 0.48 rgba(246, 252, 255, 132),
-                    stop: 1 rgba(225, 241, 249, 112)
+                    stop: 0 rgba(29, 54, 78, 224),
+                    stop: 0.48 rgba(36, 63, 90, 206),
+                    stop: 1 rgba(16, 42, 64, 226)
                 );
-                border: 1px solid rgba(255, 255, 255, 210);
+                border: 1px solid rgba(143, 175, 199, 98);
                 border-radius: 30px;
             }
+            QLabel#logoMarcaLogin {
+                margin-bottom: 0;
+            }
+            QLabel#lemaMarcaLogin {
+                color: rgba(201, 219, 233, 220);
+                font-size: 12px;
+                font-weight: 600;
+                padding: 0 6px 2px 6px;
+            }
             QLabel#badgeContexto {
-                color: rgba(16, 35, 61, 184);
-                background-color: rgba(255, 255, 255, 86);
-                border: 1px solid rgba(255, 255, 255, 112);
+                color: #C9DBE9;
+                background-color: rgba(16, 42, 64, 214);
+                border: 1px solid rgba(83, 112, 139, 118);
                 border-radius: 11px;
                 font-size: 10px;
                 font-weight: 700;
@@ -906,29 +1006,29 @@ class VistaAutenticacion(QWidget):
                 margin: 0 0 4px 0;
             }
             QLabel#emblemaPagina {
-                color: #1f2c51;
+                color: #C9DBE9;
                 margin-bottom: 0;
             }
             QLabel#tituloPagina {
-                color: #10233d;
+                color: #EAF2F8;
                 font-size: 23px;
                 font-weight: 800;
                 letter-spacing: 0.2px;
             }
             QLabel#subtituloPagina,
             QLabel#textoExplicativo {
-                color: rgba(34, 57, 84, 242);
+                color: #C9DBE9;
                 font-size: 13px;
                 line-height: 1.25;
             }
             QLabel#pieLogin {
-                color: rgba(45, 72, 101, 226);
+                color: rgba(143, 175, 199, 210);
                 font-size: 12px;
                 font-weight: 600;
-                padding-top: 0;
+                padding-top: 2px;
             }
             QLabel#etiquetaCampo {
-                color: #17324d;
+                color: #EAF2F8;
                 font-size: 12px;
                 font-weight: 600;
                 letter-spacing: 0.2px;

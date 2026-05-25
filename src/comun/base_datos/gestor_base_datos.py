@@ -1,4 +1,4 @@
-"""Utilidades compartidas para inicializar y abrir SQLite en SICAP."""
+"""Utilidades compartidas para inicializar y abrir SQLite en SIGQUA."""
 
 from __future__ import annotations
 

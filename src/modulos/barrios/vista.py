@@ -29,9 +29,9 @@ from PySide6.QtWidgets import (
 
 from comun.ui import (
     BotonAccionContextual,
-    DialogoBaseSicap,
-    DialogoConfirmacionSicap,
-    DialogoMensajeSicap,
+    DialogoBaseSigqua,
+    DialogoConfirmacionSigqua,
+    DialogoMensajeSigqua,
     aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
     crear_boton_operativo,
@@ -41,7 +41,7 @@ from comun.ui import (
 )
 from comun.ui.componentes import COLOR_FONDO_DIALOGO, RADIO_TARJETA_DIALOGO
 from comun.ui.temas import (
-    TEMA_SICAP_PREDETERMINADO,
+    TEMA_SIGQUA_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
     resolver_nombre_tema,
@@ -157,7 +157,7 @@ class BotonIconoFilaBarrio(QToolButton):
         self._actualizar_icono(self._color_base)
 
 
-class DialogoFormularioBarrio(DialogoBaseSicap):
+class DialogoFormularioBarrio(DialogoBaseSigqua):
     """Modal para crear o editar barrios."""
 
     def __init__(self, barrio: Barrio | None = None, parent: QWidget | None = None) -> None:
@@ -185,11 +185,11 @@ class DialogoFormularioBarrio(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Editar barrio" if self._barrio else "Nuevo barrio")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Completa el formulario con la informacion principal del barrio."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         fila_superior = QHBoxLayout()
@@ -228,7 +228,7 @@ class DialogoFormularioBarrio(DialogoBaseSicap):
         )
 
         self._mensaje = QLabel("")
-        self._mensaje.setObjectName("mensajeErrorDialogoSicap")
+        self._mensaje.setObjectName("mensajeErrorDialogoSigqua")
         self._mensaje.setVisible(False)
 
         fila_acciones = QHBoxLayout()
@@ -278,28 +278,28 @@ class DialogoFormularioBarrio(DialogoBaseSicap):
         layout.setSpacing(3)
 
         label = QLabel(etiqueta)
-        label.setObjectName("etiquetaDatoDialogoSicap")
+        label.setObjectName("etiquetaDatoDialogoSigqua")
         layout.addWidget(label)
         layout.addWidget(campo)
         return bloque
 
     def _crear_panel_formulario(self, titulo: str, descripcion: str) -> QFrame:
         panel = QFrame()
-        panel.setObjectName("bloqueDialogoSicap")
+        panel.setObjectName("bloqueDialogoSigqua")
         layout_panel = QVBoxLayout(panel)
         layout_panel.setContentsMargins(14, 14, 14, 14)
         layout_panel.setSpacing(8)
         label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("etiquetaDatoDialogoSicap")
+        label_titulo.setObjectName("etiquetaDatoDialogoSigqua")
         label_descripcion = QLabel(descripcion)
-        label_descripcion.setObjectName("descripcionDialogoSicap")
+        label_descripcion.setObjectName("descripcionDialogoSigqua")
         label_descripcion.setWordWrap(True)
         layout_panel.addWidget(label_titulo)
         layout_panel.addWidget(label_descripcion)
         return panel
 
 
-class DialogoDetalleBarrio(DialogoBaseSicap):
+class DialogoDetalleBarrio(DialogoBaseSigqua):
     """Modal para consultar detalle del barrio."""
 
     def __init__(
@@ -324,11 +324,11 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Detalle de barrio")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Consulta información general, estado operativo y estadísticas del barrio."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         scroll = QScrollArea()
@@ -678,7 +678,7 @@ class DialogoDetalleBarrio(DialogoBaseSicap):
         )
 
 
-class DialogoConfirmacionEstadoBarrio(DialogoConfirmacionSicap):
+class DialogoConfirmacionEstadoBarrio(DialogoConfirmacionSigqua):
     """Modal de confirmacion para activar o inactivar barrios."""
 
     def __init__(self, barrio: Barrio, parent: QWidget | None = None) -> None:
@@ -723,7 +723,7 @@ class VistaBarrios(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SIGQUA_PREDETERMINADO
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._pagina_actual = 1
         self._total_paginas = 1

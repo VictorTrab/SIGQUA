@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import shutil
@@ -190,10 +190,10 @@ class TestMorosidadReportes(unittest.TestCase):
 
         self.assertEqual(vista_morosidad.objectName(), "vistaMorosidad")
         self.assertEqual(vista_reportes.objectName(), "vistaReportes")
-        vista_morosidad.aplicar_tema("tema_sicap")
-        vista_reportes.aplicar_tema("tema_sicap")
-        self.assertEqual(vista_morosidad._tema_actual, "tema_sicap")
-        self.assertEqual(vista_reportes._tema_actual, "tema_sicap")
+        vista_morosidad.aplicar_tema("tema_sigqua")
+        vista_reportes.aplicar_tema("tema_sigqua")
+        self.assertEqual(vista_morosidad._tema_actual, "tema_sigqua")
+        self.assertEqual(vista_reportes._tema_actual, "tema_sigqua")
         self.assertIn('font-family: "Segoe UI"', vista_morosidad.styleSheet())
         self.assertIn('font-family: "Segoe UI"', vista_reportes.styleSheet())
 

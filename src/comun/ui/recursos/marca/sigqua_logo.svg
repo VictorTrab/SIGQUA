@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="180" viewBox="0 0 720 180" role="img" aria-labelledby="titulo descripcion">
+  <title id="titulo">SIGQUA</title>
+  <desc id="descripcion">Logotipo tipografico de la marca SIGQUA.</desc>
+  <text
+    x="360"
+    y="106"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="Montserrat, Avenir Next, Trebuchet MS, sans-serif"
+    font-size="96"
+    font-weight="800"
+    letter-spacing="3"
+  ><tspan fill="#D8F3FF">SIG</tspan><tspan fill="#38BDF8">QUA</tspan></text>
+</svg>

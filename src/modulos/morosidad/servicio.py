@@ -215,7 +215,7 @@ class ServicioMorosidad:
             clave: getattr(parametro, "valor", "")
             for clave, parametro in valores.items()
         }
-        identidad = construir_identidad_empresa(parametros, nombre_predeterminado="SICAP")
+        identidad = construir_identidad_empresa(parametros, nombre_predeterminado="SIGQUA")
 
         class _ConfiguracionTemporal:
             nombre_junta = identidad.nombre

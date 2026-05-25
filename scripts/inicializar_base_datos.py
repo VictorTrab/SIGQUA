@@ -1,4 +1,4 @@
-"""Inicializa la base de datos SQLite de SICAP desde la migracion versionada."""
+"""Inicializa la base de datos SQLite de SIGQUA desde la migracion versionada."""
 
 from __future__ import annotations
 

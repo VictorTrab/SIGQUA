@@ -1,4 +1,4 @@
-"""Backend documental para comprobantes y reportes de SICAP."""
+"""Backend documental para comprobantes y reportes de SIGQUA."""
 
 from modulos.documentos.generadores.generador_pdf_reportlab import GeneradorPdfReportLab
 from modulos.documentos.servicios.servicio_comprobante_pago import ServicioComprobantePago

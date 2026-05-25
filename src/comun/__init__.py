@@ -1,1 +1,1 @@
-"""Componentes compartidos de SICAP."""
+"""Componentes compartidos de SIGQUA."""

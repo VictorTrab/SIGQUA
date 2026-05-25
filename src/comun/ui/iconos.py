@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
@@ -50,5 +51,57 @@ def obtener_pixmap_tabler_coloreado(
     renderer.render(painter)
     painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
     painter.fillRect(pixmap.rect(), QColor(color_hexadecimal))
+    painter.end()
+    return pixmap
+
+
+def obtener_pixmap_marca(
+    ruta_marca: Path,
+    ancho_logico: int,
+    factor_escala: float = 1.0,
+) -> QPixmap:
+    """Renderiza la marca al tamano final para evitar reescalados borrosos."""
+    factor = max(1.0, float(factor_escala or 1.0))
+    ancho = max(1, int(ancho_logico))
+
+    if ruta_marca.suffix.lower() == ".svg":
+        return _renderizar_svg_marca(ruta_marca, ancho, factor)
+
+    pixmap_original = QPixmap(str(ruta_marca))
+    if pixmap_original.isNull():
+        return QPixmap()
+
+    pixmap = pixmap_original.scaledToWidth(
+        round(ancho * factor),
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    pixmap.setDevicePixelRatio(factor)
+    return pixmap
+
+
+def _renderizar_svg_marca(ruta_marca: Path, ancho_logico: int, factor_escala: float) -> QPixmap:
+    renderer = QSvgRenderer(str(ruta_marca))
+    if not renderer.isValid():
+        return QPixmap()
+
+    tamano_svg = renderer.defaultSize()
+    if tamano_svg.isEmpty() or tamano_svg.width() <= 0:
+        proporcion_alto = 0.25
+    else:
+        proporcion_alto = tamano_svg.height() / tamano_svg.width()
+
+    alto_logico = max(1, round(ancho_logico * proporcion_alto))
+    pixmap = QPixmap(
+        round(ancho_logico * factor_escala),
+        round(alto_logico * factor_escala),
+    )
+    pixmap.setDevicePixelRatio(factor_escala)
+    pixmap.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+    renderer.render(painter, QRectF(0, 0, ancho_logico, alto_logico))
     painter.end()
     return pixmap

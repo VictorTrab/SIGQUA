@@ -99,14 +99,35 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
     def test_vista_usa_tres_paginas_reutilizables_y_navegacion_local(self) -> None:
         vista = VistaAutenticacion()
         fondo_blur = vista._pagina_login.findChild(type(vista._boton_login.parentWidget()), "fondoBlurTarjeta")
+        logo_login = vista._pagina_login.findChild(QLabel, "logoMarcaLogin")
+        lema_login = vista._pagina_login.findChild(QLabel, "lemaMarcaLogin")
 
+        self.assertEqual(vista._gestor_rutas.obtener_ruta_logo_marca().name, "sigqua_logo.svg")
         self.assertEqual(vista._stack.count(), 3)
         self.assertEqual(vista._boton_login.parentWidget().maximumWidth(), ANCHO_MAXIMO_TARJETA)
         self.assertGreater(vista.maximumWidth(), ANCHO_MAXIMO_TARJETA)
-        self.assertEqual(COLOR_GRADIENTE_INICIAL, "#1abc9c")
-        self.assertEqual(COLOR_GRADIENTE_FINAL, "#1f2c51")
+        self.assertEqual(COLOR_GRADIENTE_INICIAL, "#0A1728")
+        self.assertEqual(COLOR_GRADIENTE_FINAL, "#1D364E")
         self.assertIsNotNone(fondo_blur)
+        self.assertIsNotNone(logo_login)
+        self.assertIsNotNone(logo_login.pixmap())
+        self.assertFalse(logo_login.pixmap().isNull())
+        self.assertEqual(logo_login.pixmap().deviceIndependentSize().toSize().width(), 248)
+        self.assertIsNotNone(lema_login)
+        self.assertEqual(lema_login.text(), "Sistema Integrado de Gestión para Juntas de Agua")
+        self.assertIn("Versión 2.2.0", vista._label_pie_login.text())
         self.assertIsNone(fondo_blur.graphicsEffect())
+        accion_limpiar_usuario = next(
+            accion
+            for accion in vista._campo_usuario.actions()
+            if accion.objectName() == "accionLimpiarCampo"
+        )
+        self.assertFalse(accion_limpiar_usuario.isVisible())
+        vista._campo_usuario.setText("admin")
+        self.aplicacion.processEvents()
+        self.assertTrue(accion_limpiar_usuario.isVisible())
+        accion_limpiar_usuario.trigger()
+        self.assertEqual(vista._campo_usuario.text(), "")
         self.assertEqual(len(vista._campo_contrasena.actions()), 2)
         self.assertEqual(vista._campo_contrasena.echoMode(), vista._campo_contrasena.EchoMode.Password)
 
@@ -116,6 +137,13 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista._campo_contrasena.actions()[-1].trigger()
         self.assertEqual(vista._campo_contrasena.echoMode(), vista._campo_contrasena.EchoMode.Password)
         self.assertFalse(vista._boton_login.icon().isNull())
+
+        vista.mostrar_restablecer("admin")
+        self.assertEqual(vista._campo_nueva_contrasena.echoMode(), vista._campo_nueva_contrasena.EchoMode.Password)
+        vista._campo_nueva_contrasena.actions()[-1].trigger()
+        self.assertEqual(vista._campo_nueva_contrasena.echoMode(), vista._campo_nueva_contrasena.EchoMode.Normal)
+        vista._campo_nueva_contrasena.actions()[-1].trigger()
+        self.assertEqual(vista._campo_nueva_contrasena.echoMode(), vista._campo_nueva_contrasena.EchoMode.Password)
 
         vista.mostrar_olvido_contrasena()
         self.assertIs(vista._stack.currentWidget(), vista._pagina_olvido)
@@ -172,6 +200,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
             self.assertIs(ventana_principal.centralWidget(), ventana_principal.contenedor_central)
             self.assertIs(ventana_principal.contenedor_central.currentWidget(), vista_autenticacion)
+            self.assertEqual(ventana_principal.windowTitle(), "SIGQUA | Autenticación")
             self.assertEqual(ventana_principal.minimumWidth(), ANCHO_VENTANA_AUTENTICACION)
             self.assertEqual(ventana_principal.maximumWidth(), ANCHO_VENTANA_AUTENTICACION)
             self.assertEqual(ventana_principal.minimumHeight(), ALTO_VENTANA_AUTENTICACION)
@@ -203,7 +232,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                         identificador=1,
                         nombre_usuario="admin",
                         nombre_completo="Administrador del Sistema",
-                        correo="admin@sicap.local",
+                        correo="admin@sigqua.local",
                         estado="ACTIVO",
                     ),
                     token_sesion="token-prueba-123",
@@ -216,7 +245,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 ventana_principal.contenedor_central.currentWidget(),
                 VistaModuloPrincipal,
             )
-            self.assertEqual(ventana_principal.windowTitle(), "SICAP | Modulo principal")
+            self.assertEqual(ventana_principal.windowTitle(), "SIGQUA | Módulo principal")
             self.assertIsNotNone(ventana_principal.sesion_activa)
             self.assertEqual(ventana_principal.sesion_activa.token_sesion, "token-prueba-123")
             self.assertEqual(ventana_principal.contenedor_central.count(), 2)
@@ -249,7 +278,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                         identificador=1,
                         nombre_usuario="admin",
                         nombre_completo="Administrador del Sistema",
-                        correo="admin@sicap.local",
+                        correo="admin@sigqua.local",
                         estado="ACTIVO",
                     ),
                     token_sesion="token-prueba-456",
@@ -262,7 +291,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertIs(ventana_principal.centralWidget(), ventana_principal.contenedor_central)
             self.assertIs(ventana_principal.contenedor_central.currentWidget(), vista_autenticacion)
             self.assertIsNone(ventana_principal.sesion_activa)
-            self.assertEqual(ventana_principal.windowTitle(), "SICAP | Autenticacion")
+            self.assertEqual(ventana_principal.windowTitle(), "SIGQUA | Autenticación")
             self.assertEqual(ventana_principal.contenedor_central.count(), 2)
             self.assertGreaterEqual(alto_minimo_principal, 0)
             self.assertEqual(ventana_principal.minimumWidth(), ANCHO_VENTANA_AUTENTICACION)
@@ -301,7 +330,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                         identificador=1,
                         nombre_usuario="admin",
                         nombre_completo="Administrador del Sistema",
-                        correo="admin@sicap.local",
+                        correo="admin@sigqua.local",
                         estado="ACTIVO",
                     ),
                     token_sesion="token-dashboard",
@@ -369,7 +398,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                         identificador=99,
                         nombre_usuario="superadmin",
                         nombre_completo="Superadministrador Tecnico",
-                        correo="superadmin@sicap.local",
+                        correo="superadmin@sigqua.local",
                         estado="ACTIVO",
                         es_tecnico=True,
                         es_oculto=True,
@@ -526,9 +555,13 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
     def test_shell_principal_reduce_ancho_sidebar_sin_expandir_menu(self) -> None:
         vista_principal = VistaModuloPrincipal()
+        logo_sidebar = vista_principal.findChild(QLabel, "logoSidebar")
 
         self.assertEqual(vista_principal._sidebar.minimumWidth(), 192)
         self.assertEqual(vista_principal._sidebar.maximumWidth(), 198)
+        self.assertIsNotNone(logo_sidebar)
+        self.assertIsNotNone(logo_sidebar.pixmap())
+        self.assertFalse(logo_sidebar.pixmap().isNull())
         vista_principal.close()
 
     def test_shell_principal_resuelve_saludo_por_hora(self) -> None:
@@ -802,10 +835,10 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             dialogo.show()
             self.aplicacion.processEvents()
             self.assertGreaterEqual(dialogo.minimumWidth(), 520)
-            self.assertIn("QFrame#bloqueDialogoSicap", dialogo.styleSheet())
+            self.assertIn("QFrame#bloqueDialogoSigqua", dialogo.styleSheet())
             dialogo.close()
 
-    def test_shell_aplica_tema_sicap_sin_selector_de_tema(self) -> None:
+    def test_shell_aplica_tema_sigqua_sin_selector_de_tema(self) -> None:
         vista_principal = VistaModuloPrincipal()
         vista_barrios = VistaBarrios()
         vista_abonados = VistaAbonados()
@@ -831,21 +864,21 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista_principal.show()
         self.aplicacion.processEvents()
 
-        vista_principal.aplicar_tema("tema_sicap")
+        vista_principal.aplicar_tema("tema_sigqua")
         self.aplicacion.processEvents()
 
-        self.assertEqual(vista_principal._tema_actual, "tema_sicap")
+        self.assertEqual(vista_principal._tema_actual, "tema_sigqua")
         self.assertFalse(hasattr(vista_principal, "_boton_tema"))
-        self.assertEqual(vista_barrios._tema_actual, "tema_sicap")
-        self.assertEqual(vista_abonados._tema_actual, "tema_sicap")
-        self.assertEqual(vista_casas._tema_actual, "tema_sicap")
-        self.assertEqual(vista_planes._tema_actual, "tema_sicap")
-        self.assertEqual(vista_pagos._tema_actual, "tema_sicap")
-        self.assertEqual(vista_historial._tema_actual, "tema_sicap")
-        self.assertEqual(vista_morosidad._tema_actual, "tema_sicap")
-        self.assertEqual(vista_reportes._tema_actual, "tema_sicap")
-        self.assertEqual(vista_usuarios._tema_actual, "tema_sicap")
-        self.assertEqual(vista_configuracion._tema_actual, "tema_sicap")
+        self.assertEqual(vista_barrios._tema_actual, "tema_sigqua")
+        self.assertEqual(vista_abonados._tema_actual, "tema_sigqua")
+        self.assertEqual(vista_casas._tema_actual, "tema_sigqua")
+        self.assertEqual(vista_planes._tema_actual, "tema_sigqua")
+        self.assertEqual(vista_pagos._tema_actual, "tema_sigqua")
+        self.assertEqual(vista_historial._tema_actual, "tema_sigqua")
+        self.assertEqual(vista_morosidad._tema_actual, "tema_sigqua")
+        self.assertEqual(vista_reportes._tema_actual, "tema_sigqua")
+        self.assertEqual(vista_usuarios._tema_actual, "tema_sigqua")
+        self.assertEqual(vista_configuracion._tema_actual, "tema_sigqua")
         self.assertNotIn("botonTemaHeader", vista_principal.styleSheet())
         self.assertEqual(vista_principal._paleta_tema["fondo_principal"], "#0A1728")
         self.assertIn('font-family: "Segoe UI"', vista_principal.styleSheet())
@@ -947,7 +980,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 identificador=1,
                 nombre_usuario="admin",
                 nombre_completo="Admin Usuario",
-                correo="admin@sicap.local",
+                correo="admin@sigqua.local",
                 estado="ACTIVO",
                 roles=("ADMINISTRADOR",),
             )

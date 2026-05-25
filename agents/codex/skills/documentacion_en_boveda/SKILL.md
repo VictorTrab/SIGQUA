@@ -5,11 +5,11 @@ Fecha de actualización: 2026-05-07
 Esta skill asume las reglas globales de `agents.md`.
 
 ## Objetivo
-Garantizar que la documentación de SICAP se escriba siempre en la bóveda externa de Obsidian y no dentro del repositorio del proyecto.
+Garantizar que la documentación de SIGQUA se escriba siempre en la bóveda externa de Obsidian y no dentro del repositorio del proyecto.
 
 ## Ruta oficial de documentación
 
-`C:\Users\User\Documents\SICAP DOCUMENTACION\Documentacion`
+`C:\Users\User\Documents\SIGQUA DOCUMENTACION\Documentacion`
 
 ## Cuándo usarla
 
@@ -58,4 +58,4 @@ Usar esta skill cuando la tarea implique:
 
 ## Resultado esperado
 
-Toda documentación nueva de SICAP queda centralizada en la bóveda externa, ordenada por tema y lista para usarse tanto en mantenimiento técnico como en tesis.
+Toda documentación nueva de SIGQUA queda centralizada en la bóveda externa, ordenada por tema y lista para usarse tanto en mantenimiento técnico como en tesis.

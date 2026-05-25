@@ -1,4 +1,4 @@
-﻿"""Persistencia SQLite del modulo de pagos."""
+"""Persistencia SQLite del modulo de pagos."""
 
 from __future__ import annotations
 
@@ -102,7 +102,7 @@ class RepositorioPagos(Protocol):
         """Obtiene la tarifa mensual vigente."""
 
     def cobrar_mensualidad_prorrateada_en_activacion(self) -> bool:
-        """Indica si conexiÃ³n y reconexiÃ³n deben agregar el primer prorrateo."""
+        """Indica si conexión y reconexión deben agregar el primer prorrateo."""
 
     def obtener_diagnostico_plan(self, casa_id: int) -> DiagnosticoPagoPlan | None:
         """Obtiene el diagnostico de plan activo y sus cuotas cobrables para una casa."""
@@ -677,7 +677,7 @@ class RepositorioPagosSQLite:
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             filas = conexion.execute(consulta, claves).fetchall()
         valores = {str(fila["clave"]): str(fila["valor"] or "") for fila in filas}
-        identidad = construir_identidad_empresa(valores, nombre_predeterminado="SICAP")
+        identidad = construir_identidad_empresa(valores, nombre_predeterminado="SIGQUA")
         return ConfiguracionReciboPago(
             nombre_junta=identidad.nombre,
             telefono_junta=identidad.telefono,

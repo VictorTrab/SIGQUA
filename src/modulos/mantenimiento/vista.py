@@ -5,7 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-from comun.ui.temas import TEMA_SICAP_PREDETERMINADO, obtener_paleta_tema
+from comun.ui.temas import TEMA_SIGQUA_PREDETERMINADO, obtener_paleta_tema
 
 from modulos.mantenimiento.entidades import EstadoMantenimiento
 
@@ -17,7 +17,7 @@ class VistaMantenimiento(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SIGQUA_PREDETERMINADO
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self.setObjectName("vistaMantenimiento")
         self._aplicar_estilos()

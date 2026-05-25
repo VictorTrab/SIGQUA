@@ -42,7 +42,7 @@ CLAVES_IDENTIDAD_LEGADAS_JUNTA = (
 
 def construir_identidad_empresa(
     parametros: Mapping[str, object],
-    nombre_predeterminado: str = "SICAP",
+    nombre_predeterminado: str = "SIGQUA",
 ) -> IdentidadEmpresaConfigurada:
     """Resuelve identidad moderna con compatibilidad hacia claves legadas."""
 

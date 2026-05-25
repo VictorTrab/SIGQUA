@@ -6,7 +6,7 @@ Esta skill asume las reglas globales de `agents.md`.
 Cuando la tarea implique implementar o refinar pantallas PySide6, conviene usarla junto con `agents/codex/skills/interfaz_visual_premium_pyside6/SKILL.md`.
 
 ## Objetivo
-Guiar mejoras de UI de SICAP usando el MCP de Figma como referencia de contexto, no como diseño a copiar literalmente.
+Guiar mejoras de UI de SIGQUA usando el MCP de Figma como referencia de contexto, no como diseño a copiar literalmente.
 
 ## Cuándo usarla
 Úsala solo cuando se vaya a:
@@ -48,7 +48,7 @@ Antes de implementar, evaluar:
 - mover la lógica al módulo correcto si mejora la experiencia
 - preferir menos elementos visibles y mejor jerarquía
 
-## Reglas de SICAP
+## Reglas de SIGQUA
 - abonado = DNI como clave visible
 - casa = código de casa como clave visible
 - no usar número de cuenta si duplica código de casa
@@ -83,4 +83,4 @@ Con tiempos cortos, limitar el análisis a:
 No convertir cada pantalla en una auditoría larga.
 
 ## Resultado esperado
-Una mejora incremental de UI más clara, más útil y más coherente con SICAP, donde Codex piense antes de implementar y use Figma como referencia crítica, no como fuente absoluta de verdad.
+Una mejora incremental de UI más clara, más útil y más coherente con SIGQUA, donde Codex piense antes de implementar y use Figma como referencia crítica, no como fuente absoluta de verdad.

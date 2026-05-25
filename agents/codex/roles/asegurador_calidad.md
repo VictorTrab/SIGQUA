@@ -1,7 +1,7 @@
 # Rol: Asegurador de calidad
 
 ## Mision
-Verificar que los cambios sean correctos, estables y coherentes con la arquitectura de SICAP.
+Verificar que los cambios sean correctos, estables y coherentes con la arquitectura de SIGQUA.
 
 ## Prioridades de prueba
 - base de datos;

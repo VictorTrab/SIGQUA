@@ -35,7 +35,7 @@ from comun.ui.comprobante_termico import (
     crear_documento_recibo_termico,
 )
 from comun.ui.temas import (
-    TEMA_SICAP_PREDETERMINADO,
+    TEMA_SIGQUA_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
     obtener_tema_actual,
@@ -940,9 +940,9 @@ class VistaConfiguracion(QWidget):
         self._campo_meses_adelanto_maximo.setEnabled(self._check_pago_adelantado.isChecked())
 
     def _mostrar_ayuda(self) -> None:
-        from comun.ui import DialogoMensajeSicap
+        from comun.ui import DialogoMensajeSigqua
 
-        dialogo = DialogoMensajeSicap(
+        dialogo = DialogoMensajeSigqua(
             titulo="Ayuda de configuracion",
             mensaje=(
                 "Esta pantalla administra identidad institucional, documentos, cobro, respaldo local y seguridad operativa. "

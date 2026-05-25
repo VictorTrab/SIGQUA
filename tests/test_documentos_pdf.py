@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import shutil
@@ -91,7 +91,7 @@ class TestDocumentosPdf(unittest.TestCase):
             tabla=tabla,
             fecha_desde="2026-01-01",
             fecha_hasta="2026-12-31",
-            lineas_encabezado=("SICAP", "Junta de Agua de Yarumela"),
+            lineas_encabezado=("SIGQUA", "Junta de Agua de Yarumela"),
         )
 
         self.assertTrue(Path(ruta_pdf).exists())
@@ -107,7 +107,7 @@ class TestDocumentosPdf(unittest.TestCase):
                 tabla=tabla,
                 fecha_desde="2026-01-01",
                 fecha_hasta="2026-12-31",
-                lineas_encabezado=("SICAP",),
+                lineas_encabezado=("SIGQUA",),
                 generado_en="2020-01-01 08:00:00",
             )
 
@@ -116,7 +116,7 @@ class TestDocumentosPdf(unittest.TestCase):
         dto = DTOEstadoCuenta(
             titulo="DOCUMENTO DE DEUDA",
             subtitulo="Detalle operativo generado desde morosidad",
-            lineas_encabezado=("SICAP",),
+            lineas_encabezado=("SIGQUA",),
             abonado_nombre="Julio Perdomo",
             abonado_dni="0801199402022",
             generado_en="20/05/2026 08:00",

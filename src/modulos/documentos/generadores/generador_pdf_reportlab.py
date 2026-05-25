@@ -29,7 +29,7 @@ class GeneradorPdfReportLab:
         self._estilos = getSampleStyleSheet()
         self._estilos.add(
             ParagraphStyle(
-                name="SicapEncabezado",
+                name="SigquaEncabezado",
                 parent=self._estilos["Normal"],
                 fontName="Helvetica",
                 fontSize=8.5,
@@ -40,7 +40,7 @@ class GeneradorPdfReportLab:
         )
         self._estilos.add(
             ParagraphStyle(
-                name="SicapTituloTicket",
+                name="SigquaTituloTicket",
                 parent=self._estilos["Normal"],
                 fontName="Helvetica-Bold",
                 fontSize=12,
@@ -51,7 +51,7 @@ class GeneradorPdfReportLab:
         )
         self._estilos.add(
             ParagraphStyle(
-                name="SicapSubtituloTicket",
+                name="SigquaSubtituloTicket",
                 parent=self._estilos["Normal"],
                 fontName="Helvetica-Bold",
                 fontSize=8.5,
@@ -62,7 +62,7 @@ class GeneradorPdfReportLab:
         )
         self._estilos.add(
             ParagraphStyle(
-                name="SicapTextoTicket",
+                name="SigquaTextoTicket",
                 parent=self._estilos["Normal"],
                 fontName="Helvetica",
                 fontSize=8.5,
@@ -73,7 +73,7 @@ class GeneradorPdfReportLab:
         )
         self._estilos.add(
             ParagraphStyle(
-                name="SicapTextoTicketNegrita",
+                name="SigquaTextoTicketNegrita",
                 parent=self._estilos["Normal"],
                 fontName="Helvetica-Bold",
                 fontSize=8.5,
@@ -84,7 +84,7 @@ class GeneradorPdfReportLab:
         )
         self._estilos.add(
             ParagraphStyle(
-                name="SicapPieTicket",
+                name="SigquaPieTicket",
                 parent=self._estilos["Normal"],
                 fontName="Helvetica-Bold",
                 fontSize=8.5,
@@ -95,7 +95,7 @@ class GeneradorPdfReportLab:
         )
         self._estilos.add(
             ParagraphStyle(
-                name="SicapTituloReporte",
+                name="SigquaTituloReporte",
                 parent=self._estilos["Heading1"],
                 fontName="Helvetica-Bold",
                 fontSize=16,
@@ -107,7 +107,7 @@ class GeneradorPdfReportLab:
         )
         self._estilos.add(
             ParagraphStyle(
-                name="SicapMetaReporte",
+                name="SigquaMetaReporte",
                 parent=self._estilos["Normal"],
                 fontName="Helvetica",
                 fontSize=9,
@@ -128,7 +128,7 @@ class GeneradorPdfReportLab:
             topMargin=4 * mm,
             bottomMargin=4 * mm,
             title=dto.numero_comprobante,
-            author="SICAP",
+            author="SIGQUA",
             subject="Comprobante de pago",
         )
         elementos = self._construir_elementos_comprobante(dto)
@@ -153,7 +153,7 @@ class GeneradorPdfReportLab:
             topMargin=18 * mm,
             bottomMargin=16 * mm,
             title=dto.titulo,
-            author="SICAP",
+            author="SIGQUA",
             subject="Reporte administrativo",
         )
         elementos = self._construir_elementos_reporte(dto)
@@ -178,7 +178,7 @@ class GeneradorPdfReportLab:
             topMargin=16 * mm,
             bottomMargin=16 * mm,
             title=dto.titulo,
-            author="SICAP",
+            author="SIGQUA",
             subject="Documento operativo de deuda",
         )
         elementos = self._construir_elementos_estado_cuenta(dto)
@@ -195,16 +195,16 @@ class GeneradorPdfReportLab:
     def _construir_elementos_comprobante(self, dto: DTOComprobantePago) -> list[object]:
         elementos: list[object] = []
         for linea in dto.lineas_encabezado:
-            elementos.append(Paragraph(self._escapar(linea), self._estilos["SicapEncabezado"]))
+            elementos.append(Paragraph(self._escapar(linea), self._estilos["SigquaEncabezado"]))
 
         elementos.append(Spacer(1, 1.5 * mm))
-        elementos.append(Paragraph(self._escapar(dto.titulo_documento), self._estilos["SicapTituloTicket"]))
+        elementos.append(Paragraph(self._escapar(dto.titulo_documento), self._estilos["SigquaTituloTicket"]))
         if dto.subtitulo_documento.strip():
             elementos.append(
-                Paragraph(self._escapar(dto.subtitulo_documento), self._estilos["SicapSubtituloTicket"])
+                Paragraph(self._escapar(dto.subtitulo_documento), self._estilos["SigquaSubtituloTicket"])
             )
         elementos.append(
-            Paragraph(self._escapar(dto.numero_comprobante), self._estilos["SicapTituloTicket"])
+            Paragraph(self._escapar(dto.numero_comprobante), self._estilos["SigquaTituloTicket"])
         )
         elementos.append(Spacer(1, 2 * mm))
 
@@ -242,7 +242,7 @@ class GeneradorPdfReportLab:
         if dto.texto_legal_superior.strip():
             elementos.append(Spacer(1, 1.2 * mm))
             elementos.append(
-                Paragraph(self._escapar(dto.texto_legal_superior), self._estilos["SicapTextoTicket"])
+                Paragraph(self._escapar(dto.texto_legal_superior), self._estilos["SigquaTextoTicket"])
             )
 
         elementos.append(Spacer(1, 2 * mm))
@@ -258,15 +258,15 @@ class GeneradorPdfReportLab:
         )
         elementos.append(Spacer(1, 2 * mm))
         if dto.texto_pie.strip():
-            elementos.append(Paragraph(self._escapar(dto.texto_pie), self._estilos["SicapTextoTicket"]))
+            elementos.append(Paragraph(self._escapar(dto.texto_pie), self._estilos["SigquaTextoTicket"]))
             elementos.append(Spacer(1, 1.5 * mm))
         if dto.texto_legal_inferior.strip():
             elementos.append(
-                Paragraph(self._escapar(dto.texto_legal_inferior), self._estilos["SicapTextoTicket"])
+                Paragraph(self._escapar(dto.texto_legal_inferior), self._estilos["SigquaTextoTicket"])
             )
             elementos.append(Spacer(1, 1.5 * mm))
         if dto.etiqueta_copia.strip():
-            elementos.append(Paragraph(self._escapar(dto.etiqueta_copia), self._estilos["SicapPieTicket"]))
+            elementos.append(Paragraph(self._escapar(dto.etiqueta_copia), self._estilos["SigquaPieTicket"]))
         elementos.extend(
             self._construir_bloque_firma(
                 dto.firma_habilitada,
@@ -281,18 +281,18 @@ class GeneradorPdfReportLab:
     def _construir_elementos_reporte(self, dto: DTOReporteTabular) -> list[object]:
         elementos: list[object] = []
         for linea in dto.lineas_encabezado:
-            elementos.append(Paragraph(self._escapar(linea), self._estilos["SicapMetaReporte"]))
+            elementos.append(Paragraph(self._escapar(linea), self._estilos["SigquaMetaReporte"]))
         elementos.append(Spacer(1, 3 * mm))
-        elementos.append(Paragraph(self._escapar(dto.titulo), self._estilos["SicapTituloReporte"]))
+        elementos.append(Paragraph(self._escapar(dto.titulo), self._estilos["SigquaTituloReporte"]))
         if dto.descripcion.strip():
-            elementos.append(Paragraph(self._escapar(dto.descripcion), self._estilos["SicapMetaReporte"]))
+            elementos.append(Paragraph(self._escapar(dto.descripcion), self._estilos["SigquaMetaReporte"]))
         rango = self._texto_rango(dto.fecha_desde, dto.fecha_hasta)
         if rango:
-            elementos.append(Paragraph(self._escapar(rango), self._estilos["SicapMetaReporte"]))
+            elementos.append(Paragraph(self._escapar(rango), self._estilos["SigquaMetaReporte"]))
         elementos.append(
             Paragraph(
                 self._escapar(f"Generado: {dto.generado_en}"),
-                self._estilos["SicapMetaReporte"],
+                self._estilos["SigquaMetaReporte"],
             )
         )
         elementos.append(Spacer(1, 4 * mm))
@@ -302,19 +302,19 @@ class GeneradorPdfReportLab:
     def _construir_elementos_estado_cuenta(self, dto: DTOEstadoCuenta) -> list[object]:
         elementos: list[object] = []
         for linea in dto.lineas_encabezado:
-            elementos.append(Paragraph(self._escapar(linea), self._estilos["SicapMetaReporte"]))
+            elementos.append(Paragraph(self._escapar(linea), self._estilos["SigquaMetaReporte"]))
         elementos.append(Spacer(1, 3 * mm))
-        elementos.append(Paragraph(self._escapar(dto.titulo), self._estilos["SicapTituloReporte"]))
+        elementos.append(Paragraph(self._escapar(dto.titulo), self._estilos["SigquaTituloReporte"]))
         if dto.subtitulo.strip():
-            elementos.append(Paragraph(self._escapar(dto.subtitulo), self._estilos["SicapMetaReporte"]))
+            elementos.append(Paragraph(self._escapar(dto.subtitulo), self._estilos["SigquaMetaReporte"]))
         elementos.append(
             Paragraph(
                 self._escapar(f"Abonado: {dto.abonado_nombre} | DNI: {dto.abonado_dni}"),
-                self._estilos["SicapMetaReporte"],
+                self._estilos["SigquaMetaReporte"],
             )
         )
         elementos.append(
-            Paragraph(self._escapar(f"Generado: {dto.generado_en}"), self._estilos["SicapMetaReporte"])
+            Paragraph(self._escapar(f"Generado: {dto.generado_en}"), self._estilos["SigquaMetaReporte"])
         )
         elementos.append(Spacer(1, 4 * mm))
         for casa in dto.casas:
@@ -331,7 +331,7 @@ class GeneradorPdfReportLab:
                 )
             )
             elementos.append(Spacer(1, 4 * mm))
-        elementos.append(Paragraph(self._escapar(dto.observacion), self._estilos["SicapMetaReporte"]))
+        elementos.append(Paragraph(self._escapar(dto.observacion), self._estilos["SigquaMetaReporte"]))
         elementos.extend(
             self._construir_bloque_firma(
                 dto.firma_habilitada,
@@ -350,18 +350,18 @@ class GeneradorPdfReportLab:
                 [
                     Paragraph(
                         self._escapar(f"{casa.casa_codigo} · {casa.barrio_nombre}"),
-                        self._estilos["SicapTextoTicketNegrita"],
+                        self._estilos["SigquaTextoTicketNegrita"],
                     ),
-                    Paragraph(self._escapar(casa.estado_servicio), self._estilos["SicapTextoTicketNegrita"]),
+                    Paragraph(self._escapar(casa.estado_servicio), self._estilos["SigquaTextoTicketNegrita"]),
                 ],
                 [
-                    Paragraph(self._escapar(casa.direccion_casa), self._estilos["SicapTextoTicket"]),
+                    Paragraph(self._escapar(casa.direccion_casa), self._estilos["SigquaTextoTicket"]),
                     Paragraph(
                         self._escapar(
                             f"Meses vencidos: {casa.meses_vencidos} | Días en mora: {casa.dias_en_mora} | "
                             f"Prioridad: {casa.prioridad} | Más antiguo: {casa.vencimiento_mas_antiguo}"
                         ),
-                        self._estilos["SicapTextoTicket"],
+                        self._estilos["SigquaTextoTicket"],
                     ),
                 ],
             ],
@@ -419,8 +419,8 @@ class GeneradorPdfReportLab:
     def _crear_tabla_etiquetas(self, filas: tuple[tuple[str, str], ...]) -> Table:
         data = [
             [
-                Paragraph(self._escapar(etiqueta), self._estilos["SicapTextoTicketNegrita"]),
-                Paragraph(self._escapar(valor), self._estilos["SicapTextoTicket"]),
+                Paragraph(self._escapar(etiqueta), self._estilos["SigquaTextoTicketNegrita"]),
+                Paragraph(self._escapar(valor), self._estilos["SigquaTextoTicket"]),
             ]
             for etiqueta, valor in filas
         ]
@@ -463,28 +463,28 @@ class GeneradorPdfReportLab:
         )
         elementos.append(linea)
         if nombre.strip():
-            elementos.append(Paragraph(self._escapar(nombre), self._estilos["SicapMetaReporte"]))
+            elementos.append(Paragraph(self._escapar(nombre), self._estilos["SigquaMetaReporte"]))
         if cargo.strip():
-            elementos.append(Paragraph(self._escapar(cargo), self._estilos["SicapMetaReporte"]))
+            elementos.append(Paragraph(self._escapar(cargo), self._estilos["SigquaMetaReporte"]))
         if identificador.strip():
             elementos.append(
                 Paragraph(
                     self._escapar(f"Identificador: {identificador}"),
-                    self._estilos["SicapMetaReporte"],
+                    self._estilos["SigquaMetaReporte"],
                 )
             )
         if texto_apoyo.strip():
-            elementos.append(Paragraph(self._escapar(texto_apoyo), self._estilos["SicapMetaReporte"]))
+            elementos.append(Paragraph(self._escapar(texto_apoyo), self._estilos["SigquaMetaReporte"]))
         return elementos
 
     def _crear_tabla_detalle(self, lineas: tuple[LineaDetalleComprobantePago, ...]) -> Table:
         data = [
             [
-                Paragraph(self._escapar(linea.descripcion), self._estilos["SicapTextoTicket"]),
-                Paragraph(self._escapar(linea.monto), self._estilos["SicapTextoTicket"]),
+                Paragraph(self._escapar(linea.descripcion), self._estilos["SigquaTextoTicket"]),
+                Paragraph(self._escapar(linea.monto), self._estilos["SigquaTextoTicket"]),
             ]
             for linea in lineas
-        ] or [[Paragraph("Sin detalle registrado.", self._estilos["SicapTextoTicket"]), Paragraph("", self._estilos["SicapTextoTicket"])]]
+        ] or [[Paragraph("Sin detalle registrado.", self._estilos["SigquaTextoTicket"]), Paragraph("", self._estilos["SigquaTextoTicket"])]]
         tabla = Table(data, colWidths=[52 * mm, 16 * mm], hAlign="LEFT")
         tabla.setStyle(
             TableStyle(
@@ -504,8 +504,8 @@ class GeneradorPdfReportLab:
     def _crear_tabla_totales(self, filas: tuple[tuple[str, str], ...]) -> Table:
         data = [
             [
-                Paragraph(self._escapar(etiqueta), self._estilos["SicapTextoTicketNegrita"]),
-                Paragraph(self._escapar(valor), self._estilos["SicapTextoTicketNegrita"]),
+                Paragraph(self._escapar(etiqueta), self._estilos["SigquaTextoTicketNegrita"]),
+                Paragraph(self._escapar(valor), self._estilos["SigquaTextoTicketNegrita"]),
             ]
             for etiqueta, valor in filas
         ]
@@ -573,7 +573,7 @@ class GeneradorPdfReportLab:
     @staticmethod
     def _aplicar_metadatos(canvas: object, titulo: str, asunto: str) -> None:
         canvas.setTitle(titulo)
-        canvas.setAuthor("SICAP")
+        canvas.setAuthor("SIGQUA")
         canvas.setSubject(asunto)
 
     @staticmethod

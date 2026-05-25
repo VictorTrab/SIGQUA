@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import shutil
@@ -126,7 +126,7 @@ class TestPagos(unittest.TestCase):
                 UPDATE configuracion_sistema
                 SET valor = CASE clave
                     WHEN 'documentos.firma_habilitada' THEN '1'
-                    WHEN 'documentos.firma_nombre' THEN 'Tesoreria SICAP'
+                    WHEN 'documentos.firma_nombre' THEN 'Tesoreria SIGQUA'
                     WHEN 'documentos.firma_cargo' THEN 'Encargado'
                     WHEN 'documentos.firma_identificador' THEN 'ID-01'
                     WHEN 'documentos.firma_texto_apoyo' THEN 'Firma operativa'
@@ -146,7 +146,7 @@ class TestPagos(unittest.TestCase):
         configuracion = self.servicio.obtener_configuracion_recibo()
 
         self.assertTrue(configuracion.firma_habilitada)
-        self.assertEqual(configuracion.firma_nombre, "Tesoreria SICAP")
+        self.assertEqual(configuracion.firma_nombre, "Tesoreria SIGQUA")
 
     def test_mensualidad_cubre_primero_el_cargo_mas_antiguo(self) -> None:
         casa_id = self._obtener_casa_por_dni("0801199000022")
@@ -464,9 +464,9 @@ class TestPagos(unittest.TestCase):
         self.assertEqual(vista._label_estado_apertura.text(), "Abrir")
         self.assertEqual(vista._label_estado_impresion.text(), "Imprimir")
         self.assertIsInstance(vista._tabs.widget(3), vista_pagos_modulo.FlujoPagoPlan)
-        vista.aplicar_tema("tema_sicap")
-        self.assertEqual(vista._tema_actual, "tema_sicap")
-        self.assertEqual(vista._flujo_mensual._tema_actual, "tema_sicap")
+        vista.aplicar_tema("tema_sigqua")
+        self.assertEqual(vista._tema_actual, "tema_sigqua")
+        self.assertEqual(vista._flujo_mensual._tema_actual, "tema_sigqua")
         self.assertIn('font-family: "Segoe UI"', vista.styleSheet())
 
     def test_vista_notifica_comprobante_pdf_generado(self) -> None:

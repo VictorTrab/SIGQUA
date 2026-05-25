@@ -1,9 +1,9 @@
 from app import iniciar_aplicacion
 from comun.configuracion.gestor_rutas import GestorRutas
-from comun.logs import configurar_logs_basicos, obtener_logger_sicap
+from comun.logs import configurar_logs_basicos, obtener_logger_sigqua
 
 
-logger = obtener_logger_sicap("main")
+logger = obtener_logger_sigqua("main")
 
 
 if __name__ == "__main__":
@@ -11,5 +11,5 @@ if __name__ == "__main__":
     try:
         raise SystemExit(iniciar_aplicacion())
     except Exception:
-        logger.exception("Error no controlado al iniciar SICAP.")
+        logger.exception("Error no controlado al iniciar SIGQUA.")
         raise

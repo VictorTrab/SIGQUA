@@ -1,1 +1,1 @@
-"""Módulos funcionales de SICAP."""
+"""Módulos funcionales de SIGQUA."""

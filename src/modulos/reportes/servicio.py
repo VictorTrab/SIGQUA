@@ -122,12 +122,12 @@ class ServicioReportes:
 
     def _obtener_lineas_encabezado_documental(self) -> tuple[str, ...]:
         if self._repositorio_configuracion is None:
-            return ("SICAP", "Sistema de Control Administrativo")
+            return ("SIGQUA", "Sistema de Control Administrativo")
         parametros = self._repositorio_configuracion.listar_por_claves(
             self.CLAVES_IDENTIDAD_DOCUMENTAL
         )
         valores = {clave: parametro.valor for clave, parametro in parametros.items()}
-        identidad = construir_identidad_empresa(valores, nombre_predeterminado="SICAP")
+        identidad = construir_identidad_empresa(valores, nombre_predeterminado="SIGQUA")
 
         class _ConfiguracionTemporal:
             nombre_junta = identidad.nombre

@@ -31,8 +31,8 @@ from PySide6.QtWidgets import (
 from comun.ui import (
     BotonAccionContextual,
     CampoMontoMonetario,
-    DialogoBaseSicap,
-    DialogoConfirmacionSicap,
+    DialogoBaseSigqua,
+    DialogoConfirmacionSigqua,
     ejecutar_acciones_documento_pdf,
     configurar_tabla_operativa,
     crear_boton_operativo,
@@ -45,7 +45,7 @@ from comun.ui.comprobante_termico import (
     preparar_documento_para_printer,
 )
 from comun.ui.temas import (
-    TEMA_SICAP_PREDETERMINADO,
+    TEMA_SIGQUA_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
     resolver_nombre_tema,
@@ -84,9 +84,9 @@ class DialogoVistaPreviaImpresionComprobante(QWidget):
         self._mensaje.setVisible(False)
 
         titulo = QLabel(datos_documento.numero_comprobante)
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel("Vista previa final del comprobante. Esta misma versión es la que se enviará a impresión.")
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         panel_ticket = QFrame()
@@ -155,7 +155,7 @@ class DialogoVistaPreviaImpresionComprobante(QWidget):
         self._mensaje.setVisible(True)
 
     def _aplicar_estilos(self) -> None:
-        paleta = obtener_paleta_tema(TEMA_SICAP_PREDETERMINADO)
+        paleta = obtener_paleta_tema(TEMA_SIGQUA_PREDETERMINADO)
         self.setStyleSheet(
             self.styleSheet()
             + f"""
@@ -255,7 +255,7 @@ class FlujoPagoPlan(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("flujoPagoPlan")
-        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SIGQUA_PREDETERMINADO
         self._paleta = obtener_paleta_tema(self._tema_actual)
         self._casas: tuple[CasaPago, ...] = ()
         self._metodos: tuple[MetodoPago, ...] = ()
@@ -1148,7 +1148,7 @@ class FlujoPagoActivacion(QWidget):
         self.setObjectName(
             "flujoPagoConexion" if tipo_pago == TIPO_PAGO_CONEXION else "flujoPagoReconexion"
         )
-        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SIGQUA_PREDETERMINADO
         self._paleta = obtener_paleta_tema(self._tema_actual)
         self._casas: tuple[CasaPago, ...] = ()
         self._metodos: tuple[MetodoPago, ...] = ()
@@ -2010,7 +2010,7 @@ class FlujoPagoMensual(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("flujoPagoMensual")
-        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SIGQUA_PREDETERMINADO
         self._paleta = obtener_paleta_tema(self._tema_actual)
         self._casas: tuple[CasaPago, ...] = ()
         self._metodos: tuple[MetodoPago, ...] = ()
@@ -2939,7 +2939,7 @@ class VistaPagos(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("vistaPagos")
-        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SIGQUA_PREDETERMINADO
         self._paleta = obtener_paleta_tema(self._tema_actual)
         self._construir_interfaz()
         self._aplicar_estilos()
@@ -3192,7 +3192,7 @@ class VistaPagos(QWidget):
             ("Saldo posterior", formatear_moneda(resumen.saldo_posterior_centavos)),
             ("Aviso", "Despues de confirmar, el pago no podra anularse dentro del flujo normal del prototipo."),
         )
-        dialogo = DialogoConfirmacionSicap(
+        dialogo = DialogoConfirmacionSigqua(
             titulo=titulo,
             descripcion=descripcion,
             detalles=detalles,

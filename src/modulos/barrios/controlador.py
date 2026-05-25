@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
+from comun.actualizaciones import bus_actualizaciones_modulos
 from modulos.barrios.entidades import Barrio, FILTRO_BARRIOS_TODOS
 from modulos.barrios.servicio import ServicioBarrios
 from modulos.barrios.vista import VistaBarrios
@@ -127,6 +128,11 @@ class ControladorBarrios:
         self._vista_barrios.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
             self._refrescar()
+            bus_actualizaciones_modulos.emitir(
+                "barrios",
+                ("dashboard", "abonados", "casas", "reportes"),
+                "Barrios actualizados.",
+            )
 
     def _confirmar_cambio_estado(self, barrio_id: int) -> None:
         barrio = self._servicio_barrios.obtener_por_id(barrio_id)
@@ -145,6 +151,11 @@ class ControladorBarrios:
         self._vista_barrios.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
             self._refrescar()
+            bus_actualizaciones_modulos.emitir(
+                "barrios",
+                ("dashboard", "abonados", "casas", "reportes"),
+                "Barrios actualizados.",
+            )
 
     def _exportar(self) -> None:
         ruta_destino = self._vista_barrios.solicitar_ruta_exportacion()

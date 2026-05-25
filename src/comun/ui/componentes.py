@@ -1,4 +1,4 @@
-"""Componentes reutilizables para pantallas operativas de SICAP."""
+"""Componentes reutilizables para pantallas operativas de SIGQUA."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from comun.ui.iconos import obtener_icono_tabler_coloreado
 from comun.ui.qt_mensajes import configurar_filtro_mensajes_qt
 from comun.ui.temas import (
-    TEMA_SICAP_PREDETERMINADO,
+    TEMA_SIGQUA_PREDETERMINADO,
     obtener_paleta_tema,
     obtener_paleta_tema_actual,
     obtener_tema_actual,
@@ -79,24 +79,24 @@ class CampoMontoMonetario(QLineEdit):
         self.setText(formatear_monto_desde_centavos(valor))
 
 
-def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> str:
+def _crear_estilo_dialogo_sigqua(color_fondo: str, paleta: dict[str, object]) -> str:
     return f"""
-    QDialog#dialogoBaseSicap {{
+    QDialog#dialogoBaseSigqua {{
         background: {paleta["modal_fondo"]};
         border: 1px solid {paleta["modal_borde"]};
         border-radius: 4px;
         font-family: "{paleta["familia_tipografica"]}";
     }}
-    QWidget#tarjetaDialogoSicap {{
+    QWidget#tarjetaDialogoSigqua {{
         background: {paleta["modal_fondo"]};
         border: none;
     }}
-    QFrame#cabeceraDialogoSicap,
-    QFrame#cuerpoDialogoSicap {{
+    QFrame#cabeceraDialogoSigqua,
+    QFrame#cuerpoDialogoSigqua {{
         background: transparent;
         border: none;
     }}
-    QFrame#pieDialogoSicap {{
+    QFrame#pieDialogoSigqua {{
         background: {paleta["modal_footer_fondo"]};
         border: none;
         border-top: 1px solid {paleta["modal_footer_separador"]};
@@ -110,26 +110,26 @@ def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> 
         background: transparent;
         border: none;
     }}
-    QFrame#bloqueDialogoSicap {{
+    QFrame#bloqueDialogoSigqua {{
         background: {paleta["modal_fondo_seccion"]};
         border: 1px solid {paleta["modal_borde"]};
         border-radius: 4px;
     }}
-    QLabel#tituloDialogoSicap {{
+    QLabel#tituloDialogoSigqua {{
         color: {paleta["modal_titulo"]};
         font-size: {paleta["tamano_titulo_panel"] + 4}px;
         font-weight: {paleta["peso_titulo"]};
     }}
-    QLabel#descripcionDialogoSicap {{
+    QLabel#descripcionDialogoSigqua {{
         color: {paleta["modal_texto"]};
         font-size: {paleta["tamano_fuente_base"] + 2}px;
     }}
-    QLabel#ayudaCampoDialogoSicap {{
+    QLabel#ayudaCampoDialogoSigqua {{
         color: {paleta["modal_texto_secundario"]};
         font-size: {paleta["tamano_fuente_base"] + 1}px;
         font-weight: {paleta["peso_subtitulo"]};
     }}
-    QLabel#mensajeErrorDialogoSicap {{
+    QLabel#mensajeErrorDialogoSigqua {{
         color: {paleta["texto_error"]};
         background: {paleta["fondo_error"]};
         border: 1px solid {paleta["borde_error"]};
@@ -138,12 +138,12 @@ def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> 
         font-size: {paleta["tamano_fuente_base"] + 2}px;
         font-weight: {paleta["peso_subtitulo"]};
     }}
-    QLabel#etiquetaDatoDialogoSicap {{
+    QLabel#etiquetaDatoDialogoSigqua {{
         color: {paleta["modal_texto_secundario"]};
         font-size: {paleta["tamano_fuente_base"] + 1}px;
         font-weight: {paleta["peso_subtitulo"]};
     }}
-    QLabel#valorDatoDialogoSicap {{
+    QLabel#valorDatoDialogoSigqua {{
         color: {paleta["modal_titulo"]};
         font-size: {paleta["tamano_fuente_base"] + 2}px;
         font-weight: {paleta["peso_titulo"]};
@@ -207,7 +207,7 @@ def _crear_estilo_dialogo_sicap(color_fondo: str, paleta: dict[str, object]) -> 
     }}
     """
 
-ESTILO_DIALOGO_SICAP = _crear_estilo_dialogo_sicap(
+ESTILO_DIALOGO_SIGQUA = _crear_estilo_dialogo_sigqua(
     COLOR_FONDO_DIALOGO,
     obtener_paleta_tema_actual(),
 )
@@ -341,12 +341,12 @@ def resolver_variante_boton_modal(texto: str, variante_sugerida: str = "neutro")
     return variante_sugerida if variante_sugerida in MAPA_VARIANTES_ACCION else "neutro"
 
 
-class DialogoBaseSicap(QDialog):
+class DialogoBaseSigqua(QDialog):
     """Dialogo base para modales coherentes del sistema."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setObjectName("dialogoBaseSicap")
+        self.setObjectName("dialogoBaseSigqua")
         self.setModal(True)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -361,7 +361,7 @@ class DialogoBaseSicap(QDialog):
         layout.setSpacing(0)
 
         self._tarjeta = QWidget()
-        self._tarjeta.setObjectName("tarjetaDialogoSicap")
+        self._tarjeta.setObjectName("tarjetaDialogoSigqua")
         self._tarjeta.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._layout_tarjeta = QVBoxLayout(self._tarjeta)
         self._layout_tarjeta.setContentsMargins(
@@ -373,19 +373,19 @@ class DialogoBaseSicap(QDialog):
         self._layout_tarjeta.setSpacing(ESPACIADO_TARJETA_DIALOGO)
 
         self._cabecera = QFrame()
-        self._cabecera.setObjectName("cabeceraDialogoSicap")
+        self._cabecera.setObjectName("cabeceraDialogoSigqua")
         self._layout_cabecera = QVBoxLayout(self._cabecera)
         self._layout_cabecera.setContentsMargins(0, 0, 0, 0)
         self._layout_cabecera.setSpacing(6)
 
         self._cuerpo = QFrame()
-        self._cuerpo.setObjectName("cuerpoDialogoSicap")
+        self._cuerpo.setObjectName("cuerpoDialogoSigqua")
         self._layout_cuerpo = QVBoxLayout(self._cuerpo)
         self._layout_cuerpo.setContentsMargins(0, 0, 0, 0)
         self._layout_cuerpo.setSpacing(10)
 
         self._pie = QFrame()
-        self._pie.setObjectName("pieDialogoSicap")
+        self._pie.setObjectName("pieDialogoSigqua")
         self._pie.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._layout_pie = QVBoxLayout(self._pie)
         self._layout_pie.setContentsMargins(0, 0, 0, 0)
@@ -395,7 +395,7 @@ class DialogoBaseSicap(QDialog):
         self._layout_tarjeta.addWidget(self._cuerpo)
         self._layout_tarjeta.addWidget(self._pie)
         layout.addWidget(self._tarjeta)
-        self.setStyleSheet(_crear_estilo_dialogo_sicap(self._color_fondo_dialogo, self._paleta_tema))
+        self.setStyleSheet(_crear_estilo_dialogo_sigqua(self._color_fondo_dialogo, self._paleta_tema))
 
     def exec(self) -> int:
         self._preparar_presentacion_inicial()
@@ -428,13 +428,13 @@ class DialogoBaseSicap(QDialog):
 
     def aplicar_color_fondo_personalizado(self, color_fondo: str) -> None:
         self._color_fondo_dialogo = color_fondo
-        self.setStyleSheet(_crear_estilo_dialogo_sicap(color_fondo, self._paleta_tema))
+        self.setStyleSheet(_crear_estilo_dialogo_sigqua(color_fondo, self._paleta_tema))
 
     def aplicar_tema(self, nombre_tema: str) -> None:
         self._nombre_tema = resolver_nombre_tema(nombre_tema)
         self._paleta_tema = obtener_paleta_tema(self._nombre_tema)
         self._color_fondo_dialogo = str(self._paleta_tema["fondo_dialogo"])
-        self.setStyleSheet(_crear_estilo_dialogo_sicap(self._color_fondo_dialogo, self._paleta_tema))
+        self.setStyleSheet(_crear_estilo_dialogo_sigqua(self._color_fondo_dialogo, self._paleta_tema))
         self._presentacion_preparada = False
 
     def _preparar_presentacion_inicial(self) -> None:
@@ -557,7 +557,7 @@ class BotonAccionContextual(QPushButton):
         self._actualizar_icono(False)
 
 
-class DialogoMensajeSicap(DialogoBaseSicap):
+class DialogoMensajeSigqua(DialogoBaseSigqua):
     """Dialogo informativo estandar del sistema."""
 
     def __init__(
@@ -574,9 +574,9 @@ class DialogoMensajeSicap(DialogoBaseSicap):
         self._cuerpo.setVisible(False)
 
         label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("tituloDialogoSicap")
+        label_titulo.setObjectName("tituloDialogoSigqua")
         label_mensaje = QLabel(mensaje)
-        label_mensaje.setObjectName("descripcionDialogoSicap")
+        label_mensaje.setObjectName("descripcionDialogoSigqua")
         label_mensaje.setWordWrap(True)
 
         fila_acciones = QHBoxLayout()
@@ -599,7 +599,7 @@ class DialogoMensajeSicap(DialogoBaseSicap):
         self.layout_pie.addLayout(fila_acciones)
 
 
-class DialogoConfirmacionSicap(DialogoBaseSicap):
+class DialogoConfirmacionSigqua(DialogoBaseSigqua):
     """Dialogo de confirmacion coherente para acciones sensibles."""
 
     def __init__(
@@ -617,18 +617,18 @@ class DialogoConfirmacionSicap(DialogoBaseSicap):
         self.setMinimumWidth(520)
 
         label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("tituloDialogoSicap")
+        label_titulo.setObjectName("tituloDialogoSigqua")
         label_descripcion = QLabel(descripcion)
-        label_descripcion.setObjectName("descripcionDialogoSicap")
+        label_descripcion.setObjectName("descripcionDialogoSigqua")
         label_descripcion.setWordWrap(True)
         self.layout_cabecera.addWidget(label_titulo)
         self.layout_cabecera.addWidget(label_descripcion)
 
         if detalles:
             titulo_resumen = QLabel("Resumen de la accion")
-            titulo_resumen.setObjectName("etiquetaDatoDialogoSicap")
+            titulo_resumen.setObjectName("etiquetaDatoDialogoSigqua")
             panel_detalles = QFrame()
-            panel_detalles.setObjectName("bloqueDialogoSicap")
+            panel_detalles.setObjectName("bloqueDialogoSigqua")
             layout_detalles = QVBoxLayout(panel_detalles)
             layout_detalles.setContentsMargins(
                 PADDING_BLOQUE_DIALOGO,
@@ -641,9 +641,9 @@ class DialogoConfirmacionSicap(DialogoBaseSicap):
                 fila = QHBoxLayout()
                 fila.setSpacing(10)
                 label_etiqueta = QLabel(etiqueta)
-                label_etiqueta.setObjectName("etiquetaDatoDialogoSicap")
+                label_etiqueta.setObjectName("etiquetaDatoDialogoSigqua")
                 label_valor = QLabel(valor)
-                label_valor.setObjectName("valorDatoDialogoSicap")
+                label_valor.setObjectName("valorDatoDialogoSigqua")
                 label_valor.setWordWrap(True)
                 fila.addWidget(label_etiqueta, 1)
                 fila.addWidget(label_valor, 2)

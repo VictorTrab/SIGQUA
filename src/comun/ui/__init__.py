@@ -4,9 +4,9 @@ from comun.ui.contenedor_apilado import ContenedorApiladoAjustable
 from comun.ui.componentes import (
     BotonAccionContextual,
     CampoMontoMonetario,
-    DialogoBaseSicap,
-    DialogoConfirmacionSicap,
-    DialogoMensajeSicap,
+    DialogoBaseSigqua,
+    DialogoConfirmacionSigqua,
+    DialogoMensajeSigqua,
     TarjetaKPI,
     VistaPlaceholderModulo,
     aplicar_estilo_boton_operativo,
@@ -22,6 +22,7 @@ from comun.ui.documentos_pdf import (
 from comun.ui.iconos import (
     obtener_icono_tabler,
     obtener_icono_tabler_coloreado,
+    obtener_pixmap_marca,
     obtener_pixmap_tabler_coloreado,
 )
 
@@ -29,9 +30,9 @@ __all__ = [
     "ContenedorApiladoAjustable",
     "BotonAccionContextual",
     "CampoMontoMonetario",
-    "DialogoBaseSicap",
-    "DialogoConfirmacionSicap",
-    "DialogoMensajeSicap",
+    "DialogoBaseSigqua",
+    "DialogoConfirmacionSigqua",
+    "DialogoMensajeSigqua",
     "TarjetaKPI",
     "VistaPlaceholderModulo",
     "aplicar_estilo_boton_operativo",
@@ -43,5 +44,6 @@ __all__ = [
     "ejecutar_acciones_documento_pdf",
     "obtener_icono_tabler",
     "obtener_icono_tabler_coloreado",
+    "obtener_pixmap_marca",
     "obtener_pixmap_tabler_coloreado",
 ]

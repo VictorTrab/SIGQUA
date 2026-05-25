@@ -1,4 +1,4 @@
-"""Utilidades compartidas de SICAP."""
+"""Utilidades compartidas de SIGQUA."""
 
 from comun.utilidades.moneda import formatear_monto_desde_centavos, parsear_monto_a_centavos
 

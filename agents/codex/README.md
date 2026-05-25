@@ -1,4 +1,4 @@
-# Reglas operativas de Codex para SICAP
+# Reglas operativas de Codex para SIGQUA
 
 ## Propósito
 Este directorio organiza las guías de trabajo de Codex separadas por `roles/` y `skills/`.
@@ -23,7 +23,7 @@ Este directorio organiza las guías de trabajo de Codex separadas por `roles/` y
 - `roles/asegurador_calidad.md`
 
 ## Skills disponibles
-- `skills/desarrollo_sicap/SKILL.md`
-- `skills/cierre_tarea_sicap/SKILL.md`
+- `skills/desarrollo_sigqua/SKILL.md`
+- `skills/cierre_tarea_sigqua/SKILL.md`
 - `skills/mejora_ui_faseada_figma_mcp/SKILL.md`
 - `skills/documentacion_en_boveda/SKILL.md`

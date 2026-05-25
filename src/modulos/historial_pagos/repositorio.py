@@ -339,7 +339,7 @@ class RepositorioHistorialPagosSQLite:
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             filas = conexion.execute(consulta, claves).fetchall()
         valores = {str(fila["clave"]): str(fila["valor"] or "") for fila in filas}
-        identidad = construir_identidad_empresa(valores, nombre_predeterminado="SICAP")
+        identidad = construir_identidad_empresa(valores, nombre_predeterminado="SIGQUA")
         return ConfiguracionReciboPago(
             nombre_junta=identidad.nombre,
             telefono_junta=identidad.telefono,

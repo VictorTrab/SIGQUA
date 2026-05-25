@@ -1,5 +1,5 @@
-﻿-- ============================================================
--- SICAP - Sistema de Control Administrativo de Pagos
+-- ============================================================
+-- SIGQUA - Sistema de Control Administrativo de Pagos
 -- Junta de Agua de Yarumela, La Paz, Honduras
 -- Script SQLite actualizado para creacion desde cero
 -- Version BD: 2.0.0
@@ -813,7 +813,7 @@ END;
 -- ============================================================
 
 INSERT OR IGNORE INTO esquema_migraciones(version, descripcion, checksum)
-VALUES ('002', 'Esquema inicial actualizado SICAP con pagos multicasa, planes, mora opcional y reportes basicos', NULL);
+VALUES ('002', 'Esquema inicial actualizado SIGQUA con pagos multicasa, planes, mora opcional y reportes basicos', NULL);
 
 INSERT OR IGNORE INTO roles(id, nombre, descripcion, es_sistema) VALUES
 (1, 'SUPERADMINISTRADOR', 'Acceso total al sistema.', 1),
@@ -848,7 +848,7 @@ SELECT 4, id FROM permisos
 WHERE codigo IN ('dashboard.ver', 'morosidad.ver', 'reportes.generar');
 
 INSERT OR IGNORE INTO usuarios(id, nombre_usuario, nombre_completo, correo, contrasena_hash, estado, observaciones) VALUES
-(1, 'admin', 'Administrador del Sistema', 'admin@sicap.local', 'scrypt$c081b3c0b1cabcfd1e173ac2293394ee$d3c88ce38c9accabda7c2beeef20c9cb0be9bf8a1014f702cc83d90c83fb8d7e8904a200712554282f89cdc1f6adc9fb2b3544f3732c7fabea9b6357a051a94d', 'ACTIVO', 'Usuario inicial de desarrollo. Contrasena local: Admin123!. Cambiar antes de usar en produccion.');
+(1, 'admin', 'Administrador del Sistema', 'admin@sigqua.local', 'scrypt$c081b3c0b1cabcfd1e173ac2293394ee$d3c88ce38c9accabda7c2beeef20c9cb0be9bf8a1014f702cc83d90c83fb8d7e8904a200712554282f89cdc1f6adc9fb2b3544f3732c7fabea9b6357a051a94d', 'ACTIVO', 'Usuario inicial de desarrollo. Contrasena local: Admin123!. Cambiar antes de usar en produccion.');
 
 INSERT OR IGNORE INTO usuarios_roles(usuario_id, rol_id) VALUES (1, 1);
 
@@ -869,7 +869,7 @@ INSERT OR IGNORE INTO conceptos_cobro(codigo, nombre, tipo, requiere_periodo, mo
 ('PAGO_ADELANTADO', 'Pago adelantado', 'PAGO_ADELANTADO', 1, NULL);
 
 INSERT OR IGNORE INTO configuracion_sistema(clave, valor, tipo_dato, categoria, descripcion, editable) VALUES
-('sistema.nombre', 'SICAP', 'TEXTO', 'Sistema', 'Nombre del sistema.', 0),
+('sistema.nombre', 'SIGQUA', 'TEXTO', 'Sistema', 'Nombre del sistema.', 0),
 ('sistema.version', '2.0.0', 'TEXTO', 'Sistema', 'Version del esquema actualizado.', 0),
 ('sistema.respaldo_automatico', '0', 'BOOLEANO', 'Sistema', 'Permite activar respaldo automatico.', 1),
 ('junta.nombre', 'Junta de Agua de Yarumela', 'TEXTO', 'Junta', 'Nombre de la Junta.', 1),

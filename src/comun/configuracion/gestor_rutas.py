@@ -1,4 +1,4 @@
-"""Resolucion centralizada de rutas para SICAP."""
+"""Resolucion centralizada de rutas para SIGQUA."""
 
 from __future__ import annotations
 
@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-NOMBRE_APLICACION = "SICAP"
+NOMBRE_APLICACION = "SIGQUA"
+VERSION_SISTEMA = "2.2.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,7 +21,7 @@ class GestorRutas:
         return self.raiz_proyecto / "database"
 
     def obtener_ruta_base_datos(self) -> Path:
-        return self.obtener_ruta_directorio_base_datos() / "sicap.db"
+        return self.obtener_ruta_directorio_base_datos() / "sigqua.db"
 
     def obtener_ruta_migraciones_base_datos(self) -> Path:
         return self.obtener_ruta_directorio_base_datos() / "migrations"
@@ -47,7 +48,15 @@ class GestorRutas:
         return self.raiz_proyecto / ".env"
 
     def obtener_ruta_logo_marca(self) -> Path:
-        return self.raiz_proyecto / "src" / "comun" / "ui" / "recursos" / "marca" / "logo.png"
+        return (
+            self.raiz_proyecto
+            / "src"
+            / "comun"
+            / "ui"
+            / "recursos"
+            / "marca"
+            / "sigqua_logo.svg"
+        )
 
     def obtener_ruta_icono_aplicacion(self) -> Path:
         return self.raiz_proyecto / "src" / "comun" / "ui" / "recursos" / "marca" / "icono.ico"

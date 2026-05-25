@@ -29,8 +29,8 @@ from PySide6.QtWidgets import (
 
 from comun.ui import (
     BotonAccionContextual,
-    DialogoBaseSicap,
-    DialogoConfirmacionSicap,
+    DialogoBaseSigqua,
+    DialogoConfirmacionSigqua,
     aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
     crear_boton_operativo,
@@ -40,7 +40,7 @@ from comun.ui import (
 )
 from comun.ui.componentes import COLOR_FONDO_DIALOGO, RADIO_TARJETA_DIALOGO
 from comun.ui.temas import (
-    TEMA_SICAP_PREDETERMINADO,
+    TEMA_SIGQUA_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
     resolver_nombre_tema,
@@ -155,7 +155,7 @@ class BotonIconoFilaAbonado(QToolButton):
         self._actualizar_icono(self._color_base)
 
 
-class DialogoFormularioAbonado(DialogoBaseSicap):
+class DialogoFormularioAbonado(DialogoBaseSigqua):
     """Modal para crear o editar abonados."""
 
     def __init__(
@@ -202,11 +202,11 @@ class DialogoFormularioAbonado(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Editar abonado" if self._abonado else "Nuevo abonado")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Completa la informacion principal del abonado y su relacion operativa con el barrio."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         formulario = QGridLayout()
@@ -282,7 +282,7 @@ class DialogoFormularioAbonado(DialogoBaseSicap):
         panel_notas.layout().addLayout(notas_layout)
 
         self._mensaje = QLabel("")
-        self._mensaje.setObjectName("mensajeErrorDialogoSicap")
+        self._mensaje.setObjectName("mensajeErrorDialogoSigqua")
         self._mensaje.setVisible(False)
 
         fila_acciones = QHBoxLayout()
@@ -323,28 +323,28 @@ class DialogoFormularioAbonado(DialogoBaseSicap):
         layout.setSpacing(4)
 
         label = QLabel(etiqueta)
-        label.setObjectName("etiquetaDatoDialogoSicap")
+        label.setObjectName("etiquetaDatoDialogoSigqua")
         layout.addWidget(label)
         layout.addWidget(campo)
         return bloque
 
     def _crear_panel_formulario(self, titulo: str, descripcion: str) -> QFrame:
         panel = QFrame()
-        panel.setObjectName("bloqueDialogoSicap")
+        panel.setObjectName("bloqueDialogoSigqua")
         layout_panel = QVBoxLayout(panel)
         layout_panel.setContentsMargins(14, 14, 14, 14)
         layout_panel.setSpacing(10)
         label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("etiquetaDatoDialogoSicap")
+        label_titulo.setObjectName("etiquetaDatoDialogoSigqua")
         label_descripcion = QLabel(descripcion)
-        label_descripcion.setObjectName("descripcionDialogoSicap")
+        label_descripcion.setObjectName("descripcionDialogoSigqua")
         label_descripcion.setWordWrap(True)
         layout_panel.addWidget(label_titulo)
         layout_panel.addWidget(label_descripcion)
         return panel
 
 
-class DialogoDetalleAbonado(DialogoBaseSicap):
+class DialogoDetalleAbonado(DialogoBaseSigqua):
     """Modal para consultar detalle del abonado."""
 
     def __init__(
@@ -371,11 +371,11 @@ class DialogoDetalleAbonado(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Detalle de abonado")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Consulta informacion principal, ubicacion operativa y estado financiero resumido."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         scroll = QScrollArea()
@@ -696,7 +696,7 @@ class DialogoDetalleAbonado(DialogoBaseSicap):
         )
 
 
-class DialogoConfirmacionEstadoAbonado(DialogoConfirmacionSicap):
+class DialogoConfirmacionEstadoAbonado(DialogoConfirmacionSigqua):
     """Modal de confirmacion para activar o inactivar abonados."""
 
     def __init__(self, abonado: Abonado, parent: QWidget | None = None) -> None:
@@ -754,7 +754,7 @@ class VistaAbonados(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SIGQUA_PREDETERMINADO
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._pagina_actual = 1
         self._total_paginas = 1

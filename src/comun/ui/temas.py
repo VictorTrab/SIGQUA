@@ -1,14 +1,14 @@
-"""Paleta visual unica compartida para SICAP."""
+"""Paleta visual unica compartida para SIGQUA."""
 
 from __future__ import annotations
 
 from copy import deepcopy
 
 
-TEMA_SICAP_PREDETERMINADO = "tema_sicap"
+TEMA_SIGQUA_PREDETERMINADO = "tema_sigqua"
 
-_PALETA_TEMA_SICAP: dict[str, object] = {
-    "nombre": "tema sicap",
+_PALETA_TEMA_SIGQUA: dict[str, object] = {
+    "nombre": "tema sigqua",
     "familia_tipografica": "Segoe UI",
     "tamano_fuente_base": 10,
     "tamano_titulo_modulo": 21,
@@ -150,7 +150,7 @@ _PALETA_TEMA_SICAP: dict[str, object] = {
     "modal_icono_accion_principal": "#0A1728",
 }
 
-_tema_actual = TEMA_SICAP_PREDETERMINADO
+_tema_actual = TEMA_SIGQUA_PREDETERMINADO
 
 
 def obtener_tema_actual() -> str:
@@ -159,23 +159,23 @@ def obtener_tema_actual() -> str:
 
 def resolver_nombre_tema(nombre_tema: str) -> str:
     _ = nombre_tema
-    return TEMA_SICAP_PREDETERMINADO
+    return TEMA_SIGQUA_PREDETERMINADO
 
 
 def establecer_tema_actual(nombre_tema: str) -> str:
     global _tema_actual
-    _tema_actual = TEMA_SICAP_PREDETERMINADO
+    _tema_actual = TEMA_SIGQUA_PREDETERMINADO
     _ = nombre_tema
     return _tema_actual
 
 
 def obtener_paleta_tema(nombre_tema: str) -> dict[str, object]:
     _ = nombre_tema
-    return deepcopy(_PALETA_TEMA_SICAP)
+    return deepcopy(_PALETA_TEMA_SIGQUA)
 
 
 def obtener_paleta_tema_actual() -> dict[str, object]:
-    return deepcopy(_PALETA_TEMA_SICAP)
+    return deepcopy(_PALETA_TEMA_SIGQUA)
 
 
 def obtener_fondo_header_destacado(nombre_tema: str) -> str:

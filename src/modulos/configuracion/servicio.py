@@ -132,7 +132,7 @@ class ServicioConfiguracion:
             self._repositorio_configuracion.obtener_resumen_respaldos()
         )
         detalle_respaldo = self._repositorio_configuracion.obtener_detalle_ultimo_respaldo()
-        identidad = construir_identidad_empresa(parametros, nombre_predeterminado="SICAP")
+        identidad = construir_identidad_empresa(parametros, nombre_predeterminado="SIGQUA")
         ultimo_parametro_actualizado = max(
             (
                 parametro
@@ -248,7 +248,7 @@ class ServicioConfiguracion:
             ruta_exportaciones_reportes=str(self._gestor_rutas.obtener_ruta_exportaciones_reportes()),
         )
         informacion = InformacionConfiguracion(
-            nombre_sistema=self._valor_parametro(parametros, "sistema.nombre", "SICAP"),
+            nombre_sistema=self._valor_parametro(parametros, "sistema.nombre", "SIGQUA"),
             version_sistema=self._valor_parametro(parametros, "sistema.version", ""),
             ruta_base_datos=str(self._gestor_rutas.obtener_ruta_base_datos()),
             modo_operacion="Autenticacion local sin correo y con soporte administrativo",

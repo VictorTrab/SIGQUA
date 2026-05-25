@@ -29,8 +29,8 @@ from PySide6.QtWidgets import (
 
 from comun.ui import (
     BotonAccionContextual,
-    DialogoBaseSicap,
-    DialogoConfirmacionSicap,
+    DialogoBaseSigqua,
+    DialogoConfirmacionSigqua,
     aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
     crear_boton_operativo,
@@ -40,7 +40,7 @@ from comun.ui import (
 )
 from comun.ui.componentes import RADIO_TARJETA_DIALOGO
 from comun.ui.temas import (
-    TEMA_SICAP_PREDETERMINADO,
+    TEMA_SIGQUA_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
     resolver_nombre_tema,
@@ -169,7 +169,7 @@ class BotonIconoFilaCasa(QToolButton):
         self._actualizar_icono(self._color_base)
 
 
-class DialogoFormularioCasa(DialogoBaseSicap):
+class DialogoFormularioCasa(DialogoBaseSigqua):
     """Modal para crear o editar casas."""
 
     def __init__(
@@ -224,11 +224,11 @@ class DialogoFormularioCasa(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Editar casa" if self._casa else "Nueva casa")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Configura la casa, su barrio y el propietario operativo actual."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         formulario = QGridLayout()
@@ -327,7 +327,7 @@ class DialogoFormularioCasa(DialogoBaseSicap):
             nota_estado = QLabel(
                 "Se muestra solo como referencia. Para cortar el servicio usa la accion operativa del modulo."
             )
-            nota_estado.setObjectName("descripcionDialogoSicap")
+            nota_estado.setObjectName("descripcionDialogoSigqua")
             nota_estado.setWordWrap(True)
             bloque_estado_servicio.layout().addWidget(nota_estado)
         formulario.addWidget(bloque_estado_servicio, 1, 1)
@@ -380,7 +380,7 @@ class DialogoFormularioCasa(DialogoBaseSicap):
         panel_notas.layout().addLayout(notas_layout)
 
         self._mensaje = QLabel("")
-        self._mensaje.setObjectName("mensajeErrorDialogoSicap")
+        self._mensaje.setObjectName("mensajeErrorDialogoSigqua")
         self._mensaje.setVisible(False)
 
         fila_acciones = QHBoxLayout()
@@ -429,28 +429,28 @@ class DialogoFormularioCasa(DialogoBaseSicap):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(3)
         label = QLabel(etiqueta)
-        label.setObjectName("etiquetaDatoDialogoSicap")
+        label.setObjectName("etiquetaDatoDialogoSigqua")
         layout.addWidget(label)
         layout.addWidget(campo)
         return bloque
 
     def _crear_panel_formulario(self, titulo: str, descripcion: str) -> QFrame:
         panel = QFrame()
-        panel.setObjectName("bloqueDialogoSicap")
+        panel.setObjectName("bloqueDialogoSigqua")
         layout_panel = QVBoxLayout(panel)
         layout_panel.setContentsMargins(14, 14, 14, 14)
         layout_panel.setSpacing(8)
         label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("etiquetaDatoDialogoSicap")
+        label_titulo.setObjectName("etiquetaDatoDialogoSigqua")
         label_descripcion = QLabel(descripcion)
-        label_descripcion.setObjectName("descripcionDialogoSicap")
+        label_descripcion.setObjectName("descripcionDialogoSigqua")
         label_descripcion.setWordWrap(True)
         layout_panel.addWidget(label_titulo)
         layout_panel.addWidget(label_descripcion)
         return panel
 
 
-class DialogoCambioDuenoCasa(DialogoBaseSicap):
+class DialogoCambioDuenoCasa(DialogoBaseSigqua):
     """Modal para reasignar el propietario actual de una casa."""
 
     def __init__(
@@ -489,18 +489,18 @@ class DialogoCambioDuenoCasa(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Cambiar dueno de casa")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "La deuda pendiente y el plan activo de la casa se migraran al nuevo abonado."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         resumen = QLabel(
             f"{self._casa.codigo} | {self._casa.resumen_propietario} | "
             f"{self._casa.barrio_nombre or 'Sin barrio'}"
         )
-        resumen.setObjectName("descripcionDialogoSicap")
+        resumen.setObjectName("descripcionDialogoSigqua")
         resumen.setWordWrap(True)
 
         self._combo_abonado = QComboBox()
@@ -534,7 +534,7 @@ class DialogoCambioDuenoCasa(DialogoBaseSicap):
         panel_motivo.layout().addWidget(self._crear_bloque_formulario("Motivo", self._campo_motivo))
 
         self._mensaje = QLabel("")
-        self._mensaje.setObjectName("mensajeErrorDialogoSicap")
+        self._mensaje.setObjectName("mensajeErrorDialogoSigqua")
         self._mensaje.setVisible(False)
 
         fila_acciones = QHBoxLayout()
@@ -571,28 +571,28 @@ class DialogoCambioDuenoCasa(DialogoBaseSicap):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
         label = QLabel(etiqueta)
-        label.setObjectName("etiquetaDatoDialogoSicap")
+        label.setObjectName("etiquetaDatoDialogoSigqua")
         layout.addWidget(label)
         layout.addWidget(campo)
         return bloque
 
     def _crear_panel_formulario(self, titulo: str, descripcion: str) -> QFrame:
         panel = QFrame()
-        panel.setObjectName("bloqueDialogoSicap")
+        panel.setObjectName("bloqueDialogoSigqua")
         layout_panel = QVBoxLayout(panel)
         layout_panel.setContentsMargins(14, 14, 14, 14)
         layout_panel.setSpacing(10)
         label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("etiquetaDatoDialogoSicap")
+        label_titulo.setObjectName("etiquetaDatoDialogoSigqua")
         label_descripcion = QLabel(descripcion)
-        label_descripcion.setObjectName("descripcionDialogoSicap")
+        label_descripcion.setObjectName("descripcionDialogoSigqua")
         label_descripcion.setWordWrap(True)
         layout_panel.addWidget(label_titulo)
         layout_panel.addWidget(label_descripcion)
         return panel
 
 
-class DialogoHistorialPropietariosCasa(DialogoBaseSicap):
+class DialogoHistorialPropietariosCasa(DialogoBaseSigqua):
     """Modal para consultar el historial de propietarios de una casa."""
 
     def __init__(
@@ -612,15 +612,15 @@ class DialogoHistorialPropietariosCasa(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Historial de propietarios")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             f"Traza de cambios registrada para {self._casa.codigo}."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         tarjeta_resumen = QFrame()
-        tarjeta_resumen.setObjectName("bloqueDialogoSicap")
+        tarjeta_resumen.setObjectName("bloqueDialogoSigqua")
         layout_resumen = QHBoxLayout(tarjeta_resumen)
         layout_resumen.setContentsMargins(14, 12, 14, 12)
         layout_resumen.setSpacing(14)
@@ -798,7 +798,7 @@ class DialogoHistorialPropietariosCasa(DialogoBaseSicap):
         )
 
 
-class DialogoDetalleCasa(DialogoBaseSicap):
+class DialogoDetalleCasa(DialogoBaseSigqua):
     """Modal para consultar el detalle operativo de una casa."""
 
     def __init__(
@@ -824,11 +824,11 @@ class DialogoDetalleCasa(DialogoBaseSicap):
     def _construir_ui(self) -> None:
         casa = self._detalle.casa
         titulo = QLabel("Detalle de casa")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Consulta estado de servicio, deuda, plan activo y trazabilidad de propietarios."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         scroll = QScrollArea()
@@ -1283,7 +1283,7 @@ class DialogoDetalleCasa(DialogoBaseSicap):
         )
 
 
-class DialogoConfirmacionEstadoCasa(DialogoConfirmacionSicap):
+class DialogoConfirmacionEstadoCasa(DialogoConfirmacionSigqua):
     """Modal de confirmacion para cambiar suspension administrativa."""
 
     def __init__(self, casa: Casa, parent: QWidget | None = None) -> None:
@@ -1312,7 +1312,7 @@ class DialogoConfirmacionEstadoCasa(DialogoConfirmacionSicap):
         )
 
 
-class DialogoCorteServicioCasa(DialogoBaseSicap):
+class DialogoCorteServicioCasa(DialogoBaseSigqua):
     """Modal para confirmar el corte fisico del servicio."""
 
     def __init__(
@@ -1349,15 +1349,15 @@ class DialogoCorteServicioCasa(DialogoBaseSicap):
     def _construir_ui(self) -> None:
         casa = self._detalle.casa
         titulo = QLabel("Confirmar corte de servicio")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Esta accion registra un corte fisico del servicio. La reactivacion posterior se gestiona desde Pagos > Conexión/Reconexion."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         panel_contexto = QFrame()
-        panel_contexto.setObjectName("bloqueDialogoSicap")
+        panel_contexto.setObjectName("bloqueDialogoSigqua")
         layout_contexto = QVBoxLayout(panel_contexto)
         layout_contexto.setContentsMargins(14, 14, 14, 14)
         layout_contexto.setSpacing(10)
@@ -1401,16 +1401,16 @@ class DialogoCorteServicioCasa(DialogoBaseSicap):
         layout_contexto.addLayout(grid_contexto)
 
         panel_observaciones = QFrame()
-        panel_observaciones.setObjectName("bloqueDialogoSicap")
+        panel_observaciones.setObjectName("bloqueDialogoSigqua")
         layout_observaciones = QVBoxLayout(panel_observaciones)
         layout_observaciones.setContentsMargins(14, 14, 14, 14)
         layout_observaciones.setSpacing(8)
         etiqueta_observaciones = QLabel("Observaciones del corte")
-        etiqueta_observaciones.setObjectName("etiquetaDatoDialogoSicap")
+        etiqueta_observaciones.setObjectName("etiquetaDatoDialogoSigqua")
         ayuda_observaciones = QLabel(
             "Explica brevemente por que se realiza el corte o cualquier contexto operativo relevante."
         )
-        ayuda_observaciones.setObjectName("descripcionDialogoSicap")
+        ayuda_observaciones.setObjectName("descripcionDialogoSigqua")
         ayuda_observaciones.setWordWrap(True)
         self._campo_observaciones = QPlainTextEdit()
         self._campo_observaciones.setPlaceholderText("Ejemplo: corte operativo manual por revision en campo.")
@@ -1420,7 +1420,7 @@ class DialogoCorteServicioCasa(DialogoBaseSicap):
         layout_observaciones.addWidget(self._campo_observaciones)
 
         self._mensaje = QLabel("")
-        self._mensaje.setObjectName("mensajeErrorDialogoSicap")
+        self._mensaje.setObjectName("mensajeErrorDialogoSigqua")
         self._mensaje.setVisible(False)
 
         fila_acciones = QHBoxLayout()
@@ -1456,7 +1456,7 @@ class DialogoCorteServicioCasa(DialogoBaseSicap):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(3)
         label_etiqueta = QLabel(etiqueta)
-        label_etiqueta.setObjectName("etiquetaDatoDialogoSicap")
+        label_etiqueta.setObjectName("etiquetaDatoDialogoSigqua")
         label_valor = QLabel(valor)
         label_valor.setObjectName("valorDetalleCasa")
         label_valor.setWordWrap(True)
@@ -1488,7 +1488,7 @@ class VistaCasas(QWidget):
         super().__init__()
         self._pagina_actual = 1
         self._total_paginas = 1
-        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SIGQUA_PREDETERMINADO
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._temporizador_mensaje = QTimer(self)
         self._temporizador_mensaje.setSingleShot(True)

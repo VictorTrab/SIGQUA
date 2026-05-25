@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from comun.actualizaciones import bus_actualizaciones_modulos
 from modulos.autenticacion.entidades import UsuarioAutenticado
 from modulos.casas.entidades import FILTRO_CASAS_TODAS
 from modulos.casas.servicio import ServicioCasas
@@ -123,6 +124,11 @@ class ControladorCasas:
         self._vista_casas.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
             self._refrescar()
+            bus_actualizaciones_modulos.emitir(
+                "casas",
+                ("dashboard", "morosidad", "pagos", "reportes"),
+                "Casas actualizadas.",
+            )
 
     def _confirmar_cambio_estado(self, casa_id: int) -> None:
         casa = self._servicio_casas.obtener_por_id(casa_id)
@@ -145,6 +151,11 @@ class ControladorCasas:
         self._vista_casas.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
             self._refrescar()
+            bus_actualizaciones_modulos.emitir(
+                "casas",
+                ("dashboard", "morosidad", "pagos", "reportes"),
+                "Casas actualizadas.",
+            )
 
     def _confirmar_corte_servicio(self, casa_id: int) -> None:
         detalle = self._servicio_casas.obtener_detalle(casa_id)
@@ -171,6 +182,11 @@ class ControladorCasas:
         self._vista_casas.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
             self._refrescar()
+            bus_actualizaciones_modulos.emitir(
+                "casas",
+                ("dashboard", "morosidad", "pagos", "reportes"),
+                "Servicio cortado.",
+            )
 
     def _mostrar_historial(self, casa_id: int) -> None:
         casa = self._servicio_casas.obtener_por_id(casa_id)
@@ -215,6 +231,11 @@ class ControladorCasas:
         self._vista_casas.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
             self._refrescar()
+            bus_actualizaciones_modulos.emitir(
+                "casas",
+                ("dashboard", "morosidad", "pagos", "reportes"),
+                "Casa actualizada.",
+            )
 
     def _exportar(self) -> None:
         ruta_destino = self._vista_casas.solicitar_ruta_exportacion()

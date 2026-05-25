@@ -1,4 +1,4 @@
-"""Utilidades compartidas para captura monetaria en SICAP."""
+"""Utilidades compartidas para captura monetaria en SIGQUA."""
 
 from __future__ import annotations
 

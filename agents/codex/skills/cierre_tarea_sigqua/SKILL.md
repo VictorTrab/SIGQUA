@@ -1,4 +1,4 @@
-# Skill: Cierre de tarea SICAP
+# Skill: Cierre de tarea SIGQUA
 
 ## Cuándo usar
 Usar esta skill antes de cerrar una tarea técnica relevante.

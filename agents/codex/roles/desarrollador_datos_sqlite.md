@@ -1,7 +1,7 @@
 # Rol: Desarrollador de datos SQLite
 
 ## Misión
-Diseñar y mantener la persistencia SQLite de SICAP de forma clara, normalizada y segura.
+Diseñar y mantener la persistencia SQLite de SIGQUA de forma clara, normalizada y segura.
 
 ## Reglas principales
 - usar SQLite;

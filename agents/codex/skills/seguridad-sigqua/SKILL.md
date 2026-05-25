@@ -1,15 +1,15 @@
 ---
-name: seguridad-sicap
-description: Revisar y reforzar la seguridad practica de SICAP en cambios de autenticacion, SQLite, PySide6, manejo de rutas, reportes, logs, variables de entorno y permisos. Usar cuando Codex vaya a crear, modificar o auditar codigo que toque datos sensibles, consultas SQL, roles, mantenimiento tecnico, exportaciones, archivos locales, configuracion o credenciales del proyecto.
+name: seguridad-sigqua
+description: Revisar y reforzar la seguridad practica de SIGQUA en cambios de autenticacion, SQLite, PySide6, manejo de rutas, reportes, logs, variables de entorno y permisos. Usar cuando Codex vaya a crear, modificar o auditar codigo que toque datos sensibles, consultas SQL, roles, mantenimiento tecnico, exportaciones, archivos locales, configuracion o credenciales del proyecto.
 ---
 
-# Seguridad SICAP
+# Seguridad SIGQUA
 
 ## Herencia
 Asumir siempre las reglas globales de `agents.md`.
 
 ## Objetivo
-Reducir riesgos reales de SICAP sin meter controles exagerados ni abstracciones innecesarias.
+Reducir riesgos reales de SIGQUA sin meter controles exagerados ni abstracciones innecesarias.
 
 ## Cuando usarla
 Usar esta skill cuando la tarea implique:
@@ -21,7 +21,7 @@ Usar esta skill cuando la tarea implique:
 - variables de entorno, configuracion sensible o rutas de salida;
 - revision de seguridad antes de cerrar una tarea importante.
 
-## Riesgos prioritarios en SICAP
+## Riesgos prioritarios en SIGQUA
 - SQL construido con concatenacion o con columnas dinamicas sin lista blanca.
 - logica sensible expuesta en la UI.
 - secretos, tokens o correos reales guardados en codigo, logs o repositorio.

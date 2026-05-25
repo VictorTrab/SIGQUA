@@ -31,8 +31,8 @@ from PySide6.QtWidgets import (
 
 from comun.ui import (
     BotonAccionContextual,
-    DialogoBaseSicap,
-    DialogoConfirmacionSicap,
+    DialogoBaseSigqua,
+    DialogoConfirmacionSigqua,
     aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
     crear_boton_operativo,
@@ -40,7 +40,7 @@ from comun.ui import (
     obtener_icono_tabler_coloreado,
 )
 from comun.ui.temas import (
-    TEMA_SICAP_PREDETERMINADO,
+    TEMA_SIGQUA_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
     resolver_nombre_tema,
@@ -155,7 +155,7 @@ class BotonIconoFilaUsuario(QToolButton):
         self.setIcon(obtener_icono_tabler_coloreado(self._icono, color_icono, tamano=18))
 
 
-class DialogoFormularioUsuario(DialogoBaseSicap):
+class DialogoFormularioUsuario(DialogoBaseSigqua):
     """Formulario modal para crear o editar usuarios."""
 
     def __init__(
@@ -201,11 +201,11 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Editar usuario" if self._usuario else "Nuevo usuario")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Configura la identidad del usuario, su rol visible y el estado operativo."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         panel_datos = self._crear_panel("Datos principales", "Información base de la cuenta operativa.")
@@ -218,7 +218,7 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
         self._campo_usuario = QLineEdit()
         self._campo_usuario.setPlaceholderText("Nombre de usuario")
         self._campo_correo = QLineEdit()
-        self._campo_correo.setPlaceholderText("usuario@sicap.hn")
+        self._campo_correo.setPlaceholderText("usuario@sigqua.hn")
         self._combo_estado = QComboBox()
         self._combo_estado.addItem("Activo", "ACTIVO")
         self._combo_estado.addItem("Inactivo", "INACTIVO")
@@ -251,7 +251,7 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
             if self._usuario is None
             else "Para cambiar la contrasena usa la accion de acceso temporal desde la tabla del modulo."
         )
-        ayuda.setObjectName("descripcionDialogoSicap")
+        ayuda.setObjectName("descripcionDialogoSigqua")
         ayuda.setWordWrap(True)
         panel_seguridad.layout().addWidget(ayuda)
 
@@ -271,7 +271,7 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
         panel_observaciones.layout().addWidget(self._campo_observaciones)
 
         self._mensaje = QLabel("")
-        self._mensaje.setObjectName("mensajeErrorDialogoSicap")
+        self._mensaje.setObjectName("mensajeErrorDialogoSigqua")
         self._mensaje.setVisible(False)
 
         fila_acciones = QHBoxLayout()
@@ -321,14 +321,14 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
 
     def _crear_panel(self, titulo: str, descripcion: str) -> QFrame:
         panel = QFrame()
-        panel.setObjectName("bloqueDialogoSicap")
+        panel.setObjectName("bloqueDialogoSigqua")
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(6)
         label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("etiquetaDatoDialogoSicap")
+        label_titulo.setObjectName("etiquetaDatoDialogoSigqua")
         label_descripcion = QLabel(descripcion)
-        label_descripcion.setObjectName("descripcionDialogoSicap")
+        label_descripcion.setObjectName("descripcionDialogoSigqua")
         label_descripcion.setWordWrap(True)
         layout.addWidget(label_titulo)
         layout.addWidget(label_descripcion)
@@ -340,7 +340,7 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(3)
         label = QLabel(etiqueta)
-        label.setObjectName("etiquetaDatoDialogoSicap")
+        label.setObjectName("etiquetaDatoDialogoSigqua")
         layout.addWidget(label)
         layout.addWidget(widget)
         return bloque
@@ -377,7 +377,7 @@ class DialogoFormularioUsuario(DialogoBaseSicap):
         return modulos
 
 
-class DialogoDetalleUsuario(DialogoBaseSicap):
+class DialogoDetalleUsuario(DialogoBaseSigqua):
     """Detalle operativo del usuario."""
 
     def __init__(
@@ -400,11 +400,11 @@ class DialogoDetalleUsuario(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Detalle de usuario")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Consulta identidad, rol operativo, actividad reciente y estado de seguridad."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         scroll = QScrollArea()
@@ -668,7 +668,7 @@ class DialogoDetalleUsuario(DialogoBaseSicap):
         )
 
 
-class DialogoGestionAccesoUsuario(DialogoBaseSicap):
+class DialogoGestionAccesoUsuario(DialogoBaseSigqua):
     """Modal para generar acceso temporal o desbloquear una cuenta."""
 
     def __init__(self, usuario: UsuarioSistema, parent: QWidget | None = None) -> None:
@@ -684,15 +684,15 @@ class DialogoGestionAccesoUsuario(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Gestión de acceso")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Genera una contrasena temporal de 10 minutos o desbloquea la cuenta si quedo bloqueada."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         panel = QFrame()
-        panel.setObjectName("bloqueDialogoSicap")
+        panel.setObjectName("bloqueDialogoSigqua")
         layout_panel = QVBoxLayout(panel)
         layout_panel.setContentsMargins(14, 14, 14, 14)
         layout_panel.setSpacing(10)
@@ -700,7 +700,7 @@ class DialogoGestionAccesoUsuario(DialogoBaseSicap):
         etiqueta_usuario = QLabel(
             f"<b>{self._usuario.nombre_usuario}</b><br>{self._usuario.nombre_completo}<br>{self._usuario.rol_principal}"
         )
-        etiqueta_usuario.setObjectName("descripcionDialogoSicap")
+        etiqueta_usuario.setObjectName("descripcionDialogoSigqua")
         etiqueta_usuario.setWordWrap(True)
         layout_panel.addWidget(etiqueta_usuario)
 
@@ -715,12 +715,12 @@ class DialogoGestionAccesoUsuario(DialogoBaseSicap):
             contexto.append("La cuenta no esta bloqueada, pero puedes generar un nuevo acceso temporal.")
 
         nota = QLabel(" ".join(contexto))
-        nota.setObjectName("descripcionDialogoSicap")
+        nota.setObjectName("descripcionDialogoSigqua")
         nota.setWordWrap(True)
         layout_panel.addWidget(nota)
 
         self._mensaje = QLabel("")
-        self._mensaje.setObjectName("mensajeErrorDialogoSicap")
+        self._mensaje.setObjectName("mensajeErrorDialogoSigqua")
         self._mensaje.setVisible(False)
 
         fila_acciones = QHBoxLayout()
@@ -767,7 +767,7 @@ class DialogoGestionAccesoUsuario(DialogoBaseSicap):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
         label = QLabel(etiqueta)
-        label.setObjectName("etiquetaDatoDialogoSicap")
+        label.setObjectName("etiquetaDatoDialogoSigqua")
         layout.addWidget(label)
         layout.addWidget(widget)
         return bloque
@@ -785,7 +785,7 @@ class DialogoGestionAccesoUsuario(DialogoBaseSicap):
         self._mensaje.setVisible(True)
 
 
-class DialogoCredencialTemporal(DialogoBaseSicap):
+class DialogoCredencialTemporal(DialogoBaseSigqua):
     """Muestra una credencial temporal generada automaticamente."""
 
     def __init__(
@@ -807,21 +807,21 @@ class DialogoCredencialTemporal(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Acceso temporal generado")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Comparte esta credencial solo con el usuario. Se muestra una sola vez y obliga cambio inmediato."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         panel = QFrame()
-        panel.setObjectName("bloqueDialogoSicap")
+        panel.setObjectName("bloqueDialogoSigqua")
         layout_panel = QVBoxLayout(panel)
         layout_panel.setContentsMargins(16, 16, 16, 16)
         layout_panel.setSpacing(10)
 
         usuario_label = QLabel(f"<b>{self._usuario}</b>")
-        usuario_label.setObjectName("descripcionDialogoSicap")
+        usuario_label.setObjectName("descripcionDialogoSigqua")
         layout_panel.addWidget(usuario_label)
 
         bloque_contrasena = QFrame()
@@ -830,7 +830,7 @@ class DialogoCredencialTemporal(DialogoBaseSicap):
         layout_contrasena.setContentsMargins(14, 14, 14, 14)
         layout_contrasena.setSpacing(6)
         etiqueta = QLabel("Contrasena temporal")
-        etiqueta.setObjectName("etiquetaDatoDialogoSicap")
+        etiqueta.setObjectName("etiquetaDatoDialogoSigqua")
         valor = QLabel(self._contrasena_temporal)
         valor.setObjectName("valorCredencialTemporal")
         layout_contrasena.addWidget(etiqueta)
@@ -842,12 +842,12 @@ class DialogoCredencialTemporal(DialogoBaseSicap):
             if self._expira_en
             else "Expiracion: Sin registro"
         )
-        info.setObjectName("descripcionDialogoSicap")
+        info.setObjectName("descripcionDialogoSigqua")
         info.setWordWrap(True)
         layout_panel.addWidget(info)
 
         advertencia = QLabel("Guardala ahora. Despues de cerrar esta ventana ya no se volvera a mostrar.")
-        advertencia.setObjectName("descripcionDialogoSicap")
+        advertencia.setObjectName("descripcionDialogoSigqua")
         advertencia.setWordWrap(True)
         layout_panel.addWidget(advertencia)
 
@@ -919,7 +919,7 @@ class VistaUsuarios(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("vistaUsuarios")
-        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SIGQUA_PREDETERMINADO
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._roles_actuales: list[RolSistema] = []
         self._filtro_rol_actual = FILTRO_USUARIOS_TODOS
@@ -1035,7 +1035,7 @@ class VistaUsuarios(QWidget):
 
     def confirmar_cambio_estado_usuario(self, usuario: UsuarioSistema) -> bool:
         accion = "desactivar" if usuario.estado == "ACTIVO" else "activar"
-        dialogo = DialogoConfirmacionSicap(
+        dialogo = DialogoConfirmacionSigqua(
             titulo=f"Confirmar {accion} usuario",
             descripcion=(
                 "Esta accion cambiara el estado operativo de la cuenta seleccionada."

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from comun.actualizaciones import bus_actualizaciones_modulos
 from modulos.autenticacion.entidades import UsuarioAutenticado
 from modulos.planes_pago.entidades import FILTRO_PLANES_TODOS
 from modulos.planes_pago.servicio import ServicioPlanesPago
@@ -91,6 +92,11 @@ class ControladorPlanesPago:
         self._vista_planes_pago.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
             self._refrescar()
+            bus_actualizaciones_modulos.emitir(
+                "planes_pago",
+                ("dashboard", "pagos", "morosidad", "reportes"),
+                "Planes de pago actualizados.",
+            )
 
     def _exportar(self) -> None:
         ruta = self._vista_planes_pago.solicitar_ruta_exportacion()

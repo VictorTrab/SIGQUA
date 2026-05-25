@@ -1,1 +1,1 @@
-"""Configuración compartida de SICAP."""
+"""Configuración compartida de SIGQUA."""

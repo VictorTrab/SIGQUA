@@ -1,4 +1,4 @@
-"""Recrea la base local de SICAP incluyendo datos de prueba de desarrollo."""
+"""Recrea la base local de SIGQUA incluyendo datos de prueba de desarrollo."""
 
 from __future__ import annotations
 

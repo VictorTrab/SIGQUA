@@ -1,4 +1,4 @@
-﻿PRAGMA foreign_keys = OFF;
+PRAGMA foreign_keys = OFF;
 
 BEGIN TRANSACTION;
 
@@ -188,7 +188,7 @@ INSERT OR IGNORE INTO usuarios(
 ) VALUES (
     'superadmin',
     'Superadministrador Tecnico',
-    'superadmin@sicap.local',
+    'superadmin@sigqua.local',
     'CAMBIAR_HASH_EN_DESARROLLO',
     'ACTIVO',
     1,

@@ -1,4 +1,4 @@
-﻿"""Siembra escenarios operativos de pagos para validacion local de SICAP."""
+"""Siembra escenarios operativos de pagos para validacion local de SIGQUA."""
 
 from __future__ import annotations
 

@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 
 from comun.ui import configurar_tabla_operativa, crear_boton_operativo, crear_item_tabla
 from comun.ui.temas import (
-    TEMA_SICAP_PREDETERMINADO,
+    TEMA_SIGQUA_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
     resolver_nombre_tema,
@@ -35,7 +35,7 @@ class VistaReportes(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("vistaReportes")
-        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SIGQUA_PREDETERMINADO
         self._paleta = obtener_paleta_tema(self._tema_actual)
         self._tablas: tuple[TablaReporte, ...] = ()
         self._construir_ui()

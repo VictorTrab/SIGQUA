@@ -36,7 +36,7 @@ class TestUsuariosSeguridad(unittest.TestCase):
         self._crear_usuario_operativo(
             nombre_usuario="cajero1",
             nombre_completo="Cajero Uno",
-            correo="cajero1@sicap.local",
+            correo="cajero1@sigqua.local",
             rol_id=3,
         )
 
@@ -44,7 +44,7 @@ class TestUsuariosSeguridad(unittest.TestCase):
             identificador=self._obtener_id_usuario("admin"),
             nombre_usuario="admin",
             nombre_completo="Administrador del Sistema",
-            correo="admin@sicap.local",
+            correo="admin@sigqua.local",
             estado="ACTIVO",
             roles=("ADMINISTRADOR",),
             permisos=frozenset({"modulo.usuarios"}),
@@ -53,7 +53,7 @@ class TestUsuariosSeguridad(unittest.TestCase):
             identificador=self._obtener_id_usuario("superadmin"),
             nombre_usuario="superadmin",
             nombre_completo="Superadministrador Tecnico",
-            correo="superadmin@sicap.local",
+            correo="superadmin@sigqua.local",
             estado="ACTIVO",
             es_tecnico=True,
             es_oculto=True,
@@ -166,7 +166,7 @@ class TestUsuariosSeguridad(unittest.TestCase):
             identificador=None,
             nombre_usuario="recepcion1",
             nombre_completo="Recepcion Uno",
-            correo="recepcion1@sicap.local",
+            correo="recepcion1@sigqua.local",
             estado="ACTIVO",
             rol_id=self._obtener_id_rol("CAJERO"),
             observaciones="Usuario creado en prueba",
@@ -194,7 +194,7 @@ class TestUsuariosSeguridad(unittest.TestCase):
             identificador=usuario.identificador,
             nombre_usuario="cajero1",
             nombre_completo="Cajero Uno Actualizado",
-            correo="cajero1.actualizado@sicap.local",
+            correo="cajero1.actualizado@sigqua.local",
             estado="INACTIVO",
             rol_id=self._obtener_id_rol("ADMINISTRADOR"),
             observaciones="Cambio administrativo",
@@ -206,7 +206,7 @@ class TestUsuariosSeguridad(unittest.TestCase):
         actualizado = self.repositorio.obtener_por_nombre_usuario("cajero1")
         self.assertIsNotNone(actualizado)
         self.assertEqual(actualizado.nombre_completo, "Cajero Uno Actualizado")
-        self.assertEqual(actualizado.correo, "cajero1.actualizado@sicap.local")
+        self.assertEqual(actualizado.correo, "cajero1.actualizado@sigqua.local")
         self.assertEqual(actualizado.estado, "INACTIVO")
         self.assertEqual(actualizado.rol_principal, "ADMINISTRADOR")
         self.assertEqual(actualizado.actualizado_por_nombre, "Administrador del Sistema")
@@ -275,7 +275,7 @@ class TestUsuariosSeguridad(unittest.TestCase):
                             estado,
                             requiere_cambio_contrasena
                         )
-                        VALUES ('legacy1', 'Legacy Uno', 'legacy1@sicap.local', 'CAMBIAR_HASH_EN_DESARROLLO', 'ACTIVO', 0);
+                        VALUES ('legacy1', 'Legacy Uno', 'legacy1@sigqua.local', 'CAMBIAR_HASH_EN_DESARROLLO', 'ACTIVO', 0);
                         """
                     )
                     usuario_legacy = int(

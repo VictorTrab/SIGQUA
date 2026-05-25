@@ -1,4 +1,4 @@
-"""Composition root de SICAP para el flujo inicial de autenticacion."""
+"""Composition root de SIGQUA para el flujo inicial de autenticacion."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QSizePolicy
 from comun.base_datos import GestorBaseDatos
 from comun.configuracion.gestor_rutas import GestorRutas
 from comun.respaldo import ServicioRespaldoLocal
-from comun.logs import obtener_logger_sicap
+from comun.logs import obtener_logger_sigqua
 from comun.sesion import SesionAplicacion
 from comun.ui import ContenedorApiladoAjustable
 from comun.ui.qt_mensajes import configurar_filtro_mensajes_qt
@@ -96,7 +96,7 @@ from modulos.usuarios import (
     VistaUsuarios,
 )
 
-logger = obtener_logger_sicap("app")
+logger = obtener_logger_sigqua("app")
 ANCHO_VENTANA_AUTENTICACION = 760
 ALTO_VENTANA_AUTENTICACION = 680
 ANCHO_VENTANA_PRINCIPAL = 1360
@@ -125,10 +125,10 @@ def crear_ventana_principal(
     gestor_rutas = gestor_rutas or GestorRutas()
     load_dotenv(gestor_rutas.obtener_ruta_env(), override=False)
     configurar_filtro_mensajes_qt()
-    logger.info("Iniciando composition root de SICAP.")
+    logger.info("Iniciando composition root de SIGQUA.")
 
     aplicacion = QApplication.instance() or QApplication(sys.argv)
-    aplicacion.setApplicationName("SICAP")
+    aplicacion.setApplicationName("SIGQUA")
     fuente_aplicacion = QFont(aplicacion.font())
     if fuente_aplicacion.pointSize() <= 0:
         fuente_aplicacion.setPointSize(10)
@@ -202,7 +202,7 @@ def crear_ventana_principal(
     contenedor_central.addWidget(vista_autenticacion)
 
     ventana_principal = QMainWindow()
-    ventana_principal.setWindowTitle("SICAP | Autenticacion")
+    ventana_principal.setWindowTitle("SIGQUA | Autenticación")
     ventana_principal.setCentralWidget(contenedor_central)
     _aplicar_modo_autenticacion(ventana_principal)
     if not icono.isNull():
@@ -321,7 +321,7 @@ def _manejar_autenticacion_exitosa(
     vista_modulo_principal = ventana_principal.vista_modulo_principal
     _refrescar_modulos_operativos(ventana_principal, sesion_iniciada.usuario)
     controlador_modulo_principal.mostrar_inicio(sesion_iniciada.usuario)
-    ventana_principal.setWindowTitle("SICAP | Modulo principal")
+    ventana_principal.setWindowTitle("SIGQUA | Módulo principal")
     ventana_principal.contenedor_central.setCurrentWidget(vista_modulo_principal)
     _aplicar_modo_principal(ventana_principal)
 
@@ -514,7 +514,7 @@ def _manejar_cierre_sesion(
 
     ventana_principal.sesion_activa = None
     vista_autenticacion = ventana_principal.vista_autenticacion
-    ventana_principal.setWindowTitle("SICAP | Autenticacion")
+    ventana_principal.setWindowTitle("SIGQUA | Autenticación")
     ventana_principal.contenedor_central.setCurrentWidget(vista_autenticacion)
     vista_autenticacion.mostrar_login(
         mensaje="Sesion cerrada correctamente.",
@@ -536,7 +536,7 @@ def _manejar_apertura_mantenimiento(ventana_principal: QMainWindow) -> None:
         return
 
     ventana_principal.controlador_mantenimiento.mostrar_panel()
-    ventana_principal.setWindowTitle("SICAP | Mantenimiento tecnico")
+    ventana_principal.setWindowTitle("SIGQUA | Mantenimiento técnico")
     ventana_principal.contenedor_central.setCurrentWidget(ventana_principal.vista_mantenimiento)
     _aplicar_modo_principal(ventana_principal)
 
@@ -544,7 +544,7 @@ def _manejar_apertura_mantenimiento(ventana_principal: QMainWindow) -> None:
 def _manejar_retorno_desde_mantenimiento(ventana_principal: QMainWindow) -> None:
     """Regresa del mantenimiento tecnico al modulo principal."""
     if hasattr(ventana_principal, "vista_modulo_principal"):
-        ventana_principal.setWindowTitle("SICAP | Modulo principal")
+        ventana_principal.setWindowTitle("SIGQUA | Módulo principal")
         ventana_principal.contenedor_central.setCurrentWidget(
             ventana_principal.vista_modulo_principal
         )

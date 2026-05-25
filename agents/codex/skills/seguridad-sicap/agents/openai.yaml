@@ -1,4 +1,0 @@
-interface:
-  display_name: "Seguridad SICAP"
-  short_description: "Controles de seguridad para SICAP"
-  default_prompt: "Usa $seguridad-sicap para revisar riesgos de seguridad en SICAP antes de implementar o cerrar un cambio."

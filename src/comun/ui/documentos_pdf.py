@@ -1,4 +1,4 @@
-"""Acciones reutilizables para documentos PDF generados por SICAP."""
+"""Acciones reutilizables para documentos PDF generados por SIGQUA."""
 
 from __future__ import annotations
 

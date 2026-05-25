@@ -28,8 +28,8 @@ from PySide6.QtWidgets import (
 
 from comun.ui import (
     BotonAccionContextual,
-    DialogoBaseSicap,
-    DialogoMensajeSicap,
+    DialogoBaseSigqua,
+    DialogoMensajeSigqua,
     configurar_tabla_operativa,
     crear_boton_operativo,
     crear_item_tabla,
@@ -37,7 +37,7 @@ from comun.ui import (
     resolver_variante_boton_modal,
 )
 from comun.ui.temas import (
-    TEMA_SICAP_PREDETERMINADO,
+    TEMA_SIGQUA_PREDETERMINADO,
     obtener_fondo_header_destacado,
     obtener_paleta_tema,
     resolver_nombre_tema,
@@ -152,7 +152,7 @@ class BotonIconoFilaHistorial(QToolButton):
         self.setIcon(obtener_icono_tabler_coloreado(self._icono, color_icono, tamano=18))
 
 
-class DialogoDetalleHistorialPago(DialogoBaseSicap):
+class DialogoDetalleHistorialPago(DialogoBaseSigqua):
     """Detalle historico del pago con reimpresion."""
 
     def __init__(
@@ -179,11 +179,11 @@ class DialogoDetalleHistorialPago(DialogoBaseSicap):
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Detalle de pago")
-        titulo.setObjectName("tituloDialogoSicap")
+        titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
             "Consulta la informacion del comprobante, detalle aplicado y datos operativos del pago."
         )
-        descripcion.setObjectName("descripcionDialogoSicap")
+        descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
         scroll = QScrollArea()
@@ -481,7 +481,7 @@ class VistaHistorialPagos(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("vistaHistorialPagos")
-        self._tema_actual = TEMA_SICAP_PREDETERMINADO
+        self._tema_actual = TEMA_SIGQUA_PREDETERMINADO
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
         self._pagina_actual = 1
         self._items_actuales: list[FilaHistorialPago] = []
