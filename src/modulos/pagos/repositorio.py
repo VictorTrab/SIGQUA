@@ -128,15 +128,6 @@ class RepositorioPagos(Protocol):
     def obtener_configuracion_recibo(self) -> ConfiguracionReciboPago:
         """Obtiene la configuracion visible del recibo de pago."""
 
-    def actualizar_documento_comprobante(
-        self,
-        pago_id: int,
-        ruta_archivo: str,
-        formato_salida: str,
-        hash_documento: str,
-    ) -> None:
-        """Actualiza la huella y ruta del archivo exportado del comprobante."""
-
 
 class RepositorioPagosSQLite:
     """Implementacion SQLite del modulo de pagos."""
@@ -571,11 +562,10 @@ class RepositorioPagosSQLite:
                         pago_id,
                         numero_comprobante,
                         tipo_comprobante,
-                        formato_salida,
                         saldo_posterior_centavos,
                         generado_por
                     )
-                    VALUES (?, ?, ?, 'PDF', ?, ?);
+                    VALUES (?, ?, ?, ?, ?);
                     """,
                     (
                         pago_id,
@@ -656,11 +646,10 @@ class RepositorioPagosSQLite:
                         pago_id,
                         numero_comprobante,
                         tipo_comprobante,
-                        formato_salida,
                         saldo_posterior_centavos,
                         generado_por
                     )
-                    VALUES (?, ?, ?, 'PDF', ?, ?);
+                    VALUES (?, ?, ?, ?, ?);
                     """,
                     (
                         pago_regularizacion_id,
@@ -692,11 +681,10 @@ class RepositorioPagosSQLite:
                         pago_id,
                         numero_comprobante,
                         tipo_comprobante,
-                        formato_salida,
                         saldo_posterior_centavos,
                         generado_por
                     )
-                    VALUES (?, ?, ?, 'PDF', ?, ?);
+                    VALUES (?, ?, ?, ?, ?);
                     """,
                     (
                         pago_activacion_id,
@@ -718,8 +706,6 @@ class RepositorioPagosSQLite:
                 p.id AS pago_id,
                 co.numero_comprobante,
                 COALESCE(co.tipo_comprobante, 'MENSUALIDAD') AS tipo_comprobante,
-                COALESCE(co.formato_salida, 'PDF') AS formato_salida,
-                COALESCE(co.ruta_archivo, '') AS ruta_archivo,
                 COALESCE(co.saldo_posterior_centavos, 0) AS saldo_posterior_centavos,
                 co.generado_en,
                 printf('CA-%03d', p.casa_id) AS casa_codigo,
@@ -772,8 +758,6 @@ class RepositorioPagosSQLite:
             total_pagado_centavos=int(fila["total_pagado_centavos"] or 0),
             saldo_posterior_centavos=int(fila["saldo_posterior_centavos"] or 0),
             detalles=detalles,
-            formato_salida=str(fila["formato_salida"] or "PDF"),
-            ruta_archivo=str(fila["ruta_archivo"] or ""),
         )
 
     def obtener_configuracion_recibo(self) -> ConfiguracionReciboPago:
@@ -792,8 +776,6 @@ class RepositorioPagosSQLite:
             "factura.mostrar_identificador_fiscal",
             "documentos.firma_habilitada",
             "documentos.firma_texto_linea",
-            "documentos.abrir_pdf_automaticamente",
-            "documentos.imprimir_pdf_automaticamente",
         )
         marcadores = ", ".join("?" for _ in claves)
         consulta = f"""
@@ -828,34 +810,7 @@ class RepositorioPagosSQLite:
             ),
             firma_habilitada=self._a_booleano(valores.get("documentos.firma_habilitada", "0")),
             firma_texto_linea=texto_firma,
-            abrir_pdf_automaticamente=self._a_booleano(
-                valores.get("documentos.abrir_pdf_automaticamente", "1")
-            ),
-            imprimir_pdf_automaticamente=self._a_booleano(
-                valores.get("documentos.imprimir_pdf_automaticamente", "0")
-            ),
         )
-
-    def actualizar_documento_comprobante(
-        self,
-        pago_id: int,
-        ruta_archivo: str,
-        formato_salida: str,
-        hash_documento: str,
-    ) -> None:
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            with conexion:
-                conexion.execute(
-                    """
-                    UPDATE comprobantes
-                    SET ruta_archivo = ?,
-                        formato_salida = ?,
-                        hash_documento = ?,
-                        generado_en = datetime('now', 'localtime')
-                    WHERE pago_id = ?;
-                    """,
-                    (ruta_archivo, formato_salida, hash_documento, pago_id),
-                )
 
     def _insertar_pago(
         self,

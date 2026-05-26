@@ -26,8 +26,7 @@ from modulos.documentos.modelos.dto_estado_cuenta import (  # noqa: E402
     DTOEstadoCuenta,
     LineaDetalleEstadoCuenta,
 )
-from modulos.documentos import ServicioComprobantePago, ServicioReportePdf  # noqa: E402
-from modulos.pagos.entidades import FormularioPago  # noqa: E402
+from modulos.documentos import ServicioReportePdf  # noqa: E402
 from modulos.pagos.repositorio import RepositorioPagosSQLite  # noqa: E402
 from modulos.pagos.servicio import ServicioPagos  # noqa: E402
 from modulos.reportes.repositorio import RepositorioReportesSQLite  # noqa: E402
@@ -49,40 +48,15 @@ class TestDocumentosPdf(unittest.TestCase):
         self.ruta_db = self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
         self.repositorio_pagos = RepositorioPagosSQLite(self.gestor_base_datos)
         self.servicio_pagos = ServicioPagos(self.repositorio_pagos, gestor_rutas=self.gestor_rutas)
-        self.servicio_comprobantes = ServicioComprobantePago(gestor_rutas=self.gestor_rutas)
         self.servicio_reporte_pdf = ServicioReportePdf(gestor_rutas=self.gestor_rutas)
 
     def tearDown(self) -> None:
         shutil.rmtree(self.raiz_temporal, ignore_errors=True)
 
-    def test_servicio_comprobante_pago_construye_pdf_desde_datos_reales(self) -> None:
-        casa_id = self._obtener_casa_por_dni("0801199000022")
-        metodo_id = self._obtener_metodo("EFECTIVO")
-        resultado = self.servicio_pagos.registrar_pago(
-            FormularioPago(
-                casa_id=casa_id,
-                tipo_pago="MENSUALIDAD",
-                cantidad_meses=1,
-                metodo_pago_id=metodo_id,
-            ),
-            actor_id=1,
-        )
-        assert resultado.comprobante is not None
-        comprobante = self.servicio_pagos.obtener_comprobante(resultado.comprobante.pago_id)
-        assert comprobante is not None
-        configuracion = self.servicio_pagos.obtener_configuracion_recibo()
+    def test_generador_pdf_ya_no_expone_comprobantes_de_pago(self) -> None:
+        generador = GeneradorPdfReportLab()
 
-        ruta_pdf = self.servicio_comprobantes.generar_pdf(
-            comprobante=comprobante,
-            configuracion=configuracion,
-            formateador_moneda=self.servicio_pagos.formatear_moneda,
-            formateador_fecha=self.servicio_pagos.formatear_fecha,
-            formateador_hora=self.servicio_pagos.formatear_hora,
-            etiqueta_tipo_pago=self.servicio_pagos._etiqueta_tipo_pago,
-        )
-
-        self.assertTrue(Path(ruta_pdf).exists())
-        self.assertTrue(Path(ruta_pdf).read_bytes().startswith(b"%PDF"))
+        self.assertFalse(hasattr(generador, "generar_comprobante_pago"))
 
     def test_servicio_reporte_pdf_genera_pdf_tabular(self) -> None:
         servicio_reportes = ServicioReportes(RepositorioReportesSQLite(self.gestor_base_datos))

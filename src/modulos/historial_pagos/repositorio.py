@@ -6,11 +6,6 @@ from contextlib import closing
 from typing import Protocol
 
 from comun.base_datos import GestorBaseDatos
-from comun.configuracion.identidad_empresa import (
-    CLAVES_IDENTIDAD_EMPRESA,
-    CLAVES_IDENTIDAD_LEGADAS_JUNTA,
-    construir_identidad_empresa,
-)
 from modulos.historial_pagos.entidades import (
     DetalleHistorialPago,
     FILTRO_HISTORIAL_TODOS,
@@ -20,7 +15,7 @@ from modulos.historial_pagos.entidades import (
     LineaDetalleHistorialPago,
     ResumenHistorialPagos,
 )
-from modulos.pagos.entidades import ComprobantePago, ConfiguracionReciboPago
+from modulos.pagos.entidades import ComprobantePago
 
 
 class RepositorioHistorialPagos(Protocol):
@@ -45,9 +40,6 @@ class RepositorioHistorialPagos(Protocol):
 
     def obtener_comprobante_para_reimpresion(self, pago_id: int) -> ComprobantePago | None:
         """Retorna el comprobante del pago para regenerar su PDF."""
-
-    def obtener_configuracion_recibo(self) -> ConfiguracionReciboPago:
-        """Obtiene configuracion documental vigente del comprobante."""
 
 
 class RepositorioHistorialPagosSQLite:
@@ -247,8 +239,6 @@ class RepositorioHistorialPagosSQLite:
                 p.id AS pago_id,
                 COALESCE(co.numero_comprobante, 'Sin comprobante') AS numero_comprobante,
                 COALESCE(co.tipo_comprobante, 'MENSUALIDAD') AS tipo_comprobante,
-                COALESCE(co.formato_salida, 'PDF') AS formato_salida,
-                COALESCE(co.ruta_archivo, '') AS ruta_archivo,
                 COALESCE(co.saldo_posterior_centavos, 0) AS saldo_posterior_centavos,
                 COALESCE(co.generado_en, p.fecha_pago, '') AS generado_en,
                 printf('CA-%03d', p.casa_id) AS casa_codigo,
@@ -304,68 +294,6 @@ class RepositorioHistorialPagosSQLite:
             total_pagado_centavos=int(fila["total_pagado_centavos"] or 0),
             saldo_posterior_centavos=int(fila["saldo_posterior_centavos"] or 0),
             detalles=detalles,
-            formato_salida=str(fila["formato_salida"] or "PDF"),
-            ruta_archivo=str(fila["ruta_archivo"] or ""),
-        )
-
-    def obtener_configuracion_recibo(self) -> ConfiguracionReciboPago:
-        claves = (
-            *CLAVES_IDENTIDAD_EMPRESA,
-            *CLAVES_IDENTIDAD_LEGADAS_JUNTA,
-            "factura.titulo_documento",
-            "factura.subtitulo_documento",
-            "factura.texto_legal_superior",
-            "factura.texto_pie",
-            "factura.texto_legal_inferior",
-            "factura.etiqueta_copia",
-            "factura.mostrar_correo",
-            "factura.mostrar_telefono",
-            "factura.mostrar_direccion",
-            "factura.mostrar_identificador_fiscal",
-            "documentos.firma_habilitada",
-            "documentos.firma_texto_linea",
-            "documentos.abrir_pdf_automaticamente",
-            "documentos.imprimir_pdf_automaticamente",
-        )
-        marcadores = ", ".join("?" for _ in claves)
-        consulta = f"""
-            SELECT clave, COALESCE(valor, '') AS valor
-            FROM configuracion_sistema
-            WHERE clave IN ({marcadores});
-        """
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            filas = conexion.execute(consulta, claves).fetchall()
-        valores = {str(fila["clave"]): str(fila["valor"] or "") for fila in filas}
-        identidad = construir_identidad_empresa(valores, nombre_predeterminado="SIGQUA")
-        return ConfiguracionReciboPago(
-            nombre_junta=identidad.nombre,
-            telefono_junta=identidad.telefono,
-            correo_junta=identidad.correo,
-            direccion_junta=identidad.direccion,
-            identificador_fiscal=identidad.identificador_fiscal,
-            sitio_web=identidad.sitio_web,
-            mensaje_contacto=identidad.mensaje_contacto,
-            titulo_documento=valores.get("factura.titulo_documento", "RECIBO DE PAGO") or "RECIBO DE PAGO",
-            subtitulo_documento=valores.get("factura.subtitulo_documento", ""),
-            texto_legal_superior=valores.get("factura.texto_legal_superior", ""),
-            texto_pie=valores.get("factura.texto_pie", ""),
-            texto_legal_inferior=valores.get("factura.texto_legal_inferior", ""),
-            etiqueta_copia=valores.get("factura.etiqueta_copia", "ORIGINAL") or "ORIGINAL",
-            mostrar_correo=self._a_booleano(valores.get("factura.mostrar_correo", "1")),
-            mostrar_telefono=self._a_booleano(valores.get("factura.mostrar_telefono", "1")),
-            mostrar_direccion=self._a_booleano(valores.get("factura.mostrar_direccion", "1")),
-            mostrar_identificador_fiscal=self._a_booleano(
-                valores.get("factura.mostrar_identificador_fiscal", "0")
-            ),
-            firma_habilitada=self._a_booleano(valores.get("documentos.firma_habilitada", "0")),
-            firma_texto_linea=valores.get("documentos.firma_texto_linea", "").strip()
-            or "Firma autorizada",
-            abrir_pdf_automaticamente=self._a_booleano(
-                valores.get("documentos.abrir_pdf_automaticamente", "1")
-            ),
-            imprimir_pdf_automaticamente=self._a_booleano(
-                valores.get("documentos.imprimir_pdf_automaticamente", "0")
-            ),
         )
 
     @staticmethod

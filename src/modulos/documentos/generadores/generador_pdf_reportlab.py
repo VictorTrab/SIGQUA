@@ -1,4 +1,4 @@
-"""Generacion PDF con ReportLab para comprobantes y reportes."""
+"""Generacion PDF con ReportLab para reportes administrativos."""
 
 from __future__ import annotations
 
@@ -11,19 +11,12 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from modulos.documentos.modelos.dto_comprobante_pago import (
-    DTOComprobantePago,
-    LineaDetalleComprobantePago,
-)
 from modulos.documentos.modelos.dto_estado_cuenta import DTOEstadoCuenta
 from modulos.documentos.modelos.dto_reporte_tabular import DTOReporteTabular
 
 
 class GeneradorPdfReportLab:
     """Genera PDFs administrativos usando ReportLab Platypus."""
-
-    ANCHO_TICKET = 80 * mm
-    MARGEN_TICKET = 4 * mm
 
     def __init__(self) -> None:
         self._estilos = getSampleStyleSheet()
@@ -117,31 +110,6 @@ class GeneradorPdfReportLab:
             )
         )
 
-    def generar_comprobante_pago(self, dto: DTOComprobantePago, ruta_destino: str) -> str:
-        ruta = Path(ruta_destino).expanduser()
-        ruta.parent.mkdir(parents=True, exist_ok=True)
-        doc = SimpleDocTemplate(
-            str(ruta),
-            pagesize=(self.ANCHO_TICKET, self._alto_ticket_estimado(dto)),
-            leftMargin=self.MARGEN_TICKET,
-            rightMargin=self.MARGEN_TICKET,
-            topMargin=4 * mm,
-            bottomMargin=4 * mm,
-            title=dto.numero_comprobante,
-            author="SIGQUA",
-            subject="Comprobante de pago",
-        )
-        elementos = self._construir_elementos_comprobante(dto)
-        doc.build(
-            elementos,
-            onFirstPage=lambda canvas, _doc: self._aplicar_metadatos(
-                canvas,
-                titulo=dto.numero_comprobante,
-                asunto="Comprobante de pago",
-            ),
-        )
-        return str(ruta)
-
     def generar_reporte_tabular(self, dto: DTOReporteTabular, ruta_destino: str) -> str:
         ruta = Path(ruta_destino).expanduser()
         ruta.parent.mkdir(parents=True, exist_ok=True)
@@ -191,88 +159,6 @@ class GeneradorPdfReportLab:
             ),
         )
         return str(ruta)
-
-    def _construir_elementos_comprobante(self, dto: DTOComprobantePago) -> list[object]:
-        elementos: list[object] = []
-        for linea in dto.lineas_encabezado:
-            elementos.append(Paragraph(self._escapar(linea), self._estilos["SigquaEncabezado"]))
-
-        elementos.append(Spacer(1, 1.5 * mm))
-        elementos.append(Paragraph(self._escapar(dto.titulo_documento), self._estilos["SigquaTituloTicket"]))
-        if dto.subtitulo_documento.strip():
-            elementos.append(
-                Paragraph(self._escapar(dto.subtitulo_documento), self._estilos["SigquaSubtituloTicket"])
-            )
-        elementos.append(
-            Paragraph(self._escapar(dto.numero_comprobante), self._estilos["SigquaTituloTicket"])
-        )
-        elementos.append(Spacer(1, 2 * mm))
-
-        elementos.append(
-            self._crear_tabla_etiquetas(
-                (
-                    ("Fecha", dto.fecha),
-                    ("Hora", dto.hora),
-                    ("Tipo", dto.tipo_comprobante),
-                )
-            )
-        )
-        elementos.append(Spacer(1, 1.5 * mm))
-        elementos.append(
-            self._crear_tabla_etiquetas(
-                (
-                    ("Casa", dto.casa_codigo),
-                    ("Abonado", dto.abonado_nombre),
-                    ("DNI", dto.abonado_dni),
-                    ("Barrio", dto.barrio_nombre),
-                    ("Direccion", dto.direccion_casa),
-                )
-            )
-        )
-        elementos.append(Spacer(1, 1.5 * mm))
-        elementos.append(
-            self._crear_tabla_etiquetas(
-                (
-                    ("Metodo", dto.metodo_pago),
-                    ("Referencia", dto.referencia),
-                    ("Registrado por", dto.usuario_registro),
-                )
-            )
-        )
-        if dto.texto_legal_superior.strip():
-            elementos.append(Spacer(1, 1.2 * mm))
-            elementos.append(
-                Paragraph(self._escapar(dto.texto_legal_superior), self._estilos["SigquaTextoTicket"])
-            )
-
-        elementos.append(Spacer(1, 2 * mm))
-        elementos.append(self._crear_tabla_detalle(dto.lineas_detalle))
-        elementos.append(Spacer(1, 2 * mm))
-        elementos.append(
-            self._crear_tabla_totales(
-                (
-                    ("Total pagado", dto.total_pagado),
-                )
-            )
-        )
-        elementos.append(Spacer(1, 2 * mm))
-        if dto.texto_pie.strip():
-            elementos.append(Paragraph(self._escapar(dto.texto_pie), self._estilos["SigquaTextoTicket"]))
-            elementos.append(Spacer(1, 1.5 * mm))
-        if dto.texto_legal_inferior.strip():
-            elementos.append(
-                Paragraph(self._escapar(dto.texto_legal_inferior), self._estilos["SigquaTextoTicket"])
-            )
-            elementos.append(Spacer(1, 1.5 * mm))
-        if dto.etiqueta_copia.strip():
-            elementos.append(Paragraph(self._escapar(dto.etiqueta_copia), self._estilos["SigquaPieTicket"]))
-        elementos.extend(
-            self._construir_bloque_firma(
-                dto.firma_habilitada,
-                dto.firma_texto_linea,
-            )
-        )
-        return elementos
 
     def _construir_elementos_reporte(self, dto: DTOReporteTabular) -> list[object]:
         elementos: list[object] = []
@@ -456,30 +342,6 @@ class GeneradorPdfReportLab:
         elementos.append(Paragraph(self._escapar(texto_firma), self._estilos["SigquaMetaReporte"]))
         return elementos
 
-    def _crear_tabla_detalle(self, lineas: tuple[LineaDetalleComprobantePago, ...]) -> Table:
-        data = [
-            [
-                Paragraph(self._escapar(linea.descripcion), self._estilos["SigquaTextoTicket"]),
-                Paragraph(self._escapar(linea.monto), self._estilos["SigquaTextoTicket"]),
-            ]
-            for linea in lineas
-        ] or [[Paragraph("Sin detalle registrado.", self._estilos["SigquaTextoTicket"]), Paragraph("", self._estilos["SigquaTextoTicket"])]]
-        tabla = Table(data, colWidths=[52 * mm, 16 * mm], hAlign="LEFT")
-        tabla.setStyle(
-            TableStyle(
-                [
-                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                    ("TOPPADDING", (0, 0), (-1, -1), 2),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-                    ("LINEBELOW", (0, 0), (-1, -1), 0.35, colors.black),
-                ]
-            )
-        )
-        return tabla
-
     def _crear_tabla_totales(self, filas: tuple[tuple[str, str], ...]) -> Table:
         data = [
             [
@@ -573,15 +435,3 @@ class GeneradorPdfReportLab:
             .replace("<", "&lt;")
             .replace(">", "&gt;")
         )
-
-    @staticmethod
-    def _alto_ticket_estimado(dto: DTOComprobantePago) -> float:
-        base_mm = 105 + (len(dto.lineas_encabezado) * 4)
-        base_mm += len(dto.lineas_detalle) * 8
-        if dto.texto_legal_superior.strip():
-            base_mm += 8
-        if dto.texto_pie.strip():
-            base_mm += 6
-        if dto.texto_legal_inferior.strip():
-            base_mm += 6
-        return min(max(base_mm * mm, 140 * mm), 320 * mm)

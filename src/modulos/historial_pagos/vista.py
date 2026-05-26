@@ -273,18 +273,24 @@ class DialogoDetalleHistorialPago(DialogoBaseSigqua):
             mostrar_icono=True,
         )
         boton_reimprimir = BotonAccionContextual(
-            "Reimprimir copia",
+            "Reimprimir",
             icono="receipt-2.svg",
             variante=resolver_variante_boton_modal("Reimprimir copia", "informacion"),
             centrado=True,
             mostrar_icono=True,
         )
+        self._combo_reimpresion = QComboBox()
+        self._combo_reimpresion.addItem("Ambas copias", "AMBAS")
+        self._combo_reimpresion.addItem("Original abonado", "ORIGINAL")
+        self._combo_reimpresion.addItem("Copia Junta", "JUNTA")
+        self._combo_reimpresion.setMinimumWidth(170)
         boton_cerrar.setMinimumWidth(124)
         boton_reimprimir.setMinimumWidth(164)
         boton_cerrar.clicked.connect(self.reject)
         boton_reimprimir.clicked.connect(self._solicitar_reimpresion)
         fila_acciones.addWidget(boton_cerrar)
         fila_acciones.addStretch(1)
+        fila_acciones.addWidget(self._combo_reimpresion)
         fila_acciones.addWidget(boton_reimprimir)
 
         layout_scroll.addWidget(panel)
@@ -387,7 +393,7 @@ class DialogoDetalleHistorialPago(DialogoBaseSigqua):
         return tarjeta
 
     def _solicitar_reimpresion(self) -> None:
-        self._accion_resultado = "reimprimir"
+        self._accion_resultado = f"reimprimir:{self._combo_reimpresion.currentData() or 'AMBAS'}"
         self.accept()
 
     def _aplicar_estilos(self) -> None:

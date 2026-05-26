@@ -23,7 +23,7 @@ from PySide6.QtWidgets import QPushButton  # noqa: E402
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
-import modulos.historial_pagos.controlador as controlador_historial_modulo  # noqa: E402
+from modulos.comprobantes import COPIA_AMBAS, COPIA_JUNTA, ResultadoComprobante  # noqa: E402
 from modulos.historial_pagos.controlador import ControladorHistorialPagos  # noqa: E402
 from modulos.historial_pagos.repositorio import RepositorioHistorialPagosSQLite  # noqa: E402
 from modulos.historial_pagos.servicio import ServicioHistorialPagos  # noqa: E402
@@ -31,6 +31,22 @@ from modulos.historial_pagos.vista import VistaHistorialPagos  # noqa: E402
 from modulos.pagos.entidades import FormularioPago  # noqa: E402
 from modulos.pagos.repositorio import RepositorioPagosSQLite  # noqa: E402
 from modulos.pagos.servicio import ServicioPagos  # noqa: E402
+
+
+class ServicioComprobantesFalso:
+    def __init__(self) -> None:
+        self.llamadas: list[tuple[int, str, bool]] = []
+
+    def imprimir_comprobante(
+        self,
+        pago_id: int,
+        *,
+        actor_id: int | None,
+        tipo_copia: str = COPIA_AMBAS,
+        es_reimpresion: bool = False,
+    ) -> ResultadoComprobante:
+        self.llamadas.append((pago_id, tipo_copia, es_reimpresion))
+        return ResultadoComprobante(True, "Comprobante reenviado a impresion termica.", "OK")
 
 
 class TestHistorialPagos(unittest.TestCase):
@@ -119,14 +135,15 @@ class TestHistorialPagos(unittest.TestCase):
         self.assertGreaterEqual(len(detalle.lineas_detalle), 1)
         self.assertTrue(all(linea.descripcion for linea in detalle.lineas_detalle))
 
-    def test_reimpresion_regenera_pdf_sin_actualizar_metadata(self) -> None:
+    def test_reimpresion_reconstruye_ticket_desde_sqlite_sin_pdf(self) -> None:
         pagina = self.servicio_historial.listar()
         pago_id = pagina.items[0].pago_id
-
+        servicio_comprobantes = ServicioComprobantesFalso()
+        self.servicio_historial._servicio_comprobantes = servicio_comprobantes  # type: ignore[assignment]
         with closing(sqlite3.connect(self.ruta_db)) as conexion:
             fila_antes = conexion.execute(
                 """
-                SELECT COALESCE(ruta_archivo, ''), COALESCE(formato_salida, '')
+                SELECT numero_comprobante, tipo_comprobante, saldo_posterior_centavos
                 FROM comprobantes
                 WHERE pago_id = ?;
                 """,
@@ -136,13 +153,12 @@ class TestHistorialPagos(unittest.TestCase):
         resultado = self.servicio_historial.reimprimir_copia(pago_id)
 
         self.assertTrue(resultado.exito, resultado.mensaje)
-        self.assertTrue(Path(resultado.ruta_documento).exists())
-        self.assertTrue(Path(resultado.ruta_documento).read_bytes().startswith(b"%PDF"))
+        self.assertEqual(servicio_comprobantes.llamadas, [(pago_id, COPIA_AMBAS, True)])
 
         with closing(sqlite3.connect(self.ruta_db)) as conexion:
             fila_despues = conexion.execute(
                 """
-                SELECT COALESCE(ruta_archivo, ''), COALESCE(formato_salida, '')
+                SELECT numero_comprobante, tipo_comprobante, saldo_posterior_centavos
                 FROM comprobantes
                 WHERE pago_id = ?;
                 """,
@@ -170,25 +186,21 @@ class TestHistorialPagos(unittest.TestCase):
         self.assertIn('font-family: "Segoe UI"', vista.styleSheet())
         vista.close()
 
-    def test_controlador_reimprime_y_aplica_politica_documental(self) -> None:
+    def test_controlador_reimprime_ticket_termico_segun_copia_solicitada(self) -> None:
+        servicio_comprobantes = ServicioComprobantesFalso()
+        self.servicio_historial._servicio_comprobantes = servicio_comprobantes  # type: ignore[assignment]
         vista = VistaHistorialPagos()
         controlador = ControladorHistorialPagos(self.servicio_historial, vista)
         pagina = self.servicio_historial.listar()
         pago_id = pagina.items[0].pago_id
         mensajes: list[str] = []
         vista.mostrar_mensaje = lambda mensaje, es_error=False: mensajes.append(mensaje)  # type: ignore[method-assign]
-        helper_original = controlador_historial_modulo.ejecutar_acciones_documento_pdf
-        controlador_historial_modulo.ejecutar_acciones_documento_pdf = (  # type: ignore[assignment]
-            lambda ruta, **_kwargs: f"Documento abierto automaticamente desde {ruta}"
-        )
 
-        try:
-            controlador._reimprimir_copia(pago_id)
-        finally:
-            controlador_historial_modulo.ejecutar_acciones_documento_pdf = helper_original  # type: ignore[assignment]
+        controlador._reimprimir_copia(pago_id, COPIA_JUNTA)
 
         self.assertTrue(mensajes)
-        self.assertIn("abierto automaticamente", mensajes[-1].lower())
+        self.assertIn("impresion termica", mensajes[-1].lower())
+        self.assertEqual(servicio_comprobantes.llamadas, [(pago_id, COPIA_JUNTA, True)])
         vista.close()
 
     def _crear_pago_historial(self, dni: str, metodo_codigo: str, referencia: str = "") -> None:

@@ -39,6 +39,12 @@ class ControladorConfiguracion:
         self._vista_configuracion.crear_respaldo_manual_solicitado.connect(
             self._crear_respaldo_manual
         )
+        self._vista_configuracion.probar_impresora_comprobantes_solicitado.connect(
+            self._probar_impresora_comprobantes
+        )
+        self._vista_configuracion.probar_impresora_reportes_solicitado.connect(
+            self._probar_impresora_reportes
+        )
 
     def _guardar_datos_junta(
         self,
@@ -76,15 +82,17 @@ class ControladorConfiguracion:
         texto_pie: str,
         texto_legal_inferior: str,
         etiqueta_copia: str,
-        formato_salida: str,
         mostrar_correo: bool,
         mostrar_telefono: bool,
         mostrar_direccion: bool,
         mostrar_identificador_fiscal: bool,
         firma_habilitada: bool,
         firma_texto_linea: str,
-        abrir_pdf_automaticamente: bool,
-        imprimir_pdf_automaticamente: bool,
+        impresora_termica_nombre: str,
+        impresora_termica_ancho_mm: int,
+        impresora_termica_corte_automatico: bool,
+        impresora_termica_codigo_pagina: str,
+        impresora_reportes_nombre: str,
     ) -> None:
         resultado = self._servicio_configuracion.guardar_parametros_factura(
             titulo_documento=titulo_documento,
@@ -93,15 +101,17 @@ class ControladorConfiguracion:
             texto_pie=texto_pie,
             texto_legal_inferior=texto_legal_inferior,
             etiqueta_copia=etiqueta_copia,
-            formato_salida=formato_salida,
             mostrar_correo=mostrar_correo,
             mostrar_telefono=mostrar_telefono,
             mostrar_direccion=mostrar_direccion,
             mostrar_identificador_fiscal=mostrar_identificador_fiscal,
             firma_habilitada=firma_habilitada,
             firma_texto_linea=firma_texto_linea,
-            abrir_pdf_automaticamente=abrir_pdf_automaticamente,
-            imprimir_pdf_automaticamente=imprimir_pdf_automaticamente,
+            impresora_termica_nombre=impresora_termica_nombre,
+            impresora_termica_ancho_mm=impresora_termica_ancho_mm,
+            impresora_termica_corte_automatico=impresora_termica_corte_automatico,
+            impresora_termica_codigo_pagina=impresora_termica_codigo_pagina,
+            impresora_reportes_nombre=impresora_reportes_nombre,
             actor_id=None if self._actor is None else self._actor.identificador,
         )
         self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
@@ -145,6 +155,14 @@ class ControladorConfiguracion:
                 modulo_origen="configuracion",
                 modulos_afectados=("pagos", "morosidad", "reportes"),
             )
+
+    def _probar_impresora_comprobantes(self, nombre_impresora: str) -> None:
+        resultado = self._servicio_configuracion.probar_impresora_comprobantes(nombre_impresora)
+        self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
+
+    def _probar_impresora_reportes(self, nombre_impresora: str) -> None:
+        resultado = self._servicio_configuracion.probar_impresora_reportes(nombre_impresora)
+        self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
 
     def _guardar_operacion_respaldo(
         self,

@@ -6,7 +6,7 @@ from calendar import monthrange
 from datetime import date, datetime
 
 from comun.configuracion.gestor_rutas import GestorRutas
-from modulos.documentos import ServicioComprobantePago
+from modulos.comprobantes import RepositorioComprobantesSQLite, ServicioComprobantes
 from modulos.pagos.entidades import (
     CargoPago,
     ComprobantePago,
@@ -37,24 +37,32 @@ class ServicioPagos:
         self,
         repositorio_pagos: RepositorioPagos,
         gestor_rutas: GestorRutas | None = None,
-        servicio_comprobante_pago: ServicioComprobantePago | None = None,
+        servicio_comprobantes: ServicioComprobantes | None = None,
     ):
         self.repositorio_pagos = repositorio_pagos
         self._gestor_rutas = gestor_rutas or GestorRutas()
-        self._servicio_comprobante_pago = servicio_comprobante_pago or ServicioComprobantePago(
-            gestor_rutas=self._gestor_rutas,
-        )
+        self._servicio_comprobantes = servicio_comprobantes or self._crear_servicio_comprobantes_predeterminado()
 
     def obtener_estado(self, filtro: str = "") -> EstadoModuloPagos:
-        configuracion = self.obtener_configuracion_recibo()
+        impresora_configurada = False
+        pendientes_impresion = 0
+        if self._servicio_comprobantes is not None:
+            try:
+                pendientes_impresion = self._servicio_comprobantes.contar_pendientes_impresion()
+            except Exception:
+                pendientes_impresion = 0
+            try:
+                impresora_configurada = self._servicio_comprobantes.impresora_configurada()
+            except Exception:
+                impresora_configurada = False
         return EstadoModuloPagos(
             casas=tuple(self.repositorio_pagos.listar_casas(filtro=filtro)),
             metodos_pago=tuple(self.repositorio_pagos.listar_metodos_pago_activos()),
             cobrar_mensualidad_prorrateada_activacion=(
                 self.repositorio_pagos.cobrar_mensualidad_prorrateada_en_activacion()
             ),
-            abrir_pdf_automaticamente=configuracion.abrir_pdf_automaticamente,
-            imprimir_pdf_automaticamente=configuracion.imprimir_pdf_automaticamente,
+            impresora_termica_configurada=impresora_configurada,
+            comprobantes_pendientes_impresion=pendientes_impresion,
         )
 
     def obtener_cargos_mensuales(self, casa_id: int) -> tuple[CargoPago, ...]:
@@ -304,6 +312,9 @@ class ServicioPagos:
         if len(comprobantes) > 1:
             numeros = ", ".join(item.numero_comprobante for item in comprobantes)
             mensaje = f"Operacion registrada con comprobantes separados: {numeros}."
+        mensaje_impresion = self._imprimir_comprobantes_confirmados(comprobantes, actor_id)
+        if mensaje_impresion:
+            mensaje = f"{mensaje} {mensaje_impresion}"
         return ResultadoPago(
             True,
             mensaje,
@@ -692,28 +703,31 @@ class ServicioPagos:
     def obtener_configuracion_recibo(self) -> ConfiguracionReciboPago:
         return self.repositorio_pagos.obtener_configuracion_recibo()
 
-    def generar_comprobante_pdf(self, pago_id: int, ruta_destino: str | None = None) -> str:
-        comprobante = self.obtener_comprobante(pago_id)
-        if comprobante is None:
-            raise ValueError("No fue posible recuperar el comprobante solicitado.")
-        configuracion = self.obtener_configuracion_recibo()
-        return self._servicio_comprobante_pago.generar_pdf(
-            comprobante=comprobante,
-            configuracion=configuracion,
-            formateador_moneda=self.formatear_moneda,
-            formateador_fecha=self.formatear_fecha,
-            formateador_hora=self.formatear_hora,
-            etiqueta_tipo_pago=self._etiqueta_tipo_pago,
-            ruta_destino=ruta_destino,
-        )
-
-    def ruta_sugerida_comprobante(self, comprobante: ComprobantePago, extension: str = ".pdf") -> str:
-        base = self._gestor_rutas.obtener_ruta_exportaciones_comprobantes()
-        return str(base / f"{comprobante.numero_comprobante}{extension}")
-
     @staticmethod
     def formatear_moneda(valor_centavos: int) -> str:
         return f"L {valor_centavos / 100:,.2f}"
+
+    def _imprimir_comprobantes_confirmados(
+        self,
+        comprobantes: tuple[ComprobantePago, ...],
+        actor_id: int,
+    ) -> str:
+        if not comprobantes or self._servicio_comprobantes is None:
+            return ""
+        resultados = self._servicio_comprobantes.imprimir_comprobantes(
+            tuple(comprobante.pago_id for comprobante in comprobantes),
+            actor_id=actor_id,
+        )
+        fallos = [resultado.mensaje for resultado in resultados if not resultado.exito]
+        if not fallos:
+            return "Comprobante termico enviado a impresion."
+        return f"Impresion pendiente: {fallos[0]}"
+
+    def _crear_servicio_comprobantes_predeterminado(self) -> ServicioComprobantes | None:
+        gestor_base_datos = getattr(self.repositorio_pagos, "_gestor_base_datos", None)
+        if gestor_base_datos is None:
+            return None
+        return ServicioComprobantes(RepositorioComprobantesSQLite(gestor_base_datos))
 
     @staticmethod
     def formatear_fecha(valor: str) -> str:

@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtPrintSupport import QPrintDialog, QPrinterInfo
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -33,16 +31,9 @@ from comun.ui import (
     CampoMontoMonetario,
     DialogoBaseSigqua,
     DialogoConfirmacionSigqua,
-    ejecutar_acciones_documento_pdf,
     configurar_tabla_operativa,
     crear_boton_operativo,
     crear_item_tabla,
-)
-from comun.ui.comprobante_termico import (
-    DatosDocumentoRecibo,
-    crear_documento_recibo_termico,
-    crear_impresora_recibo_termico,
-    preparar_documento_para_printer,
 )
 from comun.ui.temas import (
     TEMA_SIGQUA_PREDETERMINADO,
@@ -68,127 +59,6 @@ from modulos.pagos.entidades import (
     TIPO_PAGO_PLAN,
     TIPO_PAGO_RECONEXION,
 )
-
-
-class DialogoVistaPreviaImpresionComprobante(QWidget):
-    """Compatibilidad temporal: el backend documental ya no renderiza comprobantes en UI."""
-
-    def __init__(self, datos_documento: DatosDocumentoRecibo, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._documento_base = crear_documento_recibo_termico(datos_documento)
-        self.setWindowTitle(f"{datos_documento.numero_comprobante} | Comprobante de pago")
-        self.setMinimumWidth(860)
-        self.setMinimumHeight(760)
-        self._mensaje = QLabel("")
-        self._mensaje.setObjectName("mensajeComprobantePago")
-        self._mensaje.setVisible(False)
-
-        titulo = QLabel(datos_documento.numero_comprobante)
-        titulo.setObjectName("tituloDialogoSigqua")
-        descripcion = QLabel("Vista previa final del comprobante. Esta misma versión es la que se enviará a impresión.")
-        descripcion.setObjectName("descripcionDialogoSigqua")
-        descripcion.setWordWrap(True)
-
-        panel_ticket = QFrame()
-        panel_ticket.setObjectName("panelTicketComprobante")
-        layout_ticket = QVBoxLayout(panel_ticket)
-        layout_ticket.setContentsMargins(10, 10, 10, 10)
-        layout_ticket.setSpacing(0)
-
-        self._visor = QTextBrowser()
-        self._visor.setObjectName("visorComprobantePago")
-        self._visor.setOpenExternalLinks(False)
-        self._visor.setMinimumWidth(330)
-        self._visor.setMaximumWidth(330)
-        self._visor.setDocument(self._documento_base.clone())
-        layout_ticket.addWidget(self._visor)
-
-        contenedor_ticket = QHBoxLayout()
-        contenedor_ticket.setContentsMargins(0, 0, 0, 0)
-        contenedor_ticket.addStretch(1)
-        contenedor_ticket.addWidget(panel_ticket, 0, Qt.AlignmentFlag.AlignTop)
-        contenedor_ticket.addStretch(1)
-
-        fila_acciones = QHBoxLayout()
-        boton_cerrar = BotonAccionContextual("Cerrar", variante="neutro", centrado=True, mostrar_icono=False)
-        boton_imprimir = BotonAccionContextual("Imprimir", variante="primario", centrado=True, mostrar_icono=False)
-        boton_cerrar.clicked.connect(self.accept)
-        boton_imprimir.clicked.connect(self._imprimir)
-        fila_acciones.addWidget(boton_imprimir)
-        fila_acciones.addStretch(1)
-        fila_acciones.addWidget(boton_cerrar)
-
-        self.layout_cabecera.addWidget(titulo)
-        self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addLayout(contenedor_ticket)
-        self.layout_cuerpo.addWidget(self._mensaje)
-        self.layout_pie.addLayout(fila_acciones)
-        self._aplicar_estilos()
-
-        if not QPrinterInfo.availablePrinters():
-            self._mostrar_mensaje(
-                "No se detectó una impresora instalada. Puedes revisar el comprobante, pero la impresión no estará disponible hasta configurar una.",
-                es_error=True,
-            )
-
-    def _imprimir(self) -> None:
-        if not QPrinterInfo.availablePrinters():
-            self._mostrar_mensaje(
-                "No hay impresoras disponibles para enviar el comprobante.",
-                es_error=True,
-            )
-            return
-        impresora = crear_impresora_recibo_termico()
-        dialogo = QPrintDialog(impresora, self)
-        dialogo.setWindowTitle("Imprimir comprobante")
-        if dialogo.exec() != QDialog.DialogCode.Accepted:
-            return
-        documento = preparar_documento_para_printer(self._documento_base, impresora)
-        documento.print_(impresora)
-        self._mostrar_mensaje("Comprobante enviado a impresión.", es_error=False)
-
-    def _mostrar_mensaje(self, mensaje: str, es_error: bool) -> None:
-        self._mensaje.setText(mensaje)
-        self._mensaje.setProperty("error", es_error)
-        self._mensaje.style().unpolish(self._mensaje)
-        self._mensaje.style().polish(self._mensaje)
-        self._mensaje.setVisible(True)
-
-    def _aplicar_estilos(self) -> None:
-        paleta = obtener_paleta_tema(TEMA_SIGQUA_PREDETERMINADO)
-        self.setStyleSheet(
-            self.styleSheet()
-            + f"""
-            QFrame#panelTicketComprobante {{
-                background-color: #E4EACC;
-                border: 1px solid #d4d4d8;
-                border-radius: 10px;
-            }}
-            QTextBrowser#visorComprobantePago {{
-                background-color: #E4EACC;
-                border: none;
-                border-radius: 0px;
-                color: #111111;
-                padding: 0px;
-            }}
-            QLabel#mensajeComprobantePago {{
-                border-radius: 12px;
-                padding: 10px 12px;
-                font-size: 12px;
-                font-weight: 700;
-            }}
-            QLabel#mensajeComprobantePago[error="false"] {{
-                background-color: {paleta["fondo_exito"]};
-                border: 1px solid {paleta["borde_exito"]};
-                color: {paleta["texto_exito"]};
-            }}
-            QLabel#mensajeComprobantePago[error="true"] {{
-                background-color: {paleta["fondo_error"]};
-                border: 1px solid {paleta["borde_error"]};
-                color: {paleta["texto_error"]};
-            }}
-            """
-        )
 
 
 class FlujoPestanaPendiente(QWidget):
@@ -2956,9 +2826,9 @@ class VistaPagos(QWidget):
         fila_estado_documental.setContentsMargins(0, 0, 0, 0)
         fila_estado_documental.setSpacing(8)
         fila_estado_documental.addStretch(1)
-        self._label_estado_apertura = QLabel("Abrir")
+        self._label_estado_apertura = QLabel("ESC/POS")
         self._label_estado_apertura.setObjectName("badgeEstadoDocumentoPago")
-        self._label_estado_impresion = QLabel("Imprimir")
+        self._label_estado_impresion = QLabel("Pendientes")
         self._label_estado_impresion.setObjectName("badgeEstadoDocumentoPago")
         fila_estado_documental.addWidget(self._label_estado_apertura)
         fila_estado_documental.addWidget(self._label_estado_impresion)
@@ -3028,8 +2898,8 @@ class VistaPagos(QWidget):
         mostrar_casas: bool = False,
     ) -> None:
         self._actualizar_estado_documental(
-            estado.abrir_pdf_automaticamente,
-            estado.imprimir_pdf_automaticamente,
+            estado.impresora_termica_configurada,
+            estado.comprobantes_pendientes_impresion,
         )
         self._flujo_mensual.mostrar_estado(
             estado,
@@ -3202,21 +3072,10 @@ class VistaPagos(QWidget):
         )
         return dialogo.exec() == QDialog.DialogCode.Accepted
 
-    def mostrar_comprobante(
-        self,
-        ruta_documento: str,
-        abrir_automaticamente: bool = True,
-        imprimir_automaticamente: bool = False,
-    ) -> None:
-        mensaje = ejecutar_acciones_documento_pdf(
-            ruta_documento,
-            etiqueta_documento="Comprobante PDF",
-            abrir_automaticamente=abrir_automaticamente,
-            imprimir_automaticamente=imprimir_automaticamente,
-        )
+    def mostrar_resultado_impresion(self, mensaje: str, es_error: bool = False) -> None:
         self.mostrar_mensaje(
             mensaje,
-            es_error=False,
+            es_error=es_error,
             duracion_ms=self.DURACION_MENSAJE_COMPROBANTE_MS,
         )
 
@@ -3350,12 +3209,16 @@ class VistaPagos(QWidget):
 
     def _actualizar_estado_documental(
         self,
-        abrir_automaticamente: bool,
-        imprimir_automaticamente: bool,
+        impresora_configurada: bool,
+        pendientes_impresion: int,
     ) -> None:
+        self._label_estado_apertura.setText(
+            "ESC/POS listo" if impresora_configurada else "Sin impresora"
+        )
+        self._label_estado_impresion.setText(f"Pendientes: {pendientes_impresion}")
         for widget, activo in (
-            (self._label_estado_apertura, abrir_automaticamente),
-            (self._label_estado_impresion, imprimir_automaticamente),
+            (self._label_estado_apertura, impresora_configurada),
+            (self._label_estado_impresion, pendientes_impresion == 0),
         ):
             widget.setProperty("activo", activo)
             widget.style().unpolish(widget)

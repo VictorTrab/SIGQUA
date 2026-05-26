@@ -52,7 +52,7 @@ class ParametrosCobro:
 
 @dataclass(slots=True)
 class FacturaConfiguracion:
-    """Configuracion operativa de comprobantes y formato de salida."""
+    """Configuracion operativa de comprobantes termicos."""
 
     titulo_documento: str
     subtitulo_documento: str
@@ -64,11 +64,14 @@ class FacturaConfiguracion:
     mostrar_telefono: bool
     mostrar_direccion: bool
     mostrar_identificador_fiscal: bool
-    formato_salida: str
     firma_habilitada: bool
     firma_texto_linea: str
-    abrir_pdf_automaticamente: bool
-    imprimir_pdf_automaticamente: bool
+    impresora_termica_nombre: str
+    impresora_termica_ancho_mm: int
+    impresora_termica_corte_automatico: bool
+    impresora_termica_codigo_pagina: str
+    impresora_reportes_nombre: str
+    comprobantes_pendientes_impresion: int
     correlativo_actual: str
     proximo_correlativo: str
     ultimo_comprobante_emitido: str

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from comun.actualizaciones import EventoModuloActualizado, bus_actualizaciones_modulos
-from comun.ui import ejecutar_acciones_documento_pdf
 from modulos.reportes.servicio import ServicioReportes
 from modulos.reportes.vista import VistaReportes
 
@@ -75,13 +74,7 @@ class ControladorReportes:
         except (OSError, ValueError) as error:
             self.vista_reportes.mostrar_mensaje(str(error), es_error=True)
             return
-        abrir_automaticamente, imprimir_automaticamente = (
-            self.servicio_reportes.obtener_politica_documental()
+        self.vista_reportes.mostrar_mensaje(
+            f"Reporte PDF generado correctamente: {ruta_pdf}",
+            es_error=False,
         )
-        mensaje = ejecutar_acciones_documento_pdf(
-            ruta_pdf,
-            etiqueta_documento="Reporte PDF",
-            abrir_automaticamente=abrir_automaticamente,
-            imprimir_automaticamente=imprimir_automaticamente,
-        )
-        self.vista_reportes.mostrar_mensaje(mensaje, es_error=False)

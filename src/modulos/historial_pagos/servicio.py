@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from comun.configuracion.gestor_rutas import GestorRutas
-from modulos.documentos.servicios.servicio_comprobante_pago import ServicioComprobantePago
+from modulos.comprobantes import COPIA_AMBAS, RepositorioComprobantesSQLite, ServicioComprobantes
 from modulos.historial_pagos.entidades import (
     DetalleHistorialPago,
     FILTRO_HISTORIAL_TODOS,
@@ -27,13 +27,11 @@ class ServicioHistorialPagos:
         self,
         repositorio_historial: RepositorioHistorialPagos,
         gestor_rutas: GestorRutas | None = None,
-        servicio_comprobante_pago: ServicioComprobantePago | None = None,
+        servicio_comprobantes: ServicioComprobantes | None = None,
     ) -> None:
         self._repositorio_historial = repositorio_historial
         self._gestor_rutas = gestor_rutas or GestorRutas()
-        self._servicio_comprobante_pago = servicio_comprobante_pago or ServicioComprobantePago(
-            gestor_rutas=self._gestor_rutas,
-        )
+        self._servicio_comprobantes = servicio_comprobantes or self._crear_servicio_comprobantes_predeterminado()
 
     def obtener_resumen(self, filtros: FiltroHistorialPagos | None = None) -> ResumenHistorialPagos:
         filtros = filtros or FiltroHistorialPagos()
@@ -67,7 +65,12 @@ class ServicioHistorialPagos:
     def obtener_detalle(self, pago_id: int) -> DetalleHistorialPago | None:
         return self._repositorio_historial.obtener_detalle_pago(pago_id)
 
-    def reimprimir_copia(self, pago_id: int) -> ResultadoHistorialPagos:
+    def reimprimir_comprobante(
+        self,
+        pago_id: int,
+        tipo_copia: str = COPIA_AMBAS,
+        actor_id: int | None = None,
+    ) -> ResultadoHistorialPagos:
         comprobante = self._repositorio_historial.obtener_comprobante_para_reimpresion(pago_id)
         if comprobante is None:
             return ResultadoHistorialPagos(
@@ -75,35 +78,22 @@ class ServicioHistorialPagos:
                 "No fue posible recuperar el comprobante seleccionado.",
                 "NO_ENCONTRADO",
             )
-        configuracion = self._repositorio_historial.obtener_configuracion_recibo()
-        try:
-            ruta = self._servicio_comprobante_pago.generar_pdf(
-                comprobante=comprobante,
-                configuracion=configuracion,
-                formateador_moneda=self.formatear_moneda,
-                formateador_fecha=self.formatear_fecha,
-                formateador_hora=self.formatear_hora,
-                etiqueta_tipo_pago=self.etiqueta_tipo_pago,
-            )
-        except OSError as error:
+        if self._servicio_comprobantes is None:
             return ResultadoHistorialPagos(
                 False,
-                f"No fue posible regenerar la copia PDF. {error}",
-                "ERROR_PDF",
+                "El servicio de impresion termica no esta disponible.",
+                "ERROR_CONFIG",
             )
-        return ResultadoHistorialPagos(
-            True,
-            f"Copia regenerada correctamente: {self._extraer_nombre_archivo(ruta)}",
-            "OK",
-            ruta_documento=ruta,
+        resultado = self._servicio_comprobantes.imprimir_comprobante(
+            pago_id,
+            actor_id=actor_id,
+            tipo_copia=tipo_copia,
+            es_reimpresion=True,
         )
+        return ResultadoHistorialPagos(resultado.exito, resultado.mensaje, resultado.codigo)
 
-    def obtener_politica_documental(self) -> tuple[bool, bool]:
-        configuracion = self._repositorio_historial.obtener_configuracion_recibo()
-        return (
-            configuracion.abrir_pdf_automaticamente,
-            configuracion.imprimir_pdf_automaticamente,
-        )
+    def reimprimir_copia(self, pago_id: int) -> ResultadoHistorialPagos:
+        return self.reimprimir_comprobante(pago_id, COPIA_AMBAS)
 
     @staticmethod
     def formatear_moneda(valor_centavos: int) -> str:
@@ -168,6 +158,8 @@ class ServicioHistorialPagos:
         if fecha_desde and fecha_hasta and fecha_desde > fecha_hasta:
             raise ValueError("La fecha inicial no puede ser mayor que la fecha final.")
 
-    @staticmethod
-    def _extraer_nombre_archivo(ruta: str) -> str:
-        return ruta.replace("\\", "/").split("/")[-1]
+    def _crear_servicio_comprobantes_predeterminado(self) -> ServicioComprobantes | None:
+        gestor_base_datos = getattr(self._repositorio_historial, "_gestor_base_datos", None)
+        if gestor_base_datos is None:
+            return None
+        return ServicioComprobantes(RepositorioComprobantesSQLite(gestor_base_datos))

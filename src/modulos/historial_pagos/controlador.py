@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from comun.actualizaciones import EventoModuloActualizado, bus_actualizaciones_modulos
-from comun.ui import ejecutar_acciones_documento_pdf
+from modulos.comprobantes import COPIA_AMBAS
 from modulos.historial_pagos.entidades import FiltroHistorialPagos
 from modulos.historial_pagos.servicio import ServicioHistorialPagos
 from modulos.historial_pagos.vista import VistaHistorialPagos
@@ -77,22 +77,12 @@ class ControladorHistorialPagos:
             formateador_tipo=self._servicio_historial.etiqueta_tipo_pago,
         )
         if accion == "reimprimir":
-            self._reimprimir_copia(pago_id)
+            self._reimprimir_copia(pago_id, COPIA_AMBAS)
+        elif accion.startswith("reimprimir:"):
+            self._reimprimir_copia(pago_id, accion.split(":", maxsplit=1)[1] or COPIA_AMBAS)
 
-    def _reimprimir_copia(self, pago_id: int) -> None:
-        resultado = self._servicio_historial.reimprimir_copia(pago_id)
-        if resultado.exito and resultado.ruta_documento:
-            abrir_automaticamente, imprimir_automaticamente = (
-                self._servicio_historial.obtener_politica_documental()
-            )
-            mensaje = ejecutar_acciones_documento_pdf(
-                resultado.ruta_documento,
-                etiqueta_documento="Copia PDF del comprobante",
-                abrir_automaticamente=abrir_automaticamente,
-                imprimir_automaticamente=imprimir_automaticamente,
-            )
-            self._vista_historial.mostrar_mensaje(mensaje, es_error=False)
-            return
+    def _reimprimir_copia(self, pago_id: int, tipo_copia: str = COPIA_AMBAS) -> None:
+        resultado = self._servicio_historial.reimprimir_comprobante(pago_id, tipo_copia=tipo_copia)
         self._vista_historial.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
 
     def _manejar_actualizacion_modulo(self, evento: object) -> None:

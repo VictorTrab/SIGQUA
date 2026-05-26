@@ -60,6 +60,7 @@ from modulos.configuracion import (
     ServicioConfiguracion,
     VistaConfiguracion,
 )
+from modulos.comprobantes import RepositorioComprobantesSQLite, ServicioComprobantes
 from modulos.planes_pago import (
     ControladorPlanesPago,
     RepositorioPlanesPagoSQLite,
@@ -189,12 +190,19 @@ def crear_ventana_principal(
     servicio_abonados = ServicioAbonados(repositorio_abonados, repositorio_casas)
     repositorio_planes_pago = RepositorioPlanesPagoSQLite(gestor_base_datos)
     servicio_planes_pago = ServicioPlanesPago(repositorio_planes_pago)
+    repositorio_comprobantes = RepositorioComprobantesSQLite(gestor_base_datos)
+    servicio_comprobantes = ServicioComprobantes(repositorio_comprobantes)
     repositorio_pagos = RepositorioPagosSQLite(gestor_base_datos)
-    servicio_pagos = ServicioPagos(repositorio_pagos, gestor_rutas=gestor_rutas)
+    servicio_pagos = ServicioPagos(
+        repositorio_pagos,
+        gestor_rutas=gestor_rutas,
+        servicio_comprobantes=servicio_comprobantes,
+    )
     repositorio_historial_pagos = RepositorioHistorialPagosSQLite(gestor_base_datos)
     servicio_historial_pagos = ServicioHistorialPagos(
         repositorio_historial_pagos,
         gestor_rutas=gestor_rutas,
+        servicio_comprobantes=servicio_comprobantes,
     )
     repositorio_morosidad = RepositorioMorosidadSQLite(gestor_base_datos)
     servicio_morosidad = ServicioMorosidad(
@@ -211,6 +219,7 @@ def crear_ventana_principal(
         repositorio_configuracion,
         gestor_rutas,
         servicio_respaldo=servicio_respaldo,
+        servicio_comprobantes=servicio_comprobantes,
     )
     repositorio_mantenimiento = RepositorioMantenimientoSQLite(gestor_base_datos)
     servicio_mantenimiento = ServicioMantenimiento(repositorio_mantenimiento)
@@ -255,6 +264,7 @@ def crear_ventana_principal(
     ventana_principal.servicio_planes_pago = servicio_planes_pago
     ventana_principal.servicio_pagos = servicio_pagos
     ventana_principal.servicio_historial_pagos = servicio_historial_pagos
+    ventana_principal.servicio_comprobantes = servicio_comprobantes
     ventana_principal.servicio_morosidad = servicio_morosidad
     ventana_principal.servicio_reportes = servicio_reportes
     ventana_principal.servicio_configuracion = servicio_configuracion

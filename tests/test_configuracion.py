@@ -60,13 +60,16 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.parametros_cobro.meses_adelanto_maximo, 12)
         self.assertEqual(estado.parametros_cobro.mora_leve_hasta_meses, 2)
         self.assertEqual(estado.parametros_cobro.mora_media_hasta_meses, 5)
-        self.assertEqual(estado.factura.formato_salida, "PDF")
         self.assertEqual(estado.factura.titulo_documento, "RECIBO DE PAGO")
         self.assertEqual(estado.factura.etiqueta_copia, "ORIGINAL")
         self.assertFalse(estado.factura.firma_habilitada)
         self.assertEqual(estado.factura.firma_texto_linea, "Firma autorizada")
-        self.assertTrue(estado.factura.abrir_pdf_automaticamente)
-        self.assertFalse(estado.factura.imprimir_pdf_automaticamente)
+        self.assertEqual(estado.factura.impresora_termica_nombre, "")
+        self.assertEqual(estado.factura.impresora_termica_ancho_mm, 80)
+        self.assertTrue(estado.factura.impresora_termica_corte_automatico)
+        self.assertEqual(estado.factura.impresora_termica_codigo_pagina, "cp850")
+        self.assertEqual(estado.factura.impresora_reportes_nombre, "")
+        self.assertEqual(estado.factura.comprobantes_pendientes_impresion, 0)
         self.assertTrue(estado.factura.correlativo_actual.startswith("REC-"))
         self.assertEqual(estado.operacion.total_respaldos, 0)
         self.assertEqual(estado.operacion.ruta_respaldos_principal, str(self.gestor_rutas.obtener_ruta_respaldos()))
@@ -132,15 +135,17 @@ class TestConfiguracion(unittest.TestCase):
             texto_pie="Conserve este comprobante.",
             texto_legal_inferior="No se aceptan anulaciones desde caja.",
             etiqueta_copia="ORIGINAL",
-            formato_salida="pdf",
             mostrar_correo=True,
             mostrar_telefono=True,
             mostrar_direccion=True,
             mostrar_identificador_fiscal=True,
             firma_habilitada=True,
             firma_texto_linea="Firma autorizada",
-            abrir_pdf_automaticamente=False,
-            imprimir_pdf_automaticamente=True,
+            impresora_termica_nombre="Ticketera Caja",
+            impresora_termica_ancho_mm=58,
+            impresora_termica_corte_automatico=False,
+            impresora_termica_codigo_pagina="cp850",
+            impresora_reportes_nombre="Impresora Administrativa",
             actor_id=1,
         )
         resultado_respaldo = self.servicio.guardar_operacion_respaldo(
@@ -160,12 +165,13 @@ class TestConfiguracion(unittest.TestCase):
         estado = self.servicio.obtener_estado()
         self.assertEqual(estado.factura.titulo_documento, "RECIBO OFICIAL DE PAGO")
         self.assertEqual(estado.factura.texto_pie, "Conserve este comprobante.")
-        self.assertEqual(estado.factura.formato_salida, "PDF")
         self.assertTrue(estado.factura.mostrar_identificador_fiscal)
         self.assertTrue(estado.factura.firma_habilitada)
         self.assertEqual(estado.factura.firma_texto_linea, "Firma autorizada")
-        self.assertFalse(estado.factura.abrir_pdf_automaticamente)
-        self.assertTrue(estado.factura.imprimir_pdf_automaticamente)
+        self.assertEqual(estado.factura.impresora_termica_nombre, "Ticketera Caja")
+        self.assertEqual(estado.factura.impresora_termica_ancho_mm, 58)
+        self.assertFalse(estado.factura.impresora_termica_corte_automatico)
+        self.assertEqual(estado.factura.impresora_reportes_nombre, "Impresora Administrativa")
         self.assertTrue(estado.operacion.respaldo_automatico)
         self.assertEqual(estado.seguridad.duracion_sesion_horas, 4.0)
 
@@ -206,15 +212,12 @@ class TestConfiguracion(unittest.TestCase):
             texto_pie="Pie",
             texto_legal_inferior="",
             etiqueta_copia="ORIGINAL",
-            formato_salida="pdf",
             mostrar_correo=True,
             mostrar_telefono=True,
             mostrar_direccion=True,
             mostrar_identificador_fiscal=False,
             firma_habilitada=True,
             firma_texto_linea="",
-            abrir_pdf_automaticamente=True,
-            imprimir_pdf_automaticamente=False,
             actor_id=1,
         )
 

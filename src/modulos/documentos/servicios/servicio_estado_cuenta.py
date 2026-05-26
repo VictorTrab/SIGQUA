@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from comun.configuracion.documentos import lineas_encabezado_documental
 from comun.configuracion.gestor_rutas import GestorRutas
 from modulos.documentos.generadores.generador_pdf_reportlab import GeneradorPdfReportLab
 from modulos.documentos.modelos.dto_estado_cuenta import (
@@ -11,7 +12,6 @@ from modulos.documentos.modelos.dto_estado_cuenta import (
     DTOEstadoCuenta,
     LineaDetalleEstadoCuenta,
 )
-from modulos.documentos.servicios.servicio_comprobante_pago import ServicioComprobantePago
 
 
 class ServicioEstadoCuenta:
@@ -121,7 +121,7 @@ class ServicioEstadoCuenta:
 
     @staticmethod
     def lineas_encabezado_desde_configuracion(configuracion: object) -> tuple[str, ...]:
-        return tuple(ServicioComprobantePago.lineas_encabezado_desde_configuracion(configuracion))
+        return tuple(lineas_encabezado_documental(configuracion))
 
     @staticmethod
     def _fecha_emision_actual() -> str:

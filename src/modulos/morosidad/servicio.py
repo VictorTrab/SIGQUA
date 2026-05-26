@@ -9,9 +9,9 @@ from comun.configuracion.identidad_empresa import (
     CLAVES_IDENTIDAD_LEGADAS_JUNTA,
     construir_identidad_empresa,
 )
+from comun.configuracion.documentos import lineas_encabezado_documental
 from comun.configuracion.gestor_rutas import GestorRutas
 from modulos.documentos import ServicioEstadoCuenta
-from modulos.documentos.servicios.servicio_comprobante_pago import ServicioComprobantePago
 from modulos.morosidad.entidades import (
     DetalleMorosidad,
     EstadoMorosidad,
@@ -38,8 +38,6 @@ class ServicioMorosidad:
         "factura.mostrar_telefono",
         "factura.mostrar_direccion",
         "factura.mostrar_identificador_fiscal",
-        "documentos.abrir_pdf_automaticamente",
-        "documentos.imprimir_pdf_automaticamente",
         "documentos.firma_habilitada",
         "documentos.firma_texto_linea",
     )
@@ -157,11 +155,7 @@ class ServicioMorosidad:
         return leve, media
 
     def obtener_politica_documental(self) -> tuple[bool, bool]:
-        configuracion = self._obtener_configuracion_documental()
-        return (
-            bool(getattr(configuracion, "abrir_pdf_automaticamente", True)),
-            bool(getattr(configuracion, "imprimir_pdf_automaticamente", False)),
-        )
+        return True, False
 
     @staticmethod
     def filtro_inicial() -> FiltroMorosidad:
@@ -198,11 +192,7 @@ class ServicioMorosidad:
         return fila
 
     def _obtener_lineas_encabezado_documental(self) -> tuple[str, ...]:
-        return tuple(
-            ServicioComprobantePago.lineas_encabezado_desde_configuracion(
-                self._obtener_configuracion_documental()
-            )
-        )
+        return tuple(lineas_encabezado_documental(self._obtener_configuracion_documental()))
 
     def _obtener_configuracion_documental(self) -> object:
         valores = self._repositorio_morosidad.listar_parametros_configuracion(
@@ -252,17 +242,6 @@ class ServicioMorosidad:
                 if valores.get("documentos.firma_texto_linea")
                 else "Firma autorizada"
             )
-            abrir_pdf_automaticamente = ServicioMorosidad._a_booleano(
-                valores.get("documentos.abrir_pdf_automaticamente").valor
-                if valores.get("documentos.abrir_pdf_automaticamente")
-                else "1"
-            )
-            imprimir_pdf_automaticamente = ServicioMorosidad._a_booleano(
-                valores.get("documentos.imprimir_pdf_automaticamente").valor
-                if valores.get("documentos.imprimir_pdf_automaticamente")
-                else "0"
-            )
-
         return _ConfiguracionTemporal()
 
     @staticmethod

@@ -57,13 +57,16 @@ class TestPagos(unittest.TestCase):
     def tearDown(self) -> None:
         shutil.rmtree(self.raiz_temporal, ignore_errors=True)
 
-    def test_migraciones_007_008_y_009_agregan_campos_y_catalogos_de_pago(self) -> None:
+    def test_migraciones_agregan_catalogos_y_separan_comprobantes_termicos(self) -> None:
         with closing(sqlite3.connect(self.ruta_db)) as conexion:
             columnas_pagos = {
                 fila[1] for fila in conexion.execute("PRAGMA table_info(pagos);").fetchall()
             }
             columnas_comprobantes = {
                 fila[1] for fila in conexion.execute("PRAGMA table_info(comprobantes);").fetchall()
+            }
+            columnas_impresiones = {
+                fila[1] for fila in conexion.execute("PRAGMA table_info(comprobantes_impresiones);").fetchall()
             }
             columnas_metodos = {
                 fila[1] for fila in conexion.execute("PRAGMA table_info(metodos_pago);").fetchall()
@@ -79,6 +82,9 @@ class TestPagos(unittest.TestCase):
             ).fetchone()
             version_011 = conexion.execute(
                 "SELECT 1 FROM esquema_migraciones WHERE version = '011' LIMIT 1;"
+            ).fetchone()
+            version_023 = conexion.execute(
+                "SELECT 1 FROM esquema_migraciones WHERE version = '023' LIMIT 1;"
             ).fetchone()
             deposito = conexion.execute(
                 """
@@ -104,20 +110,45 @@ class TestPagos(unittest.TestCase):
                 LIMIT 1;
                 """
             ).fetchone()
+            impresora_termica = conexion.execute(
+                """
+                SELECT valor
+                FROM configuracion_sistema
+                WHERE clave = 'impresion_termica.nombre_impresora'
+                LIMIT 1;
+                """
+            ).fetchone()
+            impresora_reportes = conexion.execute(
+                """
+                SELECT valor
+                FROM configuracion_sistema
+                WHERE clave = 'impresion_reportes.nombre_impresora'
+                LIMIT 1;
+                """
+            ).fetchone()
 
         self.assertIn("tipo_pago", columnas_pagos)
         self.assertIn("plan_pago_id", columnas_pagos)
         self.assertIn("tipo_comprobante", columnas_comprobantes)
         self.assertIn("saldo_posterior_centavos", columnas_comprobantes)
+        self.assertNotIn("formato_salida", columnas_comprobantes)
+        self.assertNotIn("ruta_archivo", columnas_comprobantes)
+        self.assertNotIn("hash_documento", columnas_comprobantes)
+        self.assertIn("tipo_copia", columnas_impresiones)
+        self.assertIn("es_reimpresion", columnas_impresiones)
+        self.assertIn("estado", columnas_impresiones)
         self.assertIn("requiere_referencia", columnas_metodos)
         self.assertIsNotNone(version)
         self.assertIsNotNone(version_008)
         self.assertIsNotNone(version_009)
         self.assertIsNotNone(version_011)
+        self.assertIsNotNone(version_023)
         self.assertIsNotNone(deposito)
         self.assertEqual(deposito[0], 1)
         self.assertIsNotNone(correlativo)
         self.assertEqual(titulo_documento[0], "RECIBO DE PAGO")
+        self.assertIsNotNone(impresora_termica)
+        self.assertIsNotNone(impresora_reportes)
 
     def test_configuracion_recibo_expone_firma_compartida(self) -> None:
         with closing(sqlite3.connect(self.ruta_db)) as conexion:
@@ -261,7 +292,7 @@ class TestPagos(unittest.TestCase):
         self.assertEqual(resultado.codigo, "VALIDACION")
         self.assertIn("suspendida", resultado.mensaje.lower())
 
-    def test_comprobante_pdf_backend_genera_archivo_real_sin_tocar_metadata(self) -> None:
+    def test_pago_crea_comprobante_sqlite_y_deja_impresion_pendiente_sin_pdf(self) -> None:
         casa_id = self._obtener_casa_por_dni("0801199000022")
         metodo_id = self._obtener_metodo("EFECTIVO")
         resultado = self.servicio.registrar_pago(
@@ -276,22 +307,36 @@ class TestPagos(unittest.TestCase):
 
         self.assertTrue(resultado.exito, resultado.mensaje)
         assert resultado.comprobante is not None
-        ruta_pdf = self.servicio.generar_comprobante_pdf(resultado.comprobante.pago_id)
-
-        self.assertTrue(Path(ruta_pdf).exists())
-        self.assertEqual(Path(ruta_pdf).suffix.lower(), ".pdf")
-        self.assertTrue(Path(ruta_pdf).read_bytes().startswith(b"%PDF"))
+        self.assertIn("Impresion pendiente", resultado.mensaje)
         with closing(sqlite3.connect(self.ruta_db)) as conexion:
             fila = conexion.execute(
                 """
-                SELECT COALESCE(ruta_archivo, ''), COALESCE(formato_salida, '')
+                SELECT numero_comprobante, tipo_comprobante, saldo_posterior_centavos
                 FROM comprobantes
                 WHERE pago_id = ?;
                 """,
                 (resultado.comprobante.pago_id,),
             ).fetchone()
-        self.assertEqual(fila[0], "")
-        self.assertEqual(fila[1], "PDF")
+            intento = conexion.execute(
+                """
+                SELECT tipo_copia, es_reimpresion, estado, mensaje_error
+                FROM comprobantes_impresiones
+                WHERE comprobante_id = (SELECT id FROM comprobantes WHERE pago_id = ?)
+                ORDER BY id DESC
+                LIMIT 1;
+                """,
+                (resultado.comprobante.pago_id,),
+            ).fetchone()
+        self.assertIsNotNone(fila)
+        self.assertTrue(fila[0].startswith("REC-"))
+        self.assertEqual(fila[1], "MENSUALIDAD")
+        self.assertGreaterEqual(fila[2], 0)
+        self.assertEqual(intento[0], "AMBAS")
+        self.assertEqual(intento[1], 0)
+        self.assertEqual(intento[2], "FALLIDO")
+        self.assertIn("impresora termica", intento[3])
+        ruta_comprobantes = self.raiz_temporal / "exportaciones" / "comprobantes"
+        self.assertFalse(any(ruta_comprobantes.glob("*.pdf")) if ruta_comprobantes.exists() else False)
 
     def test_adelanto_rechaza_deuda_vencida_no_mensual(self) -> None:
         casa_id = self._crear_casa_activa_sin_cargos()
@@ -455,45 +500,33 @@ class TestPagos(unittest.TestCase):
         self.assertFalse(hasattr(vista._flujo_mensual, "_barra_progreso"))
         self.assertEqual(vista._flujo_mensual._tabla_casas.rowCount(), 0)
         self.assertEqual(vista._tabs.property("estadoMensual"), None)
-        self.assertEqual(vista._label_estado_apertura.text(), "Abrir")
-        self.assertEqual(vista._label_estado_impresion.text(), "Imprimir")
+        self.assertEqual(vista._label_estado_apertura.text(), "ESC/POS")
+        self.assertEqual(vista._label_estado_impresion.text(), "Pendientes")
         self.assertIsInstance(vista._tabs.widget(3), vista_pagos_modulo.FlujoPagoPlan)
         vista.aplicar_tema("tema_sigqua")
         self.assertEqual(vista._tema_actual, "tema_sigqua")
         self.assertEqual(vista._flujo_mensual._tema_actual, "tema_sigqua")
         self.assertIn('font-family: "Segoe UI"', vista.styleSheet())
 
-    def test_vista_notifica_comprobante_pdf_generado(self) -> None:
+    def test_vista_notifica_resultado_de_impresion_termica(self) -> None:
         _app = QApplication.instance() or QApplication([])
         vista = VistaPagos()
-        ruta = self.raiz_temporal / "exportaciones" / "comprobantes" / "REC-000001.pdf"
-        vista.mostrar_comprobante(str(ruta))
-        self.assertIn("REC-000001.pdf", vista.label_mensaje.text())
-        self.assertIn(str(ruta.resolve()), vista.label_mensaje.text())
+        vista.mostrar_resultado_impresion("Comprobante REC-000001 enviado a impresion termica.")
+        self.assertIn("REC-000001", vista.label_mensaje.text())
+        self.assertIn("impresion termica", vista.label_mensaje.text().lower())
         vista.close()
 
-    def test_vista_muestra_advertencia_si_falla_impresion_automatica(self) -> None:
+    def test_vista_muestra_advertencia_si_falla_impresion_termica(self) -> None:
         _app = QApplication.instance() or QApplication([])
         vista = VistaPagos()
-        helper_original = vista_pagos_modulo.ejecutar_acciones_documento_pdf
-        vista_pagos_modulo.ejecutar_acciones_documento_pdf = lambda *_args, **_kwargs: (  # type: ignore[assignment]
-            "Comprobante PDF generado correctamente: REC-000001.pdf. "
-            "Ruta del documento: C:/tmp/REC-000001.pdf. "
-            "no se detecto una impresora disponible; verifica que este conectada y encendida."
+        vista.mostrar_resultado_impresion(
+            "Pago registrado; no hay impresora termica configurada para imprimir el comprobante.",
+            es_error=True,
         )
 
-        try:
-            vista.mostrar_comprobante(
-                str(self.raiz_temporal / "exportaciones" / "comprobantes" / "REC-000001.pdf"),
-                abrir_automaticamente=False,
-                imprimir_automaticamente=True,
-            )
-        finally:
-            vista_pagos_modulo.ejecutar_acciones_documento_pdf = helper_original  # type: ignore[assignment]
-
         self.assertIn("impresora", vista.label_mensaje.text().lower())
-        self.assertIn("conectada", vista.label_mensaje.text().lower())
-        self.assertIn("ruta del documento", vista.label_mensaje.text().lower())
+        self.assertIn("termica", vista.label_mensaje.text().lower())
+        self.assertIn("configurada", vista.label_mensaje.text().lower())
         vista.close()
 
     def test_vista_muestra_estado_documental_en_label(self) -> None:
@@ -508,7 +541,9 @@ class TestPagos(unittest.TestCase):
             mostrar_casas=True,
         )
 
-        self.assertTrue(vista._label_estado_apertura.property("activo"))
+        self.assertEqual(vista._label_estado_apertura.text(), "Sin impresora")
+        self.assertFalse(vista._label_estado_apertura.property("activo"))
+        self.assertIn("Pendientes:", vista._label_estado_impresion.text())
         self.assertFalse(vista._label_estado_impresion.property("activo"))
         vista.close()
 
@@ -717,22 +752,19 @@ class TestPagos(unittest.TestCase):
         self.assertIn("Cuota 1", flujo._visor_resumen.toPlainText())
         self.assertTrue(flujo._boton_confirmar.isEnabled())
 
-    def test_registro_desde_resumen_persiste_y_abre_comprobante(self) -> None:
+    def test_registro_desde_resumen_persiste_y_notifica_impresion_pendiente(self) -> None:
         app = QApplication.instance() or QApplication([])
         vista = VistaPagos()
         controlador = ControladorPagos(self.servicio, vista)
         flujo = vista._flujo_mensual
         controlador._actor = type("ActorPrueba", (), {"identificador": 1})()
-        comprobante_abierto: dict[str, bool] = {"ok": False}
+        mensajes: list[str] = []
 
         def _confirmar(*_args, **_kwargs):
             return True
 
-        def _mostrar_comprobante(**_kwargs):
-            comprobante_abierto["ok"] = True
-
         vista.confirmar_pago = _confirmar  # type: ignore[method-assign]
-        vista.mostrar_comprobante = _mostrar_comprobante  # type: ignore[method-assign]
+        vista.mostrar_mensaje = lambda mensaje, es_error=False: mensajes.append(mensaje)  # type: ignore[method-assign]
 
         with closing(sqlite3.connect(self.ruta_db)) as conexion:
             total_antes = conexion.execute("SELECT COUNT(*) FROM pagos;").fetchone()[0]
@@ -753,7 +785,8 @@ class TestPagos(unittest.TestCase):
             total_despues = conexion.execute("SELECT COUNT(*) FROM pagos;").fetchone()[0]
 
         self.assertEqual(total_despues, total_antes + 1)
-        self.assertTrue(comprobante_abierto["ok"])
+        self.assertTrue(mensajes)
+        self.assertIn("Impresion pendiente", mensajes[-1])
         self.assertEqual(flujo._stack.currentIndex(), flujo.PASO_BUSQUEDA)
 
     def _obtener_casa_por_dni(self, dni: str) -> int:

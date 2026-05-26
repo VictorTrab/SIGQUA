@@ -22,7 +22,6 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
 import modulos.morosidad.controlador as controlador_morosidad_modulo  # noqa: E402
-import modulos.reportes.controlador as controlador_reportes_modulo  # noqa: E402
 from modulos.morosidad.controlador import ControladorMorosidad  # noqa: E402
 from modulos.morosidad.entidades import FILTRO_MOROSIDAD_SEVERA  # noqa: E402
 from modulos.morosidad.repositorio import RepositorioMorosidadSQLite  # noqa: E402
@@ -229,7 +228,7 @@ class TestMorosidadReportes(unittest.TestCase):
         self.assertIn("abierto automaticamente", mensajes[-1].lower())
         vista.close()
 
-    def test_controlador_reportes_aplica_politica_documental_al_exportar_pdf(self) -> None:
+    def test_controlador_reportes_exporta_pdf_solo_bajo_demanda(self) -> None:
         _app = QApplication.instance() or QApplication([])
         servicio = ServicioReportes(RepositorioReportesSQLite(self.gestor_base_datos))
         vista = VistaReportes()
@@ -238,21 +237,16 @@ class TestMorosidadReportes(unittest.TestCase):
         vista.mostrar_mensaje = lambda mensaje, es_error=False: mensajes.append(mensaje)  # type: ignore[method-assign]
         ruta_pdf = self.raiz_temporal / "exportaciones" / "reportes" / "historial_pagos.pdf"
         vista.solicitar_ruta_exportacion = lambda _codigo: str(ruta_pdf)  # type: ignore[method-assign]
-        helper_original = controlador_reportes_modulo.ejecutar_acciones_documento_pdf
-        controlador_reportes_modulo.ejecutar_acciones_documento_pdf = (  # type: ignore[assignment]
-            lambda ruta, **_kwargs: f"Documento abierto automaticamente desde {ruta}"
+
+        controlador._exportar(
+            "ingresos_diarios",
+            {"fecha_desde": "2026-01-01", "fecha_hasta": "2026-12-31"},
         )
 
-        try:
-            controlador._exportar(
-                "ingresos_diarios",
-                {"fecha_desde": "2026-01-01", "fecha_hasta": "2026-12-31"},
-            )
-        finally:
-            controlador_reportes_modulo.ejecutar_acciones_documento_pdf = helper_original  # type: ignore[assignment]
-
         self.assertTrue(mensajes)
-        self.assertIn("abierto automaticamente", mensajes[-1].lower())
+        self.assertIn("reporte pdf generado correctamente", mensajes[-1].lower())
+        self.assertTrue(ruta_pdf.exists())
+        self.assertTrue(ruta_pdf.read_bytes().startswith(b"%PDF"))
         vista.close()
 
 

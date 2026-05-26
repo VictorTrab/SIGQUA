@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import sys
+import tempfile
 
 from comun.configuracion.gestor_rutas import GestorRutas
 from comun.configuracion.identidad_empresa import (
@@ -14,6 +17,7 @@ from comun.respaldo import (
     ConfiguracionRespaldoLocal,
     ServicioRespaldoLocal,
 )
+from comun.impresion_termica import TransporteWindowsRawEscpos
 from modulos.configuracion.entidades import (
     EstadoConfiguracion,
     FacturaConfiguracion,
@@ -26,6 +30,8 @@ from modulos.configuracion.entidades import (
     SeguridadConfiguracion,
 )
 from modulos.configuracion.repositorio import RepositorioConfiguracion
+from modulos.comprobantes import ServicioComprobantes
+from reportlab.pdfgen import canvas
 
 
 CLAVES_DATOS_EMPRESA = CLAVES_IDENTIDAD_EMPRESA + CLAVES_IDENTIDAD_LEGADAS_JUNTA
@@ -53,11 +59,13 @@ CLAVES_FACTURA = (
     "factura.mostrar_telefono",
     "factura.mostrar_direccion",
     "factura.mostrar_identificador_fiscal",
-    "factura.formato_salida",
     "documentos.firma_habilitada",
     "documentos.firma_texto_linea",
-    "documentos.abrir_pdf_automaticamente",
-    "documentos.imprimir_pdf_automaticamente",
+    "impresion_termica.nombre_impresora",
+    "impresion_termica.ancho_papel_mm",
+    "impresion_termica.corte_automatico",
+    "impresion_termica.codigo_pagina",
+    "impresion_reportes.nombre_impresora",
 )
 CLAVES_SISTEMA = (
     "sistema.nombre",
@@ -82,8 +90,6 @@ CLAVES_LABORATORIO_VISUAL = (
     "ui.laboratorio.modal_color_primario",
     "ui.laboratorio.modal_color_secundario",
 )
-FORMATO_SALIDA_FACTURA = "PDF"
-FORMATOS_SALIDA_FACTURA_VALIDOS = (FORMATO_SALIDA_FACTURA,)
 TEXTO_FIRMA_PREDETERMINADO = "Firma autorizada"
 DURACIONES_SESION_HORAS_VALIDAS = (0.5, 1.0, 2.0, 4.0, 8.0, 12.0)
 MAXIMO_INTENTOS_FALLIDOS_OPERATIVO = 5
@@ -104,10 +110,12 @@ class ServicioConfiguracion:
         repositorio_configuracion: RepositorioConfiguracion,
         gestor_rutas: GestorRutas,
         servicio_respaldo: ServicioRespaldoLocal | None = None,
+        servicio_comprobantes: ServicioComprobantes | None = None,
     ) -> None:
         self._repositorio_configuracion = repositorio_configuracion
         self._gestor_rutas = gestor_rutas
         self._servicio_respaldo = servicio_respaldo
+        self._servicio_comprobantes = servicio_comprobantes
 
     def obtener_estado(self) -> EstadoConfiguracion:
         claves = (
@@ -187,17 +195,26 @@ class ServicioConfiguracion:
             mostrar_identificador_fiscal=self._a_booleano(
                 self._valor_parametro(parametros, "factura.mostrar_identificador_fiscal", "0")
             ),
-            formato_salida=FORMATO_SALIDA_FACTURA,
             firma_habilitada=self._a_booleano(
                 self._valor_parametro(parametros, "documentos.firma_habilitada", "0")
             ),
             firma_texto_linea=firma_texto_linea,
-            abrir_pdf_automaticamente=self._a_booleano(
-                self._valor_parametro(parametros, "documentos.abrir_pdf_automaticamente", "1")
+            impresora_termica_nombre=self._valor_parametro(
+                parametros, "impresion_termica.nombre_impresora", ""
             ),
-            imprimir_pdf_automaticamente=self._a_booleano(
-                self._valor_parametro(parametros, "documentos.imprimir_pdf_automaticamente", "0")
+            impresora_termica_ancho_mm=self._a_entero(
+                self._valor_parametro(parametros, "impresion_termica.ancho_papel_mm", "80")
             ),
+            impresora_termica_corte_automatico=self._a_booleano(
+                self._valor_parametro(parametros, "impresion_termica.corte_automatico", "1")
+            ),
+            impresora_termica_codigo_pagina=self._valor_parametro(
+                parametros, "impresion_termica.codigo_pagina", "cp850"
+            ) or "cp850",
+            impresora_reportes_nombre=self._valor_parametro(
+                parametros, "impresion_reportes.nombre_impresora", ""
+            ),
+            comprobantes_pendientes_impresion=self._contar_pendientes_impresion(),
             correlativo_actual=self._formatear_correlativo(correlativo_actual),
             proximo_correlativo=self._formatear_correlativo(correlativo_actual + 1),
             ultimo_comprobante_emitido=ultimo_comprobante if ultimo_comprobante else "Sin comprobantes emitidos",
@@ -224,7 +241,7 @@ class ServicioConfiguracion:
             organizar_por_periodo=configuracion_respaldo.organizar_por_periodo,
             retencion_dias=configuracion_respaldo.retencion_dias,
             proxima_ejecucion_programada="Activo al cerrar sesion",
-            ruta_exportaciones_comprobantes=str(self._gestor_rutas.obtener_ruta_exportaciones_comprobantes()),
+            ruta_exportaciones_comprobantes="No aplica: los comprobantes se imprimen por ESC/POS.",
             ruta_exportaciones_reportes=str(self._gestor_rutas.obtener_ruta_exportaciones_reportes()),
         )
         informacion = InformacionConfiguracion(
@@ -366,15 +383,17 @@ class ServicioConfiguracion:
         texto_pie: str,
         texto_legal_inferior: str,
         etiqueta_copia: str,
-        formato_salida: str,
         mostrar_correo: bool,
         mostrar_telefono: bool,
         mostrar_direccion: bool,
         mostrar_identificador_fiscal: bool,
         firma_habilitada: bool,
         firma_texto_linea: str,
-        abrir_pdf_automaticamente: bool = True,
-        imprimir_pdf_automaticamente: bool = False,
+        impresora_termica_nombre: str = "",
+        impresora_termica_ancho_mm: int = 80,
+        impresora_termica_corte_automatico: bool = True,
+        impresora_termica_codigo_pagina: str = "cp850",
+        impresora_reportes_nombre: str = "",
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
         titulo_documento = titulo_documento.strip()
@@ -383,8 +402,10 @@ class ServicioConfiguracion:
         texto_pie = texto_pie.strip()
         texto_legal_inferior = texto_legal_inferior.strip()
         etiqueta_copia = etiqueta_copia.strip()
-        formato_salida = formato_salida.strip().upper()
         firma_texto_linea = firma_texto_linea.strip() or TEXTO_FIRMA_PREDETERMINADO
+        impresora_termica_nombre = impresora_termica_nombre.strip()
+        impresora_termica_codigo_pagina = impresora_termica_codigo_pagina.strip() or "cp850"
+        impresora_reportes_nombre = impresora_reportes_nombre.strip()
 
         if not titulo_documento:
             return ResultadoGestionConfiguracion(False, "Indica el titulo principal del recibo.", "VALIDACION")
@@ -392,8 +413,8 @@ class ServicioConfiguracion:
             return ResultadoGestionConfiguracion(False, "Indica el texto inferior del comprobante.", "VALIDACION")
         if not etiqueta_copia:
             return ResultadoGestionConfiguracion(False, "Indica la etiqueta visible del recibo.", "VALIDACION")
-        if formato_salida not in FORMATOS_SALIDA_FACTURA_VALIDOS:
-            return ResultadoGestionConfiguracion(False, "El formato de salida vigente es PDF.", "VALIDACION")
+        if impresora_termica_ancho_mm not in {58, 80}:
+            return ResultadoGestionConfiguracion(False, "El ancho termico debe ser 58 mm u 80 mm.", "VALIDACION")
         try:
             self._repositorio_configuracion.actualizar_valores(
                 {
@@ -403,15 +424,17 @@ class ServicioConfiguracion:
                     "factura.texto_pie": texto_pie,
                     "factura.texto_legal_inferior": texto_legal_inferior,
                     "factura.etiqueta_copia": etiqueta_copia,
-                    "factura.formato_salida": formato_salida,
                     "factura.mostrar_correo": "1" if mostrar_correo else "0",
                     "factura.mostrar_telefono": "1" if mostrar_telefono else "0",
                     "factura.mostrar_direccion": "1" if mostrar_direccion else "0",
                     "factura.mostrar_identificador_fiscal": "1" if mostrar_identificador_fiscal else "0",
                     "documentos.firma_habilitada": "1" if firma_habilitada else "0",
                     "documentos.firma_texto_linea": firma_texto_linea,
-                    "documentos.abrir_pdf_automaticamente": "1" if abrir_pdf_automaticamente else "0",
-                    "documentos.imprimir_pdf_automaticamente": "1" if imprimir_pdf_automaticamente else "0",
+                    "impresion_termica.nombre_impresora": impresora_termica_nombre,
+                    "impresion_termica.ancho_papel_mm": str(impresora_termica_ancho_mm),
+                    "impresion_termica.corte_automatico": "1" if impresora_termica_corte_automatico else "0",
+                    "impresion_termica.codigo_pagina": impresora_termica_codigo_pagina,
+                    "impresion_reportes.nombre_impresora": impresora_reportes_nombre,
                 },
                 actor_id=actor_id,
             )
@@ -586,6 +609,36 @@ class ServicioConfiguracion:
     def crear_respaldo_automatico(self, actor_id: int | None = None) -> ResultadoGestionConfiguracion:
         return self._crear_respaldo("AUTOMATICO", actor_id=actor_id)
 
+    def probar_impresora_comprobantes(self, nombre_impresora: str) -> ResultadoGestionConfiguracion:
+        nombre_impresora = nombre_impresora.strip()
+        if not nombre_impresora:
+            return ResultadoGestionConfiguracion(False, "Configura primero la impresora de comprobantes.", "VALIDACION")
+        datos = (
+            b"\x1b@"
+            + "SIGQUA\nPrueba de impresora de comprobantes\nESC/POS Windows RAW\n\n".encode("cp850", errors="replace")
+            + b"\x1dV\x00"
+        )
+        resultado = TransporteWindowsRawEscpos().enviar(nombre_impresora, datos, "SIGQUA prueba comprobantes")
+        return ResultadoGestionConfiguracion(resultado.exito, resultado.mensaje, resultado.codigo)
+
+    def probar_impresora_reportes(self, nombre_impresora: str) -> ResultadoGestionConfiguracion:
+        nombre_impresora = nombre_impresora.strip()
+        if not nombre_impresora:
+            return ResultadoGestionConfiguracion(False, "Configura primero la impresora de reportes.", "VALIDACION")
+        if sys.platform != "win32" or not hasattr(os, "startfile"):
+            return ResultadoGestionConfiguracion(False, "La prueba de impresion de reportes solo esta disponible en Windows.", "ERROR_CONFIG")
+        ruta_temporal = Path(tempfile.gettempdir()) / "sigqua_prueba_impresora_reportes.pdf"
+        documento = canvas.Canvas(str(ruta_temporal))
+        documento.drawString(72, 740, "SIGQUA")
+        documento.drawString(72, 720, "Prueba de impresora de reportes PDF")
+        documento.drawString(72, 700, f"Impresora: {nombre_impresora}")
+        documento.save()
+        try:
+            os.startfile(str(ruta_temporal), "printto", f'"{nombre_impresora}"')  # type: ignore[attr-defined]
+        except OSError as error:
+            return ResultadoGestionConfiguracion(False, f"No fue posible enviar la prueba PDF. {error}", "ERROR_IMPRESION")
+        return ResultadoGestionConfiguracion(True, "Prueba enviada a la impresora de reportes.", "OK")
+
     def _crear_respaldo(
         self,
         tipo_respaldo: str,
@@ -739,6 +792,14 @@ class ServicioConfiguracion:
             self._valor_parametro(parametros, "documentos.firma_texto_linea", "").strip()
             or TEXTO_FIRMA_PREDETERMINADO
         )
+
+    def _contar_pendientes_impresion(self) -> int:
+        if self._servicio_comprobantes is None:
+            return 0
+        try:
+            return self._servicio_comprobantes.contar_pendientes_impresion()
+        except Exception:
+            return 0
 
     def _validar_directorio_respaldo(self, ruta: str) -> tuple[bool, str]:
         if self._servicio_respaldo is None:

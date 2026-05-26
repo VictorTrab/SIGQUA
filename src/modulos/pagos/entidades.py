@@ -156,8 +156,6 @@ class ComprobantePago:
     total_pagado_centavos: int = 0
     saldo_posterior_centavos: int = 0
     detalles: tuple[str, ...] = ()
-    formato_salida: str = "PDF"
-    ruta_archivo: str = ""
 
 
 @dataclass(slots=True)
@@ -183,8 +181,6 @@ class ConfiguracionReciboPago:
     mostrar_identificador_fiscal: bool
     firma_habilitada: bool
     firma_texto_linea: str
-    abrir_pdf_automaticamente: bool = True
-    imprimir_pdf_automaticamente: bool = False
 
 
 @dataclass(slots=True)
@@ -275,5 +271,5 @@ class EstadoModuloPagos:
     casas: tuple[CasaPago, ...]
     metodos_pago: tuple[MetodoPago, ...]
     cobrar_mensualidad_prorrateada_activacion: bool = False
-    abrir_pdf_automaticamente: bool = True
-    imprimir_pdf_automaticamente: bool = False
+    impresora_termica_configurada: bool = False
+    comprobantes_pendientes_impresion: int = 0

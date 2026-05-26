@@ -9,10 +9,10 @@ from comun.configuracion.identidad_empresa import (
     CLAVES_IDENTIDAD_LEGADAS_JUNTA,
     construir_identidad_empresa,
 )
+from comun.configuracion.documentos import lineas_encabezado_documental
 from comun.configuracion.gestor_rutas import GestorRutas
 from modulos.configuracion.repositorio import RepositorioConfiguracionSQLite
 from modulos.documentos import ServicioReportePdf
-from modulos.documentos.servicios.servicio_comprobante_pago import ServicioComprobantePago
 from modulos.reportes.entidades import (
     EstadoReportes,
     REPORTE_ABONADOS_SIN_DEUDA,
@@ -38,8 +38,6 @@ class ServicioReportes:
         "factura.mostrar_telefono",
         "factura.mostrar_direccion",
         "factura.mostrar_identificador_fiscal",
-        "documentos.abrir_pdf_automaticamente",
-        "documentos.imprimir_pdf_automaticamente",
     )
 
     CATALOGO_REPORTES = (
@@ -149,27 +147,6 @@ class ServicioReportes:
             ruta_destino=ruta_destino,
         )
 
-    def obtener_politica_documental(self) -> tuple[bool, bool]:
-        if self._repositorio_configuracion is None:
-            return True, False
-        parametros = self._repositorio_configuracion.listar_por_claves(
-            (
-                "documentos.abrir_pdf_automaticamente",
-                "documentos.imprimir_pdf_automaticamente",
-            )
-        )
-        abrir = self._a_booleano(
-            parametros.get("documentos.abrir_pdf_automaticamente").valor
-            if parametros.get("documentos.abrir_pdf_automaticamente")
-            else "1"
-        )
-        imprimir = self._a_booleano(
-            parametros.get("documentos.imprimir_pdf_automaticamente").valor
-            if parametros.get("documentos.imprimir_pdf_automaticamente")
-            else "0"
-        )
-        return abrir, imprimir
-
     @staticmethod
     def _normalizar_filtros(filtros: dict[str, str] | None) -> dict[str, str]:
         base = {
@@ -219,9 +196,7 @@ class ServicioReportes:
                 valores.get("factura.mostrar_identificador_fiscal", "0")
             )
 
-        return tuple(
-            ServicioComprobantePago.lineas_encabezado_desde_configuracion(_ConfiguracionTemporal())
-        )
+        return tuple(lineas_encabezado_documental(_ConfiguracionTemporal()))
 
     @staticmethod
     def _a_booleano(valor: str) -> bool:

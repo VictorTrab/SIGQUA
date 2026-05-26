@@ -122,4 +122,3 @@ class ResultadoHistorialPagos:
     exito: bool
     mensaje: str
     codigo: str = ""
-    ruta_documento: str = ""

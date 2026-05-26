@@ -6,6 +6,7 @@ from typing import Callable
 
 from PySide6.QtCore import Qt, QTimer, Signal, QUrl
 from PySide6.QtGui import QDesktopServices
+from PySide6.QtPrintSupport import QPrinterInfo
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -80,17 +81,21 @@ class VistaConfiguracion(QWidget):
         str,
         str,
         str,
-        str,
         bool,
         bool,
         bool,
         bool,
         bool,
         str,
+        str,
+        int,
         bool,
-        bool,
+        str,
+        str,
     )
     guardar_parametros_cobro_solicitado = Signal(int, bool, int, bool, int, bool, bool, int, int, int)
+    probar_impresora_comprobantes_solicitado = Signal(str)
+    probar_impresora_reportes_solicitado = Signal(str)
     guardar_operacion_respaldo_solicitado = Signal(
         str,
         str,
@@ -171,17 +176,20 @@ class VistaConfiguracion(QWidget):
         self._campo_texto_pie.setPlainText(estado.factura.texto_pie)
         self._campo_texto_legal_inferior.setPlainText(estado.factura.texto_legal_inferior)
         self._campo_etiqueta_copia.setText(estado.factura.etiqueta_copia)
-        self._combo_formato_salida.setCurrentText(estado.factura.formato_salida)
+        self._seleccionar_impresora(self._combo_impresora_comprobantes, estado.factura.impresora_termica_nombre)
+        self._combo_ancho_termico.setCurrentText(f"{estado.factura.impresora_termica_ancho_mm} mm")
+        self._check_corte_termico.setChecked(estado.factura.impresora_termica_corte_automatico)
+        self._campo_codigo_pagina_termico.setText(estado.factura.impresora_termica_codigo_pagina)
+        self._seleccionar_impresora(self._combo_impresora_reportes, estado.factura.impresora_reportes_nombre)
         self._check_mostrar_correo.setChecked(estado.factura.mostrar_correo)
         self._check_mostrar_telefono.setChecked(estado.factura.mostrar_telefono)
         self._check_mostrar_direccion.setChecked(estado.factura.mostrar_direccion)
         self._check_mostrar_identificador.setChecked(estado.factura.mostrar_identificador_fiscal)
         self._check_firma_habilitada.setChecked(estado.factura.firma_habilitada)
-        self._check_abrir_pdf_automatico.setChecked(estado.factura.abrir_pdf_automaticamente)
-        self._check_imprimir_pdf_automatico.setChecked(estado.factura.imprimir_pdf_automaticamente)
         self._campo_firma_texto_linea.setText(estado.factura.firma_texto_linea)
         self._valor_total_comprobantes.setText(str(estado.factura.total_comprobantes_emitidos))
         self._valor_proximo_correlativo.setText(estado.factura.proximo_correlativo)
+        self._valor_pendientes_impresion.setText(str(estado.factura.comprobantes_pendientes_impresion))
 
         self._campo_precio_mensual.establecer_desde_centavos(
             estado.parametros_cobro.precio_mensual_centavos
@@ -420,24 +428,23 @@ class VistaConfiguracion(QWidget):
         self._campo_texto_legal_inferior = QPlainTextEdit()
         self._campo_texto_legal_inferior.setFixedHeight(64)
         self._campo_etiqueta_copia = QLineEdit()
-        self._combo_formato_salida = QComboBox()
-        self._combo_formato_salida.addItem("PDF")
-        self._combo_formato_salida.setEnabled(False)
+        self._combo_impresora_comprobantes = self._crear_combo_impresoras()
+        self._combo_impresora_reportes = self._crear_combo_impresoras()
+        self._combo_ancho_termico = QComboBox()
+        self._combo_ancho_termico.addItems(["80 mm", "58 mm"])
+        self._check_corte_termico = QCheckBox("Cortar papel automaticamente")
+        self._campo_codigo_pagina_termico = QLineEdit()
+        self._campo_codigo_pagina_termico.setPlaceholderText("cp850")
         self._check_mostrar_correo = QCheckBox("Mostrar correo institucional")
         self._check_mostrar_telefono = QCheckBox("Mostrar telefono institucional")
         self._check_mostrar_direccion = QCheckBox("Mostrar direccion institucional")
         self._check_mostrar_identificador = QCheckBox("Mostrar identificador fiscal")
         self._check_firma_habilitada = QCheckBox("Mostrar línea de firma en documentos")
-        self._check_abrir_pdf_automatico = QCheckBox(
-            "Abrir automaticamente el comprobante PDF al registrar un pago"
-        )
-        self._check_imprimir_pdf_automatico = QCheckBox(
-            "Enviar automaticamente el comprobante PDF a impresion"
-        )
         self._campo_firma_texto_linea = QLineEdit()
         self._campo_firma_texto_linea.setPlaceholderText("Firma autorizada")
         self._valor_total_comprobantes = self._crear_valor_seguridad()
         self._valor_proximo_correlativo = self._crear_valor_seguridad()
+        self._valor_pendientes_impresion = self._crear_valor_seguridad()
 
         grilla_superior = QGridLayout()
         grilla_superior.setHorizontalSpacing(12)
@@ -474,9 +481,31 @@ class VistaConfiguracion(QWidget):
                 self._check_mostrar_telefono,
                 self._check_mostrar_direccion,
                 self._check_mostrar_identificador,
-                self._check_abrir_pdf_automatico,
-                self._check_imprimir_pdf_automatico,
-                self._crear_bloque_campo("Formato de salida", self._combo_formato_salida),
+            ],
+        )
+        panel_impresoras = self._crear_panel(
+            "Impresoras",
+            "Impresoras predeterminadas independientes para tickets termicos y reportes PDF en carta.",
+            [
+                self._crear_bloque_campo_con_accion(
+                    "Impresora de comprobantes",
+                    self._combo_impresora_comprobantes,
+                    "Probar",
+                    lambda: self.probar_impresora_comprobantes_solicitado.emit(
+                        self._combo_impresora_comprobantes.currentText()
+                    ),
+                ),
+                self._crear_bloque_campo("Ancho de papel termico", self._combo_ancho_termico),
+                self._check_corte_termico,
+                self._crear_bloque_campo("Codigo de pagina ESC/POS", self._campo_codigo_pagina_termico),
+                self._crear_bloque_campo_con_accion(
+                    "Impresora de reportes",
+                    self._combo_impresora_reportes,
+                    "Probar",
+                    lambda: self.probar_impresora_reportes_solicitado.emit(
+                        self._combo_impresora_reportes.currentText()
+                    ),
+                ),
             ],
         )
         panel_firma = self._crear_panel(
@@ -500,6 +529,7 @@ class VistaConfiguracion(QWidget):
             [
                 self._crear_fila_resumen("Total de comprobantes", self._valor_total_comprobantes),
                 self._crear_fila_resumen("Proximo correlativo", self._valor_proximo_correlativo),
+                self._crear_fila_resumen("Pendientes de impresion", self._valor_pendientes_impresion),
             ],
         )
 
@@ -512,20 +542,23 @@ class VistaConfiguracion(QWidget):
                 self._campo_texto_pie.toPlainText(),
                 self._campo_texto_legal_inferior.toPlainText(),
                 self._campo_etiqueta_copia.text(),
-                self._combo_formato_salida.currentText(),
                 self._check_mostrar_correo.isChecked(),
                 self._check_mostrar_telefono.isChecked(),
                 self._check_mostrar_direccion.isChecked(),
                 self._check_mostrar_identificador.isChecked(),
                 self._check_firma_habilitada.isChecked(),
                 self._campo_firma_texto_linea.text(),
-                self._check_abrir_pdf_automatico.isChecked(),
-                self._check_imprimir_pdf_automatico.isChecked(),
+                self._combo_impresora_comprobantes.currentText(),
+                self._resolver_ancho_termico_actual(),
+                self._check_corte_termico.isChecked(),
+                self._campo_codigo_pagina_termico.text(),
+                self._combo_impresora_reportes.currentText(),
             )
         )
 
         contenido = self._crear_contenedor_scroll()
         contenido.widget().layout().addWidget(panel_factura)
+        contenido.widget().layout().addWidget(panel_impresoras)
         contenido.widget().layout().addWidget(panel_firma)
         contenido.widget().layout().addWidget(panel_preview)
         contenido.widget().layout().addWidget(panel_resumen)
@@ -808,7 +841,7 @@ class VistaConfiguracion(QWidget):
                 ),
                 bloque_comprobante=(
                     ("Proximo recibo", estado.factura.proximo_correlativo),
-                    ("Formato", estado.factura.formato_salida),
+                    ("Salida", "Ticket termico ESC/POS"),
                     ("Tipo", "Mensualidad"),
                 ),
                 bloque_servicio=(
@@ -903,6 +936,28 @@ class VistaConfiguracion(QWidget):
         layout.addWidget(label)
         layout.addWidget(campo)
         return bloque
+
+    def _crear_combo_impresoras(self) -> QComboBox:
+        combo = QComboBox()
+        combo.addItem("")
+        for impresora in QPrinterInfo.availablePrinters():
+            nombre = impresora.printerName()
+            if nombre:
+                combo.addItem(nombre)
+        combo.setEditable(True)
+        return combo
+
+    @staticmethod
+    def _seleccionar_impresora(combo: QComboBox, nombre: str) -> None:
+        nombre = nombre.strip()
+        indice = combo.findText(nombre)
+        if indice < 0 and nombre:
+            combo.addItem(nombre)
+            indice = combo.findText(nombre)
+        combo.setCurrentIndex(max(0, indice))
+
+    def _resolver_ancho_termico_actual(self) -> int:
+        return 58 if "58" in self._combo_ancho_termico.currentText() else 80
 
     def _crear_bloque_campo_con_accion(
         self,

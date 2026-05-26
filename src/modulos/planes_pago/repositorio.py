@@ -733,11 +733,10 @@ class RepositorioPlanesPagoSQLite:
                 pago_id,
                 numero_comprobante,
                 tipo_comprobante,
-                formato_salida,
                 saldo_posterior_centavos,
                 generado_por
             )
-            VALUES (?, ?, 'PLAN_PAGO', 'PDF', ?, ?);
+            VALUES (?, ?, 'PLAN_PAGO', ?, ?);
             """,
             (pago_id, numero_comprobante, max(plan.saldo_financiado_centavos, 0), actor_id),
         )

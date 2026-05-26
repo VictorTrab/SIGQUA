@@ -39,7 +39,6 @@ class ControladorPagos:
         self.vista_pagos.registrar_pago_conexion_solicitado.connect(self._registrar_pago_conexion)
         self.vista_pagos.registrar_pago_reconexion_solicitado.connect(self._registrar_pago_reconexion)
         self.vista_pagos.registrar_pago_plan_solicitado.connect(self._registrar_pago_plan)
-        self.vista_pagos.comprobante_solicitado.connect(self._mostrar_comprobante)
 
     def _refrescar(self, filtro: str = "") -> None:
         estado = self.servicio_pagos.obtener_estado(filtro=filtro)
@@ -164,15 +163,12 @@ class ControladorPagos:
         resultado = self.servicio_pagos.registrar_pago(formulario, actor_id=actor_id)
         self.vista_pagos.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
-            comprobante_id = resultado.comprobante.pago_id if resultado.comprobante is not None else None
             self.vista_pagos.reiniciar_flujo_mensual()
             self._refrescar()
             bus_actualizaciones_modulos.emitir(
                 modulo_origen="pagos",
                 modulos_afectados=("historial_pagos", "morosidad", "reportes"),
             )
-            if comprobante_id is not None:
-                self._abrir_dialogo_comprobante(comprobante_id)
 
     def _registrar_pago_conexion(self, formulario: FormularioPago) -> None:
         self._registrar_pago_activacion(
@@ -217,34 +213,12 @@ class ControladorPagos:
         resultado = self.servicio_pagos.registrar_pago(formulario, actor_id=actor_id)
         self.vista_pagos.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
-            comprobante_id = resultado.comprobante.pago_id if resultado.comprobante is not None else None
             reiniciar_flujo()
             self._refrescar()
             bus_actualizaciones_modulos.emitir(
                 modulo_origen="pagos",
                 modulos_afectados=("historial_pagos", "morosidad", "reportes"),
             )
-            if comprobante_id is not None:
-                self._abrir_dialogo_comprobante(comprobante_id)
-
-    def _mostrar_comprobante(self, pago_id: int) -> None:
-        self._abrir_dialogo_comprobante(pago_id)
-
-    def _abrir_dialogo_comprobante(self, pago_id: int) -> None:
-        try:
-            ruta_documento = self.servicio_pagos.generar_comprobante_pdf(pago_id)
-            configuracion = self.servicio_pagos.obtener_configuracion_recibo()
-        except (OSError, ValueError) as error:
-            self.vista_pagos.mostrar_mensaje(
-                f"No fue posible generar el comprobante PDF. {error}",
-                es_error=True,
-            )
-            return
-        self.vista_pagos.mostrar_comprobante(
-            ruta_documento=ruta_documento,
-            abrir_automaticamente=configuracion.abrir_pdf_automaticamente,
-            imprimir_automaticamente=configuracion.imprimir_pdf_automaticamente,
-        )
 
     def _manejar_actualizacion_modulo(self, evento: object) -> None:
         if not isinstance(evento, EventoModuloActualizado):
