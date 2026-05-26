@@ -10,6 +10,7 @@ build/
 *.spec
 logs/*.log
 logs/*.txt
+respaldos/
 .codex-temp/
 .sicap-webengine/
 tests/_tmp*/
