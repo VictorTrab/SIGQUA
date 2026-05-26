@@ -9,8 +9,6 @@ import json
 from pathlib import Path
 import shutil
 import sqlite3
-import subprocess
-import sys
 import tempfile
 from typing import Protocol
 import zipfile
@@ -20,23 +18,11 @@ from comun.configuracion.gestor_rutas import GestorRutas
 
 
 FORMATO_FECHA_RESPALDO = "%Y-%m-%d %H:%M:%S"
-NOMBRE_TAREA_RESPALDO = "SIGQUA-RespaldoAutomatico"
-TIPOS_PROGRAMACION_VALIDOS = ("DESACTIVADO", "DIARIO", "SEMANAL")
-DIAS_SEMANA_VALIDOS = ("LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO")
-
-
-@dataclass(slots=True)
-class ConfiguracionProgramacionRespaldo:
-    """Parámetros simples de programación visibles para usuarios operativos."""
-
-    tipo: str
-    hora: str
-    dia_semana: str
 
 
 @dataclass(slots=True)
 class ConfiguracionRespaldoLocal:
-    """Configuración operativa del flujo de respaldo local."""
+    """Configuracion operativa del flujo de respaldo local."""
 
     ruta_principal: str
     ruta_secundaria: str
@@ -44,13 +30,12 @@ class ConfiguracionRespaldoLocal:
     comprimir_zip: bool
     organizar_por_periodo: bool
     retencion_dias: int
-    programacion: ConfiguracionProgramacionRespaldo
     version_sistema: str
 
 
 @dataclass(slots=True)
 class DetalleRespaldoLocal:
-    """Resultado técnico y operativo de un respaldo generado."""
+    """Resultado tecnico y operativo de un respaldo generado."""
 
     nombre_archivo: str
     ruta_archivo: str
@@ -64,7 +49,7 @@ class DetalleRespaldoLocal:
 
 
 class RepositorioHistorialRespaldos(Protocol):
-    """Contrato mínimo para registrar respaldos desde configuración."""
+    """Contrato minimo para registrar respaldos desde configuracion."""
 
     def registrar_respaldo(
         self,
@@ -80,106 +65,16 @@ class RepositorioHistorialRespaldos(Protocol):
         """Guarda el respaldo generado en historial_respaldos."""
 
 
-class ProgramadorTareasWindows(Protocol):
-    """Abstrae la interacción con el Programador de tareas."""
-
-    def programar(self, configuracion: ConfiguracionProgramacionRespaldo, comando: str) -> None:
-        """Crea o actualiza la tarea automática."""
-
-    def quitar(self) -> None:
-        """Elimina la tarea si existe."""
-
-    def obtener_proxima_ejecucion(self) -> str:
-        """Consulta la siguiente ejecución programada si existe."""
-
-
-class ProgramadorTareasWindowsSchtasks:
-    """Implementación simple basada en schtasks.exe sin .bat intermedio."""
-
-    MAPA_DIAS = {
-        "LUNES": "MON",
-        "MARTES": "TUE",
-        "MIERCOLES": "WED",
-        "JUEVES": "THU",
-        "VIERNES": "FRI",
-        "SABADO": "SAT",
-        "DOMINGO": "SUN",
-    }
-
-    def programar(self, configuracion: ConfiguracionProgramacionRespaldo, comando: str) -> None:
-        tipo = configuracion.tipo.strip().upper()
-        if tipo not in ("DIARIO", "SEMANAL"):
-            raise ValueError("La programación automática solo admite DIARIO o SEMANAL.")
-
-        argumentos = [
-            "schtasks",
-            "/create",
-            "/f",
-            "/tn",
-            NOMBRE_TAREA_RESPALDO,
-            "/tr",
-            comando,
-        ]
-        if tipo == "DIARIO":
-            argumentos.extend(["/sc", "daily", "/st", configuracion.hora])
-        else:
-            argumentos.extend(
-                [
-                    "/sc",
-                    "weekly",
-                    "/d",
-                    self.MAPA_DIAS[configuracion.dia_semana.strip().upper()],
-                    "/st",
-                    configuracion.hora,
-                ]
-            )
-        self._ejecutar(argumentos)
-
-    def quitar(self) -> None:
-        self._ejecutar(["schtasks", "/delete", "/f", "/tn", NOMBRE_TAREA_RESPALDO], tolerar_error=True)
-
-    def obtener_proxima_ejecucion(self) -> str:
-        resultado = subprocess.run(
-            ["schtasks", "/query", "/tn", NOMBRE_TAREA_RESPALDO, "/fo", "list", "/v"],
-            capture_output=True,
-            text=True,
-            check=False,
-            shell=False,
-        )
-        if resultado.returncode != 0:
-            return ""
-        for linea in resultado.stdout.splitlines():
-            if linea.lower().startswith("next run time".lower()):
-                _, _, valor = linea.partition(":")
-                return valor.strip()
-        return ""
-
-    @staticmethod
-    def _ejecutar(argumentos: list[str], tolerar_error: bool = False) -> None:
-        resultado = subprocess.run(
-            argumentos,
-            capture_output=True,
-            text=True,
-            check=False,
-            shell=False,
-        )
-        if resultado.returncode != 0 and not tolerar_error:
-            mensaje = (resultado.stderr or resultado.stdout or "No fue posible programar la tarea.").strip()
-            raise RuntimeError(mensaje)
-
-
 class ServicioRespaldoLocal:
-    """Genera respaldos seguros de SQLite y administra su programación."""
+    """Genera respaldos seguros de SQLite."""
 
     def __init__(
         self,
         gestor_base_datos: GestorBaseDatos,
         gestor_rutas: GestorRutas | None = None,
-        programador_tareas: ProgramadorTareasWindows | None = None,
     ) -> None:
         self._gestor_base_datos = gestor_base_datos
         self._gestor_rutas = gestor_rutas or GestorRutas()
-        self._programador_tareas = programador_tareas or ProgramadorTareasWindowsSchtasks()
 
     def validar_directorio_respaldo(self, ruta: str) -> tuple[bool, str]:
         ruta_normalizada = self._normalizar_directorio(Path(ruta).expanduser())
@@ -193,7 +88,7 @@ class ServicioRespaldoLocal:
                 ruta_temporal = Path(temporal.name)
             ruta_temporal.unlink(missing_ok=True)
         except Exception:
-            return False, "La carpeta seleccionada no está disponible para escritura."
+            return False, "La carpeta seleccionada no esta disponible para escritura."
         return True, ""
 
     def crear_respaldo_manual(
@@ -289,40 +184,17 @@ class ServicioRespaldoLocal:
         if configuracion.retencion_dias < 1:
             return
         limite = datetime.now() - timedelta(days=configuracion.retencion_dias)
-        for ruta_base in filter(None, (configuracion.ruta_principal, configuracion.ruta_secundaria if configuracion.secundaria_activa else "")):
+        rutas = (
+            configuracion.ruta_principal,
+            configuracion.ruta_secundaria if configuracion.secundaria_activa else "",
+        )
+        for ruta_base in filter(None, rutas):
             directorio = Path(ruta_base).expanduser()
             if not directorio.exists():
                 continue
             for archivo in directorio.rglob("SIGQUA_RESPALDO_*"):
-                if not archivo.is_file():
-                    continue
-                if datetime.fromtimestamp(archivo.stat().st_mtime) < limite:
+                if archivo.is_file() and datetime.fromtimestamp(archivo.stat().st_mtime) < limite:
                     archivo.unlink(missing_ok=True)
-
-    def programar_respaldo_windows(
-        self,
-        configuracion: ConfiguracionProgramacionRespaldo,
-        comando: str,
-    ) -> str:
-        tipo = configuracion.tipo.strip().upper()
-        if tipo == "DESACTIVADO":
-            self.quitar_programacion_respaldo_windows()
-            return ""
-        self._validar_programacion(configuracion)
-        self._programador_tareas.programar(configuracion, comando)
-        return self._programador_tareas.obtener_proxima_ejecucion()
-
-    def quitar_programacion_respaldo_windows(self) -> None:
-        self._programador_tareas.quitar()
-
-    def obtener_proxima_ejecucion_programada(self) -> str:
-        return self._programador_tareas.obtener_proxima_ejecucion()
-
-    def construir_comando_respaldo_programado(self) -> str:
-        return (
-            f'"{Path(sys.executable)}" '
-            f'"{self._gestor_rutas.raiz_proyecto / "scripts" / "ejecutar_respaldo_automatico.py"}"'
-        )
 
     def _copiar_base_segura(self, ruta_destino: Path) -> None:
         conexion_origen = self._gestor_base_datos.obtener_conexion()
@@ -339,7 +211,7 @@ class ServicioRespaldoLocal:
         try:
             resultado = conexion.execute("PRAGMA integrity_check;").fetchone()
             if not resultado or str(resultado[0]).lower() != "ok":
-                raise RuntimeError("La copia de respaldo no superó la validación de integridad.")
+                raise RuntimeError("La copia de respaldo no supero la validacion de integridad.")
         finally:
             conexion.close()
 
@@ -365,12 +237,3 @@ class ServicioRespaldoLocal:
 
     def _normalizar_directorio(self, ruta: Path) -> Path:
         return ruta if ruta.is_absolute() else self._gestor_rutas.raiz_proyecto / ruta
-
-    @staticmethod
-    def _validar_programacion(configuracion: ConfiguracionProgramacionRespaldo) -> None:
-        if configuracion.tipo not in TIPOS_PROGRAMACION_VALIDOS:
-            raise ValueError("Selecciona un tipo de programación válido.")
-        if len(configuracion.hora.strip()) != 5 or ":" not in configuracion.hora:
-            raise ValueError("Define una hora válida para la programación automática.")
-        if configuracion.tipo == "SEMANAL" and configuracion.dia_semana not in DIAS_SEMANA_VALIDOS:
-            raise ValueError("Selecciona un día de semana válido para la programación automática.")

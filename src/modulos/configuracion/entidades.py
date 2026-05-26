@@ -66,10 +66,7 @@ class FacturaConfiguracion:
     mostrar_identificador_fiscal: bool
     formato_salida: str
     firma_habilitada: bool
-    firma_nombre: str
-    firma_cargo: str
-    firma_identificador: str
-    firma_texto_apoyo: str
+    firma_texto_linea: str
     abrir_pdf_automaticamente: bool
     imprimir_pdf_automaticamente: bool
     correlativo_actual: str
@@ -96,9 +93,6 @@ class OperacionConfiguracion:
     comprimir_zip: bool
     organizar_por_periodo: bool
     retencion_dias: int
-    programacion_tipo: str
-    programacion_hora: str
-    programacion_dia_semana: str
     proxima_ejecucion_programada: str
     ruta_exportaciones_comprobantes: str
     ruta_exportaciones_reportes: str

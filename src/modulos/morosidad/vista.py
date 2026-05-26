@@ -649,7 +649,7 @@ class VistaMorosidad(QWidget):
             (FILTRO_MOROSIDAD_TODOS, "Todos"),
             (FILTRO_MOROSIDAD_LEVE, "Baja"),
             (FILTRO_MOROSIDAD_MEDIA, "Media"),
-            (FILTRO_MOROSIDAD_SEVERA, "Critica"),
+            (FILTRO_MOROSIDAD_SEVERA, "Alta"),
         ):
             boton = QPushButton(etiqueta)
             boton.setCheckable(True)

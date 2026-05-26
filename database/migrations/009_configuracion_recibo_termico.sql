@@ -15,10 +15,10 @@ INSERT OR IGNORE INTO configuracion_sistema(clave, valor, tipo_dato, categoria, 
 ('junta.mensaje_contacto', '', 'TEXTO', 'Junta', 'Mensaje institucional corto para contacto o soporte.', 1);
 
 UPDATE configuracion_sistema
-SET valor = 'HTML',
+SET valor = 'PDF',
     actualizado_en = datetime('now', 'localtime')
 WHERE clave = 'factura.formato_salida'
-  AND upper(COALESCE(valor, '')) = 'PDF';
+  AND upper(COALESCE(valor, '')) <> 'PDF';
 
 INSERT INTO esquema_migraciones(version, descripcion, checksum)
 SELECT '009', 'configuracion_recibo_termico', NULL

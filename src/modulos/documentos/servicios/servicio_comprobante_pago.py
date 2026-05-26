@@ -66,12 +66,8 @@ class ServicioComprobantePago:
                 for descripcion, monto in self._descomponer_detalles(comprobante.detalles)
             ),
             total_pagado=formateador_moneda(comprobante.total_pagado_centavos),
-            saldo_posterior=formateador_moneda(comprobante.saldo_posterior_centavos),
             firma_habilitada=configuracion.firma_habilitada,
-            firma_nombre=configuracion.firma_nombre,
-            firma_cargo=configuracion.firma_cargo,
-            firma_identificador=configuracion.firma_identificador,
-            firma_texto_apoyo=configuracion.firma_texto_apoyo,
+            firma_texto_linea=configuracion.firma_texto_linea,
         )
 
     def generar_pdf(

@@ -252,7 +252,6 @@ class GeneradorPdfReportLab:
             self._crear_tabla_totales(
                 (
                     ("Total pagado", dto.total_pagado),
-                    ("Saldo posterior", dto.saldo_posterior),
                 )
             )
         )
@@ -270,10 +269,7 @@ class GeneradorPdfReportLab:
         elementos.extend(
             self._construir_bloque_firma(
                 dto.firma_habilitada,
-                dto.firma_nombre,
-                dto.firma_cargo,
-                dto.firma_identificador,
-                dto.firma_texto_apoyo,
+                dto.firma_texto_linea,
             )
         )
         return elementos
@@ -335,10 +331,7 @@ class GeneradorPdfReportLab:
         elementos.extend(
             self._construir_bloque_firma(
                 dto.firma_habilitada,
-                dto.firma_nombre,
-                dto.firma_cargo,
-                dto.firma_identificador,
-                dto.firma_texto_apoyo,
+                dto.firma_texto_linea,
             )
         )
         return elementos
@@ -443,10 +436,7 @@ class GeneradorPdfReportLab:
     def _construir_bloque_firma(
         self,
         habilitada: bool,
-        nombre: str,
-        cargo: str,
-        identificador: str,
-        texto_apoyo: str,
+        texto_linea: str,
     ) -> list[object]:
         if not habilitada:
             return []
@@ -462,19 +452,8 @@ class GeneradorPdfReportLab:
             )
         )
         elementos.append(linea)
-        if nombre.strip():
-            elementos.append(Paragraph(self._escapar(nombre), self._estilos["SigquaMetaReporte"]))
-        if cargo.strip():
-            elementos.append(Paragraph(self._escapar(cargo), self._estilos["SigquaMetaReporte"]))
-        if identificador.strip():
-            elementos.append(
-                Paragraph(
-                    self._escapar(f"Identificador: {identificador}"),
-                    self._estilos["SigquaMetaReporte"],
-                )
-            )
-        if texto_apoyo.strip():
-            elementos.append(Paragraph(self._escapar(texto_apoyo), self._estilos["SigquaMetaReporte"]))
+        texto_firma = texto_linea.strip() or "Firma autorizada"
+        elementos.append(Paragraph(self._escapar(texto_firma), self._estilos["SigquaMetaReporte"]))
         return elementos
 
     def _crear_tabla_detalle(self, lineas: tuple[LineaDetalleComprobantePago, ...]) -> Table:

@@ -62,7 +62,7 @@ class TestMorosidadReportes(unittest.TestCase):
         self.assertGreaterEqual(estado.resumen.deuda_total_centavos, estado.resumen.deuda_base_centavos)
         self.assertTrue(all(fila.deuda_total_centavos > 0 for fila in estado.pagina.items))
         self.assertTrue(all(fila.severidad in {"LEVE", "MEDIA", "SEVERA"} for fila in estado.pagina.items))
-        self.assertTrue(all(fila.prioridad in {"Baja", "Media", "Critica"} for fila in estado.pagina.items))
+        self.assertTrue(all(fila.prioridad in {"Baja", "Media", "Alta"} for fila in estado.pagina.items))
         self.assertTrue(all(fila.dias_en_mora >= 0 for fila in estado.pagina.items))
 
     def test_morosidad_respeta_umbral_visual_configurable(self) -> None:
@@ -143,7 +143,7 @@ class TestMorosidadReportes(unittest.TestCase):
         detalle = servicio.obtener_detalle(abonado_id)
         assert detalle is not None
         self.assertGreaterEqual(detalle.casas[0].dias_en_mora, 0)
-        self.assertIn(detalle.casas[0].prioridad, {"Baja", "Media", "Critica"})
+        self.assertIn(detalle.casas[0].prioridad, {"Baja", "Media", "Alta"})
 
         resultado = servicio.emitir_documento_deuda(
             abonado_id=abonado_id,
@@ -157,15 +157,19 @@ class TestMorosidadReportes(unittest.TestCase):
     def test_reportes_basicos_exponen_tablas_obligatorias(self) -> None:
         servicio = ServicioReportes(RepositorioReportesSQLite(self.gestor_base_datos))
 
-        estado = servicio.obtener_estado(fecha_desde="2026-01-01", fecha_hasta="2026-12-31")
-        codigos = {tabla.codigo for tabla in estado.tablas}
+        estado = servicio.obtener_estado(
+            codigo_reporte="deuda_abonados_estado",
+            filtros={"fecha_desde": "2026-01-01", "fecha_hasta": "2026-12-31"},
+        )
+        codigos = {tarjeta.codigo for tarjeta in estado.catalogo}
 
         self.assertEqual(len(estado.indicadores), 5)
-        self.assertIn("abonados_estado", codigos)
-        self.assertIn("casas_estado", codigos)
-        self.assertIn("deuda_activa", codigos)
-        self.assertIn("historial_pagos", codigos)
+        self.assertIn("deuda_abonados_estado", codigos)
+        self.assertIn("abonados_sin_deuda", codigos)
+        self.assertIn("servicio_casas", codigos)
+        self.assertIn("ingresos_mensuales", codigos)
         self.assertIn("ingresos_diarios", codigos)
+        self.assertIsNotNone(estado.tabla_actual)
 
     def test_reportes_exportan_pdf_tabular_real(self) -> None:
         servicio = ServicioReportes(RepositorioReportesSQLite(self.gestor_base_datos))
@@ -173,9 +177,8 @@ class TestMorosidadReportes(unittest.TestCase):
 
         resultado = servicio.exportar_pdf(
             ruta_destino=str(ruta_pdf),
-            codigo_reporte="historial_pagos",
-            fecha_desde="2026-01-01",
-            fecha_hasta="2026-12-31",
+            codigo_reporte="ingresos_diarios",
+            filtros={"fecha_desde": "2026-01-01", "fecha_hasta": "2026-12-31"},
         )
 
         self.assertEqual(resultado, str(ruta_pdf))
@@ -233,7 +236,6 @@ class TestMorosidadReportes(unittest.TestCase):
         controlador = ControladorReportes(servicio, vista)
         mensajes: list[str] = []
         vista.mostrar_mensaje = lambda mensaje, es_error=False: mensajes.append(mensaje)  # type: ignore[method-assign]
-        vista.obtener_reporte_actual_codigo = lambda: "historial_pagos"  # type: ignore[method-assign]
         ruta_pdf = self.raiz_temporal / "exportaciones" / "reportes" / "historial_pagos.pdf"
         vista.solicitar_ruta_exportacion = lambda _codigo: str(ruta_pdf)  # type: ignore[method-assign]
         helper_original = controlador_reportes_modulo.ejecutar_acciones_documento_pdf
@@ -242,7 +244,10 @@ class TestMorosidadReportes(unittest.TestCase):
         )
 
         try:
-            controlador._exportar()
+            controlador._exportar(
+                "ingresos_diarios",
+                {"fecha_desde": "2026-01-01", "fecha_hasta": "2026-12-31"},
+            )
         finally:
             controlador_reportes_modulo.ejecutar_acciones_documento_pdf = helper_original  # type: ignore[assignment]
 

@@ -104,10 +104,7 @@ class ServicioEstadoCuenta:
             total_recargo_mora=formateador_moneda(recargo),
             total_general=formateador_moneda(total),
             firma_habilitada=bool(getattr(firma, "firma_habilitada", False)),
-            firma_nombre=str(getattr(firma, "firma_nombre", "")),
-            firma_cargo=str(getattr(firma, "firma_cargo", "")),
-            firma_identificador=str(getattr(firma, "firma_identificador", "")),
-            firma_texto_apoyo=str(getattr(firma, "firma_texto_apoyo", "")),
+            firma_texto_linea=str(getattr(firma, "firma_texto_linea", "Firma autorizada")),
         )
 
     def ruta_sugerida(self, abonado_nombre: str) -> str:

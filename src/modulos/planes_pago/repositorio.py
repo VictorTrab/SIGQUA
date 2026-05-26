@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from comun.base_datos import GestorBaseDatos
+from modulos.pagos.entidades import MetodoPago
 from modulos.planes_pago.entidades import (
     CuotaPlanPago,
     DetallePlanPago,
@@ -134,7 +135,11 @@ class RepositorioPlanesPago(Protocol):
         plan: PlanPago,
         cuotas: list[tuple[str, int]],
         cargos_vinculados: tuple[int, ...],
+        metodo_pago_id: int | None = None,
+        referencia_pago: str = "",
+        fecha_activacion: str = "",
         actor_id: int | None = None,
+        activar_servicio_con_plan: bool = False,
     ) -> int:
         """Crea o actualiza un plan y sus cuotas."""
 
@@ -147,6 +152,12 @@ class RepositorioPlanesPago(Protocol):
         concepto_financiado: str,
     ) -> tuple[int, ...]:
         """Obtiene cargos pendientes compatibles con el concepto del plan."""
+
+    def listar_metodos_pago_activos(self) -> list[MetodoPago]:
+        """Lista metodos de pago activos para registrar la prima."""
+
+    def obtener_metodo_pago(self, metodo_pago_id: int) -> MetodoPago | None:
+        """Recupera un metodo de pago activo."""
 
 
 class RepositorioPlanesPagoSQLite:
@@ -178,6 +189,10 @@ class RepositorioPlanesPagoSQLite:
                 COALESCE(b.nombre, '') AS barrio_nombre,
                 COALESCE(pp.tipo_plan, 'RECONEXION') AS tipo_plan,
                 COALESCE(pp.concepto_financiado, 'RECONEXION') AS concepto_financiado,
+                COALESCE(pp.tipo_activacion_origen, COALESCE(pp.tipo_plan, 'RECONEXION')) AS tipo_activacion_origen,
+                COALESCE(pp.fecha_corte_deuda, '') AS fecha_corte_deuda,
+                COALESCE(pp.deuda_financiada_centavos, 0) AS deuda_financiada_centavos,
+                COALESCE(pp.monto_activacion_centavos, 0) AS monto_activacion_centavos,
                 COALESCE(pp.prima_centavos, 0) AS prima_centavos,
                 MAX(pp.monto_total_centavos - COALESCE(pp.prima_centavos, 0), 0) AS saldo_financiado_centavos,
                 pp.monto_total_centavos,
@@ -250,6 +265,10 @@ class RepositorioPlanesPagoSQLite:
                 COALESCE(b.nombre, '') AS barrio_nombre,
                 COALESCE(pp.tipo_plan, 'RECONEXION') AS tipo_plan,
                 COALESCE(pp.concepto_financiado, 'RECONEXION') AS concepto_financiado,
+                COALESCE(pp.tipo_activacion_origen, COALESCE(pp.tipo_plan, 'RECONEXION')) AS tipo_activacion_origen,
+                COALESCE(pp.fecha_corte_deuda, '') AS fecha_corte_deuda,
+                COALESCE(pp.deuda_financiada_centavos, 0) AS deuda_financiada_centavos,
+                COALESCE(pp.monto_activacion_centavos, 0) AS monto_activacion_centavos,
                 COALESCE(pp.prima_centavos, 0) AS prima_centavos,
                 MAX(pp.monto_total_centavos - COALESCE(pp.prima_centavos, 0), 0) AS saldo_financiado_centavos,
                 pp.monto_total_centavos,
@@ -327,6 +346,9 @@ class RepositorioPlanesPagoSQLite:
                 a.dni AS abonado_dni,
                 COALESCE(b.nombre, '') AS barrio_nombre,
                 c.estado_servicio,
+                COALESCE(c.estado_administrativo, 'OPERATIVA') AS estado_administrativo,
+                a.estado AS abonado_estado,
+                COALESCE(c.ha_tenido_servicio_activo, 0) AS ha_tenido_servicio_activo,
                 COALESCE(dd.meses_pendientes, 0) AS meses_pendientes,
                 COALESCE(dd.meses_en_mora, 0) AS meses_en_mora,
                 COALESCE(dd.deuda_total_centavos, 0) AS deuda_total_centavos
@@ -348,6 +370,9 @@ class RepositorioPlanesPagoSQLite:
                 abonado_dni=str(fila["abonado_dni"] or ""),
                 barrio_nombre=str(fila["barrio_nombre"] or ""),
                 estado_servicio=str(fila["estado_servicio"] or "ACTIVO"),
+                estado_administrativo=str(fila["estado_administrativo"] or "OPERATIVA"),
+                abonado_estado=str(fila["abonado_estado"] or "ACTIVO"),
+                ha_tenido_servicio_activo=bool(int(fila["ha_tenido_servicio_activo"] or 0)),
                 meses_pendientes=int(fila["meses_pendientes"] or 0),
                 meses_en_mora=int(fila["meses_en_mora"] or 0),
                 deuda_total_centavos=int(fila["deuda_total_centavos"] or 0),
@@ -360,7 +385,11 @@ class RepositorioPlanesPagoSQLite:
         plan: PlanPago,
         cuotas: list[tuple[str, int]],
         cargos_vinculados: tuple[int, ...],
+        metodo_pago_id: int | None = None,
+        referencia_pago: str = "",
+        fecha_activacion: str = "",
         actor_id: int | None = None,
+        activar_servicio_con_plan: bool = False,
     ) -> int:
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             with conexion:
@@ -381,9 +410,13 @@ class RepositorioPlanesPagoSQLite:
                             creado_por,
                             tipo_plan,
                             concepto_financiado,
-                            prima_centavos
+                            prima_centavos,
+                            tipo_activacion_origen,
+                            fecha_corte_deuda,
+                            deuda_financiada_centavos,
+                            monto_activacion_centavos
                         )
-                        VALUES (?, ?, date('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                        VALUES (?, ?, date('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                         """,
                         (
                             plan.abonado_id,
@@ -399,6 +432,10 @@ class RepositorioPlanesPagoSQLite:
                             plan.tipo_plan,
                             plan.concepto_financiado,
                             plan.prima_centavos,
+                            plan.tipo_activacion_origen,
+                            plan.fecha_corte_deuda or None,
+                            plan.deuda_financiada_centavos,
+                            plan.monto_activacion_centavos,
                         ),
                     )
                     plan_id = int(cursor.lastrowid)
@@ -417,6 +454,10 @@ class RepositorioPlanesPagoSQLite:
                             tipo_plan = ?,
                             concepto_financiado = ?,
                             prima_centavos = ?,
+                            tipo_activacion_origen = ?,
+                            fecha_corte_deuda = ?,
+                            deuda_financiada_centavos = ?,
+                            monto_activacion_centavos = ?,
                             actualizado_en = datetime('now', 'localtime')
                         WHERE id = ?;
                         """,
@@ -432,6 +473,10 @@ class RepositorioPlanesPagoSQLite:
                             plan.tipo_plan,
                             plan.concepto_financiado,
                             plan.prima_centavos,
+                            plan.tipo_activacion_origen,
+                            plan.fecha_corte_deuda or None,
+                            plan.deuda_financiada_centavos,
+                            plan.monto_activacion_centavos,
                             plan.identificador,
                         ),
                     )
@@ -462,6 +507,17 @@ class RepositorioPlanesPagoSQLite:
                         """,
                         (plan_id, cargo_id),
                     )
+                if activar_servicio_con_plan:
+                    self._registrar_activacion_con_plan(
+                        conexion=conexion,
+                        plan=plan,
+                        plan_id=plan_id,
+                        metodo_pago_id=metodo_pago_id,
+                        referencia_pago=referencia_pago,
+                        fecha_activacion=fecha_activacion,
+                        actor_id=actor_id,
+                        cargos_vinculados=cargos_vinculados,
+                    )
                 return plan_id
 
     def contar_cuotas_pagadas(self, plan_id: int) -> int:
@@ -485,16 +541,6 @@ class RepositorioPlanesPagoSQLite:
             "saldo_pendiente_centavos > 0",
         ]
         parametros: list[object] = [casa_id]
-        if concepto_financiado == "RECONEXION":
-            condiciones.append(
-                "concepto_id IN (SELECT id FROM conceptos_cobro WHERE codigo = 'RECONEXION')"
-            )
-        elif concepto_financiado == "CONEXION":
-            condiciones.append(
-                "concepto_id IN (SELECT id FROM conceptos_cobro WHERE codigo IN ('CONEXION', 'PRIMA'))"
-            )
-        else:
-            return ()
         consulta = f"""
             SELECT id
             FROM cargos
@@ -504,6 +550,50 @@ class RepositorioPlanesPagoSQLite:
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             filas = conexion.execute(consulta, tuple(parametros)).fetchall()
         return tuple(int(fila["id"]) for fila in filas)
+
+    def listar_metodos_pago_activos(self) -> list[MetodoPago]:
+        consulta = """
+            SELECT id, codigo, nombre, COALESCE(requiere_referencia, 0) AS requiere_referencia
+            FROM metodos_pago
+            WHERE estado = 'ACTIVO'
+            ORDER BY
+                CASE codigo
+                    WHEN 'EFECTIVO' THEN 1
+                    WHEN 'TRANSFERENCIA' THEN 2
+                    WHEN 'DEPOSITO' THEN 3
+                    ELSE 9
+                END,
+                nombre;
+        """
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            filas = conexion.execute(consulta).fetchall()
+        return [
+            MetodoPago(
+                identificador=int(fila["id"]),
+                codigo=str(fila["codigo"] or ""),
+                nombre=str(fila["nombre"] or ""),
+                requiere_referencia=bool(int(fila["requiere_referencia"] or 0)),
+            )
+            for fila in filas
+        ]
+
+    def obtener_metodo_pago(self, metodo_pago_id: int) -> MetodoPago | None:
+        consulta = """
+            SELECT id, codigo, nombre, COALESCE(requiere_referencia, 0) AS requiere_referencia
+            FROM metodos_pago
+            WHERE id = ? AND estado = 'ACTIVO'
+            LIMIT 1;
+        """
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            fila = conexion.execute(consulta, (metodo_pago_id,)).fetchone()
+        if fila is None:
+            return None
+        return MetodoPago(
+            identificador=int(fila["id"]),
+            codigo=str(fila["codigo"] or ""),
+            nombre=str(fila["nombre"] or ""),
+            requiere_referencia=bool(int(fila["requiere_referencia"] or 0)),
+        )
 
     def _construir_filtros(
         self,
@@ -548,6 +638,10 @@ class RepositorioPlanesPagoSQLite:
             barrio_nombre=str(fila["barrio_nombre"] or ""),
             tipo_plan=str(fila["tipo_plan"] or "MESES_PENDIENTES"),
             concepto_financiado=str(fila["concepto_financiado"] or "MESES_PENDIENTES"),
+            tipo_activacion_origen=str(fila["tipo_activacion_origen"] or fila["tipo_plan"] or "RECONEXION"),
+            fecha_corte_deuda=str(fila["fecha_corte_deuda"] or ""),
+            deuda_financiada_centavos=int(fila["deuda_financiada_centavos"] or 0),
+            monto_activacion_centavos=int(fila["monto_activacion_centavos"] or 0),
             prima_centavos=int(fila["prima_centavos"] or 0),
             saldo_financiado_centavos=int(fila["saldo_financiado_centavos"] or 0),
             monto_total_centavos=int(fila["monto_total_centavos"] or 0),
@@ -564,4 +658,240 @@ class RepositorioPlanesPagoSQLite:
             actualizado_en=str(fila["actualizado_en"] or ""),
             creado_por_nombre=str(fila["creado_por_nombre"] or ""),
         )
+
+    def _registrar_activacion_con_plan(
+        self,
+        *,
+        conexion: object,
+        plan: PlanPago,
+        plan_id: int,
+        metodo_pago_id: int | None,
+        referencia_pago: str,
+        fecha_activacion: str,
+        actor_id: int | None,
+        cargos_vinculados: tuple[int, ...],
+    ) -> None:
+        if metodo_pago_id is None or metodo_pago_id <= 0:
+            raise ValueError("La prima del plan requiere un metodo de pago activo.")
+        cursor_operacion = conexion.execute(
+            """
+            INSERT INTO operaciones_cobro(
+                abonado_id,
+                casa_id,
+                tipo_operacion,
+                estado,
+                descripcion,
+                creado_por
+            )
+            VALUES (?, ?, 'PLAN_ACTIVACION', 'CONFIRMADA', ?, ?);
+            """,
+            (
+                plan.abonado_id,
+                plan.casa_id,
+                f"Activacion con plan PP-{plan_id:03d}",
+                actor_id,
+            ),
+        )
+        operacion_cobro_id = int(cursor_operacion.lastrowid)
+        cursor_pago = conexion.execute(
+            """
+            INSERT INTO pagos(
+                abonado_id,
+                casa_id,
+                usuario_cobrador_id,
+                metodo_pago_id,
+                referencia_externa,
+                total_bruto_centavos,
+                descuento_centavos,
+                total_pagado_centavos,
+                saldo_a_favor_centavos,
+                observaciones,
+                tipo_pago,
+                plan_pago_id,
+                operacion_cobro_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, 0, ?, 0, ?, 'PLAN_PAGO', ?, ?);
+            """,
+            (
+                plan.abonado_id,
+                plan.casa_id,
+                actor_id,
+                metodo_pago_id,
+                referencia_pago or None,
+                plan.prima_centavos,
+                plan.prima_centavos,
+                f"Prima inicial del plan PP-{plan_id:03d}",
+                plan_id,
+                operacion_cobro_id,
+            ),
+        )
+        pago_id = int(cursor_pago.lastrowid)
+        numero_comprobante = self._generar_numero_comprobante(conexion)
+        conexion.execute(
+            """
+            INSERT INTO comprobantes(
+                pago_id,
+                numero_comprobante,
+                tipo_comprobante,
+                formato_salida,
+                saldo_posterior_centavos,
+                generado_por
+            )
+            VALUES (?, ?, 'PLAN_PAGO', 'PDF', ?, ?);
+            """,
+            (pago_id, numero_comprobante, max(plan.saldo_financiado_centavos, 0), actor_id),
+        )
+        concepto_prima_id = self._obtener_concepto_id(conexion, "PRIMA")
+        conexion.execute(
+            """
+            INSERT INTO pagos_detalle(
+                pago_id,
+                casa_id,
+                concepto_id,
+                descripcion,
+                monto_pagado_centavos,
+                orden_aplicacion
+            )
+            VALUES (?, ?, ?, ?, ?, 1);
+            """,
+            (
+                pago_id,
+                plan.casa_id,
+                concepto_prima_id,
+                f"Prima inicial del plan PP-{plan_id:03d}",
+                plan.prima_centavos,
+            ),
+        )
+        cursor_proceso = conexion.execute(
+            """
+            INSERT INTO procesos_servicio(
+                abonado_id,
+                casa_id,
+                tipo,
+                fecha_ejecucion,
+                fecha_activacion,
+                estado,
+                motivo,
+                observaciones,
+                plan_pago_id,
+                pago_id,
+                usuario_id,
+                monto_conexion_centavos,
+                monto_reconexion_centavos,
+                multa_corte_centavos
+            )
+            VALUES (?, ?, ?, datetime('now', 'localtime'), ?, 'EJECUTADO', ?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            (
+                plan.abonado_id,
+                plan.casa_id,
+                plan.tipo_activacion_origen,
+                fecha_activacion,
+                f"{plan.tipo_activacion_origen} mediante plan de pago",
+                f"Plan PP-{plan_id:03d} activado con prima inicial.",
+                plan_id,
+                pago_id,
+                actor_id,
+                plan.monto_activacion_centavos if plan.tipo_activacion_origen == "CONEXION" else None,
+                plan.monto_activacion_centavos if plan.tipo_activacion_origen == "RECONEXION" else None,
+                None,
+            ),
+        )
+        proceso_servicio_id = int(cursor_proceso.lastrowid)
+        if plan.monto_activacion_centavos > 0:
+            codigo_concepto = "CONEXION" if plan.tipo_activacion_origen == "CONEXION" else "RECONEXION"
+            concepto_activacion_id = self._obtener_concepto_id(conexion, codigo_concepto)
+            cursor_cargo_activacion = conexion.execute(
+                """
+                INSERT INTO cargos(
+                    casa_id,
+                    abonado_id,
+                    concepto_id,
+                    proceso_servicio_id,
+                    descripcion,
+                    monto_centavos,
+                    saldo_pendiente_centavos,
+                    fecha_generacion,
+                    fecha_vencimiento,
+                    estado,
+                    origen
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 0, date('now', 'localtime'), ?, 'PAGADO', 'PLAN_PAGO');
+                """,
+                (
+                    plan.casa_id,
+                    plan.abonado_id,
+                    concepto_activacion_id,
+                    proceso_servicio_id,
+                    f"{codigo_concepto.title()} financiada por plan PP-{plan_id:03d}",
+                    plan.monto_activacion_centavos,
+                    fecha_activacion,
+                ),
+            )
+            conexion.execute(
+                """
+                INSERT INTO planes_pago_cargos(plan_pago_id, cargo_id)
+                VALUES (?, ?);
+                """,
+                (plan_id, int(cursor_cargo_activacion.lastrowid)),
+            )
+        if cargos_vinculados:
+            marcadores = ", ".join("?" for _ in cargos_vinculados)
+            conexion.execute(
+                f"""
+                UPDATE cargos
+                SET saldo_pendiente_centavos = 0,
+                    estado = 'PAGADO',
+                    actualizado_en = datetime('now', 'localtime')
+                WHERE id IN ({marcadores});
+                """,
+                tuple(cargos_vinculados),
+            )
+        conexion.execute(
+            """
+            UPDATE casas
+            SET estado_servicio = 'ACTIVO',
+                estado_administrativo = 'OPERATIVA',
+                motivo_estado_administrativo = 'NINGUNO',
+                ha_tenido_servicio_activo = 1,
+                actualizado_en = datetime('now', 'localtime')
+            WHERE id = ?;
+            """,
+            (plan.casa_id,),
+        )
+
+    @staticmethod
+    def _obtener_concepto_id(conexion: object, codigo: str) -> int:
+        fila = conexion.execute(
+            "SELECT id FROM conceptos_cobro WHERE codigo = ? LIMIT 1;",
+            (codigo,),
+        ).fetchone()
+        if fila is None:
+            raise ValueError(f"No existe el concepto de cobro {codigo}.")
+        return int(fila["id"])
+
+    @staticmethod
+    def _generar_numero_comprobante(conexion: object) -> str:
+        conexion.execute(
+            """
+            INSERT OR IGNORE INTO correlativos_comprobantes(clave, ultimo_numero)
+            VALUES ('RECIBO_GLOBAL', 0);
+            """
+        )
+        conexion.execute(
+            """
+            UPDATE correlativos_comprobantes
+            SET ultimo_numero = ultimo_numero + 1,
+                actualizado_en = datetime('now', 'localtime')
+            WHERE clave = 'RECIBO_GLOBAL';
+            """
+        )
+        fila = conexion.execute(
+            """
+            SELECT ultimo_numero
+            FROM correlativos_comprobantes
+            WHERE clave = 'RECIBO_GLOBAL';
+            """
+        ).fetchone()
+        return f"REC-{int(fila['ultimo_numero']):06d}"
 

@@ -11,7 +11,6 @@ from comun.configuracion.identidad_empresa import (
     construir_identidad_empresa,
 )
 from comun.respaldo import (
-    ConfiguracionProgramacionRespaldo,
     ConfiguracionRespaldoLocal,
     ServicioRespaldoLocal,
 )
@@ -56,10 +55,7 @@ CLAVES_FACTURA = (
     "factura.mostrar_identificador_fiscal",
     "factura.formato_salida",
     "documentos.firma_habilitada",
-    "documentos.firma_nombre",
-    "documentos.firma_cargo",
-    "documentos.firma_identificador",
-    "documentos.firma_texto_apoyo",
+    "documentos.firma_texto_linea",
     "documentos.abrir_pdf_automaticamente",
     "documentos.imprimir_pdf_automaticamente",
 )
@@ -74,9 +70,6 @@ CLAVES_SISTEMA = (
     "respaldo.comprimir_zip",
     "respaldo.organizar_por_periodo",
     "respaldo.retencion_dias",
-    "respaldo.programacion_tipo",
-    "respaldo.programacion_hora",
-    "respaldo.programacion_dia_semana",
     "mantenimiento.ruta_respaldos",
     "mantenimiento.dias_retencion_respaldos",
 )
@@ -89,9 +82,9 @@ CLAVES_LABORATORIO_VISUAL = (
     "ui.laboratorio.modal_color_primario",
     "ui.laboratorio.modal_color_secundario",
 )
-FORMATOS_SALIDA_FACTURA_VALIDOS = ("PDF", "HTML", "TEXTO")
-TIPOS_PROGRAMACION_RESPALDO_VALIDOS = ("DESACTIVADO", "DIARIO", "SEMANAL")
-DIAS_SEMANA_VALIDOS = ("LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO")
+FORMATO_SALIDA_FACTURA = "PDF"
+FORMATOS_SALIDA_FACTURA_VALIDOS = (FORMATO_SALIDA_FACTURA,)
+TEXTO_FIRMA_PREDETERMINADO = "Firma autorizada"
 DURACIONES_SESION_HORAS_VALIDAS = (0.5, 1.0, 2.0, 4.0, 8.0, 12.0)
 MAXIMO_INTENTOS_FALLIDOS_OPERATIVO = 5
 MODOS_LABORATORIO_VISUAL_VALIDOS = ("SOLIDO", "DEGRADADO")
@@ -176,6 +169,7 @@ class ServicioConfiguracion:
                 self._valor_parametro(parametros, "cobro.mora_media_hasta_meses", "5")
             ),
         )
+        firma_texto_linea = self._resolver_texto_firma_linea(parametros)
         factura = FacturaConfiguracion(
             titulo_documento=self._valor_parametro(parametros, "factura.titulo_documento", "RECIBO DE PAGO"),
             subtitulo_documento=self._valor_parametro(parametros, "factura.subtitulo_documento", ""),
@@ -193,14 +187,11 @@ class ServicioConfiguracion:
             mostrar_identificador_fiscal=self._a_booleano(
                 self._valor_parametro(parametros, "factura.mostrar_identificador_fiscal", "0")
             ),
-            formato_salida=self._valor_parametro(parametros, "factura.formato_salida", "HTML").upper(),
+            formato_salida=FORMATO_SALIDA_FACTURA,
             firma_habilitada=self._a_booleano(
                 self._valor_parametro(parametros, "documentos.firma_habilitada", "0")
             ),
-            firma_nombre=self._valor_parametro(parametros, "documentos.firma_nombre", ""),
-            firma_cargo=self._valor_parametro(parametros, "documentos.firma_cargo", ""),
-            firma_identificador=self._valor_parametro(parametros, "documentos.firma_identificador", ""),
-            firma_texto_apoyo=self._valor_parametro(parametros, "documentos.firma_texto_apoyo", ""),
+            firma_texto_linea=firma_texto_linea,
             abrir_pdf_automaticamente=self._a_booleano(
                 self._valor_parametro(parametros, "documentos.abrir_pdf_automaticamente", "1")
             ),
@@ -214,16 +205,8 @@ class ServicioConfiguracion:
         )
         duracion_sesion_horas = self._resolver_duracion_sesion_horas(parametros)
         configuracion_respaldo = self._construir_configuracion_respaldo(parametros)
-        proxima_ejecucion = ""
-        if self._servicio_respaldo is not None:
-            try:
-                proxima_ejecucion = self._servicio_respaldo.obtener_proxima_ejecucion_programada()
-            except Exception:
-                proxima_ejecucion = ""
         operacion = OperacionConfiguracion(
-            respaldo_automatico=self._a_booleano(
-                self._valor_parametro(parametros, "sistema.respaldo_automatico", "0")
-            ),
+            respaldo_automatico=True,
             ultimo_respaldo_en=ultimo_respaldo_en,
             ultimo_respaldo_estado=ultimo_respaldo_estado or "SIN_REGISTRO",
             total_respaldos=total_respaldos,
@@ -240,10 +223,7 @@ class ServicioConfiguracion:
             comprimir_zip=configuracion_respaldo.comprimir_zip,
             organizar_por_periodo=configuracion_respaldo.organizar_por_periodo,
             retencion_dias=configuracion_respaldo.retencion_dias,
-            programacion_tipo=configuracion_respaldo.programacion.tipo,
-            programacion_hora=configuracion_respaldo.programacion.hora,
-            programacion_dia_semana=configuracion_respaldo.programacion.dia_semana,
-            proxima_ejecucion_programada=proxima_ejecucion,
+            proxima_ejecucion_programada="Activo al cerrar sesion",
             ruta_exportaciones_comprobantes=str(self._gestor_rutas.obtener_ruta_exportaciones_comprobantes()),
             ruta_exportaciones_reportes=str(self._gestor_rutas.obtener_ruta_exportaciones_reportes()),
         )
@@ -251,7 +231,7 @@ class ServicioConfiguracion:
             nombre_sistema=self._valor_parametro(parametros, "sistema.nombre", "SIGQUA"),
             version_sistema=self._valor_parametro(parametros, "sistema.version", ""),
             ruta_base_datos=str(self._gestor_rutas.obtener_ruta_base_datos()),
-            modo_operacion="Autenticacion local sin correo y con soporte administrativo",
+            modo_operacion="Acceso local",
             ultima_actualizacion=ultimo_parametro_actualizado.actualizado_en if ultimo_parametro_actualizado else "",
             actualizado_por=self._resolver_autoria(
                 ultimo_parametro_actualizado.actualizado_por_nombre if ultimo_parametro_actualizado else "",
@@ -392,10 +372,7 @@ class ServicioConfiguracion:
         mostrar_direccion: bool,
         mostrar_identificador_fiscal: bool,
         firma_habilitada: bool,
-        firma_nombre: str,
-        firma_cargo: str,
-        firma_identificador: str,
-        firma_texto_apoyo: str,
+        firma_texto_linea: str,
         abrir_pdf_automaticamente: bool = True,
         imprimir_pdf_automaticamente: bool = False,
         actor_id: int | None = None,
@@ -407,10 +384,7 @@ class ServicioConfiguracion:
         texto_legal_inferior = texto_legal_inferior.strip()
         etiqueta_copia = etiqueta_copia.strip()
         formato_salida = formato_salida.strip().upper()
-        firma_nombre = firma_nombre.strip()
-        firma_cargo = firma_cargo.strip()
-        firma_identificador = firma_identificador.strip()
-        firma_texto_apoyo = firma_texto_apoyo.strip()
+        firma_texto_linea = firma_texto_linea.strip() or TEXTO_FIRMA_PREDETERMINADO
 
         if not titulo_documento:
             return ResultadoGestionConfiguracion(False, "Indica el titulo principal del recibo.", "VALIDACION")
@@ -419,9 +393,7 @@ class ServicioConfiguracion:
         if not etiqueta_copia:
             return ResultadoGestionConfiguracion(False, "Indica la etiqueta visible del recibo.", "VALIDACION")
         if formato_salida not in FORMATOS_SALIDA_FACTURA_VALIDOS:
-            return ResultadoGestionConfiguracion(False, "Selecciona un formato de salida valido.", "VALIDACION")
-        if firma_habilitada and not firma_nombre:
-            return ResultadoGestionConfiguracion(False, "Indica el nombre visible de la firma compartida.", "VALIDACION")
+            return ResultadoGestionConfiguracion(False, "El formato de salida vigente es PDF.", "VALIDACION")
         try:
             self._repositorio_configuracion.actualizar_valores(
                 {
@@ -437,10 +409,7 @@ class ServicioConfiguracion:
                     "factura.mostrar_direccion": "1" if mostrar_direccion else "0",
                     "factura.mostrar_identificador_fiscal": "1" if mostrar_identificador_fiscal else "0",
                     "documentos.firma_habilitada": "1" if firma_habilitada else "0",
-                    "documentos.firma_nombre": firma_nombre,
-                    "documentos.firma_cargo": firma_cargo,
-                    "documentos.firma_identificador": firma_identificador,
-                    "documentos.firma_texto_apoyo": firma_texto_apoyo,
+                    "documentos.firma_texto_linea": firma_texto_linea,
                     "documentos.abrir_pdf_automaticamente": "1" if abrir_pdf_automaticamente else "0",
                     "documentos.imprimir_pdf_automaticamente": "1" if imprimir_pdf_automaticamente else "0",
                 },
@@ -464,18 +433,20 @@ class ServicioConfiguracion:
         mora_media_hasta_meses: int,
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
-        if precio_mensual_centavos < 0:
-            return ResultadoGestionConfiguracion(False, "El precio mensual no puede ser negativo.", "VALIDACION")
+        if precio_mensual_centavos <= 0:
+            return ResultadoGestionConfiguracion(False, "El precio mensual debe ser mayor que cero.", "VALIDACION")
         if multa_mora_automatica_centavos < 0:
             return ResultadoGestionConfiguracion(False, "La multa automatica por mora no puede ser negativa.", "VALIDACION")
         if meses_para_corte < 1:
             return ResultadoGestionConfiguracion(False, "Define al menos un mes para el umbral de corte o alerta.", "VALIDACION")
         if permitir_pago_adelantado and meses_adelanto_maximo < 1:
             return ResultadoGestionConfiguracion(False, "Indica el maximo de meses adelantados permitidos.", "VALIDACION")
+        if permitir_pago_adelantado and meses_adelanto_maximo > 12:
+            return ResultadoGestionConfiguracion(False, "El maximo recomendado de adelantos es de 12 meses.", "VALIDACION")
         if mora_leve_hasta_meses < 1:
-            return ResultadoGestionConfiguracion(False, "El rango de mora leve debe iniciar al menos en 1 mes.", "VALIDACION")
+            return ResultadoGestionConfiguracion(False, "La prioridad baja debe cubrir al menos 1 mes vencido.", "VALIDACION")
         if mora_media_hasta_meses <= mora_leve_hasta_meses:
-            return ResultadoGestionConfiguracion(False, "La mora media debe terminar despues del rango de mora leve.", "VALIDACION")
+            return ResultadoGestionConfiguracion(False, "La prioridad media debe terminar despues de la prioridad baja.", "VALIDACION")
         if not multa_mora_automatica_activa:
             multa_mora_automatica_centavos = 0
         if not permitir_pago_adelantado:
@@ -504,31 +475,22 @@ class ServicioConfiguracion:
 
     def guardar_operacion_respaldo(
         self,
-        respaldo_automatico: bool,
         ruta_principal: str,
         ruta_secundaria: str,
         secundaria_activa: bool,
         comprimir_zip: bool,
         organizar_por_periodo: bool,
         retencion_dias: int,
-        programacion_tipo: str,
-        programacion_hora: str,
-        programacion_dia_semana: str,
         duracion_sesion_horas: float,
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
         ruta_principal = ruta_principal.strip()
         ruta_secundaria = ruta_secundaria.strip()
-        programacion_tipo = programacion_tipo.strip().upper()
-        programacion_hora = programacion_hora.strip()
-        programacion_dia_semana = programacion_dia_semana.strip().upper()
 
         if duracion_sesion_horas not in DURACIONES_SESION_HORAS_VALIDAS:
             return ResultadoGestionConfiguracion(False, "Selecciona un tiempo de sesion valido.", "VALIDACION")
         if retencion_dias < 1:
             return ResultadoGestionConfiguracion(False, "La retencion minima debe ser de 1 dia.", "VALIDACION")
-        if programacion_tipo not in TIPOS_PROGRAMACION_RESPALDO_VALIDOS:
-            return ResultadoGestionConfiguracion(False, "Selecciona un tipo de programacion valido.", "VALIDACION")
         valido_principal, mensaje_principal = self._validar_directorio_respaldo(ruta_principal)
         if not valido_principal:
             return ResultadoGestionConfiguracion(False, mensaje_principal, "VALIDACION")
@@ -538,17 +500,11 @@ class ServicioConfiguracion:
             valido_secundario, mensaje_secundario = self._validar_directorio_respaldo(ruta_secundaria)
             if not valido_secundario:
                 return ResultadoGestionConfiguracion(False, mensaje_secundario, "VALIDACION")
-        if respaldo_automatico and programacion_tipo == "DESACTIVADO":
-            return ResultadoGestionConfiguracion(False, "Selecciona una programacion diaria o semanal para activar el respaldo automatico.", "VALIDACION")
-        if programacion_tipo == "SEMANAL" and programacion_dia_semana not in DIAS_SEMANA_VALIDOS:
-            return ResultadoGestionConfiguracion(False, "Selecciona un dia valido para la programacion semanal.", "VALIDACION")
-        if programacion_hora not in self.opciones_horario_respaldo():
-            return ResultadoGestionConfiguracion(False, "Selecciona una hora valida para la programacion.", "VALIDACION")
 
         try:
             self._repositorio_configuracion.actualizar_valores(
                 {
-                    "sistema.respaldo_automatico": "1" if respaldo_automatico else "0",
+                    "sistema.respaldo_automatico": "1",
                     "seguridad.duracion_sesion_horas": self._duracion_a_texto(duracion_sesion_horas),
                     "respaldo.ruta_principal": ruta_principal,
                     "respaldo.ruta_secundaria": ruta_secundaria,
@@ -556,27 +512,12 @@ class ServicioConfiguracion:
                     "respaldo.comprimir_zip": "1" if comprimir_zip else "0",
                     "respaldo.organizar_por_periodo": "1" if organizar_por_periodo else "0",
                     "respaldo.retencion_dias": str(retencion_dias),
-                    "respaldo.programacion_tipo": programacion_tipo,
-                    "respaldo.programacion_hora": programacion_hora,
-                    "respaldo.programacion_dia_semana": programacion_dia_semana,
                 },
                 actor_id=actor_id,
             )
-            if self._servicio_respaldo is not None:
-                if respaldo_automatico and programacion_tipo != "DESACTIVADO":
-                    self._servicio_respaldo.programar_respaldo_windows(
-                        ConfiguracionProgramacionRespaldo(
-                            tipo=programacion_tipo,
-                            hora=programacion_hora,
-                            dia_semana=programacion_dia_semana,
-                        ),
-                        self._servicio_respaldo.construir_comando_respaldo_programado(),
-                    )
-                else:
-                    self._servicio_respaldo.quitar_programacion_respaldo_windows()
         except Exception:
             return ResultadoGestionConfiguracion(False, "No fue posible actualizar el control de respaldos.", "ERROR_SQLITE")
-        return ResultadoGestionConfiguracion(True, "Control y respaldo actualizado.", "OK")
+        return ResultadoGestionConfiguracion(True, "Respaldos actualizados. El respaldo automatico se ejecutara al cerrar sesion.", "OK")
 
     def guardar_laboratorio_visual(
         self,
@@ -662,11 +603,6 @@ class ServicioConfiguracion:
                     comprimir_zip=estado.operacion.comprimir_zip,
                     organizar_por_periodo=estado.operacion.organizar_por_periodo,
                     retencion_dias=estado.operacion.retencion_dias,
-                    programacion=ConfiguracionProgramacionRespaldo(
-                        tipo=estado.operacion.programacion_tipo,
-                        hora=estado.operacion.programacion_hora,
-                        dia_semana=estado.operacion.programacion_dia_semana,
-                    ),
                     version_sistema=estado.informacion.version_sistema or "Sin version",
                 ),
                 repositorio_historial=self._repositorio_configuracion,
@@ -686,14 +622,6 @@ class ServicioConfiguracion:
             ("8 horas", 8.0),
             ("12 horas", 12.0),
         )
-
-    @staticmethod
-    def opciones_horario_respaldo() -> tuple[str, ...]:
-        return tuple(f"{hora:02d}:00" for hora in range(24))
-
-    @staticmethod
-    def opciones_dias_semana() -> tuple[str, ...]:
-        return DIAS_SEMANA_VALIDOS
 
     @staticmethod
     def formatear_moneda(valor_centavos: int) -> str:
@@ -803,12 +731,13 @@ class ServicioConfiguracion:
                 self._valor_parametro(parametros, "respaldo.organizar_por_periodo", "1")
             ),
             retencion_dias=max(retencion_predeterminada, 1),
-            programacion=ConfiguracionProgramacionRespaldo(
-                tipo=self._valor_parametro(parametros, "respaldo.programacion_tipo", "DESACTIVADO").upper(),
-                hora=self._valor_parametro(parametros, "respaldo.programacion_hora", "18:00"),
-                dia_semana=self._valor_parametro(parametros, "respaldo.programacion_dia_semana", "VIERNES").upper(),
-            ),
             version_sistema=self._valor_parametro(parametros, "sistema.version", ""),
+        )
+
+    def _resolver_texto_firma_linea(self, parametros: dict[str, object]) -> str:
+        return (
+            self._valor_parametro(parametros, "documentos.firma_texto_linea", "").strip()
+            or TEXTO_FIRMA_PREDETERMINADO
         )
 
     def _validar_directorio_respaldo(self, ruta: str) -> tuple[bool, str]:

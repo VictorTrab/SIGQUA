@@ -1,8 +1,7 @@
-"""Servicios del modulo de reportes."""
+"""Servicios del modulo de reportes administrativos."""
 
 from __future__ import annotations
 
-import csv
 from datetime import datetime
 
 from comun.configuracion.identidad_empresa import (
@@ -14,12 +13,23 @@ from comun.configuracion.gestor_rutas import GestorRutas
 from modulos.configuracion.repositorio import RepositorioConfiguracionSQLite
 from modulos.documentos import ServicioReportePdf
 from modulos.documentos.servicios.servicio_comprobante_pago import ServicioComprobantePago
-from modulos.reportes.entidades import EstadoReportes
+from modulos.reportes.entidades import (
+    EstadoReportes,
+    REPORTE_ABONADOS_SIN_DEUDA,
+    REPORTE_DEUDA_ABONADOS_ESTADO,
+    REPORTE_HISTORIAL_ABONADO,
+    REPORTE_HISTORIAL_CASA,
+    REPORTE_INGRESOS_DIARIOS,
+    REPORTE_INGRESOS_MENSUALES,
+    REPORTE_PLANES_ACTIVOS,
+    REPORTE_SERVICIO_CASAS,
+    TarjetaReporte,
+)
 from modulos.reportes.repositorio import RepositorioReportes
 
 
 class ServicioReportes:
-    """Orquesta consultas de reportes basicos."""
+    """Orquesta reportes administrativos con seleccion visual y filtros dinamicos."""
 
     CLAVES_IDENTIDAD_DOCUMENTAL = (
         *CLAVES_IDENTIDAD_EMPRESA,
@@ -30,6 +40,65 @@ class ServicioReportes:
         "factura.mostrar_identificador_fiscal",
         "documentos.abrir_pdf_automaticamente",
         "documentos.imprimir_pdf_automaticamente",
+    )
+
+    CATALOGO_REPORTES = (
+        TarjetaReporte(
+            codigo=REPORTE_DEUDA_ABONADOS_ESTADO,
+            titulo="Deuda por abonado",
+            descripcion="Deuda total consolidada por abonado responsable actual.",
+            icono="receipt-2.svg",
+            resumen="Activos e inactivos",
+        ),
+        TarjetaReporte(
+            codigo=REPORTE_ABONADOS_SIN_DEUDA,
+            titulo="Abonados sin deuda",
+            descripcion="Responsables sin deuda base, mora ni saldo vivo de plan.",
+            icono="circle-check.svg",
+            resumen="Responsables al dia",
+        ),
+        TarjetaReporte(
+            codigo=REPORTE_SERVICIO_CASAS,
+            titulo="Servicio por casa",
+            descripcion="Cuantas casas tienen servicio y cuantas no.",
+            icono="home.svg",
+            resumen="Resumen operativo",
+        ),
+        TarjetaReporte(
+            codigo=REPORTE_INGRESOS_MENSUALES,
+            titulo="Ingresos mensuales",
+            descripcion="Resumen mensual de ingresos confirmados.",
+            icono="calendar-plus.svg",
+            resumen="Consolidado por mes",
+        ),
+        TarjetaReporte(
+            codigo=REPORTE_INGRESOS_DIARIOS,
+            titulo="Ingresos diarios",
+            descripcion="Detalle por dia dentro del rango seleccionado.",
+            icono="calendar-stats.svg",
+            resumen="Detalle diario",
+        ),
+        TarjetaReporte(
+            codigo=REPORTE_HISTORIAL_ABONADO,
+            titulo="Historial por abonado",
+            descripcion="Pagos confirmados filtrados por abonado responsable.",
+            icono="user.svg",
+            resumen="Consulta puntual",
+        ),
+        TarjetaReporte(
+            codigo=REPORTE_HISTORIAL_CASA,
+            titulo="Historial por casa",
+            descripcion="Pagos confirmados filtrados por casa.",
+            icono="home-2.svg",
+            resumen="Consulta por inmueble",
+        ),
+        TarjetaReporte(
+            codigo=REPORTE_PLANES_ACTIVOS,
+            titulo="Planes activos",
+            descripcion="Planes vigentes, cuotas pendientes y saldo vivo.",
+            icono="notes.svg",
+            resumen="Seguimiento financiero",
+        ),
     )
 
     def __init__(
@@ -46,46 +115,36 @@ class ServicioReportes:
             gestor_rutas=self._gestor_rutas,
         )
 
-    def obtener_estado(self, fecha_desde: str = "", fecha_hasta: str = "") -> EstadoReportes:
-        self._validar_rango(fecha_desde, fecha_hasta)
-        return self.repositorio_reportes.obtener_estado(
-            fecha_desde=fecha_desde,
-            fecha_hasta=fecha_hasta,
-        )
-
-    def exportar_csv(
+    def obtener_estado(
         self,
-        ruta_destino: str,
-        codigo_reporte: str,
-        fecha_desde: str = "",
-        fecha_hasta: str = "",
-    ) -> str:
-        estado = self.obtener_estado(fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
-        tabla = next((item for item in estado.tablas if item.codigo == codigo_reporte), None)
-        if tabla is None:
-            raise ValueError("No existe el reporte seleccionado para exportacion.")
-        with open(ruta_destino, "w", newline="", encoding="utf-8") as archivo:
-            escritor = csv.writer(archivo)
-            escritor.writerow(tabla.columnas)
-            for fila in tabla.filas:
-                escritor.writerow(fila)
-        return ruta_destino
+        codigo_reporte: str = "",
+        filtros: dict[str, str] | None = None,
+    ) -> EstadoReportes:
+        filtros_normalizados = self._normalizar_filtros(filtros)
+        self._validar_rango(
+            filtros_normalizados.get("fecha_desde", ""),
+            filtros_normalizados.get("fecha_hasta", ""),
+        )
+        return self.repositorio_reportes.obtener_estado(
+            catalogo=self.CATALOGO_REPORTES,
+            codigo_reporte=codigo_reporte,
+            filtros=filtros_normalizados,
+        )
 
     def exportar_pdf(
         self,
         ruta_destino: str,
         codigo_reporte: str,
-        fecha_desde: str = "",
-        fecha_hasta: str = "",
+        filtros: dict[str, str] | None = None,
     ) -> str:
-        estado = self.obtener_estado(fecha_desde=fecha_desde, fecha_hasta=fecha_hasta)
-        tabla = next((item for item in estado.tablas if item.codigo == codigo_reporte), None)
-        if tabla is None:
-            raise ValueError("No existe el reporte seleccionado para exportacion.")
+        estado = self.obtener_estado(codigo_reporte=codigo_reporte, filtros=filtros)
+        if estado.tabla_actual is None:
+            raise ValueError("No existe vista previa para el reporte seleccionado.")
+        filtros_norm = self._normalizar_filtros(filtros)
         return self._servicio_reporte_pdf.generar_pdf(
-            tabla=tabla,
-            fecha_desde=fecha_desde,
-            fecha_hasta=fecha_hasta,
+            tabla=estado.tabla_actual,
+            fecha_desde=filtros_norm.get("fecha_desde", ""),
+            fecha_hasta=filtros_norm.get("fecha_hasta", ""),
             lineas_encabezado=self._obtener_lineas_encabezado_documental(),
             ruta_destino=ruta_destino,
         )
@@ -110,6 +169,22 @@ class ServicioReportes:
             else "0"
         )
         return abrir, imprimir
+
+    @staticmethod
+    def _normalizar_filtros(filtros: dict[str, str] | None) -> dict[str, str]:
+        base = {
+            "estado_abonado": "TODOS",
+            "estado_servicio": "TODOS",
+            "barrio": "TODOS",
+            "abonado_id": "TODOS",
+            "casa_id": "TODOS",
+            "fecha_desde": "",
+            "fecha_hasta": "",
+            "incluir_mora": "1",
+        }
+        if filtros:
+            base.update({clave: str(valor) for clave, valor in filtros.items() if valor is not None})
+        return base
 
     @staticmethod
     def _validar_rango(fecha_desde: str, fecha_hasta: str) -> None:

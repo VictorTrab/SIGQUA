@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import sys
+from typing import Callable
 
 from dotenv import load_dotenv
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QIcon
-from PySide6.QtWidgets import QApplication, QMainWindow, QSizePolicy
+from PySide6.QtGui import QCloseEvent, QFont, QIcon
+from PySide6.QtWidgets import QApplication, QDialog, QMainWindow, QSizePolicy
 
 from comun.base_datos import GestorBaseDatos
 from comun.configuracion.gestor_rutas import GestorRutas
 from comun.respaldo import ServicioRespaldoLocal
 from comun.logs import obtener_logger_sigqua
 from comun.sesion import SesionAplicacion
-from comun.ui import ContenedorApiladoAjustable
+from comun.ui import ContenedorApiladoAjustable, DialogoConfirmacionSigqua, DialogoMensajeSigqua
 from comun.ui.qt_mensajes import configurar_filtro_mensajes_qt
 from modulos.autenticacion import (
     ControladorAutenticacion,
@@ -118,6 +119,28 @@ FLAGS_VENTANA_PRINCIPAL = (
     | Qt.WindowType.WindowMaximizeButtonHint
     | Qt.WindowType.WindowCloseButtonHint
 )
+
+
+class VentanaPrincipalSigqua(QMainWindow):
+    """Ventana principal con cierre controlado para respaldar sesiones activas."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._callback_cierre_controlado: Callable[[], bool] | None = None
+
+    def configurar_callback_cierre_controlado(self, callback: Callable[[], bool]) -> None:
+        self._callback_cierre_controlado = callback
+
+    def closeEvent(self, evento: QCloseEvent) -> None:  # noqa: N802
+        if self._callback_cierre_controlado is None:
+            evento.accept()
+            return
+        if self._callback_cierre_controlado():
+            evento.accept()
+            return
+        evento.ignore()
+
+
 def crear_ventana_principal(
     gestor_rutas: GestorRutas | None = None,
 ) -> tuple[QApplication, QMainWindow, VistaAutenticacion]:
@@ -201,7 +224,7 @@ def crear_ventana_principal(
     contenedor_central.setMinimumSize(0, 0)
     contenedor_central.addWidget(vista_autenticacion)
 
-    ventana_principal = QMainWindow()
+    ventana_principal = VentanaPrincipalSigqua()
     ventana_principal.setWindowTitle("SIGQUA | Autenticación")
     ventana_principal.setCentralWidget(contenedor_central)
     _aplicar_modo_autenticacion(ventana_principal)
@@ -237,6 +260,12 @@ def crear_ventana_principal(
     ventana_principal.servicio_configuracion = servicio_configuracion
     ventana_principal.servicio_mantenimiento = servicio_mantenimiento
     ventana_principal.vista_autenticacion = vista_autenticacion
+    ventana_principal.configurar_callback_cierre_controlado(
+        lambda: _manejar_cierre_ventana_principal(
+            ventana_principal=ventana_principal,
+            servicio_autenticacion=servicio_autenticacion,
+        )
+    )
     logger.info("Ventana principal lista y mostrando autenticacion.")
     return aplicacion, ventana_principal, vista_autenticacion
 
@@ -494,13 +523,71 @@ def _refrescar_modulos_operativos(
         ventana_principal.controlador_configuracion.mostrar_para_actor(usuario)
 
 
+def _ejecutar_respaldo_por_cierre_sesion(ventana_principal: QMainWindow) -> tuple[bool, str]:
+    """Genera el respaldo obligatorio de cierre sin bloquear la salida si falla."""
+    sesion_activa = getattr(ventana_principal, "sesion_activa", None)
+    actor_id = None if sesion_activa is None else sesion_activa.usuario.identificador
+    servicio_configuracion = getattr(ventana_principal, "servicio_configuracion", None)
+    if servicio_configuracion is None:
+        logger.warning("No se genero respaldo de cierre porque Configuracion no esta inicializada.")
+        return False, "No se pudo crear el respaldo automatico de cierre."
+    resultado = servicio_configuracion.crear_respaldo_automatico(actor_id=actor_id)
+    if resultado.exito:
+        logger.info("Respaldo automatico de cierre generado correctamente.")
+        return True, resultado.mensaje
+    logger.warning("Fallo el respaldo automatico de cierre: %s", resultado.mensaje)
+    return False, "No se pudo crear el respaldo automatico. Puedes continuar; revisa Respaldos luego."
+
+
+def _manejar_cierre_ventana_principal(
+    ventana_principal: QMainWindow,
+    servicio_autenticacion: ServicioAutenticacion,
+) -> bool:
+    """Controla el cierre con X y ejecuta respaldo si hay sesion activa."""
+    sesion_activa = getattr(ventana_principal, "sesion_activa", None)
+    if sesion_activa is None:
+        return True
+    if QApplication.platformName().lower() == "offscreen":
+        _ejecutar_respaldo_por_cierre_sesion(ventana_principal)
+        servicio_autenticacion.cerrar_sesion(sesion_activa.token_sesion)
+        ventana_principal.sesion_activa = None
+        return True
+    dialogo = DialogoConfirmacionSigqua(
+        titulo="Cerrar SIGQUA",
+        descripcion=(
+            "Se cerrara la sesion actual y se generara un respaldo automatico antes de salir."
+        ),
+        detalles=(("Usuario", sesion_activa.usuario.nombre_usuario),),
+        texto_confirmar="Cerrar sistema",
+        parent=ventana_principal,
+    )
+    if dialogo.exec() != QDialog.DialogCode.Accepted:
+        return False
+    respaldo_ok, mensaje_respaldo = _ejecutar_respaldo_por_cierre_sesion(ventana_principal)
+    if not respaldo_ok:
+        DialogoMensajeSigqua(
+            titulo="Respaldo no generado",
+            mensaje=mensaje_respaldo,
+            variante="advertencia",
+            parent=ventana_principal,
+        ).exec()
+    resultado_cierre = servicio_autenticacion.cerrar_sesion(sesion_activa.token_sesion)
+    if not resultado_cierre.exito:
+        logger.warning("No fue posible cerrar la sesion durante cierre de ventana: %s", resultado_cierre.mensaje)
+    ventana_principal.sesion_activa = None
+    return True
+
+
 def _manejar_cierre_sesion(
     ventana_principal: QMainWindow,
     servicio_autenticacion: ServicioAutenticacion,
 ) -> None:
     """Cierra la sesion activa y retorna al login."""
     sesion_activa = getattr(ventana_principal, "sesion_activa", None)
+    respaldo_ok = True
+    mensaje_respaldo = ""
     if sesion_activa is not None:
+        respaldo_ok, mensaje_respaldo = _ejecutar_respaldo_por_cierre_sesion(ventana_principal)
         resultado_cierre = servicio_autenticacion.cerrar_sesion(sesion_activa.token_sesion)
         if resultado_cierre.exito:
             logger.info(
@@ -517,8 +604,8 @@ def _manejar_cierre_sesion(
     ventana_principal.setWindowTitle("SIGQUA | Autenticación")
     ventana_principal.contenedor_central.setCurrentWidget(vista_autenticacion)
     vista_autenticacion.mostrar_login(
-        mensaje="Sesion cerrada correctamente.",
-        es_exito=True,
+        mensaje="Sesion cerrada correctamente." if respaldo_ok else mensaje_respaldo,
+        es_exito=respaldo_ok,
     )
     _aplicar_modo_autenticacion(ventana_principal)
     logger.info("Se regreso al flujo de autenticacion.")

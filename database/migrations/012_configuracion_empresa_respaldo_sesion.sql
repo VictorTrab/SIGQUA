@@ -14,10 +14,7 @@ INSERT OR IGNORE INTO configuracion_sistema(clave, valor, tipo_dato, categoria, 
 ('respaldo.secundaria_activa', '0', 'BOOLEANO', 'Respaldo', 'Indica si SIGQUA debe guardar una copia secundaria del respaldo.', 1),
 ('respaldo.comprimir_zip', '1', 'BOOLEANO', 'Respaldo', 'Indica si el respaldo debe comprimirse como ZIP.', 1),
 ('respaldo.organizar_por_periodo', '1', 'BOOLEANO', 'Respaldo', 'Organiza respaldos por carpetas de año y mes.', 1),
-('respaldo.retencion_dias', '30', 'ENTERO', 'Respaldo', 'Cantidad de dias a conservar respaldos gestionados por SIGQUA.', 1),
-('respaldo.programacion_tipo', 'DESACTIVADO', 'TEXTO', 'Respaldo', 'Tipo de programacion visible para el respaldo automatico.', 1),
-('respaldo.programacion_hora', '18:00', 'TEXTO', 'Respaldo', 'Hora programada para el respaldo automatico.', 1),
-('respaldo.programacion_dia_semana', 'VIERNES', 'TEXTO', 'Respaldo', 'Dia de semana usado cuando la programacion es semanal.', 1);
+('respaldo.retencion_dias', '30', 'ENTERO', 'Respaldo', 'Cantidad de dias a conservar respaldos gestionados por SIGQUA.', 1);
 
 UPDATE configuracion_sistema
 SET valor = COALESCE(NULLIF((SELECT valor FROM configuracion_sistema WHERE clave = 'junta.nombre'), ''), valor)

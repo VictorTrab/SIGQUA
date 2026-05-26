@@ -31,6 +31,7 @@ from modulos.pagos.entidades import FormularioPago  # noqa: E402
 from modulos.pagos.repositorio import RepositorioPagosSQLite  # noqa: E402
 from modulos.pagos.servicio import ServicioPagos  # noqa: E402
 from modulos.reportes.repositorio import RepositorioReportesSQLite  # noqa: E402
+from modulos.reportes.servicio import ServicioReportes  # noqa: E402
 from reportlab.platypus import Table  # noqa: E402
 
 
@@ -84,9 +85,13 @@ class TestDocumentosPdf(unittest.TestCase):
         self.assertTrue(Path(ruta_pdf).read_bytes().startswith(b"%PDF"))
 
     def test_servicio_reporte_pdf_genera_pdf_tabular(self) -> None:
-        servicio_reportes = RepositorioReportesSQLite(self.gestor_base_datos)
-        estado = servicio_reportes.obtener_estado(fecha_desde="2026-01-01", fecha_hasta="2026-12-31")
-        tabla = next(tabla for tabla in estado.tablas if tabla.codigo == "casas_estado")
+        servicio_reportes = ServicioReportes(RepositorioReportesSQLite(self.gestor_base_datos))
+        estado = servicio_reportes.obtener_estado(
+            codigo_reporte="servicio_casas",
+            filtros={"fecha_desde": "2026-01-01", "fecha_hasta": "2026-12-31"},
+        )
+        assert estado.tabla_actual is not None
+        tabla = estado.tabla_actual
         ruta_pdf = self.servicio_reporte_pdf.generar_pdf(
             tabla=tabla,
             fecha_desde="2026-01-01",
@@ -98,9 +103,13 @@ class TestDocumentosPdf(unittest.TestCase):
         self.assertTrue(Path(ruta_pdf).read_bytes().startswith(b"%PDF"))
 
     def test_servicio_reporte_pdf_rechaza_fecha_emision_fuera_del_dia_actual(self) -> None:
-        servicio_reportes = RepositorioReportesSQLite(self.gestor_base_datos)
-        estado = servicio_reportes.obtener_estado(fecha_desde="2026-01-01", fecha_hasta="2026-12-31")
-        tabla = next(tabla for tabla in estado.tablas if tabla.codigo == "casas_estado")
+        servicio_reportes = ServicioReportes(RepositorioReportesSQLite(self.gestor_base_datos))
+        estado = servicio_reportes.obtener_estado(
+            codigo_reporte="servicio_casas",
+            filtros={"fecha_desde": "2026-01-01", "fecha_hasta": "2026-12-31"},
+        )
+        assert estado.tabla_actual is not None
+        tabla = estado.tabla_actual
 
         with self.assertRaises(ValueError):
             self.servicio_reporte_pdf.construir_dto(
@@ -147,10 +156,7 @@ class TestDocumentosPdf(unittest.TestCase):
             total_recargo_mora="L 30.00",
             total_general="L 180.00",
             firma_habilitada=False,
-            firma_nombre="",
-            firma_cargo="",
-            firma_identificador="",
-            firma_texto_apoyo="",
+            firma_texto_linea="Firma autorizada",
         )
 
         elementos = generador._construir_elementos_estado_cuenta(dto)

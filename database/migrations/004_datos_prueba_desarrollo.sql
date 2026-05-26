@@ -667,7 +667,7 @@ INSERT INTO comprobantes(
 SELECT
     p.id,
     'REC-PRUEBA-001',
-    'TEXTO',
+    'PDF',
     NULL,
     NULL,
     (SELECT id FROM usuarios WHERE lower(nombre_usuario) = 'admin')

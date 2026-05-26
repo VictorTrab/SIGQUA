@@ -80,6 +80,10 @@ class ServicioPagos:
             alertas.append(
                 f"La casa tiene {casa.meses_vencidos} mes(es) vencido(s) y se cobraran primero."
             )
+        if casa.estado_servicio == "CORTADO":
+            alertas.append(
+                "La casa esta cortada: en este flujo solo se permite regularizar deuda existente, sin adelantos."
+            )
         if casa.deuda_total_centavos <= 0:
             alertas.append(
                 "La casa no tiene deuda mensual pendiente; cualquier pago se tratara como adelanto si la regla vigente lo permite."
@@ -223,6 +227,12 @@ class ServicioPagos:
 
         meses_adelantados = meses_solicitados - len(detalles)
         if meses_adelantados > 0:
+            if casa.estado_servicio == "CORTADO":
+                return ResultadoPago(
+                    False,
+                    "No se pueden registrar meses adelantados mientras la casa este cortada. Primero regulariza la deuda pendiente.",
+                    "VALIDACION",
+                )
             if resumen_deuda.deuda_vencida_no_mensual_centavos > 0:
                 return ResultadoPago(
                     False,
@@ -276,17 +286,30 @@ class ServicioPagos:
         if isinstance(confirmacion, ResultadoPago):
             return confirmacion
         try:
-            comprobante = self.repositorio_pagos.guardar_pago_confirmado(
-                resumen=confirmacion,
-                actor_id=actor_id,
-            )
+            if confirmacion.es_operacion_compuesta and confirmacion.tipo_operacion_compuesta == "RECONEXION_COMPUESTA":
+                comprobantes = self.repositorio_pagos.guardar_operacion_compuesta_confirmada(
+                    resumen=confirmacion,
+                    actor_id=actor_id,
+                )
+                comprobante = comprobantes[-1] if comprobantes else None
+            else:
+                comprobante = self.repositorio_pagos.guardar_pago_confirmado(
+                    resumen=confirmacion,
+                    actor_id=actor_id,
+                )
+                comprobantes = () if comprobante is None else (comprobante,)
         except Exception as error:
             return ResultadoPago(False, f"No fue posible registrar el pago. {error}", "ERROR_SQLITE")
+        mensaje = f"Pago registrado correctamente. Comprobante {comprobante.numero_comprobante}." if comprobante is not None else "Pago registrado correctamente."
+        if len(comprobantes) > 1:
+            numeros = ", ".join(item.numero_comprobante for item in comprobantes)
+            mensaje = f"Operacion registrada con comprobantes separados: {numeros}."
         return ResultadoPago(
             True,
-            f"Pago registrado correctamente. Comprobante {comprobante.numero_comprobante}.",
+            mensaje,
             "OK",
             comprobante,
+            tuple(comprobantes),
         )
 
     def _validar_estado_operativo_mensual(
@@ -307,18 +330,12 @@ class ServicioPagos:
                 "No se puede registrar pago mensual para una casa suspendida administrativamente. Reactiva o reasigna primero un abonado activo responsable.",
                 "VALIDACION",
             )
-        if estado_servicio == "CORTADO":
-            return ResultadoPago(
-                False,
-                "La casa esta cortada. El pago mensual directo no aplica en este flujo; primero debe resolverse mediante conexion o reconexion segun corresponda.",
-                "VALIDACION",
-            )
         if estado_servicio == "INACTIVO":
             return ResultadoPago(False, "No se puede registrar pago mensual para una casa inactiva.", "VALIDACION")
-        if estado_servicio != "ACTIVO":
+        if estado_servicio not in {"ACTIVO", "CORTADO"}:
             return ResultadoPago(
                 False,
-                f"La casa debe estar ACTIVA para registrar pago mensual. Estado actual: {estado_servicio}.",
+                f"La casa debe estar ACTIVA o CORTADA para registrar regularizacion mensual. Estado actual: {estado_servicio}.",
                 "VALIDACION",
             )
         return None
@@ -540,6 +557,30 @@ class ServicioPagos:
             return ResultadoPago(False, "La fecha de activacion no es valida.", "VALIDACION")
 
         detalles: list[DetalleAplicacionPago] = []
+        if tipo_pago == TIPO_PAGO_RECONEXION:
+            resumen_deuda = self.repositorio_pagos.obtener_resumen_deuda_pago(casa.casa_id)
+            cargos_mensuales = self.repositorio_pagos.listar_cargos_mensuales(casa.casa_id)
+            if resumen_deuda.deuda_total_centavos > 0 and not cargos_mensuales:
+                return ResultadoPago(
+                    False,
+                    "La casa tiene deuda activa no mensual que debe regularizarse antes de la reconexion compuesta.",
+                    "VALIDACION",
+                )
+            for cargo in cargos_mensuales:
+                detalles.append(
+                    DetalleAplicacionPago(
+                        cargo_id=cargo.identificador,
+                        periodo_id=cargo.periodo_id,
+                        periodo_anio=cargo.periodo_anio,
+                        periodo_mes=cargo.periodo_mes,
+                        periodo_nombre=cargo.periodo_nombre,
+                        concepto_codigo=cargo.concepto_codigo,
+                        descripcion=cargo.descripcion,
+                        monto_centavos=cargo.saldo_pendiente_centavos,
+                        etiqueta="Regularizacion",
+                        tipo_pago_destino=TIPO_PAGO_MENSUALIDAD,
+                    )
+                )
         if tipo_pago == TIPO_PAGO_CONEXION:
             if formulario.monto_conexion_centavos <= 0:
                 return ResultadoPago(False, "Indica un monto valido para la conexion.", "VALIDACION")
@@ -554,6 +595,7 @@ class ServicioPagos:
                     descripcion="Conexion de servicio",
                     monto_centavos=formulario.monto_conexion_centavos,
                     etiqueta="Conexion",
+                    tipo_pago_destino=TIPO_PAGO_CONEXION,
                 )
             )
         else:
@@ -570,6 +612,7 @@ class ServicioPagos:
                     descripcion="Reconexion de servicio",
                     monto_centavos=formulario.monto_reconexion_centavos,
                     etiqueta="Reconexion",
+                    tipo_pago_destino=TIPO_PAGO_RECONEXION,
                 )
             )
             if formulario.multa_corte_centavos > 0:
@@ -584,6 +627,7 @@ class ServicioPagos:
                         descripcion="Multa por corte",
                         monto_centavos=formulario.multa_corte_centavos,
                         etiqueta="Multa",
+                        tipo_pago_destino=TIPO_PAGO_RECONEXION,
                     )
                 )
 
@@ -609,10 +653,16 @@ class ServicioPagos:
                     descripcion=f"Mensualidad prorrateada desde {fecha_real.isoformat()}",
                     monto_centavos=monto_prorrateado,
                     etiqueta="Prorrateo",
+                    tipo_pago_destino=tipo_pago,
                 )
             )
 
         total_pago = sum(detalle.monto_centavos for detalle in detalles)
+        monto_regularizado = sum(
+            detalle.monto_centavos
+            for detalle in detalles
+            if detalle.tipo_pago_destino == TIPO_PAGO_MENSUALIDAD
+        )
         return ResumenConfirmacionPago(
             casa=casa,
             tipo_pago=tipo_pago,
@@ -620,10 +670,16 @@ class ServicioPagos:
             detalles=tuple(detalles),
             saldo_anterior_centavos=casa.deuda_total_centavos,
             total_pago_centavos=total_pago,
-            saldo_posterior_centavos=casa.deuda_total_centavos,
+            saldo_posterior_centavos=max(0, casa.deuda_total_centavos - monto_regularizado),
             referencia=referencia,
             observaciones=formulario.observaciones.strip(),
             fecha_activacion=fecha_activacion,
+            es_operacion_compuesta=(tipo_pago == TIPO_PAGO_RECONEXION and monto_regularizado > 0),
+            tipo_operacion_compuesta=(
+                "RECONEXION_COMPUESTA"
+                if tipo_pago == TIPO_PAGO_RECONEXION and monto_regularizado > 0
+                else ""
+            ),
         )
 
     @staticmethod

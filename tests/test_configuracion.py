@@ -22,22 +22,6 @@ from modulos.configuracion.repositorio import RepositorioConfiguracionSQLite  # 
 from modulos.configuracion.servicio import ServicioConfiguracion  # noqa: E402
 
 
-class ProgramadorTareasFalso:
-    def __init__(self) -> None:
-        self.comando = ""
-        self.proxima_ejecucion = ""
-
-    def programar(self, configuracion, comando: str) -> None:
-        self.comando = comando
-        self.proxima_ejecucion = f"{configuracion.tipo}:{configuracion.hora}"
-
-    def quitar(self) -> None:
-        self.proxima_ejecucion = ""
-
-    def obtener_proxima_ejecucion(self) -> str:
-        return self.proxima_ejecucion
-
-
 class TestConfiguracion(unittest.TestCase):
     def setUp(self) -> None:
         self.raiz_temporal = RAIZ_PROYECTO / "tests" / f"_tmp_configuracion_{uuid.uuid4().hex}"
@@ -51,11 +35,9 @@ class TestConfiguracion(unittest.TestCase):
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
         self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
         self.repositorio = RepositorioConfiguracionSQLite(self.gestor_base_datos)
-        self.programador_tareas = ProgramadorTareasFalso()
         self.servicio_respaldo = ServicioRespaldoLocal(
             gestor_base_datos=self.gestor_base_datos,
             gestor_rutas=self.gestor_rutas,
-            programador_tareas=self.programador_tareas,
         )
         self.servicio = ServicioConfiguracion(
             self.repositorio,
@@ -78,11 +60,11 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.parametros_cobro.meses_adelanto_maximo, 12)
         self.assertEqual(estado.parametros_cobro.mora_leve_hasta_meses, 2)
         self.assertEqual(estado.parametros_cobro.mora_media_hasta_meses, 5)
-        self.assertEqual(estado.factura.formato_salida, "HTML")
+        self.assertEqual(estado.factura.formato_salida, "PDF")
         self.assertEqual(estado.factura.titulo_documento, "RECIBO DE PAGO")
         self.assertEqual(estado.factura.etiqueta_copia, "ORIGINAL")
         self.assertFalse(estado.factura.firma_habilitada)
-        self.assertEqual(estado.factura.firma_nombre, "")
+        self.assertEqual(estado.factura.firma_texto_linea, "Firma autorizada")
         self.assertTrue(estado.factura.abrir_pdf_automaticamente)
         self.assertFalse(estado.factura.imprimir_pdf_automaticamente)
         self.assertTrue(estado.factura.correlativo_actual.startswith("REC-"))
@@ -150,31 +132,24 @@ class TestConfiguracion(unittest.TestCase):
             texto_pie="Conserve este comprobante.",
             texto_legal_inferior="No se aceptan anulaciones desde caja.",
             etiqueta_copia="ORIGINAL",
-            formato_salida="html",
+            formato_salida="pdf",
             mostrar_correo=True,
             mostrar_telefono=True,
             mostrar_direccion=True,
             mostrar_identificador_fiscal=True,
             firma_habilitada=True,
-            firma_nombre="Administracion SIGQUA",
-            firma_cargo="Encargado de caja",
-            firma_identificador="0801-01-0001",
-            firma_texto_apoyo="Documento validado para uso interno.",
+            firma_texto_linea="Firma autorizada",
             abrir_pdf_automaticamente=False,
             imprimir_pdf_automaticamente=True,
             actor_id=1,
         )
         resultado_respaldo = self.servicio.guardar_operacion_respaldo(
-            respaldo_automatico=True,
             ruta_principal=str(self.gestor_rutas.obtener_ruta_respaldos()),
             ruta_secundaria=str(self.raiz_temporal / "respaldos_secundarios"),
             secundaria_activa=True,
             comprimir_zip=True,
             organizar_por_periodo=True,
             retencion_dias=15,
-            programacion_tipo="DIARIO",
-            programacion_hora="18:00",
-            programacion_dia_semana="VIERNES",
             duracion_sesion_horas=4.0,
             actor_id=1,
         )
@@ -185,29 +160,23 @@ class TestConfiguracion(unittest.TestCase):
         estado = self.servicio.obtener_estado()
         self.assertEqual(estado.factura.titulo_documento, "RECIBO OFICIAL DE PAGO")
         self.assertEqual(estado.factura.texto_pie, "Conserve este comprobante.")
-        self.assertEqual(estado.factura.formato_salida, "HTML")
+        self.assertEqual(estado.factura.formato_salida, "PDF")
         self.assertTrue(estado.factura.mostrar_identificador_fiscal)
         self.assertTrue(estado.factura.firma_habilitada)
-        self.assertEqual(estado.factura.firma_nombre, "Administracion SIGQUA")
+        self.assertEqual(estado.factura.firma_texto_linea, "Firma autorizada")
         self.assertFalse(estado.factura.abrir_pdf_automaticamente)
         self.assertTrue(estado.factura.imprimir_pdf_automaticamente)
         self.assertTrue(estado.operacion.respaldo_automatico)
-        self.assertEqual(estado.operacion.programacion_tipo, "DIARIO")
         self.assertEqual(estado.seguridad.duracion_sesion_horas, 4.0)
-        self.assertEqual(self.programador_tareas.proxima_ejecucion, "DIARIO:18:00")
 
     def test_crear_respaldo_manual_genera_zip_y_registra_historial(self) -> None:
         self.servicio.guardar_operacion_respaldo(
-            respaldo_automatico=False,
             ruta_principal=str(self.gestor_rutas.obtener_ruta_respaldos()),
             ruta_secundaria=str(self.raiz_temporal / "copias"),
             secundaria_activa=True,
             comprimir_zip=True,
             organizar_por_periodo=True,
             retencion_dias=30,
-            programacion_tipo="DESACTIVADO",
-            programacion_hora="18:00",
-            programacion_dia_semana="VIERNES",
             duracion_sesion_horas=8.0,
             actor_id=1,
         )
@@ -229,7 +198,7 @@ class TestConfiguracion(unittest.TestCase):
         self.assertTrue(bool(estado.operacion.ultimo_respaldo_hash))
         self.assertEqual(estado.operacion.ultimo_respaldo_generado_por, "Administrador del Sistema")
 
-    def test_no_permite_firma_habilitada_sin_nombre(self) -> None:
+    def test_firma_visual_vacia_usa_texto_predeterminado(self) -> None:
         resultado = self.servicio.guardar_parametros_factura(
             titulo_documento="RECIBO",
             subtitulo_documento="",
@@ -243,17 +212,14 @@ class TestConfiguracion(unittest.TestCase):
             mostrar_direccion=True,
             mostrar_identificador_fiscal=False,
             firma_habilitada=True,
-            firma_nombre="",
-            firma_cargo="Caja",
-            firma_identificador="",
-            firma_texto_apoyo="",
+            firma_texto_linea="",
             abrir_pdf_automaticamente=True,
             imprimir_pdf_automaticamente=False,
             actor_id=1,
         )
 
-        self.assertFalse(resultado.exito)
-        self.assertEqual(resultado.codigo, "VALIDACION")
+        self.assertTrue(resultado.exito)
+        self.assertEqual(self.servicio.obtener_estado().factura.firma_texto_linea, "Firma autorizada")
 
     def test_no_permite_meses_corte_invalido(self) -> None:
         resultado = self.servicio.guardar_parametros_cobro(
@@ -308,45 +274,6 @@ class TestConfiguracion(unittest.TestCase):
 
         self.assertFalse(resultado.exito)
         self.assertEqual(resultado.codigo, "VALIDACION")
-
-    def test_guardado_laboratorio_visual_actualiza_estado(self) -> None:
-        resultado = self.servicio.guardar_laboratorio_visual(
-            fondo_aplicado=True,
-            fondo_modo="degradado",
-            fondo_color_primario="#112233",
-            fondo_color_secundario="#445566",
-            modal_modo="solido",
-            modal_color_primario="#778899",
-            modal_color_secundario="#AABBCC",
-            actor_id=1,
-        )
-
-        self.assertTrue(resultado.exito)
-
-        estado = self.servicio.obtener_estado()
-        self.assertTrue(estado.laboratorio_visual.fondo_aplicado)
-        self.assertEqual(estado.laboratorio_visual.fondo_modo, "DEGRADADO")
-        self.assertEqual(estado.laboratorio_visual.fondo_color_primario, "#112233")
-        self.assertEqual(estado.laboratorio_visual.fondo_color_secundario, "#445566")
-        self.assertEqual(estado.laboratorio_visual.modal_modo, "SOLIDO")
-        self.assertEqual(estado.laboratorio_visual.modal_color_primario, "#778899")
-        self.assertEqual(estado.laboratorio_visual.modal_color_secundario, "#778899")
-
-    def test_no_permite_color_invalido_en_laboratorio_visual(self) -> None:
-        resultado = self.servicio.guardar_laboratorio_visual(
-            fondo_aplicado=False,
-            fondo_modo="SOLIDO",
-            fondo_color_primario="azul",
-            fondo_color_secundario="#445566",
-            modal_modo="DEGRADADO",
-            modal_color_primario="#778899",
-            modal_color_secundario="#AABBCC",
-            actor_id=1,
-        )
-
-        self.assertFalse(resultado.exito)
-        self.assertEqual(resultado.codigo, "VALIDACION")
-
 
 if __name__ == "__main__":
     unittest.main()

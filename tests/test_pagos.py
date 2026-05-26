@@ -126,18 +126,12 @@ class TestPagos(unittest.TestCase):
                 UPDATE configuracion_sistema
                 SET valor = CASE clave
                     WHEN 'documentos.firma_habilitada' THEN '1'
-                    WHEN 'documentos.firma_nombre' THEN 'Tesoreria SIGQUA'
-                    WHEN 'documentos.firma_cargo' THEN 'Encargado'
-                    WHEN 'documentos.firma_identificador' THEN 'ID-01'
-                    WHEN 'documentos.firma_texto_apoyo' THEN 'Firma operativa'
+                    WHEN 'documentos.firma_texto_linea' THEN 'Firma autorizada'
                     ELSE valor
                 END
                 WHERE clave IN (
                     'documentos.firma_habilitada',
-                    'documentos.firma_nombre',
-                    'documentos.firma_cargo',
-                    'documentos.firma_identificador',
-                    'documentos.firma_texto_apoyo'
+                    'documentos.firma_texto_linea'
                 );
                 """
             )
@@ -146,7 +140,7 @@ class TestPagos(unittest.TestCase):
         configuracion = self.servicio.obtener_configuracion_recibo()
 
         self.assertTrue(configuracion.firma_habilitada)
-        self.assertEqual(configuracion.firma_nombre, "Tesoreria SIGQUA")
+        self.assertEqual(configuracion.firma_texto_linea, "Firma autorizada")
 
     def test_mensualidad_cubre_primero_el_cargo_mas_antiguo(self) -> None:
         casa_id = self._obtener_casa_por_dni("0801199000022")
@@ -297,7 +291,7 @@ class TestPagos(unittest.TestCase):
                 (resultado.comprobante.pago_id,),
             ).fetchone()
         self.assertEqual(fila[0], "")
-        self.assertEqual(fila[1], "HTML")
+        self.assertEqual(fila[1], "PDF")
 
     def test_adelanto_rechaza_deuda_vencida_no_mensual(self) -> None:
         casa_id = self._crear_casa_activa_sin_cargos()

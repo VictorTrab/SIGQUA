@@ -247,7 +247,7 @@ class RepositorioHistorialPagosSQLite:
                 p.id AS pago_id,
                 COALESCE(co.numero_comprobante, 'Sin comprobante') AS numero_comprobante,
                 COALESCE(co.tipo_comprobante, 'MENSUALIDAD') AS tipo_comprobante,
-                COALESCE(co.formato_salida, 'HTML') AS formato_salida,
+                COALESCE(co.formato_salida, 'PDF') AS formato_salida,
                 COALESCE(co.ruta_archivo, '') AS ruta_archivo,
                 COALESCE(co.saldo_posterior_centavos, 0) AS saldo_posterior_centavos,
                 COALESCE(co.generado_en, p.fecha_pago, '') AS generado_en,
@@ -304,7 +304,7 @@ class RepositorioHistorialPagosSQLite:
             total_pagado_centavos=int(fila["total_pagado_centavos"] or 0),
             saldo_posterior_centavos=int(fila["saldo_posterior_centavos"] or 0),
             detalles=detalles,
-            formato_salida=str(fila["formato_salida"] or "HTML"),
+            formato_salida=str(fila["formato_salida"] or "PDF"),
             ruta_archivo=str(fila["ruta_archivo"] or ""),
         )
 
@@ -323,10 +323,7 @@ class RepositorioHistorialPagosSQLite:
             "factura.mostrar_direccion",
             "factura.mostrar_identificador_fiscal",
             "documentos.firma_habilitada",
-            "documentos.firma_nombre",
-            "documentos.firma_cargo",
-            "documentos.firma_identificador",
-            "documentos.firma_texto_apoyo",
+            "documentos.firma_texto_linea",
             "documentos.abrir_pdf_automaticamente",
             "documentos.imprimir_pdf_automaticamente",
         )
@@ -361,10 +358,8 @@ class RepositorioHistorialPagosSQLite:
                 valores.get("factura.mostrar_identificador_fiscal", "0")
             ),
             firma_habilitada=self._a_booleano(valores.get("documentos.firma_habilitada", "0")),
-            firma_nombre=valores.get("documentos.firma_nombre", ""),
-            firma_cargo=valores.get("documentos.firma_cargo", ""),
-            firma_identificador=valores.get("documentos.firma_identificador", ""),
-            firma_texto_apoyo=valores.get("documentos.firma_texto_apoyo", ""),
+            firma_texto_linea=valores.get("documentos.firma_texto_linea", "").strip()
+            or "Firma autorizada",
             abrir_pdf_automaticamente=self._a_booleano(
                 valores.get("documentos.abrir_pdf_automaticamente", "1")
             ),

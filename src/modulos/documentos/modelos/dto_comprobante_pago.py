@@ -38,9 +38,5 @@ class DTOComprobantePago:
     usuario_registro: str
     lineas_detalle: tuple[LineaDetalleComprobantePago, ...]
     total_pagado: str
-    saldo_posterior: str
     firma_habilitada: bool
-    firma_nombre: str
-    firma_cargo: str
-    firma_identificador: str
-    firma_texto_apoyo: str
+    firma_texto_linea: str

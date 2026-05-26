@@ -27,6 +27,7 @@ from modulos.pagos.entidades import (
     ResumenConfirmacionPago,
     TIPO_PAGO_MENSUALIDAD,
     TIPO_PAGO_PLAN,
+    TIPO_PAGO_RECONEXION,
 )
 
 
@@ -113,6 +114,13 @@ class RepositorioPagos(Protocol):
         actor_id: int,
     ) -> ComprobantePago:
         """Guarda pago, detalle y comprobante dentro de una transaccion."""
+
+    def guardar_operacion_compuesta_confirmada(
+        self,
+        resumen: ResumenConfirmacionPago,
+        actor_id: int,
+    ) -> tuple[ComprobantePago, ...]:
+        """Guarda una operacion con pagos y comprobantes separados."""
 
     def obtener_comprobante(self, pago_id: int) -> ComprobantePago | None:
         """Obtiene el comprobante completo de un pago confirmado."""
@@ -567,7 +575,7 @@ class RepositorioPagosSQLite:
                         saldo_posterior_centavos,
                         generado_por
                     )
-                    VALUES (?, ?, ?, 'HTML', ?, ?);
+                    VALUES (?, ?, ?, 'PDF', ?, ?);
                     """,
                     (
                         pago_id,
@@ -582,13 +590,135 @@ class RepositorioPagosSQLite:
             raise ValueError("No fue posible recuperar el comprobante recien generado.")
         return comprobante
 
+    def guardar_operacion_compuesta_confirmada(
+        self,
+        resumen: ResumenConfirmacionPago,
+        actor_id: int,
+    ) -> tuple[ComprobantePago, ...]:
+        if not resumen.es_operacion_compuesta:
+            comprobante = self.guardar_pago_confirmado(resumen, actor_id)
+            return (comprobante,)
+        detalles_regularizacion = tuple(
+            detalle
+            for detalle in resumen.detalles
+            if detalle.tipo_pago_destino == TIPO_PAGO_MENSUALIDAD
+        )
+        detalles_activacion = tuple(
+            detalle
+            for detalle in resumen.detalles
+            if detalle.tipo_pago_destino != TIPO_PAGO_MENSUALIDAD
+        )
+        if not detalles_regularizacion or not detalles_activacion:
+            raise ValueError("La reconexion compuesta requiere detalles separados de regularizacion y activacion.")
+        total_regularizacion = sum(detalle.monto_centavos for detalle in detalles_regularizacion)
+        total_activacion = sum(detalle.monto_centavos for detalle in detalles_activacion)
+        saldo_posterior = max(0, resumen.saldo_anterior_centavos - total_regularizacion)
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            with conexion:
+                cursor_operacion = conexion.execute(
+                    """
+                    INSERT INTO operaciones_cobro(
+                        abonado_id,
+                        casa_id,
+                        tipo_operacion,
+                        estado,
+                        descripcion,
+                        creado_por
+                    )
+                    VALUES (?, ?, 'RECONEXION_COMPUESTA', 'CONFIRMADA', ?, ?);
+                    """,
+                    (
+                        resumen.casa.abonado_id,
+                        resumen.casa.casa_id,
+                        "Reconexion con regularizacion de deuda activa.",
+                        actor_id,
+                    ),
+                )
+                operacion_id = int(cursor_operacion.lastrowid)
+                resumen_regularizacion = ResumenConfirmacionPago(
+                    casa=resumen.casa,
+                    tipo_pago=TIPO_PAGO_MENSUALIDAD,
+                    metodo_pago=resumen.metodo_pago,
+                    detalles=detalles_regularizacion,
+                    saldo_anterior_centavos=resumen.saldo_anterior_centavos,
+                    total_pago_centavos=total_regularizacion,
+                    saldo_posterior_centavos=saldo_posterior,
+                    referencia=resumen.referencia,
+                    observaciones=(resumen.observaciones or "").strip() or "Regularizacion previa a reconexion.",
+                    operacion_cobro_id=operacion_id,
+                )
+                pago_regularizacion_id = self._insertar_pago(conexion, resumen_regularizacion, actor_id)
+                self._persistir_detalles_mensualidad(conexion, pago_regularizacion_id, resumen_regularizacion)
+                numero_regularizacion = self._generar_numero_comprobante(conexion)
+                conexion.execute(
+                    """
+                    INSERT INTO comprobantes(
+                        pago_id,
+                        numero_comprobante,
+                        tipo_comprobante,
+                        formato_salida,
+                        saldo_posterior_centavos,
+                        generado_por
+                    )
+                    VALUES (?, ?, ?, 'PDF', ?, ?);
+                    """,
+                    (
+                        pago_regularizacion_id,
+                        numero_regularizacion,
+                        TIPO_PAGO_MENSUALIDAD,
+                        saldo_posterior,
+                        actor_id,
+                    ),
+                )
+                resumen_activacion = ResumenConfirmacionPago(
+                    casa=self.obtener_casa(resumen.casa.casa_id) or resumen.casa,
+                    tipo_pago=TIPO_PAGO_RECONEXION,
+                    metodo_pago=resumen.metodo_pago,
+                    detalles=detalles_activacion,
+                    saldo_anterior_centavos=saldo_posterior,
+                    total_pago_centavos=total_activacion,
+                    saldo_posterior_centavos=saldo_posterior,
+                    referencia=resumen.referencia,
+                    observaciones=resumen.observaciones,
+                    fecha_activacion=resumen.fecha_activacion,
+                    operacion_cobro_id=operacion_id,
+                )
+                pago_activacion_id = self._insertar_pago(conexion, resumen_activacion, actor_id)
+                self._persistir_detalles_activacion(conexion, pago_activacion_id, resumen_activacion, actor_id)
+                numero_activacion = self._generar_numero_comprobante(conexion)
+                conexion.execute(
+                    """
+                    INSERT INTO comprobantes(
+                        pago_id,
+                        numero_comprobante,
+                        tipo_comprobante,
+                        formato_salida,
+                        saldo_posterior_centavos,
+                        generado_por
+                    )
+                    VALUES (?, ?, ?, 'PDF', ?, ?);
+                    """,
+                    (
+                        pago_activacion_id,
+                        numero_activacion,
+                        TIPO_PAGO_RECONEXION,
+                        saldo_posterior,
+                        actor_id,
+                    ),
+                )
+        comprobante_regularizacion = self.obtener_comprobante(pago_regularizacion_id)
+        comprobante_activacion = self.obtener_comprobante(pago_activacion_id)
+        if comprobante_regularizacion is None or comprobante_activacion is None:
+            raise ValueError("No fue posible recuperar los comprobantes de la reconexion compuesta.")
+        return (comprobante_regularizacion, comprobante_activacion)
+
     def obtener_comprobante(self, pago_id: int) -> ComprobantePago | None:
         consulta = """
             SELECT
                 p.id AS pago_id,
                 co.numero_comprobante,
                 COALESCE(co.tipo_comprobante, 'MENSUALIDAD') AS tipo_comprobante,
-                COALESCE(co.formato_salida, 'HTML') AS formato_salida,
+                COALESCE(co.formato_salida, 'PDF') AS formato_salida,
                 COALESCE(co.ruta_archivo, '') AS ruta_archivo,
                 COALESCE(co.saldo_posterior_centavos, 0) AS saldo_posterior_centavos,
                 co.generado_en,
@@ -642,7 +772,7 @@ class RepositorioPagosSQLite:
             total_pagado_centavos=int(fila["total_pagado_centavos"] or 0),
             saldo_posterior_centavos=int(fila["saldo_posterior_centavos"] or 0),
             detalles=detalles,
-            formato_salida=str(fila["formato_salida"] or "HTML"),
+            formato_salida=str(fila["formato_salida"] or "PDF"),
             ruta_archivo=str(fila["ruta_archivo"] or ""),
         )
 
@@ -661,10 +791,7 @@ class RepositorioPagosSQLite:
             "factura.mostrar_direccion",
             "factura.mostrar_identificador_fiscal",
             "documentos.firma_habilitada",
-            "documentos.firma_nombre",
-            "documentos.firma_cargo",
-            "documentos.firma_identificador",
-            "documentos.firma_texto_apoyo",
+            "documentos.firma_texto_linea",
             "documentos.abrir_pdf_automaticamente",
             "documentos.imprimir_pdf_automaticamente",
         )
@@ -678,6 +805,7 @@ class RepositorioPagosSQLite:
             filas = conexion.execute(consulta, claves).fetchall()
         valores = {str(fila["clave"]): str(fila["valor"] or "") for fila in filas}
         identidad = construir_identidad_empresa(valores, nombre_predeterminado="SIGQUA")
+        texto_firma = valores.get("documentos.firma_texto_linea", "").strip() or "Firma autorizada"
         return ConfiguracionReciboPago(
             nombre_junta=identidad.nombre,
             telefono_junta=identidad.telefono,
@@ -699,10 +827,7 @@ class RepositorioPagosSQLite:
                 valores.get("factura.mostrar_identificador_fiscal", "0")
             ),
             firma_habilitada=self._a_booleano(valores.get("documentos.firma_habilitada", "0")),
-            firma_nombre=valores.get("documentos.firma_nombre", ""),
-            firma_cargo=valores.get("documentos.firma_cargo", ""),
-            firma_identificador=valores.get("documentos.firma_identificador", ""),
-            firma_texto_apoyo=valores.get("documentos.firma_texto_apoyo", ""),
+            firma_texto_linea=texto_firma,
             abrir_pdf_automaticamente=self._a_booleano(
                 valores.get("documentos.abrir_pdf_automaticamente", "1")
             ),
@@ -752,9 +877,10 @@ class RepositorioPagosSQLite:
                 saldo_a_favor_centavos,
                 observaciones,
                 tipo_pago,
-                plan_pago_id
+                plan_pago_id,
+                operacion_cobro_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?);
+            VALUES (?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?);
             """,
             (
                 resumen.casa.abonado_id,
@@ -767,6 +893,7 @@ class RepositorioPagosSQLite:
                 resumen.observaciones or None,
                 resumen.tipo_pago,
                 resumen.plan_pago_id,
+                resumen.operacion_cobro_id,
             ),
         )
         return int(cursor.lastrowid)

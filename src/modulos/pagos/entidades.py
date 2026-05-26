@@ -95,6 +95,7 @@ class DetalleAplicacionPago:
     monto_centavos: int
     etiqueta: str
     es_adelantado: bool = False
+    tipo_pago_destino: str = ""
 
 
 @dataclass(slots=True)
@@ -113,6 +114,7 @@ class FormularioPago:
     multa_corte_centavos: int = 0
     plan_pago_id: int | None = None
     cuotas_plan_pago_ids: tuple[int, ...] = ()
+    permitir_regularizacion_cortado: bool = False
 
 
 @dataclass(slots=True)
@@ -130,6 +132,9 @@ class ResumenConfirmacionPago:
     observaciones: str
     fecha_activacion: str = ""
     plan_pago_id: int | None = None
+    operacion_cobro_id: int | None = None
+    es_operacion_compuesta: bool = False
+    tipo_operacion_compuesta: str = ""
 
 
 @dataclass(slots=True)
@@ -151,7 +156,7 @@ class ComprobantePago:
     total_pagado_centavos: int = 0
     saldo_posterior_centavos: int = 0
     detalles: tuple[str, ...] = ()
-    formato_salida: str = "HTML"
+    formato_salida: str = "PDF"
     ruta_archivo: str = ""
 
 
@@ -177,10 +182,7 @@ class ConfiguracionReciboPago:
     mostrar_direccion: bool
     mostrar_identificador_fiscal: bool
     firma_habilitada: bool
-    firma_nombre: str
-    firma_cargo: str
-    firma_identificador: str
-    firma_texto_apoyo: str
+    firma_texto_linea: str
     abrir_pdf_automaticamente: bool = True
     imprimir_pdf_automaticamente: bool = False
 
@@ -249,6 +251,7 @@ class ResultadoPago:
     mensaje: str
     codigo: str = "OK"
     comprobante: ComprobantePago | None = None
+    comprobantes: tuple[ComprobantePago, ...] = ()
 
 
 @dataclass(slots=True)

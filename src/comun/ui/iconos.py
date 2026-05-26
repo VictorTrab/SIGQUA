@@ -15,7 +15,7 @@ from comun.configuracion.gestor_rutas import GestorRutas
 @lru_cache(maxsize=32)
 def obtener_icono_tabler(nombre_icono: str) -> QIcon:
     """Obtiene un icono Tabler descargado localmente."""
-    ruta_icono = GestorRutas().obtener_ruta_icono_tabler(nombre_icono)
+    ruta_icono = _resolver_ruta_icono_tabler(nombre_icono)
     return QIcon(str(ruta_icono))
 
 
@@ -42,7 +42,7 @@ def obtener_pixmap_tabler_coloreado(
     tamano: int = 20,
 ) -> QPixmap:
     """Renderiza un SVG de Tabler como pixmap coloreado."""
-    ruta_icono = GestorRutas().obtener_ruta_icono_tabler(nombre_icono)
+    ruta_icono = _resolver_ruta_icono_tabler(nombre_icono)
     renderer = QSvgRenderer(str(ruta_icono))
     pixmap = QPixmap(tamano, tamano)
     pixmap.fill(Qt.GlobalColor.transparent)
@@ -53,6 +53,21 @@ def obtener_pixmap_tabler_coloreado(
     painter.fillRect(pixmap.rect(), QColor(color_hexadecimal))
     painter.end()
     return pixmap
+
+
+def _resolver_ruta_icono_tabler(nombre_icono: str) -> Path:
+    """Normaliza nombres Tabler y evita avisos de Qt si falta un recurso."""
+    gestor_rutas = GestorRutas()
+    ruta_icono = gestor_rutas.obtener_ruta_icono_tabler(nombre_icono)
+    if ruta_icono.exists():
+        return ruta_icono
+
+    if not ruta_icono.suffix:
+        ruta_con_extension = ruta_icono.with_suffix(".svg")
+        if ruta_con_extension.exists():
+            return ruta_con_extension
+
+    return gestor_rutas.obtener_ruta_icono_tabler("help.svg")
 
 
 def obtener_pixmap_marca(

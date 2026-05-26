@@ -31,6 +31,10 @@ class PlanPago:
     barrio_nombre: str = ""
     tipo_plan: str = "RECONEXION"
     concepto_financiado: str = "RECONEXION"
+    tipo_activacion_origen: str = "RECONEXION"
+    fecha_corte_deuda: str = ""
+    deuda_financiada_centavos: int = 0
+    monto_activacion_centavos: int = 0
     prima_centavos: int = 0
     saldo_financiado_centavos: int = 0
     monto_total_centavos: int = 0
@@ -107,6 +111,9 @@ class OpcionCasaPlanPago:
     abonado_dni: str
     barrio_nombre: str
     estado_servicio: str
+    estado_administrativo: str = "OPERATIVA"
+    abonado_estado: str = "ACTIVO"
+    ha_tenido_servicio_activo: bool = False
     meses_pendientes: int = 0
     meses_en_mora: int = 0
     deuda_total_centavos: int = 0
@@ -127,12 +134,17 @@ class FormularioPlanPago:
     casa_id: int | None
     tipo_plan: str
     concepto_financiado: str
-    prima_centavos: int
-    saldo_financiado_centavos: int
-    cuota_regular_centavos: int
-    cantidad_cuotas: int
-    estado: str
-    observaciones: str
+    fecha_activacion: str = ""
+    metodo_pago_id: int | None = None
+    referencia_pago: str = ""
+    monto_activacion_centavos: int = 0
+    multa_corte_centavos: int = 0
+    prima_centavos: int = 0
+    saldo_financiado_centavos: int = 0
+    cuota_regular_centavos: int = 0
+    cantidad_cuotas: int = 0
+    estado: str = "ACTIVO"
+    observaciones: str = ""
 
 
 @dataclass(slots=True)

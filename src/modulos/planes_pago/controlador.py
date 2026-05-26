@@ -51,6 +51,7 @@ class ControladorPlanesPago:
     def _crear_plan(self) -> None:
         formulario = self._vista_planes_pago.solicitar_datos_plan(
             casas=self._servicio_planes_pago.listar_casas_disponibles(),
+            metodos_pago=self._servicio_planes_pago.listar_metodos_pago_activos(),
         )
         if formulario is None:
             return
@@ -78,6 +79,7 @@ class ControladorPlanesPago:
             return
         formulario = self._vista_planes_pago.solicitar_datos_plan(
             casas=self._servicio_planes_pago.listar_casas_disponibles(),
+            metodos_pago=self._servicio_planes_pago.listar_metodos_pago_activos(),
             plan=plan,
         )
         if formulario is None:

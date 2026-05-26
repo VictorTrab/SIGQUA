@@ -41,10 +41,7 @@ class ServicioMorosidad:
         "documentos.abrir_pdf_automaticamente",
         "documentos.imprimir_pdf_automaticamente",
         "documentos.firma_habilitada",
-        "documentos.firma_nombre",
-        "documentos.firma_cargo",
-        "documentos.firma_identificador",
-        "documentos.firma_texto_apoyo",
+        "documentos.firma_texto_linea",
     )
     CLAVES_MORA_VISUAL = (
         "cobro.mora_leve_hasta_meses",
@@ -189,9 +186,9 @@ class ServicioMorosidad:
         etiquetas = {
             FILTRO_MOROSIDAD_LEVE: "Baja",
             FILTRO_MOROSIDAD_MEDIA: "Media",
-            FILTRO_MOROSIDAD_SEVERA: "Critica",
+            FILTRO_MOROSIDAD_SEVERA: "Alta",
         }
-        return etiquetas.get(severidad, "Mora")
+        return etiquetas.get(severidad, "Baja")
 
     def _aplicar_severidad(self, fila: FilaMorosidad, rangos: tuple[int, int]) -> FilaMorosidad:
         severidad = self._resolver_severidad(fila.meses_vencidos, rangos)
@@ -250,25 +247,10 @@ class ServicioMorosidad:
                 if valores.get("documentos.firma_habilitada")
                 else "0"
             )
-            firma_nombre = (
-                valores.get("documentos.firma_nombre").valor
-                if valores.get("documentos.firma_nombre")
-                else ""
-            )
-            firma_cargo = (
-                valores.get("documentos.firma_cargo").valor
-                if valores.get("documentos.firma_cargo")
-                else ""
-            )
-            firma_identificador = (
-                valores.get("documentos.firma_identificador").valor
-                if valores.get("documentos.firma_identificador")
-                else ""
-            )
-            firma_texto_apoyo = (
-                valores.get("documentos.firma_texto_apoyo").valor
-                if valores.get("documentos.firma_texto_apoyo")
-                else ""
+            firma_texto_linea = (
+                valores.get("documentos.firma_texto_linea").valor
+                if valores.get("documentos.firma_texto_linea")
+                else "Firma autorizada"
             )
             abrir_pdf_automaticamente = ServicioMorosidad._a_booleano(
                 valores.get("documentos.abrir_pdf_automaticamente").valor

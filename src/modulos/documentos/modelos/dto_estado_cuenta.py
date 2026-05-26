@@ -48,7 +48,4 @@ class DTOEstadoCuenta:
     total_recargo_mora: str
     total_general: str
     firma_habilitada: bool
-    firma_nombre: str
-    firma_cargo: str
-    firma_identificador: str
-    firma_texto_apoyo: str
+    firma_texto_linea: str

@@ -87,24 +87,17 @@ class VistaConfiguracion(QWidget):
         bool,
         bool,
         str,
-        str,
-        str,
-        str,
         bool,
         bool,
     )
     guardar_parametros_cobro_solicitado = Signal(int, bool, int, bool, int, bool, bool, int, int, int)
     guardar_operacion_respaldo_solicitado = Signal(
-        bool,
         str,
         str,
         bool,
         bool,
         bool,
         int,
-        str,
-        str,
-        str,
         float,
     )
     crear_respaldo_manual_solicitado = Signal()
@@ -118,17 +111,6 @@ class VistaConfiguracion(QWidget):
         ("8 horas", 8.0),
         ("12 horas", 12.0),
     )
-    OPCIONES_HORARIO_RESPALDO = tuple(f"{hora:02d}:00" for hora in range(24))
-    OPCIONES_DIAS_SEMANA = (
-        "LUNES",
-        "MARTES",
-        "MIERCOLES",
-        "JUEVES",
-        "VIERNES",
-        "SABADO",
-        "DOMINGO",
-    )
-
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("vistaConfiguracion")
@@ -162,11 +144,11 @@ class VistaConfiguracion(QWidget):
             ),
         )
         self._tarjeta_respaldo.actualizar(
-            "Activo" if estado.operacion.respaldo_automatico else "Inactivo",
+            "Activo",
             (
-                f"Ultimo: {estado.operacion.ultimo_respaldo_en}."
+                f"Al cerrar sesion. Ultimo: {estado.operacion.ultimo_respaldo_en}."
                 if estado.operacion.ultimo_respaldo_en
-                else "Sin respaldos registrados."
+                else "Al cerrar sesion. Sin respaldos registrados."
             ),
         )
 
@@ -197,10 +179,7 @@ class VistaConfiguracion(QWidget):
         self._check_firma_habilitada.setChecked(estado.factura.firma_habilitada)
         self._check_abrir_pdf_automatico.setChecked(estado.factura.abrir_pdf_automaticamente)
         self._check_imprimir_pdf_automatico.setChecked(estado.factura.imprimir_pdf_automaticamente)
-        self._campo_firma_nombre.setText(estado.factura.firma_nombre)
-        self._campo_firma_cargo.setText(estado.factura.firma_cargo)
-        self._campo_firma_identificador.setText(estado.factura.firma_identificador)
-        self._campo_firma_texto_apoyo.setPlainText(estado.factura.firma_texto_apoyo)
+        self._campo_firma_texto_linea.setText(estado.factura.firma_texto_linea)
         self._valor_total_comprobantes.setText(str(estado.factura.total_comprobantes_emitidos))
         self._valor_proximo_correlativo.setText(estado.factura.proximo_correlativo)
 
@@ -236,15 +215,12 @@ class VistaConfiguracion(QWidget):
             else "No aplica a esta version."
         )
         self._valor_rangos_mora.setText(
-            f"Leve: 1-{estado.parametros_cobro.mora_leve_hasta_meses} | "
-            f"Media: {estado.parametros_cobro.mora_leve_hasta_meses + 1}-{estado.parametros_cobro.mora_media_hasta_meses} | "
-            f"Severa: {estado.parametros_cobro.mora_media_hasta_meses + 1}+"
+            f"Prioridad baja: 1-{estado.parametros_cobro.mora_leve_hasta_meses} | "
+            f"Prioridad media: {estado.parametros_cobro.mora_leve_hasta_meses + 1}-{estado.parametros_cobro.mora_media_hasta_meses} | "
+            f"Prioridad alta: {estado.parametros_cobro.mora_media_hasta_meses + 1}+"
         )
         self._actualizar_estado_campos_cobro()
 
-        self._check_respaldo_automatico.blockSignals(True)
-        self._check_respaldo_automatico.setChecked(estado.operacion.respaldo_automatico)
-        self._check_respaldo_automatico.blockSignals(False)
         self._campo_ruta_respaldos_principal.setText(estado.operacion.ruta_respaldos_principal)
         self._campo_ruta_respaldos_secundaria.setText(estado.operacion.ruta_respaldos_secundaria)
         self._check_respaldo_secundario.blockSignals(True)
@@ -253,9 +229,6 @@ class VistaConfiguracion(QWidget):
         self._check_comprimir_zip.setChecked(estado.operacion.comprimir_zip)
         self._check_organizar_periodo.setChecked(estado.operacion.organizar_por_periodo)
         self._campo_retencion_dias.setText(str(estado.operacion.retencion_dias))
-        self._combo_programacion_tipo.setCurrentText(estado.operacion.programacion_tipo.title())
-        self._combo_programacion_hora.setCurrentText(estado.operacion.programacion_hora)
-        self._combo_programacion_dia.setCurrentText(estado.operacion.programacion_dia_semana.title())
         self._seleccionar_duracion_sesion(estado.seguridad.duracion_sesion_horas)
         self._valor_ultimo_respaldo.setText(
             estado.operacion.ultimo_respaldo_en or "Sin registros"
@@ -266,13 +239,10 @@ class VistaConfiguracion(QWidget):
         self._valor_tamano_respaldo.setText(
             self._formatear_tamano_bytes(estado.operacion.ultimo_respaldo_tamano_bytes)
         )
-        self._valor_hash_respaldo.setText(estado.operacion.ultimo_respaldo_hash or "Sin hash")
+        self._valor_respaldo_automatico.setText("Activo al cerrar sesion")
         self._valor_respaldo_generado_por.setText(estado.operacion.ultimo_respaldo_generado_por)
         self._valor_ruta_respaldos.setText(estado.operacion.ruta_respaldos_principal)
         self._valor_retencion.setText(f"{estado.operacion.retencion_dias} dias")
-        self._valor_proxima_ejecucion.setText(
-            estado.operacion.proxima_ejecucion_programada or "Sin programacion activa"
-        )
         self._valor_ruta_comprobantes.setText(estado.operacion.ruta_exportaciones_comprobantes)
         self._valor_ruta_reportes.setText(estado.operacion.ruta_exportaciones_reportes)
 
@@ -291,7 +261,7 @@ class VistaConfiguracion(QWidget):
         self._valor_actualizacion.setText(estado.informacion.ultima_actualizacion or "Sin registro")
         self._valor_actualizado_por.setText(estado.informacion.actualizado_por)
 
-        self._actualizar_estado_programacion_respaldo()
+        self._actualizar_estado_respaldos()
         self._actualizar_preview_comprobante(estado, formateador_moneda)
 
     def mostrar_mensaje(self, mensaje: str, es_error: bool = False) -> None:
@@ -333,8 +303,8 @@ class VistaConfiguracion(QWidget):
         tarjetas = QGridLayout()
         tarjetas.setHorizontalSpacing(10)
         tarjetas.setVerticalSpacing(10)
-        self._tarjeta_precio = TarjetaResumenConfiguracion("Precio actual servicio")
-        self._tarjeta_correlativo = TarjetaResumenConfiguracion("Correlativo global")
+        self._tarjeta_precio = TarjetaResumenConfiguracion("Precio mensual")
+        self._tarjeta_correlativo = TarjetaResumenConfiguracion("Proximo recibo")
         self._tarjeta_adelantos = TarjetaResumenConfiguracion("Pago adelantado")
         self._tarjeta_respaldo = TarjetaResumenConfiguracion("Respaldo automatico")
         tarjetas.addWidget(self._tarjeta_precio, 0, 0)
@@ -344,11 +314,11 @@ class VistaConfiguracion(QWidget):
 
         self._tabs = QTabWidget()
         self._tabs.setObjectName("tabsConfiguracion")
-        self._tabs.addTab(self._crear_tab_datos_junta(), "Identidad de la empresa")
-        self._tabs.addTab(self._crear_tab_factura(), "Documentos y comprobantes")
-        self._tabs.addTab(self._crear_tab_parametros_cobro(), "Parámetros de cobro")
-        self._tabs.addTab(self._crear_tab_operacion_respaldo(), "Control y respaldo")
-        self._tabs.addTab(self._crear_tab_informacion(), "Información")
+        self._tabs.addTab(self._crear_tab_datos_junta(), "Organización")
+        self._tabs.addTab(self._crear_tab_factura(), "Comprobantes")
+        self._tabs.addTab(self._crear_tab_parametros_cobro(), "Cobros y morosidad")
+        self._tabs.addTab(self._crear_tab_operacion_respaldo(), "Respaldos")
+        self._tabs.addTab(self._crear_tab_informacion(), "Sistema")
 
         layout.addLayout(encabezado)
         layout.addWidget(self._mensaje)
@@ -451,23 +421,21 @@ class VistaConfiguracion(QWidget):
         self._campo_texto_legal_inferior.setFixedHeight(64)
         self._campo_etiqueta_copia = QLineEdit()
         self._combo_formato_salida = QComboBox()
-        self._combo_formato_salida.addItems(["HTML", "TEXTO", "PDF"])
+        self._combo_formato_salida.addItem("PDF")
+        self._combo_formato_salida.setEnabled(False)
         self._check_mostrar_correo = QCheckBox("Mostrar correo institucional")
         self._check_mostrar_telefono = QCheckBox("Mostrar telefono institucional")
         self._check_mostrar_direccion = QCheckBox("Mostrar direccion institucional")
         self._check_mostrar_identificador = QCheckBox("Mostrar identificador fiscal")
-        self._check_firma_habilitada = QCheckBox("Habilitar firma compartida en documentos")
+        self._check_firma_habilitada = QCheckBox("Mostrar línea de firma en documentos")
         self._check_abrir_pdf_automatico = QCheckBox(
             "Abrir automaticamente el comprobante PDF al registrar un pago"
         )
         self._check_imprimir_pdf_automatico = QCheckBox(
             "Enviar automaticamente el comprobante PDF a impresion"
         )
-        self._campo_firma_nombre = QLineEdit()
-        self._campo_firma_cargo = QLineEdit()
-        self._campo_firma_identificador = QLineEdit()
-        self._campo_firma_texto_apoyo = QPlainTextEdit()
-        self._campo_firma_texto_apoyo.setFixedHeight(70)
+        self._campo_firma_texto_linea = QLineEdit()
+        self._campo_firma_texto_linea.setPlaceholderText("Firma autorizada")
         self._valor_total_comprobantes = self._crear_valor_seguridad()
         self._valor_proximo_correlativo = self._crear_valor_seguridad()
 
@@ -512,14 +480,11 @@ class VistaConfiguracion(QWidget):
             ],
         )
         panel_firma = self._crear_panel(
-            "Firma compartida",
-            "Se reutiliza en recibos de pago y documentos de deuda generados desde el backend documental.",
+            "Firma visual",
+            "Solo imprime una linea de firma y el texto bajo la linea. No guarda cargos, identificadores ni credenciales.",
             [
                 self._check_firma_habilitada,
-                self._crear_bloque_campo("Nombre visible", self._campo_firma_nombre),
-                self._crear_bloque_campo("Cargo", self._campo_firma_cargo),
-                self._crear_bloque_campo("Identificador", self._campo_firma_identificador),
-                self._crear_bloque_campo("Texto de apoyo", self._campo_firma_texto_apoyo),
+                self._crear_bloque_campo("Texto bajo la firma", self._campo_firma_texto_linea),
             ],
         )
 
@@ -553,10 +518,7 @@ class VistaConfiguracion(QWidget):
                 self._check_mostrar_direccion.isChecked(),
                 self._check_mostrar_identificador.isChecked(),
                 self._check_firma_habilitada.isChecked(),
-                self._campo_firma_nombre.text(),
-                self._campo_firma_cargo.text(),
-                self._campo_firma_identificador.text(),
-                self._campo_firma_texto_apoyo.toPlainText(),
+                self._campo_firma_texto_linea.text(),
                 self._check_abrir_pdf_automatico.isChecked(),
                 self._check_imprimir_pdf_automatico.isChecked(),
             )
@@ -580,7 +542,7 @@ class VistaConfiguracion(QWidget):
         self._check_multa_automatica = QCheckBox("Aplicar recargo automatico por cada mes vencido")
         self._check_multa_automatica.toggled.connect(self._actualizar_estado_campos_cobro)
         self._campo_multa_automatica = CampoMontoMonetario()
-        self._check_corte_automatico = QCheckBox("Permitir corte automatico por deuda")
+        self._check_corte_automatico = QCheckBox("Sugerir corte por deuda")
         self._campo_meses_para_corte = QLineEdit()
         self._campo_meses_para_corte.setPlaceholderText("Meses de deuda para alerta o corte")
         self._check_prorrateo_activacion = QCheckBox(
@@ -593,9 +555,9 @@ class VistaConfiguracion(QWidget):
         self._valor_mora_regla = self._crear_valor_seguridad()
         self._valor_rangos_mora = self._crear_valor_seguridad()
         self._campo_mora_leve_hasta = QLineEdit()
-        self._campo_mora_leve_hasta.setPlaceholderText("Hasta cuantos meses sigue siendo leve")
+        self._campo_mora_leve_hasta.setPlaceholderText("Hasta cuantos meses mantiene prioridad baja")
         self._campo_mora_media_hasta = QLineEdit()
-        self._campo_mora_media_hasta.setPlaceholderText("Hasta cuantos meses sigue siendo media")
+        self._campo_mora_media_hasta.setPlaceholderText("Hasta cuantos meses mantiene prioridad media")
 
         panel_precio = self._crear_panel(
             "Precio mensual del servicio",
@@ -614,11 +576,11 @@ class VistaConfiguracion(QWidget):
                     self._campo_multa_automatica,
                 ),
                 self._crear_bloque_campo(
-                    "Mora leve hasta (meses)",
+                    "Prioridad baja hasta (meses)",
                     self._campo_mora_leve_hasta,
                 ),
                 self._crear_bloque_campo(
-                    "Mora media hasta (meses)",
+                    "Prioridad media hasta (meses)",
                     self._campo_mora_media_hasta,
                 ),
             ],
@@ -628,7 +590,7 @@ class VistaConfiguracion(QWidget):
             "Control global que afecta diagnostico de casas, morosidad y decision operativa del soporte.",
             [
                 self._check_corte_automatico,
-                self._crear_bloque_campo("Meses para corte o alerta", self._campo_meses_para_corte),
+                self._crear_bloque_campo("Meses vencidos para sugerir corte", self._campo_meses_para_corte),
             ],
         )
         panel_adelantos = self._crear_panel(
@@ -664,35 +626,25 @@ class VistaConfiguracion(QWidget):
         return contenido
 
     def _crear_tab_operacion_respaldo(self) -> QWidget:
-        self._check_respaldo_automatico = QCheckBox("Generar respaldo automatico de la base local")
-        self._check_respaldo_automatico.toggled.connect(self._actualizar_estado_programacion_respaldo)
         self._check_respaldo_secundario = QCheckBox("Guardar tambien una copia secundaria")
-        self._check_respaldo_secundario.toggled.connect(self._actualizar_estado_programacion_respaldo)
+        self._check_respaldo_secundario.toggled.connect(self._actualizar_estado_respaldos)
         self._check_comprimir_zip = QCheckBox("Generar ZIP comprimido")
         self._check_organizar_periodo = QCheckBox("Organizar carpetas por ano y mes")
         self._campo_ruta_respaldos_principal = QLineEdit()
         self._campo_ruta_respaldos_secundaria = QLineEdit()
         self._campo_retencion_dias = QLineEdit()
-        self._combo_programacion_tipo = QComboBox()
-        self._combo_programacion_tipo.addItems(["Desactivado", "Diario", "Semanal"])
-        self._combo_programacion_tipo.currentTextChanged.connect(self._actualizar_estado_programacion_respaldo)
-        self._combo_programacion_hora = QComboBox()
-        self._combo_programacion_hora.addItems(self.OPCIONES_HORARIO_RESPALDO)
-        self._combo_programacion_dia = QComboBox()
-        self._combo_programacion_dia.addItems([dia.title() for dia in self.OPCIONES_DIAS_SEMANA])
         self._combo_duracion_sesion = QComboBox()
         for etiqueta, valor in self.OPCIONES_DURACION_SESION:
             self._combo_duracion_sesion.addItem(etiqueta, valor)
+        self._valor_respaldo_automatico = self._crear_valor_seguridad()
         self._valor_ultimo_respaldo = self._crear_valor_seguridad()
         self._valor_estado_respaldo = self._crear_valor_seguridad()
         self._valor_total_respaldos = self._crear_valor_seguridad()
         self._valor_archivo_respaldo = self._crear_valor_seguridad()
         self._valor_tamano_respaldo = self._crear_valor_seguridad()
-        self._valor_hash_respaldo = self._crear_valor_seguridad()
         self._valor_respaldo_generado_por = self._crear_valor_seguridad()
         self._valor_ruta_respaldos = self._crear_valor_seguridad()
         self._valor_retencion = self._crear_valor_seguridad()
-        self._valor_proxima_ejecucion = self._crear_valor_seguridad()
         self._valor_ruta_comprobantes = self._crear_valor_seguridad()
         self._valor_ruta_reportes = self._crear_valor_seguridad()
         self._valor_autenticacion = self._crear_valor_seguridad()
@@ -703,24 +655,22 @@ class VistaConfiguracion(QWidget):
 
         panel_estado = self._crear_panel(
             "Estado actual",
-            "Resumen de respaldo local, seguridad operativa y rutas vinculadas al modulo.",
+            "Resumen de respaldo local ejecutado al cerrar sesion o salir del sistema.",
             [
-                self._check_respaldo_automatico,
+                self._crear_fila_resumen("Respaldo automatico", self._valor_respaldo_automatico),
                 self._crear_fila_resumen("Ultimo respaldo", self._valor_ultimo_respaldo),
                 self._crear_fila_resumen("Estado del ultimo respaldo", self._valor_estado_respaldo),
                 self._crear_fila_resumen("Total de respaldos", self._valor_total_respaldos),
                 self._crear_fila_resumen("Archivo generado", self._valor_archivo_respaldo),
                 self._crear_fila_resumen("Tamano", self._valor_tamano_respaldo),
-                self._crear_fila_resumen("Hash", self._valor_hash_respaldo),
                 self._crear_fila_resumen("Generado por", self._valor_respaldo_generado_por),
                 self._crear_fila_resumen("Carpeta principal", self._valor_ruta_respaldos),
                 self._crear_fila_resumen("Retencion", self._valor_retencion),
-                self._crear_fila_resumen("Proxima ejecucion", self._valor_proxima_ejecucion),
             ],
         )
         panel_manual = self._crear_panel(
             "Respaldo manual",
-            "Genera un snapshot seguro de SQLite con registro interno e historial operativo.",
+            "Genera una copia segura de SQLite con registro interno e historial operativo.",
             [
                 self._crear_fila_resumen(
                     "Ruta exportacion comprobantes",
@@ -728,15 +678,6 @@ class VistaConfiguracion(QWidget):
                 ),
                 self._crear_fila_resumen("Ruta exportacion reportes", self._valor_ruta_reportes),
                 self._crear_fila_botones_respaldo(),
-            ],
-        )
-        panel_automatizacion = self._crear_panel(
-            "Automatizacion",
-            "Programa respaldos en Windows sin .bat y con opciones simples para personal operativo.",
-            [
-                self._crear_bloque_campo("Tipo de programacion", self._combo_programacion_tipo),
-                self._crear_bloque_campo("Hora", self._combo_programacion_hora),
-                self._crear_bloque_campo("Dia de la semana", self._combo_programacion_dia),
             ],
         )
         panel_ubicacion = self._crear_panel(
@@ -781,15 +722,14 @@ class VistaConfiguracion(QWidget):
         grilla.setVerticalSpacing(12)
         grilla.addWidget(panel_estado, 0, 0)
         grilla.addWidget(panel_manual, 0, 1)
-        grilla.addWidget(panel_automatizacion, 1, 0)
-        grilla.addWidget(panel_ubicacion, 1, 1)
+        grilla.addWidget(panel_ubicacion, 1, 0, 1, 2)
         grilla.addWidget(panel_seguridad, 2, 0, 1, 2)
 
         contenido = self._crear_contenedor_scroll()
         contenido.widget().layout().addLayout(grilla)
         contenido.widget().layout().addWidget(
             self._crear_aviso(
-                "La restauracion sigue fuera de esta pantalla. Aqui solo configuras, programas y ejecutas respaldos locales seguros."
+                "La restauracion sigue fuera de esta pantalla. Aqui configuras carpetas y ejecutas respaldos locales seguros."
             )
         )
         contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
@@ -864,10 +804,7 @@ class VistaConfiguracion(QWidget):
                     texto_legal_inferior=estado.factura.texto_legal_inferior or "",
                     etiqueta_copia=estado.factura.etiqueta_copia or "ORIGINAL",
                     firma_habilitada=estado.factura.firma_habilitada,
-                    firma_nombre=estado.factura.firma_nombre,
-                    firma_cargo=estado.factura.firma_cargo,
-                    firma_identificador=estado.factura.firma_identificador,
-                    firma_texto_apoyo=estado.factura.firma_texto_apoyo,
+                    firma_texto_linea=estado.factura.firma_texto_linea,
                 ),
                 bloque_comprobante=(
                     ("Proximo recibo", estado.factura.proximo_correlativo),
@@ -1070,16 +1007,12 @@ class VistaConfiguracion(QWidget):
 
     def _emitir_guardado_respaldo(self) -> None:
         self.guardar_operacion_respaldo_solicitado.emit(
-            self._check_respaldo_automatico.isChecked(),
             self._campo_ruta_respaldos_principal.text().strip(),
             self._campo_ruta_respaldos_secundaria.text().strip(),
             self._check_respaldo_secundario.isChecked(),
             self._check_comprimir_zip.isChecked(),
             self._check_organizar_periodo.isChecked(),
             self._leer_entero(self._campo_retencion_dias.text()),
-            self._combo_programacion_tipo.currentText().strip().upper(),
-            self._combo_programacion_hora.currentText().strip(),
-            self._combo_programacion_dia.currentText().strip().upper(),
             float(self._combo_duracion_sesion.currentData() or 8.0),
         )
 
@@ -1106,14 +1039,7 @@ class VistaConfiguracion(QWidget):
         if ruta:
             QDesktopServices.openUrl(QUrl.fromLocalFile(ruta))
 
-    def _actualizar_estado_programacion_respaldo(self) -> None:
-        respaldo_automatico = self._check_respaldo_automatico.isChecked()
-        programacion_tipo = self._combo_programacion_tipo.currentText().strip().upper()
-        semanal = respaldo_automatico and programacion_tipo == "SEMANAL"
-        programado = respaldo_automatico and programacion_tipo != "DESACTIVADO"
-        self._combo_programacion_tipo.setEnabled(respaldo_automatico)
-        self._combo_programacion_hora.setEnabled(programado)
-        self._combo_programacion_dia.setEnabled(semanal)
+    def _actualizar_estado_respaldos(self) -> None:
         self._campo_ruta_respaldos_secundaria.setEnabled(self._check_respaldo_secundario.isChecked())
 
     def _seleccionar_duracion_sesion(self, duracion_horas: float) -> None:

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Callable, Iterable
 
-from PySide6.QtCore import QElapsedTimer, QEvent, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QDate, QElapsedTimer, QEvent, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
     QComboBox,
+    QDateEdit,
     QDialog,
     QFileDialog,
     QFrame,
@@ -60,6 +61,7 @@ from modulos.planes_pago.entidades import (
     ResumenPlanesPago,
     TIPOS_PLAN_VALIDOS,
 )
+from modulos.pagos.entidades import MetodoPago
 
 
 class TarjetaResumenPlanPago(QFrame):
@@ -144,15 +146,17 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
     def __init__(
         self,
         casas: Iterable[OpcionCasaPlanPago],
+        metodos_pago: Iterable[MetodoPago],
         plan: PlanPago | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._casas = list(casas)
+        self._metodos_pago = list(metodos_pago)
         self._casas_filtradas = list(self._casas)
         self._plan = plan
         self.setMinimumWidth(620)
-        self.setMinimumHeight(520)
+        self.setMinimumHeight(640)
         self._construir_ui()
 
     def obtener_formulario(self) -> FormularioPlanPago:
@@ -161,6 +165,11 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
             casa_id=self._combo_casa.currentData(),
             tipo_plan=self._combo_tipo_plan.currentText(),
             concepto_financiado=self._combo_tipo_plan.currentText(),
+            fecha_activacion=self._campo_fecha_activacion.date().toString("yyyy-MM-dd"),
+            metodo_pago_id=self._combo_metodo_pago.currentData(),
+            referencia_pago=self._campo_referencia_pago.text().strip(),
+            monto_activacion_centavos=self._campo_activacion.obtener_centavos(),
+            multa_corte_centavos=self._campo_multa.obtener_centavos(),
             prima_centavos=max(self._campo_prima.obtener_centavos(), 0),
             saldo_financiado_centavos=self._campo_saldo.obtener_centavos(),
             cuota_regular_centavos=self._campo_cuota.obtener_centavos(),
@@ -173,6 +182,14 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
         formulario = self.obtener_formulario()
         if formulario.casa_id is None:
             self._mensaje.setText("Selecciona una casa para continuar.")
+            self._mensaje.setVisible(True)
+            return
+        if self._plan is None and formulario.metodo_pago_id is None:
+            self._mensaje.setText("Selecciona un metodo de pago para la prima.")
+            self._mensaje.setVisible(True)
+            return
+        if self._plan is None and formulario.monto_activacion_centavos <= 0:
+            self._mensaje.setText("Indica el monto de activacion a financiar.")
             self._mensaje.setVisible(True)
             return
         if formulario.saldo_financiado_centavos <= 0:
@@ -194,7 +211,7 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
         titulo = QLabel("Editar plan de pago" if self._plan else "Nuevo plan de pago")
         titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
-            "Crea o ajusta planes asociados solo a conexion o reconexion segun la regla cerrada vigente."
+            "Crea o ajusta planes de activacion. El sistema toma la deuda vigente de la casa, suma la activacion y descuenta la prima para calcular las cuotas."
         )
         descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
@@ -209,8 +226,22 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
         self._combo_tipo_plan.addItems(TIPOS_PLAN_VALIDOS)
         self._combo_estado = QComboBox()
         self._combo_estado.addItems(["ACTIVO", "FINALIZADO", "CANCELADO", "ANULADO"])
+        self._campo_fecha_activacion = QDateEdit()
+        self._campo_fecha_activacion.setDisplayFormat("yyyy-MM-dd")
+        self._campo_fecha_activacion.setCalendarPopup(True)
+        self._campo_fecha_activacion.setDate(QDate.currentDate())
+        self._combo_metodo_pago = QComboBox()
+        self._combo_metodo_pago.addItem("Selecciona un metodo", None)
+        for metodo in self._metodos_pago:
+            self._combo_metodo_pago.addItem(metodo.nombre, metodo.identificador)
+        self._campo_referencia_pago = QLineEdit()
+        self._campo_referencia_pago.setPlaceholderText("Referencia de transferencia o deposito, si aplica")
+        self._campo_activacion = CampoMontoMonetario()
+        self._campo_multa = CampoMontoMonetario()
         self._campo_prima = CampoMontoMonetario()
         self._campo_saldo = CampoMontoMonetario()
+        self._campo_saldo.setReadOnly(True)
+        self._campo_saldo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._campo_cuota = CampoMontoMonetario()
         self._campo_cuota.setReadOnly(True)
         self._campo_cuota.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -229,20 +260,34 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
         )
         self._campo_observaciones = QPlainTextEdit()
         self._campo_observaciones.setFixedHeight(66)
-        self._campo_saldo.textChanged.connect(self._actualizar_cuota_automatica)
+        self._combo_casa.currentIndexChanged.connect(self._actualizar_resumen_financiado)
+        self._combo_tipo_plan.currentIndexChanged.connect(self._actualizar_resumen_financiado)
+        self._campo_activacion.textChanged.connect(self._actualizar_resumen_financiado)
+        self._campo_multa.textChanged.connect(self._actualizar_resumen_financiado)
+        self._campo_prima.textChanged.connect(self._actualizar_resumen_financiado)
         self._campo_cantidad.valueChanged.connect(self._actualizar_cuota_automatica)
         self._recargar_casas()
 
         if self._plan is not None:
             self._combo_tipo_plan.setCurrentText(self._plan.tipo_plan)
             self._combo_estado.setCurrentText(self._plan.estado)
+            self._campo_fecha_activacion.setDate(
+                QDate.fromString(self._plan.fecha_corte_deuda or QDate.currentDate().toString("yyyy-MM-dd"), "yyyy-MM-dd")
+            )
+            self._campo_activacion.establecer_desde_centavos(self._plan.monto_activacion_centavos)
             self._campo_prima.establecer_desde_centavos(self._plan.prima_centavos)
             self._campo_saldo.establecer_desde_centavos(self._plan.saldo_financiado_centavos)
             self._campo_cuota.establecer_desde_centavos(self._plan.cuota_regular_centavos)
             self._campo_cantidad.setValue(max(self._plan.cantidad_cuotas, 1))
             self._campo_observaciones.setPlainText(self._plan.observaciones)
             self._seleccionar_casa_por_id(self._plan.casa_id)
+            self._campo_fecha_activacion.setEnabled(False)
+            self._combo_metodo_pago.setEnabled(False)
+            self._campo_referencia_pago.setEnabled(False)
+            self._campo_activacion.setReadOnly(True)
+            self._campo_multa.setReadOnly(True)
         self._actualizar_cuota_automatica()
+        self._actualizar_resumen_financiado()
 
         grilla = QGridLayout()
         grilla.setHorizontalSpacing(10)
@@ -251,15 +296,30 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
         grilla.addWidget(self._crear_bloque("Casa asociada", self._combo_casa), 1, 0, 1, 2)
         grilla.addWidget(self._crear_bloque("Tipo de plan", self._combo_tipo_plan), 2, 0)
         grilla.addWidget(self._crear_bloque("Estado", self._combo_estado), 2, 1)
-        grilla.addWidget(self._crear_bloque("Prima", self._campo_prima), 3, 0)
-        grilla.addWidget(self._crear_bloque("Saldo financiado", self._campo_saldo), 3, 1)
-        grilla.addWidget(self._crear_bloque("Cuota mensual", self._campo_cuota), 4, 0)
-        grilla.addWidget(self._crear_bloque("Cantidad de cuotas", self._campo_cantidad), 4, 1)
+        grilla.addWidget(self._crear_bloque("Fecha de activacion", self._campo_fecha_activacion), 3, 0)
+        grilla.addWidget(self._crear_bloque("Metodo de pago de la prima", self._combo_metodo_pago), 3, 1)
+        grilla.addWidget(
+            self._crear_bloque(
+                "Referencia de pago",
+                self._campo_referencia_pago,
+                "Solo se exige cuando el metodo la requiere.",
+            ),
+            4,
+            0,
+            1,
+            2,
+        )
+        grilla.addWidget(self._crear_bloque("Monto de activacion", self._campo_activacion), 5, 0)
+        grilla.addWidget(self._crear_bloque("Multa por corte", self._campo_multa), 5, 1)
+        grilla.addWidget(self._crear_bloque("Prima", self._campo_prima), 6, 0)
+        grilla.addWidget(self._crear_bloque("Saldo financiado", self._campo_saldo), 6, 1)
+        grilla.addWidget(self._crear_bloque("Cuota mensual", self._campo_cuota), 7, 0)
+        grilla.addWidget(self._crear_bloque("Cantidad de cuotas", self._campo_cantidad), 7, 1)
         ayuda_cuota = QLabel("Calculada automaticamente segun el saldo financiado y la cantidad de cuotas.")
         ayuda_cuota.setObjectName("ayudaCampoDialogoSigqua")
         ayuda_cuota.setWordWrap(True)
         ayuda_cuota.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        grilla.addWidget(ayuda_cuota, 5, 0, 1, 2)
+        grilla.addWidget(ayuda_cuota, 8, 0, 1, 2)
 
         panel_principal = self._crear_panel(
             "Estructura del plan",
@@ -398,6 +458,20 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
             return
         cuota_regular = saldo_centavos // cantidad_cuotas
         self._campo_cuota.establecer_desde_centavos(cuota_regular)
+
+    def _actualizar_resumen_financiado(self) -> None:
+        casa_id = self._combo_casa.currentData()
+        casa = next((item for item in self._casas if item.casa_id == casa_id), None)
+        deuda = 0 if casa is None else casa.deuda_total_centavos
+        monto_activacion = self._campo_activacion.obtener_centavos()
+        multa = self._campo_multa.obtener_centavos()
+        if self._combo_tipo_plan.currentText() == "CONEXION" and multa > 0:
+            self._campo_multa.establecer_desde_centavos(0)
+            multa = 0
+        prima = max(self._campo_prima.obtener_centavos(), 0)
+        saldo = max(0, deuda + monto_activacion + multa - prima)
+        self._campo_saldo.establecer_desde_centavos(saldo)
+        self._actualizar_cuota_automatica()
 
 
 class DialogoDetallePlanPago(DialogoBaseSigqua):
@@ -760,9 +834,15 @@ class VistaPlanesPago(QWidget):
     def solicitar_datos_plan(
         self,
         casas: Iterable[OpcionCasaPlanPago],
+        metodos_pago: Iterable[MetodoPago],
         plan: PlanPago | None = None,
     ) -> FormularioPlanPago | None:
-        dialogo = DialogoFormularioPlanPago(casas=casas, plan=plan, parent=self)
+        dialogo = DialogoFormularioPlanPago(
+            casas=casas,
+            metodos_pago=metodos_pago,
+            plan=plan,
+            parent=self,
+        )
         return dialogo.obtener_formulario() if dialogo.exec() == QDialog.DialogCode.Accepted else None
 
     def mostrar_detalle_plan(
