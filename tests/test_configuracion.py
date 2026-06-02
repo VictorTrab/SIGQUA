@@ -79,9 +79,9 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.informacion.actualizado_por, "Sistema")
         self.assertFalse(estado.laboratorio_visual.fondo_aplicado)
         self.assertEqual(estado.laboratorio_visual.fondo_modo, "DEGRADADO")
-        self.assertEqual(estado.laboratorio_visual.fondo_color_primario, "#0A1728")
+        self.assertEqual(estado.laboratorio_visual.fondo_color_primario, "#071A2D")
         self.assertEqual(estado.laboratorio_visual.modal_modo, "SOLIDO")
-        self.assertEqual(estado.laboratorio_visual.modal_color_primario, "#1D364E")
+        self.assertEqual(estado.laboratorio_visual.modal_color_primario, "#0D2A45")
 
     def test_guardado_datos_junta_y_cobro_actualiza_base(self) -> None:
         resultado_junta = self.servicio.guardar_datos_junta(

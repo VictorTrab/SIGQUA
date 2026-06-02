@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import QEvent, QSize, Qt, Signal
+from PySide6.QtGui import QIcon, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
+    QCompleter,
     QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListView,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
@@ -79,6 +83,152 @@ class CampoMontoMonetario(QLineEdit):
         self.setText(formatear_monto_desde_centavos(valor))
 
 
+class CampoBusquedaSeleccionSigqua(QWidget):
+    """Campo reutilizable para buscar y seleccionar registros grandes por ID real."""
+
+    RESULTADOS_VISIBLES_MAX = 7
+    seleccion_cambiada = Signal(object, str)
+
+    def __init__(
+        self,
+        texto_sin_resultados: str,
+        placeholder: str = "",
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("campoBusquedaSeleccionSigqua")
+        self._texto_sin_resultados = texto_sin_resultados
+        self._opciones: list[tuple[int, str]] = []
+        self._opciones_por_id: dict[int, str] = {}
+        self._identificador_seleccionado: int | None = None
+        self._texto_seleccionado = ""
+        self._actualizando_texto = False
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self._campo = QLineEdit()
+        self._campo.setObjectName("campoBusquedaSeleccionSigqua")
+        self._campo.setPlaceholderText(placeholder)
+        self._campo.installEventFilter(self)
+        layout.addWidget(self._campo)
+
+        self._modelo_resultados = QStandardItemModel(self)
+        self._popup = QListView()
+        self._popup.setObjectName("popupBusquedaSeleccionSigqua")
+        self._popup.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._popup.setUniformItemSizes(True)
+
+        self._completer = QCompleter(self._modelo_resultados, self)
+        self._completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion)
+        self._completer.setMaxVisibleItems(self.RESULTADOS_VISIBLES_MAX)
+        self._completer.setPopup(self._popup)
+        self._campo.setCompleter(self._completer)
+
+        self._campo.textEdited.connect(self._al_editar_texto)
+        self._campo.editingFinished.connect(self._normalizar_seleccion_manual)
+        self._popup.clicked.connect(self._seleccionar_desde_indice)
+        self._popup.activated.connect(self._seleccionar_desde_indice)
+
+    def eventFilter(self, origen: object, evento: QEvent) -> bool:
+        if origen is self._campo and evento.type() == QEvent.Type.FocusIn:
+            self._mostrar_resultados(self._campo.text().strip())
+        return super().eventFilter(origen, evento)
+
+    def establecer_opciones(self, opciones: list[tuple[int, str]]) -> None:
+        self._opciones = list(opciones)
+        self._opciones_por_id = {identificador: etiqueta for identificador, etiqueta in self._opciones}
+        self._mostrar_resultados(self._campo.text().strip())
+
+    def seleccionar_por_id(self, identificador: int | None, etiqueta_fallback: str = "") -> None:
+        if identificador is None:
+            self._establecer_seleccion(None, "")
+            return
+        etiqueta = self._opciones_por_id.get(int(identificador), etiqueta_fallback)
+        self._establecer_seleccion(int(identificador), etiqueta)
+
+    def identificador_seleccionado(self) -> int | None:
+        return self._identificador_seleccionado
+
+    def texto_seleccionado(self) -> str:
+        return self._campo.text().strip()
+
+    def setPlaceholderText(self, texto: str) -> None:
+        self._campo.setPlaceholderText(texto)
+
+    def setEnabled(self, habilitado: bool) -> None:
+        super().setEnabled(habilitado)
+        self._campo.setEnabled(habilitado)
+
+    def setFocus(self, reason: Qt.FocusReason = Qt.FocusReason.OtherFocusReason) -> None:
+        self._campo.setFocus(reason)
+
+    def _al_editar_texto(self, texto: str) -> None:
+        texto = texto.strip()
+        if texto != self._texto_seleccionado:
+            if self._identificador_seleccionado is not None or self._texto_seleccionado:
+                self._identificador_seleccionado = None
+                self._texto_seleccionado = ""
+                self.seleccion_cambiada.emit(None, "")
+        self._mostrar_resultados(texto)
+
+    def _normalizar_seleccion_manual(self) -> None:
+        if self._actualizando_texto:
+            return
+        texto = self._campo.text().strip()
+        if not texto:
+            self._establecer_seleccion(None, "")
+            return
+        coincidencias_exactas = [
+            (identificador, etiqueta)
+            for identificador, etiqueta in self._opciones
+            if etiqueta.casefold() == texto.casefold()
+        ]
+        if len(coincidencias_exactas) == 1:
+            identificador, etiqueta = coincidencias_exactas[0]
+            self._establecer_seleccion(identificador, etiqueta)
+
+    def _mostrar_resultados(self, texto: str) -> None:
+        self._modelo_resultados.clear()
+        coincidencias = [
+            (identificador, etiqueta)
+            for identificador, etiqueta in self._opciones
+            if not texto or texto.casefold() in etiqueta.casefold()
+        ]
+        if not coincidencias:
+            item_vacio = QStandardItem(self._texto_sin_resultados)
+            item_vacio.setEditable(False)
+            item_vacio.setSelectable(False)
+            item_vacio.setEnabled(False)
+            self._modelo_resultados.appendRow(item_vacio)
+        else:
+            for identificador, etiqueta in coincidencias:
+                item = QStandardItem(etiqueta)
+                item.setData(int(identificador), Qt.ItemDataRole.UserRole)
+                item.setEditable(False)
+                self._modelo_resultados.appendRow(item)
+        if self.isEnabled() and self._campo.hasFocus():
+            self._completer.complete()
+
+    def _seleccionar_desde_indice(self, indice) -> None:
+        identificador = indice.data(Qt.ItemDataRole.UserRole)
+        etiqueta = str(indice.data(Qt.ItemDataRole.DisplayRole) or "").strip()
+        if identificador is None or not etiqueta:
+            return
+        self._establecer_seleccion(int(identificador), etiqueta)
+        self._popup.hide()
+
+    def _establecer_seleccion(self, identificador: int | None, etiqueta: str) -> None:
+        self._identificador_seleccionado = identificador
+        self._texto_seleccionado = etiqueta
+        self._actualizando_texto = True
+        self._campo.setText(etiqueta)
+        self._actualizando_texto = False
+        self.seleccion_cambiada.emit(identificador, etiqueta)
+
+
 def _crear_estilo_dialogo_sigqua(color_fondo: str, paleta: dict[str, object]) -> str:
     return f"""
     QDialog#dialogoBaseSigqua {{
@@ -101,7 +251,7 @@ def _crear_estilo_dialogo_sigqua(color_fondo: str, paleta: dict[str, object]) ->
         border: none;
         border-top: 1px solid {paleta["modal_footer_separador"]};
         margin-top: 2px;
-        padding-top: 10px;
+        padding-top: 8px;
     }}
     QScrollArea,
     QScrollArea > QWidget > QWidget,
@@ -153,8 +303,15 @@ def _crear_estilo_dialogo_sigqua(color_fondo: str, paleta: dict[str, object]) ->
         border-radius: 4px;
         background: {paleta["modal_fondo_campo"]};
         color: {paleta["modal_titulo"]};
-        padding: 8px 10px;
+        padding: 6px 8px;
         font-size: {paleta["tamano_fuente_base"] + 2}px;
+    }}
+    QLineEdit, QComboBox, QSpinBox, QWidget#campoBusquedaSeleccionSigqua QLineEdit {{
+        min-height: 18px;
+    }}
+    QPlainTextEdit, QTextEdit {{
+        padding-top: 6px;
+        padding-bottom: 6px;
     }}
     QTableWidget {{
         border: 1px solid {paleta["borde_tabla"]};
@@ -200,6 +357,22 @@ def _crear_estilo_dialogo_sigqua(color_fondo: str, paleta: dict[str, object]) ->
         color: {paleta["modal_titulo"]};
         selection-background-color: {paleta["fondo_badge_activo"]};
     }}
+    QListView#popupBusquedaSeleccionSigqua {{
+        background: {paleta["modal_fondo"]};
+        color: {paleta["modal_titulo"]};
+        border: 1px solid {paleta["modal_borde"]};
+        border-radius: 4px;
+        outline: none;
+        padding: 2px;
+    }}
+    QListView#popupBusquedaSeleccionSigqua::item {{
+        padding: 6px 8px;
+        min-height: 18px;
+    }}
+    QListView#popupBusquedaSeleccionSigqua::item:selected {{
+        background: {paleta["fondo_badge_activo"]};
+        color: {paleta["texto_principal"]};
+    }}
     QLabel {{
         color: {paleta["modal_texto"]};
         font-size: {paleta["tamano_fuente_base"] + 2}px;
@@ -217,7 +390,7 @@ def _crear_mapa_variantes_accion(paleta: dict[str, object]) -> dict[str, dict[st
         "neutro": {
             "fondo": str(paleta["boton_secundario_fondo"]),
             "fondo_hover": str(paleta["boton_secundario_hover"]),
-            "fondo_pressed": "rgba(78, 106, 156, 0.32)",
+            "fondo_pressed": str(paleta["fondo_menu_activo"]),
             "fondo_focus": str(paleta["boton_secundario_hover"]),
             "borde": str(paleta["borde_suave"]),
             "borde_hover": str(paleta["borde_principal"]),
@@ -229,11 +402,11 @@ def _crear_mapa_variantes_accion(paleta: dict[str, object]) -> dict[str, dict[st
             "icono_hover": str(paleta["texto_destacado"]),
         },
         "informacion": {
-            "fondo": str(paleta["fondo_superficie_suave"]),
+            "fondo": str(paleta["fondo_info"]),
             "fondo_hover": str(paleta["boton_secundario_hover"]),
-            "fondo_pressed": "rgba(78, 106, 156, 0.32)",
+            "fondo_pressed": str(paleta["acento_seleccion"]),
             "fondo_focus": str(paleta["boton_secundario_hover"]),
-            "borde": str(paleta["borde_medio"]),
+            "borde": str(paleta["borde_info"]),
             "borde_hover": str(paleta["borde_principal"]),
             "borde_pressed": str(paleta["borde_foco_input"]),
             "borde_focus": str(paleta["borde_foco_input"]),
@@ -245,7 +418,7 @@ def _crear_mapa_variantes_accion(paleta: dict[str, object]) -> dict[str, dict[st
         "ayuda": {
             "fondo": str(paleta["fondo_panel_accion"]),
             "fondo_hover": str(paleta["boton_secundario_hover"]),
-            "fondo_pressed": "rgba(83, 112, 139, 0.34)",
+            "fondo_pressed": str(paleta["fondo_menu_activo"]),
             "fondo_focus": str(paleta["boton_secundario_hover"]),
             "borde": str(paleta["borde_suave"]),
             "borde_hover": str(paleta["borde_principal"]),
@@ -257,28 +430,28 @@ def _crear_mapa_variantes_accion(paleta: dict[str, object]) -> dict[str, dict[st
             "icono_hover": str(paleta["texto_destacado"]),
         },
         "edicion": {
-            "fondo": "rgba(109, 99, 63, 0.26)",
-            "fondo_hover": "rgba(109, 99, 63, 0.38)",
-            "fondo_pressed": "rgba(109, 99, 63, 0.46)",
-            "fondo_focus": "rgba(109, 99, 63, 0.38)",
-            "borde": "rgba(228, 234, 204, 0.24)",
-            "borde_hover": "rgba(228, 234, 204, 0.34)",
-            "borde_pressed": "rgba(228, 234, 204, 0.42)",
-            "borde_focus": "rgba(228, 234, 204, 0.42)",
-            "texto": str(paleta["texto_destacado"]),
-            "texto_hover": str(paleta["texto_destacado"]),
-            "icono": str(paleta["texto_destacado"]),
-            "icono_hover": str(paleta["texto_destacado"]),
+            "fondo": str(paleta["fondo_advertencia"]),
+            "fondo_hover": "rgba(245, 184, 75, 0.26)",
+            "fondo_pressed": "rgba(245, 184, 75, 0.34)",
+            "fondo_focus": "rgba(245, 184, 75, 0.26)",
+            "borde": str(paleta["borde_advertencia"]),
+            "borde_hover": "rgba(245, 184, 75, 0.46)",
+            "borde_pressed": "rgba(245, 184, 75, 0.54)",
+            "borde_focus": "rgba(245, 184, 75, 0.54)",
+            "texto": str(paleta["texto_advertencia"]),
+            "texto_hover": str(paleta["texto_advertencia"]),
+            "icono": str(paleta["icono_editar"]),
+            "icono_hover": str(paleta["icono_editar"]),
         },
         "primario": {
             "fondo": str(paleta["boton_primario_fondo"]),
             "fondo_hover": str(paleta["boton_primario_hover"]),
-            "fondo_pressed": "#B7CDDC",
+            "fondo_pressed": str(paleta["acento_hover"]),
             "fondo_focus": str(paleta["boton_primario_hover"]),
-            "borde": "rgba(201, 219, 233, 0.24)",
-            "borde_hover": "rgba(201, 219, 233, 0.46)",
-            "borde_pressed": "rgba(201, 219, 233, 0.56)",
-            "borde_focus": "rgba(201, 219, 233, 0.56)",
+            "borde": str(paleta["borde_info"]),
+            "borde_hover": str(paleta["borde_foco_input"]),
+            "borde_pressed": str(paleta["borde_foco_input"]),
+            "borde_focus": str(paleta["borde_foco_input"]),
             "texto": str(paleta["boton_primario_texto"]),
             "texto_hover": str(paleta["boton_primario_texto"]),
             "icono": str(paleta["modal_icono_accion_principal"]),
@@ -287,30 +460,30 @@ def _crear_mapa_variantes_accion(paleta: dict[str, object]) -> dict[str, dict[st
         "salida": {
             "fondo": str(paleta["boton_peligro_fondo"]),
             "fondo_hover": str(paleta["boton_peligro_hover"]),
-            "fondo_pressed": "#955E69",
+            "fondo_pressed": "#B95562",
             "fondo_focus": str(paleta["boton_peligro_hover"]),
-            "borde": "rgba(244, 232, 236, 0.24)",
-            "borde_hover": "rgba(244, 232, 236, 0.36)",
-            "borde_pressed": "rgba(244, 232, 236, 0.44)",
-            "borde_focus": "rgba(244, 232, 236, 0.44)",
+            "borde": str(paleta["borde_error"]),
+            "borde_hover": "rgba(242, 116, 116, 0.46)",
+            "borde_pressed": "rgba(242, 116, 116, 0.54)",
+            "borde_focus": "rgba(242, 116, 116, 0.54)",
             "texto": str(paleta["boton_peligro_texto"]),
             "texto_hover": str(paleta["boton_peligro_texto"]),
             "icono": str(paleta["boton_peligro_texto"]),
             "icono_hover": str(paleta["boton_peligro_texto"]),
         },
         "advertencia": {
-            "fondo": "rgba(109, 99, 63, 0.26)",
-            "fondo_hover": "rgba(109, 99, 63, 0.38)",
-            "fondo_pressed": "rgba(109, 99, 63, 0.46)",
-            "fondo_focus": "rgba(109, 99, 63, 0.38)",
-            "borde": "rgba(228, 234, 204, 0.24)",
-            "borde_hover": "rgba(228, 234, 204, 0.34)",
-            "borde_pressed": "rgba(228, 234, 204, 0.42)",
-            "borde_focus": "rgba(228, 234, 204, 0.42)",
-            "texto": str(paleta["texto_destacado"]),
-            "texto_hover": str(paleta["texto_destacado"]),
-            "icono": str(paleta["texto_destacado"]),
-            "icono_hover": str(paleta["texto_destacado"]),
+            "fondo": str(paleta["fondo_advertencia"]),
+            "fondo_hover": "rgba(245, 184, 75, 0.26)",
+            "fondo_pressed": "rgba(245, 184, 75, 0.34)",
+            "fondo_focus": "rgba(245, 184, 75, 0.26)",
+            "borde": str(paleta["borde_advertencia"]),
+            "borde_hover": "rgba(245, 184, 75, 0.46)",
+            "borde_pressed": "rgba(245, 184, 75, 0.54)",
+            "borde_focus": "rgba(245, 184, 75, 0.54)",
+            "texto": str(paleta["texto_advertencia"]),
+            "texto_hover": str(paleta["texto_advertencia"]),
+            "icono": str(paleta["icono_aviso"]),
+            "icono_hover": str(paleta["icono_aviso"]),
         },
     }
 
@@ -328,7 +501,14 @@ def resolver_variante_boton_modal(texto: str, variante_sugerida: str = "neutro")
     """Ajusta la variante visual segun la accion escrita en el boton."""
 
     texto_normalizado = texto.casefold()
-    acciones_destructivas = ("salir", "cerrar", "cancelar", "suspender", "inactivar", "desactivar")
+    alias_variantes = {
+        "peligro": "salida",
+        "destructivo": "salida",
+    }
+    variante_resuelta = alias_variantes.get(variante_sugerida, variante_sugerida)
+    if texto_normalizado == "cancelar":
+        return "neutro"
+    acciones_destructivas = ("salir", "cerrar sistema", "suspender", "inactivar", "desactivar")
     acciones_informativas = ("detalle", "ver ")
     acciones_positivas = ("guardar", "confirmar", "activar")
 
@@ -338,7 +518,7 @@ def resolver_variante_boton_modal(texto: str, variante_sugerida: str = "neutro")
         return "informacion"
     if any(palabra in texto_normalizado for palabra in acciones_positivas):
         return "primario"
-    return variante_sugerida if variante_sugerida in MAPA_VARIANTES_ACCION else "neutro"
+    return variante_resuelta if variante_resuelta in MAPA_VARIANTES_ACCION else "neutro"
 
 
 class DialogoBaseSigqua(QDialog):
@@ -407,7 +587,7 @@ class DialogoBaseSigqua(QDialog):
             if self.layout() is not None:
                 self.layout().activate()
             self.adjustSize()
-            self.resize(self.sizeHint().expandedTo(self.minimumSizeHint()))
+            self.resize(self._obtener_tamano_presentacion())
             self._centrar_en_pantalla_activa()
 
     @property
@@ -425,6 +605,20 @@ class DialogoBaseSigqua(QDialog):
     @property
     def layout_pie(self) -> QVBoxLayout:
         return self._layout_pie
+
+    def crear_area_scroll_cuerpo(
+        self,
+        contenido: QWidget,
+        object_name: str = "scrollCuerpoDialogoSigqua",
+    ) -> QScrollArea:
+        scroll = QScrollArea()
+        scroll.setObjectName(object_name)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setWidget(contenido)
+        return scroll
 
     def aplicar_color_fondo_personalizado(self, color_fondo: str) -> None:
         self._color_fondo_dialogo = color_fondo
@@ -444,22 +638,25 @@ class DialogoBaseSigqua(QDialog):
         if self.layout() is not None:
             self.layout().activate()
         self.adjustSize()
-        tamano_objetivo = self.sizeHint().expandedTo(self.minimumSizeHint())
-        self.resize(tamano_objetivo)
+        self.resize(self._obtener_tamano_presentacion())
         self._centrar_en_pantalla_activa()
         self._presentacion_preparada = True
 
-    def _centrar_en_pantalla_activa(self) -> None:
-        pantalla = self.screen()
-        if pantalla is None:
-            ventana_padre = self.parentWidget().window() if self.parentWidget() is not None else None
-            pantalla = (
-                None if ventana_padre is None else ventana_padre.screen()
-            ) or QApplication.primaryScreen()
-        if pantalla is None:
-            return
+    def _obtener_tamano_presentacion(self) -> QSize:
+        tamano = self.sizeHint().expandedTo(self.minimumSizeHint())
+        geometria_disponible = self._obtener_geometria_disponible()
+        if geometria_disponible is None:
+            return tamano
+        ancho_maximo = max(360, geometria_disponible.width() - 72)
+        alto_maximo = max(280, geometria_disponible.height() - 88)
+        tamano.setWidth(min(tamano.width(), ancho_maximo))
+        tamano.setHeight(min(tamano.height(), alto_maximo))
+        return tamano
 
-        geometria_disponible = pantalla.availableGeometry()
+    def _centrar_en_pantalla_activa(self) -> None:
+        geometria_disponible = self._obtener_geometria_disponible()
+        if geometria_disponible is None:
+            return
         geometria_dialogo = self.frameGeometry()
         geometria_dialogo.moveCenter(geometria_disponible.center())
 
@@ -474,6 +671,17 @@ class DialogoBaseSigqua(QDialog):
             geometria_disponible.bottom() - geometria_dialogo.height() + 1,
         )
         self.move(posicion_x, posicion_y)
+
+    def _obtener_geometria_disponible(self):
+        pantalla = self.screen()
+        if pantalla is None:
+            ventana_padre = self.parentWidget().window() if self.parentWidget() is not None else None
+            pantalla = (
+                None if ventana_padre is None else ventana_padre.screen()
+            ) or QApplication.primaryScreen()
+        if pantalla is None:
+            return None
+        return pantalla.availableGeometry()
 
 
 class BotonAccionContextual(QPushButton):
@@ -495,6 +703,7 @@ class BotonAccionContextual(QPushButton):
         self._nombre_tema = obtener_tema_actual()
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setObjectName("botonAccionContextual")
+        self._variante = resolver_variante_boton_modal(texto, self._variante)
         self.setMinimumHeight(ALTURA_BOTON_DIALOGO)
         self.setIconSize(QSize(16, 16))
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -879,14 +1088,14 @@ def aplicar_estilo_boton_operativo(boton: QPushButton, principal: bool = False) 
         }}
         QPushButton#botonOperativoPrimario {{
             background-color: {paleta["boton_primario_fondo"]};
-            border: 1px solid rgba(201, 219, 233, 0.26);
+            border: 1px solid {paleta["borde_info"]};
             color: {paleta["boton_primario_texto"]};
         }}
         QPushButton#botonOperativoPrimario:hover {{
             background-color: {paleta["boton_primario_hover"]};
         }}
         QPushButton#botonOperativoPrimario:pressed {{
-            background-color: #B7CDDC;
+            background-color: {paleta["acento_hover"]};
         }}
         QPushButton#botonOperativo:disabled,
         QPushButton#botonOperativoPrimario:disabled {{

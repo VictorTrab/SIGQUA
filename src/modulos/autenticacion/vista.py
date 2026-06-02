@@ -45,16 +45,16 @@ from modulos.autenticacion.entidades import SesionIniciada, UsuarioAutenticado
 
 
 ANCHO_MAXIMO_TARJETA = 520
-COLOR_GRADIENTE_INICIAL = "#0A1728"
-COLOR_GRADIENTE_FINAL = "#1D364E"
-COLOR_ICONO_INPUT = "#8FAFC7"
-COLOR_ICONO_PRIMARIO = "#0A1728"
-COLOR_ICONO_SECUNDARIO = "#C9DBE9"
-COLOR_ICONO_ESTADO = "#C9DBE9"
-COLOR_ICONO_ADVERTENCIA = "#FBBF24"
-COLOR_AURORA_CLARA = QColor(201, 219, 233, 22)
-COLOR_AURORA_TURQUESA = QColor(56, 189, 248, 38)
-COLOR_AURORA_AZUL = QColor(53, 230, 168, 26)
+COLOR_GRADIENTE_INICIAL = "#071A2D"
+COLOR_GRADIENTE_FINAL = "#0D2A45"
+COLOR_ICONO_INPUT = "#92B6CC"
+COLOR_ICONO_PRIMARIO = "#061525"
+COLOR_ICONO_SECUNDARIO = "#C5DDEE"
+COLOR_ICONO_ESTADO = "#75C7F0"
+COLOR_ICONO_ADVERTENCIA = "#F5B84B"
+COLOR_AURORA_CLARA = QColor(117, 199, 240, 22)
+COLOR_AURORA_TURQUESA = QColor(55, 211, 153, 34)
+COLOR_AURORA_AZUL = QColor(73, 169, 220, 28)
 TAMANO_ICONO_ACCION_INPUT = 18
 TAMANO_AREA_ACCION_INPUT = 30
 DESPLAZAMIENTO_ACCION_DERECHA_INPUT = 18
@@ -143,18 +143,18 @@ class CampoAnimado(QLineEdit):
 
     def _aplicar_estilo_animado(self) -> None:
         borde = _interpolar_color(
-            QColor(83, 112, 139, 132),
-            QColor(0, 166, 214, 232),
+            QColor(126, 167, 196, 132),
+            QColor(117, 199, 240, 232),
             self._progreso_realce,
         )
         fondo = _interpolar_color(
-            QColor(16, 42, 64, 228),
-            QColor(29, 54, 78, 242),
+            QColor(8, 34, 56, 228),
+            QColor(13, 42, 69, 242),
             self._progreso_realce,
         )
         sombra = _interpolar_color(
-            QColor(0, 166, 214, 0),
-            QColor(0, 166, 214, 46),
+            QColor(117, 199, 240, 0),
+            QColor(117, 199, 240, 46),
             self._progreso_realce,
         )
         self._sombra.setBlurRadius(16 + (self._progreso_realce * 12))
@@ -166,9 +166,9 @@ class CampoAnimado(QLineEdit):
             f"border: 1px solid rgba({borde.red()}, {borde.green()}, {borde.blue()}, {borde.alpha()});"
             "border-radius: 16px;"
             f"background-color: rgba({fondo.red()}, {fondo.green()}, {fondo.blue()}, {fondo.alpha()});"
-            "color: #EAF2F8;"
-            "selection-background-color: #4E6A9C;"
-            "selection-color: #EAF2F8;"
+            "color: #F4FAFF;"
+            "selection-background-color: #49A9DC;"
+            "selection-color: #F4FAFF;"
             "font-size: 13px;"
             "}"
         )
@@ -226,13 +226,13 @@ class BotonAnimado(QPushButton):
         self._aplicar_estilo_secundario()
 
     def _aplicar_estilo_primario(self) -> None:
-        base = QColor(0, 166, 214, 246)
-        hover = QColor(39, 196, 239, 255)
-        pressed = QColor(0, 140, 184, 255)
+        base = QColor(117, 199, 240, 246)
+        hover = QColor(154, 216, 245, 255)
+        pressed = QColor(73, 169, 220, 255)
         color_actual = self._color_por_progreso(base, hover, pressed)
         sombra = _interpolar_color(
-            QColor(0, 166, 214, 0),
-            QColor(0, 166, 214, 54),
+            QColor(117, 199, 240, 0),
+            QColor(117, 199, 240, 54),
             min(self._progreso_interaccion, 1.0),
         )
         self._sombra.setBlurRadius(18 + min(self._progreso_interaccion, 1.0) * 10)
@@ -243,7 +243,7 @@ class BotonAnimado(QPushButton):
             "border: none;"
             "border-radius: 16px;"
             f"background-color: rgba({color_actual.red()}, {color_actual.green()}, {color_actual.blue()}, {color_actual.alpha()});"
-            "color: #0A1728;"
+            "color: #061525;"
             "font-size: 13px;"
             "font-weight: 700;"
             "padding: 0 18px;"
@@ -251,12 +251,12 @@ class BotonAnimado(QPushButton):
         )
 
     def _aplicar_estilo_secundario(self) -> None:
-        base_fondo = QColor(36, 63, 90, 224)
-        hover_fondo = QColor(45, 76, 104, 242)
-        pressed_fondo = QColor(29, 54, 78, 255)
-        base_borde = QColor(83, 112, 139, 132)
-        hover_borde = QColor(143, 175, 199, 172)
-        pressed_borde = QColor(201, 219, 233, 196)
+        base_fondo = QColor(24, 63, 95, 224)
+        hover_fondo = QColor(33, 80, 111, 242)
+        pressed_fondo = QColor(13, 42, 69, 255)
+        base_borde = QColor(126, 167, 196, 132)
+        hover_borde = QColor(146, 182, 204, 172)
+        pressed_borde = QColor(117, 199, 240, 196)
         fondo_actual = self._color_por_progreso(base_fondo, hover_fondo, pressed_fondo)
         borde_actual = self._color_por_progreso(base_borde, hover_borde, pressed_borde)
         sombra = _interpolar_color(
@@ -848,9 +848,9 @@ class VistaAutenticacion(QWidget):
         return label
 
     def _mostrar_mensaje(self, label: QLabel, mensaje: str, es_exito: bool) -> None:
-        color_borde = "rgba(201, 219, 233, 0.24)" if es_exito else "rgba(228, 234, 204, 0.22)"
-        color_texto = "#C9DBE9" if es_exito else "#E4EACC"
-        color_fondo = "rgba(45, 90, 104, 0.28)" if es_exito else "rgba(104, 61, 71, 0.24)"
+        color_borde = "rgba(55, 211, 153, 0.36)" if es_exito else "rgba(242, 116, 116, 0.34)"
+        color_texto = "#DDFBF0" if es_exito else "#FFE3E3"
+        color_fondo = "rgba(55, 211, 153, 0.18)" if es_exito else "rgba(242, 116, 116, 0.18)"
         label.setStyleSheet(
             "QLabel {"
             f"border: 1px solid {color_borde};"
@@ -970,34 +970,34 @@ class VistaAutenticacion(QWidget):
                 background: transparent;
             }
             QFrame#fondoBlurTarjeta {
-                background: rgba(10, 23, 40, 58);
-                border: 1px solid rgba(143, 175, 199, 62);
+                background: rgba(7, 26, 45, 58);
+                border: 1px solid rgba(146, 182, 204, 62);
                 border-radius: 32px;
             }
             QFrame#tarjetaAutenticacion {
                 background: qlineargradient(
                     x1: 0, y1: 0,
                     x2: 1, y2: 1,
-                    stop: 0 rgba(29, 54, 78, 224),
-                    stop: 0.48 rgba(36, 63, 90, 206),
-                    stop: 1 rgba(16, 42, 64, 226)
+                    stop: 0 rgba(13, 42, 69, 224),
+                    stop: 0.48 rgba(18, 53, 83, 206),
+                    stop: 1 rgba(8, 34, 56, 226)
                 );
-                border: 1px solid rgba(143, 175, 199, 98);
+                border: 1px solid rgba(146, 182, 204, 98);
                 border-radius: 30px;
             }
             QLabel#logoMarcaLogin {
                 margin-bottom: 0;
             }
             QLabel#lemaMarcaLogin {
-                color: rgba(201, 219, 233, 220);
+                color: rgba(197, 221, 238, 220);
                 font-size: 12px;
                 font-weight: 600;
                 padding: 0 6px 2px 6px;
             }
             QLabel#badgeContexto {
-                color: #C9DBE9;
-                background-color: rgba(16, 42, 64, 214);
-                border: 1px solid rgba(83, 112, 139, 118);
+                color: #C5DDEE;
+                background-color: rgba(8, 34, 56, 214);
+                border: 1px solid rgba(126, 167, 196, 118);
                 border-radius: 11px;
                 font-size: 10px;
                 font-weight: 700;
@@ -1006,29 +1006,29 @@ class VistaAutenticacion(QWidget):
                 margin: 0 0 4px 0;
             }
             QLabel#emblemaPagina {
-                color: #C9DBE9;
+                color: #75C7F0;
                 margin-bottom: 0;
             }
             QLabel#tituloPagina {
-                color: #EAF2F8;
+                color: #F4FAFF;
                 font-size: 23px;
                 font-weight: 800;
                 letter-spacing: 0.2px;
             }
             QLabel#subtituloPagina,
             QLabel#textoExplicativo {
-                color: #C9DBE9;
+                color: #C5DDEE;
                 font-size: 13px;
                 line-height: 1.25;
             }
             QLabel#pieLogin {
-                color: rgba(143, 175, 199, 210);
+                color: rgba(146, 182, 204, 210);
                 font-size: 12px;
                 font-weight: 600;
                 padding-top: 2px;
             }
             QLabel#etiquetaCampo {
-                color: #EAF2F8;
+                color: #F4FAFF;
                 font-size: 12px;
                 font-weight: 600;
                 letter-spacing: 0.2px;

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from comun.actualizaciones import bus_actualizaciones_modulos
 from modulos.autenticacion.entidades import UsuarioAutenticado
-from modulos.planes_pago.entidades import FILTRO_PLANES_TODOS
+from modulos.planes_pago.entidades import FILTRO_PLANES_TODOS, ResumenConfirmacionPlanPago
+from modulos.planes_pago.entidades import ResultadoGestionPlanesPago
 from modulos.planes_pago.servicio import ServicioPlanesPago
 from modulos.planes_pago.vista import VistaPlanesPago
 
@@ -50,10 +51,23 @@ class ControladorPlanesPago:
 
     def _crear_plan(self) -> None:
         formulario = self._vista_planes_pago.solicitar_datos_plan(
-            casas=self._servicio_planes_pago.listar_casas_disponibles(),
+            abonados=self._servicio_planes_pago.listar_abonados_nuevo_plan(),
             metodos_pago=self._servicio_planes_pago.listar_metodos_pago_activos(),
         )
         if formulario is None:
+            return
+        confirmacion = self._servicio_planes_pago.previsualizar_confirmacion(formulario)
+        if isinstance(confirmacion, ResultadoGestionPlanesPago):
+            self._vista_planes_pago.mostrar_mensaje(confirmacion.mensaje, es_error=not confirmacion.exito)
+            return
+        if not isinstance(confirmacion, ResumenConfirmacionPlanPago):
+            self._vista_planes_pago.mostrar_mensaje("No fue posible preparar la confirmacion del plan.", es_error=True)
+            return
+        if not self._vista_planes_pago.confirmar_creacion_plan(
+            confirmacion=confirmacion,
+            formateador_moneda=self._servicio_planes_pago.formatear_moneda,
+            formateador_fecha=self._servicio_planes_pago.formatear_fecha,
+        ):
             return
         self._guardar_plan(formulario)
 

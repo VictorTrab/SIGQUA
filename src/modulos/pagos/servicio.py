@@ -626,47 +626,44 @@ class ServicioPagos:
                     tipo_pago_destino=TIPO_PAGO_RECONEXION,
                 )
             )
-            if formulario.multa_corte_centavos > 0:
-                detalles.append(
-                    DetalleAplicacionPago(
-                        cargo_id=None,
-                        periodo_id=None,
-                        periodo_anio=None,
-                        periodo_mes=None,
-                        periodo_nombre="Operacion de activacion",
-                        concepto_codigo="MULTA",
-                        descripcion="Multa por corte",
-                        monto_centavos=formulario.multa_corte_centavos,
-                        etiqueta="Multa",
-                        tipo_pago_destino=TIPO_PAGO_RECONEXION,
-                    )
-                )
 
-        if self.repositorio_pagos.cobrar_mensualidad_prorrateada_en_activacion():
+        cobrar_prorrateo = self.repositorio_pagos.cobrar_mensualidad_prorrateada_en_activacion()
+        prorrateo_pendiente_centavos = 0
+        prorrateo_pendiente_anio: int | None = None
+        prorrateo_pendiente_mes: int | None = None
+        prorrateo_pendiente_descripcion = ""
+        if tipo_pago in (TIPO_PAGO_CONEXION, TIPO_PAGO_RECONEXION):
             precio_mensual = self.repositorio_pagos.obtener_precio_mensual_centavos()
             if precio_mensual <= 0:
                 return ResultadoPago(
                     False,
-                    "Configura primero el precio mensual del servicio para calcular el prorrateo.",
+                    "Configura primero el precio mensual del servicio para calcular o generar el prorrateo.",
                     "VALIDACION",
                 )
             dias_mes = monthrange(fecha_real.year, fecha_real.month)[1]
             dias_cobrados = (dias_mes - fecha_real.day) + 1
             monto_prorrateado = round((precio_mensual * dias_cobrados) / dias_mes)
-            detalles.append(
-                DetalleAplicacionPago(
-                    cargo_id=None,
-                    periodo_id=None,
-                    periodo_anio=fecha_real.year,
-                    periodo_mes=fecha_real.month,
-                    periodo_nombre=f"Periodo {fecha_real.month:02d}/{fecha_real.year:04d}",
-                    concepto_codigo="MENSUALIDAD_PRORRATEADA",
-                    descripcion=f"Mensualidad prorrateada desde {fecha_real.isoformat()}",
-                    monto_centavos=monto_prorrateado,
-                    etiqueta="Prorrateo",
-                    tipo_pago_destino=tipo_pago,
+            descripcion_prorrateo = f"Mensualidad prorrateada desde {fecha_real.isoformat()}"
+            if cobrar_prorrateo:
+                detalles.append(
+                    DetalleAplicacionPago(
+                        cargo_id=None,
+                        periodo_id=None,
+                        periodo_anio=fecha_real.year,
+                        periodo_mes=fecha_real.month,
+                        periodo_nombre=f"Periodo {fecha_real.month:02d}/{fecha_real.year:04d}",
+                        concepto_codigo="MENSUALIDAD_PRORRATEADA",
+                        descripcion=descripcion_prorrateo,
+                        monto_centavos=monto_prorrateado,
+                        etiqueta="Prorrateo",
+                        tipo_pago_destino=tipo_pago,
+                    )
                 )
-            )
+            else:
+                prorrateo_pendiente_centavos = monto_prorrateado
+                prorrateo_pendiente_anio = fecha_real.year
+                prorrateo_pendiente_mes = fecha_real.month
+                prorrateo_pendiente_descripcion = descripcion_prorrateo
 
         total_pago = sum(detalle.monto_centavos for detalle in detalles)
         monto_regularizado = sum(
@@ -685,6 +682,10 @@ class ServicioPagos:
             referencia=referencia,
             observaciones=formulario.observaciones.strip(),
             fecha_activacion=fecha_activacion,
+            prorrateo_pendiente_centavos=prorrateo_pendiente_centavos,
+            prorrateo_pendiente_anio=prorrateo_pendiente_anio,
+            prorrateo_pendiente_mes=prorrateo_pendiente_mes,
+            prorrateo_pendiente_descripcion=prorrateo_pendiente_descripcion,
             es_operacion_compuesta=(tipo_pago == TIPO_PAGO_RECONEXION and monto_regularizado > 0),
             tipo_operacion_compuesta=(
                 "RECONEXION_COMPUESTA"

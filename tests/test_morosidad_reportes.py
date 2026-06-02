@@ -6,6 +6,7 @@ import sqlite3
 import sys
 import unittest
 import uuid
+from contextlib import closing
 from pathlib import Path
 
 
@@ -65,7 +66,7 @@ class TestMorosidadReportes(unittest.TestCase):
         self.assertTrue(all(fila.dias_en_mora >= 0 for fila in estado.pagina.items))
 
     def test_morosidad_respeta_umbral_visual_configurable(self) -> None:
-        with sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos()) as conexion:
+        with closing(sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())) as conexion:
             conexion.row_factory = sqlite3.Row
             fila_base = conexion.execute(
                 """

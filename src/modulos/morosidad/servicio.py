@@ -14,8 +14,11 @@ from comun.configuracion.gestor_rutas import GestorRutas
 from modulos.documentos import ServicioEstadoCuenta
 from modulos.morosidad.entidades import (
     DetalleMorosidad,
+    ESTADOS_AVISO_COBRO_VALIDOS,
+    ESTADO_AVISO_CORTADO,
     EstadoMorosidad,
     FILTRO_MOROSIDAD_LEVE,
+    FILTRO_MOROSIDAD_LISTO_CORTE,
     FILTRO_MOROSIDAD_MEDIA,
     FILTRO_MOROSIDAD_SEVERA,
     FILTRO_MOROSIDAD_TODOS,
@@ -68,7 +71,16 @@ class ServicioMorosidad:
             for item in self._repositorio_morosidad.listar_morosidad(filtros)
         ]
         if filtros.severidad != FILTRO_MOROSIDAD_TODOS:
-            filas = [item for item in filas if item.severidad == filtros.severidad]
+            if filtros.severidad == FILTRO_MOROSIDAD_LISTO_CORTE:
+                _, umbral_alta = self.obtener_parametros_mora_visual()
+                filas = [
+                    item
+                    for item in filas
+                    if item.estado_aviso_cobro in {"LISTO_PARA_CORTE", "CORTADO"}
+                    or item.meses_vencidos > umbral_alta
+                ]
+            else:
+                filas = [item for item in filas if item.severidad == filtros.severidad]
         resumen = ResumenMorosidad(
             total_casas=len(filas),
             total_abonados=len({fila.abonado_id for fila in filas}),
@@ -156,6 +168,42 @@ class ServicioMorosidad:
 
     def obtener_politica_documental(self) -> tuple[bool, bool]:
         return True, False
+
+    def registrar_aviso_cobro(
+        self,
+        casa_id: int,
+        estado_aviso: str,
+        observacion: str,
+        actor_id: int | None,
+    ) -> ResultadoMorosidad:
+        estado_aviso = estado_aviso.strip().upper()
+        observacion = observacion.strip()
+        if estado_aviso not in ESTADOS_AVISO_COBRO_VALIDOS:
+            return ResultadoMorosidad(False, "Selecciona una etapa de aviso valida.", "VALIDACION")
+        if estado_aviso == ESTADO_AVISO_CORTADO:
+            return ResultadoMorosidad(
+                False,
+                "El estado CORTADO se registra desde el corte manual de la casa, no desde avisos.",
+                "VALIDACION",
+            )
+        if not observacion:
+            return ResultadoMorosidad(
+                False,
+                "Describe la observacion del aviso para mantener trazabilidad.",
+                "VALIDACION",
+            )
+        try:
+            self._repositorio_morosidad.registrar_aviso_cobro(
+                casa_id=casa_id,
+                estado_aviso=estado_aviso,
+                observacion=observacion,
+                actor_id=actor_id,
+            )
+        except ValueError as error:
+            return ResultadoMorosidad(False, str(error), "VALIDACION")
+        except Exception:
+            return ResultadoMorosidad(False, "No fue posible registrar el aviso de cobro.", "ERROR_SQLITE")
+        return ResultadoMorosidad(True, "Aviso de cobro registrado correctamente.", "OK")
 
     @staticmethod
     def filtro_inicial() -> FiltroMorosidad:

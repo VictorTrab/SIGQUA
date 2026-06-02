@@ -10,6 +10,22 @@ FILTRO_MOROSIDAD_TODOS = "TODOS"
 FILTRO_MOROSIDAD_LEVE = "LEVE"
 FILTRO_MOROSIDAD_MEDIA = "MEDIA"
 FILTRO_MOROSIDAD_SEVERA = "SEVERA"
+FILTRO_MOROSIDAD_LISTO_CORTE = "LISTO_CORTE"
+
+ESTADO_AVISO_SIN_AVISO = "SIN_AVISO"
+ESTADO_AVISO_PRIMER_AVISO = "PRIMER_AVISO"
+ESTADO_AVISO_SEGUNDO_AVISO = "SEGUNDO_AVISO"
+ESTADO_AVISO_TERCER_AVISO = "TERCER_AVISO"
+ESTADO_AVISO_LISTO_PARA_CORTE = "LISTO_PARA_CORTE"
+ESTADO_AVISO_CORTADO = "CORTADO"
+ESTADOS_AVISO_COBRO_VALIDOS = (
+    ESTADO_AVISO_SIN_AVISO,
+    ESTADO_AVISO_PRIMER_AVISO,
+    ESTADO_AVISO_SEGUNDO_AVISO,
+    ESTADO_AVISO_TERCER_AVISO,
+    ESTADO_AVISO_LISTO_PARA_CORTE,
+    ESTADO_AVISO_CORTADO,
+)
 
 
 @dataclass(slots=True)
@@ -18,6 +34,7 @@ class FiltroMorosidad:
 
     texto: str = ""
     severidad: str = FILTRO_MOROSIDAD_TODOS
+    estado_aviso: str = FILTRO_MOROSIDAD_TODOS
 
 
 @dataclass(slots=True)
@@ -37,6 +54,10 @@ class FilaMorosidad:
     recargo_mora_centavos: int
     deuda_total_centavos: int
     vencimiento_mas_antiguo: str
+    estado_aviso_cobro: str = ESTADO_AVISO_SIN_AVISO
+    fecha_ultimo_aviso: str = ""
+    usuario_ultimo_aviso: str = ""
+    observacion_ultimo_aviso: str = ""
     dias_en_mora: int = 0
     prioridad: str = "Baja"
     severidad: str = FILTRO_MOROSIDAD_LEVE
@@ -106,6 +127,10 @@ class CasaDetalleMorosidad:
     recargo_mora_centavos: int
     deuda_total_centavos: int
     vencimiento_mas_antiguo: str
+    estado_aviso_cobro: str = ESTADO_AVISO_SIN_AVISO
+    fecha_ultimo_aviso: str = ""
+    usuario_ultimo_aviso: str = ""
+    observacion_ultimo_aviso: str = ""
     dias_en_mora: int = 0
     prioridad: str = "Baja"
     lineas_detalle: tuple[LineaDetalleMorosidad, ...] = ()

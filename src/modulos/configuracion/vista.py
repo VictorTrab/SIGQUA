@@ -52,8 +52,9 @@ class TarjetaResumenConfiguracion(QFrame):
         super().__init__()
         self.setObjectName("tarjetaResumenConfiguracion")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(4)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(6)
+        self.setMinimumHeight(104)
         self._titulo = QLabel(titulo)
         self._titulo.setObjectName("tituloTarjetaResumenConfiguracion")
         self._valor = QLabel("")
@@ -289,7 +290,7 @@ class VistaConfiguracion(QWidget):
     def _construir_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(14)
+        layout.setSpacing(16)
 
         encabezado = QHBoxLayout()
         encabezado.setSpacing(12)
@@ -337,6 +338,16 @@ class VistaConfiguracion(QWidget):
         self._campo_junta_nombre = QLineEdit()
         self._campo_junta_telefono = QLineEdit()
         self._campo_junta_correo = QLineEdit()
+
+        layout.addLayout(encabezado)
+        layout.addWidget(self._mensaje)
+        layout.addLayout(tarjetas)
+        layout.addWidget(self._tabs, 1)
+
+    def _crear_tab_datos_junta(self) -> QWidget:
+        self._campo_junta_nombre = QLineEdit()
+        self._campo_junta_telefono = QLineEdit()
+        self._campo_junta_correo = QLineEdit()
         self._campo_junta_identificador = QLineEdit()
         self._campo_junta_sitio_web = QLineEdit()
         self._campo_junta_direccion = QPlainTextEdit()
@@ -344,63 +355,52 @@ class VistaConfiguracion(QWidget):
         self._campo_junta_mensaje_contacto = QPlainTextEdit()
         self._campo_junta_mensaje_contacto.setFixedHeight(76)
 
-        grilla = QGridLayout()
-        grilla.setHorizontalSpacing(12)
-        grilla.setVerticalSpacing(12)
         self._valor_estado_identidad = self._crear_valor_seguridad()
-        grilla.addWidget(
-            self._crear_bloque_campo("Nombre legal o comercial", self._campo_junta_nombre),
-            0,
-            0,
-            1,
-            2,
-        )
-        grilla.addWidget(
-            self._crear_bloque_campo("Telefono institucional", self._campo_junta_telefono),
-            1,
-            0,
-        )
-        grilla.addWidget(
-            self._crear_bloque_campo("Correo institucional", self._campo_junta_correo),
-            1,
-            1,
-        )
-        grilla.addWidget(self._crear_bloque_campo("Identificador fiscal", self._campo_junta_identificador), 2, 0)
-        grilla.addWidget(self._crear_bloque_campo("Sitio web", self._campo_junta_sitio_web), 2, 1)
-        grilla.addWidget(
-            self._crear_bloque_campo("Direccion fiscal u operativa", self._campo_junta_direccion),
-            3,
-            0,
-            1,
-            2,
-        )
-        grilla.addWidget(
-            self._crear_bloque_campo("Mensaje de contacto", self._campo_junta_mensaje_contacto),
-            4,
-            0,
-            1,
-            2,
-        )
 
         boton_guardar = crear_boton_operativo("Guardar identidad de la empresa", principal=True)
-        boton_guardar.clicked.connect(
-            lambda: self.guardar_datos_junta_solicitado.emit(
-                self._campo_junta_nombre.text(),
-                self._campo_junta_telefono.text(),
-                self._campo_junta_correo.text(),
-                self._campo_junta_direccion.toPlainText(),
-                self._campo_junta_identificador.text(),
-                self._campo_junta_sitio_web.text(),
-                self._campo_junta_mensaje_contacto.toPlainText(),
-            )
+        grilla_general.addWidget(
+            self._crear_bloque_campo("Nombre legal o comercial", self._campo_junta_nombre),
+            0, 0, 1, 2,
         )
+
+        subtitulo_contacto = self._crear_subtitulo_grupo("Contacto institucional")
+
+        grilla_contacto = QGridLayout()
+        grilla_contacto.setHorizontalSpacing(12)
+        grilla_contacto.setVerticalSpacing(16)
+        grilla_contacto.addWidget(
+            self._crear_bloque_campo("Telefono institucional", self._campo_junta_telefono),
+            0, 0,
+        )
+        grilla_contacto.addWidget(
+            self._crear_bloque_campo("Correo institucional", self._campo_junta_correo),
+            0, 1,
+        )
+        grilla_contacto.addWidget(
+            self._crear_bloque_campo("Identificador fiscal", self._campo_junta_identificador),
+            1, 0,
+        )
+        grilla_contacto.addWidget(
+            self._crear_bloque_campo("Sitio web", self._campo_junta_sitio_web),
+            1, 1,
+        )
+
+        subtitulo_ubicacion = self._crear_subtitulo_grupo("Ubicacion y contacto")
 
         contenido = self._crear_contenedor_scroll()
         contenido.widget().layout().addWidget(
             self._crear_panel(
                 "Identidad de la empresa",
                 "Datos visibles en comprobantes, reportes PDF, documentos de deuda y cabeceras operativas.",
-                [self._crear_fila_resumen("Estado actual", self._valor_estado_identidad), grilla],
+                [
+                    self._crear_fila_resumen("Estado actual", self._valor_estado_identidad),
+                    grilla_general,
+                    subtitulo_contacto,
+                    grilla_contacto,
+                    subtitulo_ubicacion,
+                    self._crear_bloque_campo("Direccion fiscal u operativa", self._campo_junta_direccion),
+                    self._crear_bloque_campo("Mensaje de contacto", self._campo_junta_mensaje_contacto),
+                ],
             )
         )
         contenido.widget().layout().addWidget(
@@ -930,7 +930,7 @@ class VistaConfiguracion(QWidget):
         bloque = QWidget()
         layout = QVBoxLayout(bloque)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(5)
+        layout.setSpacing(6)
         label = QLabel(etiqueta)
         label.setObjectName("etiquetaConfiguracion")
         layout.addWidget(label)
@@ -969,7 +969,7 @@ class VistaConfiguracion(QWidget):
         contenedor = QWidget()
         layout = QVBoxLayout(contenedor)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(5)
+        layout.setSpacing(6)
         label = QLabel(etiqueta)
         label.setObjectName("etiquetaConfiguracion")
         fila = QHBoxLayout()
@@ -1002,8 +1002,8 @@ class VistaConfiguracion(QWidget):
         panel = QFrame()
         panel.setObjectName("panelConfiguracion")
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(8)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(12)
         label_titulo = QLabel(titulo)
         label_titulo.setObjectName("tituloPanelConfiguracion")
         label_descripcion = QLabel(descripcion)
@@ -1038,7 +1038,7 @@ class VistaConfiguracion(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         contenedor = QWidget()
         layout = QVBoxLayout(contenedor)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(4, 4, 8, 16)
         layout.setSpacing(12)
         scroll.setWidget(contenedor)
         return scroll
@@ -1047,6 +1047,12 @@ class VistaConfiguracion(QWidget):
         label = QLabel("")
         label.setObjectName("valorResumenConfiguracion")
         label.setWordWrap(True)
+        return label
+
+    def _crear_subtitulo_grupo(self, texto: str) -> QLabel:
+        """Crea un subtitulo de grupo para separar bloques logicos dentro de un panel."""
+        label = QLabel(texto)
+        label.setObjectName("subtituloGrupoConfiguracion")
         return label
 
     def _crear_fila_resumen(self, etiqueta: str, valor: QLabel) -> QWidget:
@@ -1222,12 +1228,12 @@ class VistaConfiguracion(QWidget):
                 border-radius: 18px;
             }}
             QFrame#previewComprobanteConfiguracion {{
-                background: #E4EACC;
+                background: #75C7F0;
                 border: 1px solid #1a1a1a;
                 border-radius: 8px;
             }}
             QTextEdit#documentoPreviewComprobanteConfiguracion {{
-                background: #E4EACC;
+                background: #75C7F0;
                 color: #111111;
                 border: none;
                 padding: 0;

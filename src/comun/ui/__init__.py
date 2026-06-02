@@ -3,6 +3,7 @@
 from comun.ui.contenedor_apilado import ContenedorApiladoAjustable
 from comun.ui.componentes import (
     BotonAccionContextual,
+    CampoBusquedaSeleccionSigqua,
     CampoMontoMonetario,
     DialogoBaseSigqua,
     DialogoConfirmacionSigqua,
@@ -29,6 +30,7 @@ from comun.ui.iconos import (
 __all__ = [
     "ContenedorApiladoAjustable",
     "BotonAccionContextual",
+    "CampoBusquedaSeleccionSigqua",
     "CampoMontoMonetario",
     "DialogoBaseSigqua",
     "DialogoConfirmacionSigqua",

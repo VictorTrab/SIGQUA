@@ -671,6 +671,10 @@ class RepositorioPagosSQLite:
                     observaciones=resumen.observaciones,
                     fecha_activacion=resumen.fecha_activacion,
                     operacion_cobro_id=operacion_id,
+                    prorrateo_pendiente_centavos=resumen.prorrateo_pendiente_centavos,
+                    prorrateo_pendiente_anio=resumen.prorrateo_pendiente_anio,
+                    prorrateo_pendiente_mes=resumen.prorrateo_pendiente_mes,
+                    prorrateo_pendiente_descripcion=resumen.prorrateo_pendiente_descripcion,
                 )
                 pago_activacion_id = self._insertar_pago(conexion, resumen_activacion, actor_id)
                 self._persistir_detalles_activacion(conexion, pago_activacion_id, resumen_activacion, actor_id)
@@ -1043,7 +1047,6 @@ class RepositorioPagosSQLite:
 
         monto_conexion = 0
         monto_reconexion = 0
-        multa_corte = 0
         cobra_prorrateo = 0
         precio_mensual_base = None
         dias_mes = None
@@ -1054,14 +1057,17 @@ class RepositorioPagosSQLite:
                 monto_conexion = detalle.monto_centavos
             elif detalle.concepto_codigo == "RECONEXION":
                 monto_reconexion = detalle.monto_centavos
-            elif detalle.concepto_codigo == "MULTA":
-                multa_corte = detalle.monto_centavos
             elif detalle.concepto_codigo == "MENSUALIDAD_PRORRATEADA":
                 cobra_prorrateo = 1
                 monto_prorrateado = detalle.monto_centavos
                 precio_mensual_base = self.obtener_precio_mensual_centavos()
                 dias_mes = monthrange(fecha_activacion.year, fecha_activacion.month)[1]
                 dias_cobrados = (dias_mes - fecha_activacion.day) + 1
+        if resumen.prorrateo_pendiente_centavos > 0 and not cobra_prorrateo:
+            monto_prorrateado = resumen.prorrateo_pendiente_centavos
+            precio_mensual_base = self.obtener_precio_mensual_centavos()
+            dias_mes = monthrange(fecha_activacion.year, fecha_activacion.month)[1]
+            dias_cobrados = (dias_mes - fecha_activacion.day) + 1
 
         cursor_proceso = conexion.execute(
             """
@@ -1082,10 +1088,9 @@ class RepositorioPagosSQLite:
                 dias_cobrados,
                 monto_prorrateado_centavos,
                 monto_conexion_centavos,
-                monto_reconexion_centavos,
-                multa_corte_centavos
+                monto_reconexion_centavos
             )
-            VALUES (?, ?, ?, datetime('now', 'localtime'), ?, 'EJECUTADO', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            VALUES (?, ?, ?, datetime('now', 'localtime'), ?, 'EJECUTADO', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """,
             (
                 resumen.casa.abonado_id,
@@ -1100,10 +1105,9 @@ class RepositorioPagosSQLite:
                 precio_mensual_base,
                 dias_mes,
                 dias_cobrados,
-                monto_prorrateado if cobra_prorrateo else None,
+                monto_prorrateado if monto_prorrateado > 0 else None,
                 monto_conexion if monto_conexion > 0 else None,
                 monto_reconexion if monto_reconexion > 0 else None,
-                multa_corte if multa_corte > 0 else None,
             ),
         )
         proceso_servicio_id = int(cursor_proceso.lastrowid)
@@ -1176,6 +1180,56 @@ class RepositorioPagosSQLite:
                     detalle.monto_centavos,
                     periodo_id,
                     orden,
+                ),
+            )
+
+        if resumen.prorrateo_pendiente_centavos > 0:
+            if resumen.prorrateo_pendiente_anio is None or resumen.prorrateo_pendiente_mes is None:
+                raise ValueError("El prorrateo pendiente requiere periodo.")
+            periodo_id = self._asegurar_periodo(
+                conexion,
+                resumen.prorrateo_pendiente_anio,
+                resumen.prorrateo_pendiente_mes,
+            )
+            concepto_id = self._obtener_concepto_id(conexion, "MENSUALIDAD_PRORRATEADA")
+            fila_periodo = conexion.execute(
+                "SELECT fecha_vencimiento FROM periodos_cobro WHERE id = ? LIMIT 1;",
+                (periodo_id,),
+            ).fetchone()
+            fecha_vencimiento = (
+                str(fila_periodo["fecha_vencimiento"])
+                if fila_periodo is not None and fila_periodo["fecha_vencimiento"]
+                else fecha_activacion.isoformat()
+            )
+            conexion.execute(
+                """
+                INSERT INTO cargos(
+                    casa_id,
+                    abonado_id,
+                    periodo_id,
+                    concepto_id,
+                    proceso_servicio_id,
+                    descripcion,
+                    monto_centavos,
+                    saldo_pendiente_centavos,
+                    fecha_generacion,
+                    fecha_vencimiento,
+                    estado,
+                    origen
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, date('now', 'localtime'), ?, 'PENDIENTE', 'PROCESO_SERVICIO');
+                """,
+                (
+                    resumen.casa.casa_id,
+                    resumen.casa.abonado_id,
+                    periodo_id,
+                    concepto_id,
+                    proceso_servicio_id,
+                    resumen.prorrateo_pendiente_descripcion
+                    or f"Mensualidad prorrateada desde {fecha_activacion.isoformat()}",
+                    resumen.prorrateo_pendiente_centavos,
+                    resumen.prorrateo_pendiente_centavos,
+                    fecha_vencimiento,
                 ),
             )
 

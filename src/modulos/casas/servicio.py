@@ -303,9 +303,11 @@ class ServicioCasas:
         casa_id: int,
         nuevo_abonado_id: int | None,
         motivo: str,
-        actor_id: int | None,
+        actor_id: int | None = None,
+        observacion: str = "",
     ) -> ResultadoGestionCasas:
-        motivo = motivo.strip()
+        motivo = motivo.strip().upper()
+        observacion = observacion.strip()
         if nuevo_abonado_id is None or nuevo_abonado_id <= 0:
             return ResultadoGestionCasas(
                 False,
@@ -339,6 +341,7 @@ class ServicioCasas:
                 casa_id=casa_id,
                 nuevo_abonado_id=nuevo_abonado_id,
                 motivo=motivo,
+                observacion=observacion,
                 actor_id=actor_id,
             )
         except ValueError as error:

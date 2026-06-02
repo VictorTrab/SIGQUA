@@ -16,9 +16,11 @@ class ControladorMorosidad:
         self,
         servicio_morosidad: ServicioMorosidad,
         vista_morosidad: VistaMorosidad,
+        obtener_actor_id: object | None = None,
     ) -> None:
         self._servicio_morosidad = servicio_morosidad
         self._vista_morosidad = vista_morosidad
+        self._obtener_actor_id = obtener_actor_id
         self._filtros = servicio_morosidad.filtro_inicial()
         self._pagina_actual = 1
         self._conectar_senales()
@@ -33,6 +35,7 @@ class ControladorMorosidad:
         self._vista_morosidad.pagina_cambiada.connect(self._manejar_cambio_pagina)
         self._vista_morosidad.detalle_solicitado.connect(self._mostrar_detalle)
         self._vista_morosidad.emitir_documento_solicitado.connect(self._emitir_documento)
+        self._vista_morosidad.aviso_cobro_solicitado.connect(self._registrar_aviso_cobro)
 
     def _manejar_filtro_texto(self, texto: str) -> None:
         self._filtros.texto = texto.strip()
@@ -43,6 +46,22 @@ class ControladorMorosidad:
         self._filtros.severidad = severidad
         self._pagina_actual = 1
         self._refrescar()
+
+    def _registrar_aviso_cobro(self, casa_id: int, estado_aviso: str, observacion: str) -> None:
+        resultado = self._servicio_morosidad.registrar_aviso_cobro(
+            casa_id=casa_id,
+            estado_aviso=estado_aviso,
+            observacion=observacion,
+            actor_id=self._resolver_actor_id(),
+        )
+        self._vista_morosidad.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
+        if resultado.exito:
+            bus_actualizaciones_modulos.emitir(
+                "morosidad",
+                ("morosidad", "casas", "reportes"),
+                "Aviso de cobro registrado.",
+            )
+            self._refrescar()
 
     def _manejar_cambio_pagina(self, pagina: int) -> None:
         self._pagina_actual = max(1, pagina)
@@ -116,3 +135,11 @@ class ControladorMorosidad:
             formatear_moneda=self._servicio_morosidad.formatear_moneda,
             formatear_fecha=self._servicio_morosidad.formatear_fecha,
         )
+
+    def _resolver_actor_id(self) -> int | None:
+        if callable(self._obtener_actor_id):
+            try:
+                return int(self._obtener_actor_id())
+            except (TypeError, ValueError):
+                return None
+        return None

@@ -114,6 +114,7 @@ class OpcionCasaPlanPago:
     estado_administrativo: str = "OPERATIVA"
     abonado_estado: str = "ACTIVO"
     ha_tenido_servicio_activo: bool = False
+    tiene_plan_activo: bool = False
     meses_pendientes: int = 0
     meses_en_mora: int = 0
     deuda_total_centavos: int = 0
@@ -124,6 +125,22 @@ class OpcionCasaPlanPago:
             f"{self.casa_codigo} | {self.abonado_nombre} | {self.barrio_nombre} | "
             f"Servicio {self.estado_servicio} | Deuda {self.deuda_total_centavos / 100:,.2f}"
         )
+
+
+@dataclass(slots=True)
+class OpcionAbonadoPlanPago:
+    """Agrupa el contexto de un abonado para seleccionar plan por casa."""
+
+    abonado_id: int
+    abonado_nombre: str
+    abonado_dni: str
+    apto_para_plan: bool
+    motivo_no_apto: str = ""
+    casas_elegibles: tuple[OpcionCasaPlanPago, ...] = ()
+
+    @property
+    def etiqueta_busqueda(self) -> str:
+        return f"{self.abonado_nombre} | DNI {self.abonado_dni}".strip()
 
 
 @dataclass(slots=True)
@@ -138,12 +155,36 @@ class FormularioPlanPago:
     metodo_pago_id: int | None = None
     referencia_pago: str = ""
     monto_activacion_centavos: int = 0
-    multa_corte_centavos: int = 0
     prima_centavos: int = 0
     saldo_financiado_centavos: int = 0
     cuota_regular_centavos: int = 0
     cantidad_cuotas: int = 0
     estado: str = "ACTIVO"
+    observaciones: str = ""
+
+
+@dataclass(slots=True)
+class ResumenConfirmacionPlanPago:
+    """Resumen validado antes de crear un plan de pago."""
+
+    casa_id: int
+    casa_codigo: str
+    abonado_nombre: str
+    abonado_dni: str
+    barrio_nombre: str
+    tipo_plan: str
+    fecha_activacion: str
+    metodo_pago_nombre: str
+    referencia_pago: str
+    deuda_financiada_centavos: int
+    monto_activacion_centavos: int
+    monto_total_centavos: int
+    prima_centavos: int
+    saldo_financiado_centavos: int
+    cuota_regular_centavos: int
+    cantidad_cuotas: int
+    primer_vencimiento: str
+    ultimo_vencimiento: str
     observaciones: str = ""
 
 

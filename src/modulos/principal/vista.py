@@ -85,7 +85,7 @@ from modulos.principal.entidades import (
 )
 
 
-COLOR_FONDO_PRINCIPAL = "#2c2966"
+COLOR_FONDO_PRINCIPAL = "#071A2D"
 ANCHO_MINIMO_SHELL_PRINCIPAL = 960
 ALTO_MINIMO_SHELL_PRINCIPAL = 640
 ANCHO_RUPTURA_DASHBOARD_AMPLIO = 1320
@@ -94,11 +94,11 @@ ANCHO_RUPTURA_METRICAS_6_COLUMNAS = 1120
 ANCHO_RUPTURA_METRICAS_4_COLUMNAS = 980
 ANCHO_RUPTURA_METRICAS_3_COLUMNAS = 820
 ANCHO_RUPTURA_METRICAS_2_COLUMNAS = 760
-COLOR_GRADIENTE_MARCA_INICIAL = "#22d3a6"
-COLOR_GRADIENTE_MARCA_FINAL = "#E4EACC"
+COLOR_GRADIENTE_MARCA_INICIAL = "#75C7F0"
+COLOR_GRADIENTE_MARCA_FINAL = "#37D399"
 
 
-def _crear_color_qt(valor: object, fallback: str = "#C9DBE9") -> QColor:
+def _crear_color_qt(valor: object, fallback: str = "#C5DDEE") -> QColor:
     """Convierte colores de paleta CSS a QColor para pintado manual."""
     texto = str(valor).strip()
     color = QColor(texto)
@@ -257,7 +257,7 @@ class TarjetaInsight(QWidget):
         super().__init__()
         self._tema_actual = nombre_tema
         self._icono_actual = "info-circle.svg"
-        self._color_actual = "#C9DBE9"
+        self._color_actual = "#75C7F0"
         self.setObjectName("tarjetaInsight")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         sombra = QGraphicsDropShadowEffect(self)
@@ -308,16 +308,16 @@ class TarjetaInsight(QWidget):
     def _resolver_visual_insight(titulo: str) -> tuple[str, str]:
         texto = titulo.lower()
         if "comprometidos" in texto:
-            return "alert-triangle.svg", "#F87171"
+            return "alert-triangle.svg", "#F27474"
         if "pagos" in texto:
-            return "receipt-2.svg", "#38BDF8"
+            return "receipt-2.svg", "#75C7F0"
         if "cargos" in texto:
-            return "urgent.svg", "#FBBF24"
+            return "urgent.svg", "#F5B84B"
         if "planes" in texto:
             return "calendar-stats.svg", "#A78BFA"
         if "ultimo" in texto:
-            return "clock.svg", "#35E6A8"
-        return "info-circle.svg", "#C9DBE9"
+            return "clock.svg", "#37D399"
+        return "info-circle.svg", "#75C7F0"
 
     def _aplicar_estilo(self) -> None:
         color = QColor(self._color_actual)
@@ -462,7 +462,7 @@ class GraficoBarrasEstadoServicio(QWidget):
         return str(self._paleta["grafica_barra_inactivo"])
 
     def _dibujar_grilla(self, painter: QPainter, area: QRectF, maximo: float) -> None:
-        painter.setPen(QPen(_crear_color_qt(self._paleta["grafica_grid_fuerte"], "#8FAFC7"), 1))
+        painter.setPen(QPen(_crear_color_qt(self._paleta["grafica_grid_fuerte"], "#92B6CC"), 1))
         fuente = QFont(str(self._paleta["familia_tipografica"]), 8, QFont.Weight.DemiBold)
         painter.setFont(fuente)
         for indice in range(5):
@@ -471,7 +471,7 @@ class GraficoBarrasEstadoServicio(QWidget):
             valor = int(maximo * indice / 4)
             painter.setPen(QColor(str(self._paleta["grafica_texto_suave"])))
             painter.drawText(QRectF(area.left() - 34, y - 9, 28, 18), Qt.AlignmentFlag.AlignRight, str(valor))
-            painter.setPen(QPen(_crear_color_qt(self._paleta["grafica_grid_fuerte"], "#8FAFC7"), 1))
+            painter.setPen(QPen(_crear_color_qt(self._paleta["grafica_grid_fuerte"], "#92B6CC"), 1))
 
     def _dibujar_estado_vacio(self, painter: QPainter, recta: QRectF, mensaje: str) -> None:
         painter.setPen(QColor(str(self._paleta["grafica_texto_suave"])))
@@ -551,7 +551,7 @@ class GraficoBarrasHorizontalesDashboard(QWidget):
                 self._formatear_moneda(categoria.valor),
             )
 
-        painter.setPen(QPen(_crear_color_qt(self._paleta["grafica_grid_fuerte"], "#8FAFC7"), 1))
+        painter.setPen(QPen(_crear_color_qt(self._paleta["grafica_grid_fuerte"], "#92B6CC"), 1))
         painter.drawLine(int(area.left()), int(area.bottom() + 4), int(area.right()), int(area.bottom() + 4))
         painter.end()
 
@@ -1124,16 +1124,16 @@ class DialogoPruebaModalBase(QDialog):
         layout.setSpacing(10)
 
         titulo = QLabel(self._titulo_modal)
-        titulo.setStyleSheet("color: #E4EACC; font-size: 22px; font-weight: 900;")
+        titulo.setStyleSheet("color: #75C7F0; font-size: 22px; font-weight: 900;")
         descripcion = QLabel(self._descripcion_modal)
         descripcion.setWordWrap(True)
-        descripcion.setStyleSheet("color: #C9DBE9; font-size: 13px; font-weight: 700;")
+        descripcion.setStyleSheet("color: #C5DDEE; font-size: 13px; font-weight: 700;")
 
         etiqueta = QLabel(self._etiqueta_tecnica)
         etiqueta.setWordWrap(True)
         etiqueta.setStyleSheet(
             "color: rgba(247, 249, 255, 0.82);"
-            "background: rgba(29, 54, 78, 0.78);"
+            "background: rgba(13, 42, 69, 0.78);"
             f"border: 1px solid {borde};"
             "padding: 8px 10px;"
             "font-size: 12px;"
@@ -1154,7 +1154,7 @@ class DialogoPruebaModalBase(QDialog):
         layout_bloque.setSpacing(8)
         layout_bloque.addWidget(QLabel("Vista previa del cuerpo del modal"))
         layout_bloque.addWidget(
-            QLabel("Color sólido base #1D364E, misma familia visual que el flujo actual.")
+            QLabel("Color sólido base #0D2A45, misma familia visual que el flujo actual.")
         )
 
         fila_acciones = QHBoxLayout()
@@ -1206,7 +1206,7 @@ class DialogoPruebaModalSistema(DialogoPruebaModalBase):
         panel.setStyleSheet(
             "QFrame {"
             f"background: {COLOR_FONDO_DIALOGO};"
-            "border: 1px solid rgba(83, 112, 139, 0.30);"
+            "border: 1px solid rgba(126, 167, 196, 0.30);"
             "border-radius: 4px;"
             "}"
         )
@@ -1214,7 +1214,7 @@ class DialogoPruebaModalSistema(DialogoPruebaModalBase):
             panel,
             COLOR_FONDO_DIALOGO,
             4,
-            "rgba(83, 112, 139, 0.30)",
+            "rgba(126, 167, 196, 0.30)",
         )
         self._layout_raiz.addWidget(panel)
 
@@ -1240,7 +1240,7 @@ class DialogoPruebaModalRecto(DialogoPruebaModalBase):
             panel,
             COLOR_FONDO_DIALOGO,
             0,
-            "rgba(83, 112, 139, 0.30)",
+            "rgba(126, 167, 196, 0.30)",
         )
         self._layout_raiz.addWidget(panel)
 
@@ -1267,7 +1267,7 @@ class DialogoPruebaModalMascara(DialogoPruebaModalBase):
             panel,
             COLOR_FONDO_DIALOGO,
             self._radio,
-            "rgba(83, 112, 139, 0.30)",
+            "rgba(126, 167, 196, 0.30)",
         )
         self._layout_raiz.addWidget(panel)
 
@@ -1298,7 +1298,7 @@ class DialogoPruebaModalTranslucido(DialogoPruebaModalBase):
         panel.setStyleSheet(
             "QFrame {"
             f"background: {COLOR_FONDO_DIALOGO};"
-            "border: 1px solid rgba(83, 112, 139, 0.55);"
+            "border: 1px solid rgba(126, 167, 196, 0.55);"
             "border-radius: 4px;"
             "}"
         )
@@ -1311,7 +1311,7 @@ class DialogoPruebaModalTranslucido(DialogoPruebaModalBase):
             panel,
             COLOR_FONDO_DIALOGO,
             4,
-            "rgba(83, 112, 139, 0.55)",
+            "rgba(126, 167, 196, 0.55)",
         )
         self._layout_raiz.addWidget(panel)
 
@@ -1895,7 +1895,7 @@ class VistaModuloPrincipal(QWidget):
             "abonados_activos": ("users.svg", "#35E6A8", "#173F36", "Registro"),
             "casas_activas": ("home-2.svg", "#2DD4BF", "#173F3E", "Servicio"),
         }
-        return mapa.get(codigo, ("chart-bar.svg", "#C9DBE9", "#e4efff", "Resumen"))
+        return mapa.get(codigo, ("chart-bar.svg", "#C5DDEE", "#DFF4FF", "Resumen"))
 
     def _mostrar_metricas(self, estado: EstadoModuloPrincipal) -> None:
         while self._grid_metricas.count():
@@ -2314,7 +2314,7 @@ class VistaModuloPrincipal(QWidget):
         eje_y.setTickCount(5)
         eje_y.setMinorTickCount(1)
         eje_y.setLabelsColor(QColor(str(self._paleta_tema["grafica_texto_suave"])))
-        eje_y.setGridLineColor(_crear_color_qt(self._paleta_tema["grafica_grid_fuerte"], "#8FAFC7"))
+        eje_y.setGridLineColor(_crear_color_qt(self._paleta_tema["grafica_grid_fuerte"], "#92B6CC"))
         eje_y.setLabelFormat("L %.0f")
         eje_y.setLabelsFont(self._crear_fuente_chart(8, 600))
 
@@ -2747,3 +2747,4 @@ class VistaModuloPrincipal(QWidget):
             }}
             """
         )
+

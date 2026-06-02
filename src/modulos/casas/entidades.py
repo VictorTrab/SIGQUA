@@ -10,6 +10,8 @@ FILTRO_CASAS_TODAS = "TODAS"
 FILTRO_CASAS_ACTIVAS = "ACTIVAS"
 FILTRO_CASAS_SUSPENDIDAS = "SUSPENDIDAS"
 FILTRO_CASAS_CON_MORA = "CON_MORA"
+FILTRO_CASAS_CORTADAS = "CORTADAS"
+FILTRO_CASAS_DEUDA_MAYOR_5 = "DEUDA_MAYOR_5"
 FILTRO_CASAS_SIN_PROPIETARIO = "SIN_PROPIETARIO"
 
 ESTADO_SERVICIO_ACTIVO = "ACTIVO"
@@ -39,6 +41,23 @@ MOTIVOS_ESTADO_ADMINISTRATIVO_VALIDOS = (
     MOTIVO_ESTADO_ADMINISTRATIVO_REVISION_ADMINISTRATIVA,
 )
 
+ESTADO_AVISO_SIN_AVISO = "SIN_AVISO"
+ESTADO_AVISO_PRIMER_AVISO = "PRIMER_AVISO"
+ESTADO_AVISO_SEGUNDO_AVISO = "SEGUNDO_AVISO"
+ESTADO_AVISO_TERCER_AVISO = "TERCER_AVISO"
+ESTADO_AVISO_LISTO_PARA_CORTE = "LISTO_PARA_CORTE"
+ESTADO_AVISO_CORTADO = "CORTADO"
+ESTADOS_AVISO_COBRO_VALIDOS = (
+    ESTADO_AVISO_SIN_AVISO,
+    ESTADO_AVISO_PRIMER_AVISO,
+    ESTADO_AVISO_SEGUNDO_AVISO,
+    ESTADO_AVISO_TERCER_AVISO,
+    ESTADO_AVISO_LISTO_PARA_CORTE,
+    ESTADO_AVISO_CORTADO,
+)
+
+MOTIVO_CAMBIO_RESPONSABLE_FALLECIMIENTO = "FALLECIMIENTO_DEL_ABONADO"
+
 
 @dataclass(slots=True)
 class Casa:
@@ -62,6 +81,10 @@ class Casa:
     meses_pendientes: int = 0
     meses_en_mora: int = 0
     tiene_plan_activo: bool = False
+    estado_aviso_cobro: str = ESTADO_AVISO_SIN_AVISO
+    fecha_ultimo_aviso: str = ""
+    usuario_ultimo_aviso_nombre: str = ""
+    observacion_ultimo_aviso: str = ""
     creado_en: str = ""
     fecha_alta: str = ""
     actualizado_en: str = ""
@@ -193,6 +216,7 @@ class HistorialPropietarioCasa:
     abonado_nuevo_nombre: str
     motivo: str
     usuario_nombre: str
+    observacion: str = ""
 
 
 @dataclass(slots=True)

@@ -89,6 +89,8 @@ class ServicioEstadoCuenta:
                     deuda_base=formateador_moneda(casa.deuda_base_centavos),
                     recargo_mora=formateador_moneda(casa.recargo_mora_centavos),
                     deuda_total=formateador_moneda(casa.deuda_total_centavos),
+                    estado_aviso_cobro=getattr(casa, "estado_aviso_cobro", "SIN_AVISO"),
+                    fecha_ultimo_aviso=formateador_fecha(getattr(casa, "fecha_ultimo_aviso", "")),
                     lineas_detalle=tuple(
                         LineaDetalleEstadoCuenta(
                             descripcion=linea.descripcion,

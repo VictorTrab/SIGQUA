@@ -814,7 +814,7 @@ class FlujoPagoPlan(QWidget):
             QFrame#panelDiagnosticoPago,
             QFrame#panelFormularioPago {{
                 background-color: {fondo_panel};
-                border: 1px solid rgba(83, 112, 139, 0.48);
+                border: 1px solid rgba(126, 167, 196, 0.48);
                 border-radius: 18px;
             }}
             QLabel#breadcrumbPago,
@@ -1112,7 +1112,6 @@ class FlujoPagoActivacion(QWidget):
         self._input_referencia.clear()
         self._input_observaciones.clear()
         self._input_monto_principal.clear()
-        self._input_multa.clear()
         self._tabla_casas.setRowCount(0)
         self._mostrar_mensaje_formulario("Completa los datos para calcular el cobro.", es_error=False)
         self._label_resultados.setProperty("estado", "")
@@ -1305,7 +1304,7 @@ class FlujoPagoActivacion(QWidget):
         titulo = QLabel(f"Paso 3: Ingresar datos de {self._titulo_tab.lower()}")
         titulo.setObjectName("tituloPasoPago")
         descripcion = QLabel(
-            "Captura fecha de activacion, metodo, referencia, monto principal y multa cuando corresponda. El prorrateo se informa desde la configuracion global."
+            "Captura fecha de activacion, metodo, referencia, monto principal y observaciones. El prorrateo se informa desde la configuracion global."
         )
         descripcion.setObjectName("textoAyudaPasoPago")
         descripcion.setWordWrap(True)
@@ -1329,7 +1328,6 @@ class FlujoPagoActivacion(QWidget):
         self._input_observaciones = QLineEdit()
         self._input_observaciones.setPlaceholderText("Observaciones internas opcionales")
         self._input_monto_principal = CampoMontoMonetario()
-        self._input_multa = CampoMontoMonetario()
         self._mensaje_formulario = QLabel("Completa los datos para calcular el cobro.")
         self._mensaje_formulario.setObjectName("textoEstadoPasoPago")
         self._mensaje_formulario.setWordWrap(True)
@@ -1349,13 +1347,8 @@ class FlujoPagoActivacion(QWidget):
         grilla_formulario.addWidget(self._combo_metodo, 1, 1)
         grilla_formulario.addWidget(self._crear_label_campo("Referencia"), 2, 0, 1, 2)
         grilla_formulario.addWidget(self._input_referencia, 3, 0, 1, 2)
-        grilla_formulario.addWidget(self._crear_label_campo(etiqueta_monto), 4, 0)
-        grilla_formulario.addWidget(self._input_monto_principal, 5, 0)
-        if self._tipo_pago == TIPO_PAGO_RECONEXION:
-            grilla_formulario.addWidget(self._crear_label_campo("Multa por corte"), 4, 1)
-            grilla_formulario.addWidget(self._input_multa, 5, 1)
-        else:
-            self._input_multa.establecer_desde_centavos(0)
+        grilla_formulario.addWidget(self._crear_label_campo(etiqueta_monto), 4, 0, 1, 2)
+        grilla_formulario.addWidget(self._input_monto_principal, 5, 0, 1, 2)
         grilla_formulario.addWidget(self._crear_label_campo("Observaciones"), 6, 0, 1, 2)
         grilla_formulario.addWidget(self._input_observaciones, 7, 0, 1, 2)
 
@@ -1560,17 +1553,9 @@ class FlujoPagoActivacion(QWidget):
             self._mostrar_mensaje_formulario("Selecciona un metodo de pago.", es_error=True)
             return None
         monto_principal = self._input_monto_principal.obtener_centavos()
-        texto_multa = self._input_multa.text().strip()
-        multa = self._input_multa.obtener_centavos() if texto_multa else 0
         if monto_principal <= 0:
             self._mostrar_mensaje_formulario(
                 "Indica un monto principal valido.",
-                es_error=True,
-            )
-            return None
-        if self._tipo_pago == TIPO_PAGO_RECONEXION and multa < 0:
-            self._mostrar_mensaje_formulario(
-                "Indica una multa valida o deja el campo en 0.00.",
                 es_error=True,
             )
             return None
@@ -1584,7 +1569,6 @@ class FlujoPagoActivacion(QWidget):
             fecha_activacion=self._input_fecha_activacion.text().strip(),
             monto_conexion_centavos=monto_principal if self._tipo_pago == TIPO_PAGO_CONEXION else 0,
             monto_reconexion_centavos=monto_principal if self._tipo_pago == TIPO_PAGO_RECONEXION else 0,
-            multa_corte_centavos=max(multa, 0),
         )
 
     def _actualizar_estado(self) -> None:
@@ -1623,7 +1607,7 @@ class FlujoPagoActivacion(QWidget):
         mensaje = (
             "La configuracion global cobrara mensualidad prorrateada en esta activacion."
             if self._cobrar_prorrateo
-            else "La configuracion global no cobrara mensualidad prorrateada en esta activacion."
+            else "La configuracion global no cobrara el prorrateo en caja; se generara como primer cargo pendiente."
         )
         if hasattr(self, "_label_prorrateo"):
             self._label_prorrateo.setText(mensaje)
@@ -1685,7 +1669,7 @@ class FlujoPagoActivacion(QWidget):
             QFrame#panelDiagnosticoPago,
             QFrame#panelFormularioPago {{
                 background-color: {fondo_panel};
-                border: 1px solid rgba(83, 112, 139, 0.48);
+                border: 1px solid rgba(126, 167, 196, 0.48);
                 border-radius: 18px;
             }}
             QLabel#breadcrumbPago,
@@ -2600,7 +2584,7 @@ class FlujoPagoMensual(QWidget):
             QFrame#panelDiagnosticoPago,
             QFrame#panelFormularioPago {{
                 background-color: {fondo_panel};
-                border: 1px solid rgba(83, 112, 139, 0.48);
+                border: 1px solid rgba(126, 167, 196, 0.48);
                 border-radius: 18px;
             }}
             QLabel#breadcrumbPago,
@@ -3137,25 +3121,25 @@ class VistaPagos(QWidget):
             }}
             QLabel#badgeEstadoDocumentoPago {{
                 border-radius: 10px;
-                color: #C9DBE9;
+                color: #C5DDEE;
                 font-size: 10px;
                 font-weight: 800;
                 padding: 4px 9px;
-                background: rgba(132, 146, 166, 0.22);
-                border: 1px solid rgba(83, 112, 139, 0.30);
+                background: rgba(142, 168, 188, 0.22);
+                border: 1px solid rgba(126, 167, 196, 0.30);
             }}
             QLabel#badgeEstadoDocumentoPago[activo="true"] {{
-                color: #d9fff5;
-                background: rgba(16, 120, 98, 0.22);
-                border: 1px solid rgba(158, 231, 214, 0.26);
+                color: #DDFBF0;
+                background: rgba(55, 211, 153, 0.22);
+                border: 1px solid rgba(55, 211, 153, 0.26);
             }}
             QLabel#badgeEstadoDocumentoPago[activo="false"] {{
-                color: #ffd4cf;
-                background: rgba(180, 35, 24, 0.18);
-                border: 1px solid rgba(255, 205, 199, 0.28);
+                color: #FFE3E3;
+                background: rgba(242, 116, 116, 0.18);
+                border: 1px solid rgba(242, 116, 116, 0.28);
             }}
             QTabWidget#tabsPagos::pane {{
-                border: 1px solid rgba(83, 112, 139, 0.48);
+                border: 1px solid rgba(126, 167, 196, 0.48);
                 border-radius: 22px;
                 background-color: {fondo_header_destacado};
                 top: -2px;
@@ -3184,7 +3168,7 @@ class VistaPagos(QWidget):
             }}
             QTabWidget#tabsPagos QTabBar::tab:selected {{
                 background-color: {paleta["acento_seleccion"]};
-                color: #E4EACC;
+                color: #75C7F0;
                 border: 2px solid {paleta["borde_principal"]};
                 margin-top: 0px;
                 padding-top: 12px;
@@ -3223,3 +3207,4 @@ class VistaPagos(QWidget):
             widget.setProperty("activo", activo)
             widget.style().unpolish(widget)
             widget.style().polish(widget)
+

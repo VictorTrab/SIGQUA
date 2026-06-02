@@ -226,6 +226,7 @@ class ControladorCasas:
             casa_id=casa_id,
             nuevo_abonado_id=formulario.nuevo_abonado_id,
             motivo=formulario.motivo,
+            observacion=getattr(formulario, "observacion", ""),
             actor_id=None if self._actor is None else self._actor.identificador,
         )
         self._vista_casas.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)

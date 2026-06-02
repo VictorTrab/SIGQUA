@@ -111,7 +111,6 @@ class FormularioPago:
     fecha_activacion: str = ""
     monto_conexion_centavos: int = 0
     monto_reconexion_centavos: int = 0
-    multa_corte_centavos: int = 0
     plan_pago_id: int | None = None
     cuotas_plan_pago_ids: tuple[int, ...] = ()
     permitir_regularizacion_cortado: bool = False
@@ -133,6 +132,10 @@ class ResumenConfirmacionPago:
     fecha_activacion: str = ""
     plan_pago_id: int | None = None
     operacion_cobro_id: int | None = None
+    prorrateo_pendiente_centavos: int = 0
+    prorrateo_pendiente_anio: int | None = None
+    prorrateo_pendiente_mes: int | None = None
+    prorrateo_pendiente_descripcion: str = ""
     es_operacion_compuesta: bool = False
     tipo_operacion_compuesta: str = ""
 

@@ -30,6 +30,8 @@ class CasaEstadoCuenta:
     recargo_mora: str
     deuda_total: str
     lineas_detalle: tuple[LineaDetalleEstadoCuenta, ...]
+    estado_aviso_cobro: str = "SIN_AVISO"
+    fecha_ultimo_aviso: str = ""
 
 
 @dataclass(frozen=True, slots=True)

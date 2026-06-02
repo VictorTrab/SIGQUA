@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QToolButton
+from PySide6.QtWidgets import QApplication, QScrollArea, QToolButton
 
 
 RAIZ_PROYECTO = Path(__file__).resolve().parents[1]
@@ -404,8 +404,15 @@ class ServicioCasasStub:
         self.cortes.append((casa_id, observaciones, actor_id))
         return ResultadoGestionCasas(True, "corte", "OK")
 
-    def cambiar_dueno(self, casa_id: int, nuevo_abonado_id: int | None, motivo: str, actor_id: int | None):
-        self.cambios_dueno.append((casa_id, nuevo_abonado_id, motivo, actor_id))
+    def cambiar_dueno(
+        self,
+        casa_id: int,
+        nuevo_abonado_id: int | None,
+        motivo: str,
+        actor_id: int | None,
+        observacion: str = "",
+    ):
+        self.cambios_dueno.append((casa_id, nuevo_abonado_id, motivo, actor_id, observacion))
         return ResultadoGestionCasas(True, "dueno", "OK")
 
     def exportar_csv(self, ruta_destino: str, filtro: str = "", filtro_rapido: str = ""):
@@ -485,10 +492,11 @@ class TestControladorCasas(unittest.TestCase):
         class CambioDuenoStub:
             nuevo_abonado_id = 1
             motivo = "Prueba de cambio"
+            observacion = "Observacion de cambio"
 
         vista.formulario_cambio_dueno = CambioDuenoStub()
         vista.cambio_dueno_solicitado.emit(2)
-        self.assertEqual(servicio.cambios_dueno, [(2, 1, "Prueba de cambio", 9)])
+        self.assertEqual(servicio.cambios_dueno, [(2, 1, "Prueba de cambio", 9, "Observacion de cambio")])
 
         vista.historial_casa_solicitado.emit(2)
         self.assertIsNotNone(vista.historial_mostrado)
@@ -506,9 +514,7 @@ class TestVistaCasasAcciones(unittest.TestCase):
     def test_botones_de_fila_emiten_senales_reales(self) -> None:
         vista = VistaCasas()
         eventos: list[tuple[str, int]] = []
-        vista.editar_casa_solicitado.connect(lambda casa_id: eventos.append(("editar", casa_id)))
-        vista.cambio_estado_solicitado.connect(lambda casa_id: eventos.append(("estado", casa_id)))
-        vista.corte_servicio_solicitado.connect(lambda casa_id: eventos.append(("corte", casa_id)))
+        vista.detalle_casa_solicitado.connect(lambda casa_id: eventos.append(("detalle", casa_id)))
 
         vista.mostrar_casas(
             PaginaCasas(
@@ -529,17 +535,16 @@ class TestVistaCasasAcciones(unittest.TestCase):
         vista.show()
         self.aplicacion.processEvents()
 
-        contenedor_acciones = vista._tabla.cellWidget(0, 7)
+        contenedor_acciones = vista._tabla.cellWidget(0, 8)
         self.assertIsNotNone(contenedor_acciones)
         botones = contenedor_acciones.findChildren(QToolButton, "botonIconoFilaCasa")
-        self.assertEqual(len(botones), 6)
+        self.assertEqual(len(botones), 1)
+        self.assertEqual(botones[0].toolTip(), "Ver detalle")
 
-        for boton in botones:
-            if boton.toolTip() in {"Editar", "Suspender", "Cortar servicio"}:
-                QTest.mouseClick(boton, Qt.MouseButton.LeftButton)
-                self.aplicacion.processEvents()
+        QTest.mouseClick(botones[0], Qt.MouseButton.LeftButton)
+        self.aplicacion.processEvents()
 
-        self.assertEqual(eventos, [("editar", 2), ("estado", 2), ("corte", 2)])
+        self.assertEqual(eventos, [("detalle", 2)])
         vista.close()
 
     def test_boton_cortar_no_se_muestra_para_casa_cortada(self) -> None:
@@ -563,11 +568,12 @@ class TestVistaCasasAcciones(unittest.TestCase):
         vista.show()
         self.aplicacion.processEvents()
 
-        contenedor_acciones = vista._tabla.cellWidget(0, 7)
+        contenedor_acciones = vista._tabla.cellWidget(0, 8)
         self.assertIsNotNone(contenedor_acciones)
         botones = contenedor_acciones.findChildren(QToolButton, "botonIconoFilaCasa")
         tooltips = {boton.toolTip() for boton in botones}
         self.assertNotIn("Cortar servicio", tooltips)
+        self.assertEqual(tooltips, {"Ver detalle"})
         vista.close()
 
     def test_formulario_edicion_bloquea_estado_fisico(self) -> None:
@@ -587,6 +593,25 @@ class TestVistaCasasAcciones(unittest.TestCase):
             ),
         )
         self.assertFalse(dialogo._combo_estado.isEnabled())
+        dialogo.close()
+
+    def test_formulario_casa_usa_buscadores_y_preserva_ids(self) -> None:
+        dialogo = DialogoFormularioCasa(
+            barrios=[OpcionBarrio(1, "Centro"), OpcionBarrio(2, "San Jorge")],
+            abonados=[
+                OpcionAbonado(2, "Carlos Ramirez", "0801199000022", "ACTIVO"),
+                OpcionAbonado(3, "Diana Flores", "0801199000033", "ACTIVO"),
+            ],
+        )
+        dialogo._campo_abonado.seleccionar_por_id(3, "Diana Flores | 0801199000033")
+        dialogo._campo_barrio.seleccionar_por_id(2, "San Jorge")
+
+        formulario = dialogo.obtener_formulario()
+        scroll = dialogo.findChild(QScrollArea, "scrollFormularioCasa")
+
+        self.assertEqual(formulario.abonado_id, 3)
+        self.assertEqual(formulario.barrio_id, 2)
+        self.assertIsNotNone(scroll)
         dialogo.close()
 
 

@@ -106,8 +106,8 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertEqual(vista._stack.count(), 3)
         self.assertEqual(vista._boton_login.parentWidget().maximumWidth(), ANCHO_MAXIMO_TARJETA)
         self.assertGreater(vista.maximumWidth(), ANCHO_MAXIMO_TARJETA)
-        self.assertEqual(COLOR_GRADIENTE_INICIAL, "#0A1728")
-        self.assertEqual(COLOR_GRADIENTE_FINAL, "#1D364E")
+        self.assertEqual(COLOR_GRADIENTE_INICIAL, "#071A2D")
+        self.assertEqual(COLOR_GRADIENTE_FINAL, "#0D2A45")
         self.assertIsNotNone(fondo_blur)
         self.assertIsNotNone(logo_login)
         self.assertIsNotNone(logo_login.pixmap())
@@ -546,11 +546,15 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             Casa(identificador=1, abonado_nombre="Ana Martinez", barrio_nombre="Centro", estado_servicio="ACTIVO")
         )
         botones_accion = fila_acciones.findChildren(QToolButton, "botonIconoFilaCasa")
-        self.assertEqual(len(botones_accion), 6)
+        self.assertEqual(len(botones_accion), 1)
+        self.assertEqual(botones_accion[0].toolTip(), "Ver detalle")
         self.assertTrue(all(not boton.text() for boton in botones_accion))
         self.assertTrue(all(not boton.icon().isNull() for boton in botones_accion))
         self.assertTrue(all(boton.iconSize().width() == 18 for boton in botones_accion))
         self.assertEqual(fila_acciones.minimumHeight(), 74)
+        self.assertEqual(vista._tabla.horizontalHeaderItem(6).text(), "Servicio")
+        self.assertEqual(vista._tabla.horizontalHeaderItem(7).text(), "Operativo")
+        self.assertNotIn("Aviso", [vista._tabla.horizontalHeaderItem(indice).text() for indice in range(vista._tabla.columnCount())])
         vista.close()
 
     def test_shell_principal_reduce_ancho_sidebar_sin_expandir_menu(self) -> None:
@@ -880,7 +884,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertEqual(vista_usuarios._tema_actual, "tema_sigqua")
         self.assertEqual(vista_configuracion._tema_actual, "tema_sigqua")
         self.assertNotIn("botonTemaHeader", vista_principal.styleSheet())
-        self.assertEqual(vista_principal._paleta_tema["fondo_principal"], "#0A1728")
+        self.assertEqual(vista_principal._paleta_tema["fondo_principal"], "#071A2D")
         self.assertIn('font-family: "Segoe UI"', vista_principal.styleSheet())
         vista_principal.aplicar_fondo_personalizado(
             activo=True,

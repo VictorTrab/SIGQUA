@@ -12,10 +12,13 @@ from modulos.casas.entidades import (
     DetalleCasa,
     ESTADO_ADMINISTRATIVO_OPERATIVA,
     ESTADO_ADMINISTRATIVO_SUSPENDIDA,
+    ESTADO_AVISO_CORTADO,
     ESTADO_SERVICIO_ACTIVO,
     ESTADO_SERVICIO_CORTADO,
     FILTRO_CASAS_ACTIVAS,
+    FILTRO_CASAS_CORTADAS,
     FILTRO_CASAS_CON_MORA,
+    FILTRO_CASAS_DEUDA_MAYOR_5,
     FILTRO_CASAS_SIN_PROPIETARIO,
     FILTRO_CASAS_SUSPENDIDAS,
     FILTRO_CASAS_TODAS,
@@ -142,7 +145,8 @@ class RepositorioCasas(Protocol):
         casa_id: int,
         nuevo_abonado_id: int,
         motivo: str,
-        actor_id: int | None,
+        actor_id: int | None = None,
+        observacion: str = "",
     ) -> None:
         """Cambia el propietario actual de la casa y migra contexto pendiente."""
 
@@ -211,6 +215,10 @@ class RepositorioCasasSQLite:
                 COALESCE(dd.meses_pendientes, 0) AS meses_pendientes,
                 COALESCE(dd.meses_en_mora, 0) AS meses_en_mora,
                 COALESCE(pp.total_planes_activos, 0) AS total_planes_activos,
+                COALESCE(c.estado_aviso_cobro, 'SIN_AVISO') AS estado_aviso_cobro,
+                COALESCE(c.fecha_ultimo_aviso, '') AS fecha_ultimo_aviso,
+                COALESCE(u_aviso.nombre_completo, COALESCE(u_aviso.nombre_usuario, '')) AS usuario_ultimo_aviso_nombre,
+                COALESCE(c.observacion_ultimo_aviso, '') AS observacion_ultimo_aviso,
                 COALESCE(c.creado_en, '') AS creado_en,
                 COALESCE(c.fecha_alta, '') AS fecha_alta,
                 COALESCE(c.actualizado_en, '') AS actualizado_en
@@ -220,6 +228,7 @@ class RepositorioCasasSQLite:
             LEFT JOIN ({SUBCONSULTA_DEUDA}) dd ON dd.casa_id = c.id
             LEFT JOIN ({SUBCONSULTA_PLANES}) pp ON pp.casa_id = c.id
             LEFT JOIN ({SUBCONSULTA_TRAZABILIDAD_ACTIVACION}) ta ON ta.casa_id = c.id
+            LEFT JOIN usuarios u_aviso ON u_aviso.id = c.usuario_ultimo_aviso_id
             WHERE {' AND '.join(condiciones)}
             ORDER BY c.id ASC
             {clausula_paginacion};
@@ -289,6 +298,10 @@ class RepositorioCasasSQLite:
                 COALESCE(dd.meses_pendientes, 0) AS meses_pendientes,
                 COALESCE(dd.meses_en_mora, 0) AS meses_en_mora,
                 COALESCE(pp.total_planes_activos, 0) AS total_planes_activos,
+                COALESCE(c.estado_aviso_cobro, 'SIN_AVISO') AS estado_aviso_cobro,
+                COALESCE(c.fecha_ultimo_aviso, '') AS fecha_ultimo_aviso,
+                COALESCE(u_aviso.nombre_completo, COALESCE(u_aviso.nombre_usuario, '')) AS usuario_ultimo_aviso_nombre,
+                COALESCE(c.observacion_ultimo_aviso, '') AS observacion_ultimo_aviso,
                 COALESCE(c.creado_en, '') AS creado_en,
                 COALESCE(c.fecha_alta, '') AS fecha_alta,
                 COALESCE(c.actualizado_en, '') AS actualizado_en
@@ -298,6 +311,7 @@ class RepositorioCasasSQLite:
             LEFT JOIN ({SUBCONSULTA_DEUDA}) dd ON dd.casa_id = c.id
             LEFT JOIN ({SUBCONSULTA_PLANES}) pp ON pp.casa_id = c.id
             LEFT JOIN ({SUBCONSULTA_TRAZABILIDAD_ACTIVACION}) ta ON ta.casa_id = c.id
+            LEFT JOIN usuarios u_aviso ON u_aviso.id = c.usuario_ultimo_aviso_id
             WHERE c.id = ? AND c.eliminado_en IS NULL
             LIMIT 1;
         """
@@ -497,10 +511,14 @@ class RepositorioCasasSQLite:
                     """
                     UPDATE casas
                     SET estado_servicio = ?,
+                        estado_aviso_cobro = ?,
+                        fecha_ultimo_aviso = datetime('now', 'localtime'),
+                        usuario_ultimo_aviso_id = ?,
+                        observacion_ultimo_aviso = ?,
                         actualizado_en = datetime('now', 'localtime')
                     WHERE id = ? AND eliminado_en IS NULL;
                     """,
-                    (ESTADO_SERVICIO_CORTADO, casa_id),
+                    (ESTADO_SERVICIO_CORTADO, ESTADO_AVISO_CORTADO, actor_id, observaciones, casa_id),
                 )
                 conexion.execute(
                     """
@@ -559,7 +577,8 @@ class RepositorioCasasSQLite:
         casa_id: int,
         nuevo_abonado_id: int,
         motivo: str,
-        actor_id: int | None,
+        actor_id: int | None = None,
+        observacion: str = "",
     ) -> None:
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             with conexion:
@@ -652,11 +671,12 @@ class RepositorioCasasSQLite:
                         abonado_nuevo_id,
                         fecha_cambio,
                         motivo,
+                        observacion,
                         usuario_id
                     )
-                    VALUES (?, ?, ?, datetime('now', 'localtime'), ?, ?);
+                    VALUES (?, ?, ?, datetime('now', 'localtime'), ?, ?, ?);
                     """,
-                    (casa_id, abonado_anterior_id, nuevo_abonado_id, motivo, actor_id),
+                    (casa_id, abonado_anterior_id, nuevo_abonado_id, motivo, observacion, actor_id),
                 )
                 conexion.execute(
                     """
@@ -694,6 +714,7 @@ class RepositorioCasasSQLite:
                                 "abonado_dni": str(fila_nuevo_abonado["dni"] or ""),
                                 "estado_abonado": str(fila_nuevo_abonado["estado"] or ""),
                                 "motivo": motivo,
+                                "observacion": observacion,
                             },
                             ensure_ascii=True,
                         ),
@@ -708,6 +729,7 @@ class RepositorioCasasSQLite:
                 COALESCE(anterior.nombre_completo, 'Sin registro previo') AS abonado_anterior_nombre,
                 COALESCE(nuevo.nombre_completo, 'Sin asignacion') AS abonado_nuevo_nombre,
                 COALESCE(h.motivo, '') AS motivo,
+                COALESCE(h.observacion, '') AS observacion,
                 COALESCE(u.nombre_completo, COALESCE(u.nombre_usuario, 'Sistema')) AS usuario_nombre
             FROM historial_propietarios_casa h
             LEFT JOIN abonados anterior ON anterior.id = h.abonado_anterior_id
@@ -726,6 +748,7 @@ class RepositorioCasasSQLite:
                 abonado_nuevo_nombre=str(fila["abonado_nuevo_nombre"] or ""),
                 motivo=str(fila["motivo"] or ""),
                 usuario_nombre=str(fila["usuario_nombre"] or "Sistema"),
+                observacion=str(fila["observacion"] or ""),
             )
             for fila in filas
         ]
@@ -942,6 +965,10 @@ class RepositorioCasasSQLite:
             condiciones.append("c.estado_administrativo = 'SUSPENDIDA'")
         elif filtro_rapido == FILTRO_CASAS_CON_MORA:
             condiciones.append("COALESCE(dd.meses_en_mora, 0) > 0")
+        elif filtro_rapido == FILTRO_CASAS_CORTADAS:
+            condiciones.append("c.estado_servicio = 'CORTADO'")
+        elif filtro_rapido == FILTRO_CASAS_DEUDA_MAYOR_5:
+            condiciones.append("COALESCE(dd.meses_en_mora, 0) > 5")
         elif filtro_rapido == FILTRO_CASAS_SIN_PROPIETARIO:
             condiciones.append("COALESCE(a.estado, 'INACTIVO') != 'ACTIVO'")
 
@@ -970,6 +997,10 @@ class RepositorioCasasSQLite:
             meses_pendientes=int(fila["meses_pendientes"] or 0),
             meses_en_mora=int(fila["meses_en_mora"] or 0),
             tiene_plan_activo=int(fila["total_planes_activos"] or 0) > 0,
+            estado_aviso_cobro=str(fila["estado_aviso_cobro"] or "SIN_AVISO"),
+            fecha_ultimo_aviso=str(fila["fecha_ultimo_aviso"] or ""),
+            usuario_ultimo_aviso_nombre=str(fila["usuario_ultimo_aviso_nombre"] or ""),
+            observacion_ultimo_aviso=str(fila["observacion_ultimo_aviso"] or ""),
             creado_en=str(fila["creado_en"] or ""),
             fecha_alta=str(fila["fecha_alta"] or ""),
             actualizado_en=str(fila["actualizado_en"] or ""),

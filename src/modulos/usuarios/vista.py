@@ -620,19 +620,19 @@ class DialogoDetalleUsuario(DialogoBaseSigqua):
             QFrame#panelDetalleUsuario,
             QFrame#seccionDetalleUsuario,
             QFrame#campoDetalleUsuario {
-                background: rgba(29, 54, 78, 0.78);
-                border: 1px solid rgba(83, 112, 139, 0.30);
+                background: rgba(13, 42, 69, 0.78);
+                border: 1px solid rgba(126, 167, 196, 0.30);
                 border-radius: 16px;
             }
             QLabel#codigoDetalleUsuario,
             QLabel#etiquetaDetalleUsuario,
             QLabel#descripcionSeccionDetalleUsuario {
-                color: #C9DBE9;
+                color: #C5DDEE;
             }
             QLabel#nombreDetalleUsuario,
             QLabel#tituloSeccionDetalleUsuario,
             QLabel#valorDetalleUsuario {
-                color: #E4EACC;
+                color: #75C7F0;
             }
             QLabel#codigoDetalleUsuario {
                 font-size: 12px;
@@ -655,14 +655,14 @@ class DialogoDetalleUsuario(DialogoBaseSigqua):
                 padding: 6px 10px;
                 font-size: 11px;
                 font-weight: 800;
-                color: #C9DBE9;
-                background: rgba(132, 146, 166, 0.22);
-                border: 1px solid rgba(83, 112, 139, 0.30);
+                color: #C5DDEE;
+                background: rgba(142, 168, 188, 0.22);
+                border: 1px solid rgba(126, 167, 196, 0.30);
             }
             QLabel#badgeEstadoUsuarioDetalle[activo="true"] {
-                color: #E4EACC;
+                color: #75C7F0;
                 background: rgba(31, 79, 94, 0.96);
-                border-color: rgba(201, 219, 233, 0.26);
+                border-color: rgba(117, 199, 240, 0.26);
             }
             """
         )
@@ -887,11 +887,11 @@ class DialogoCredencialTemporal(DialogoBaseSigqua):
             + """
             QFrame#bloqueCredencialTemporal {
                 background: rgba(36, 63, 90, 0.84);
-                border: 1px solid rgba(83, 112, 139, 0.48);
+                border: 1px solid rgba(126, 167, 196, 0.48);
                 border-radius: 16px;
             }
             QLabel#valorCredencialTemporal {
-                color: #E4EACC;
+                color: #75C7F0;
                 font-size: 24px;
                 font-weight: 900;
                 letter-spacing: 0px;
@@ -1105,10 +1105,10 @@ class VistaUsuarios(QWidget):
         tarjetas = QGridLayout()
         tarjetas.setHorizontalSpacing(10)
         tarjetas.setVerticalSpacing(10)
-        self._tarjeta_total = TarjetaResumenUsuario("user.svg", "#C9DBE9")
-        self._tarjeta_activos = TarjetaResumenUsuario("circle-check.svg", "#C9DBE9")
-        self._tarjeta_admins = TarjetaResumenUsuario("key.svg", "#E4EACC")
-        self._tarjeta_accesos = TarjetaResumenUsuario("clock.svg", "#8FAFC7")
+        self._tarjeta_total = TarjetaResumenUsuario("user.svg", "#75C7F0")
+        self._tarjeta_activos = TarjetaResumenUsuario("circle-check.svg", "#37D399")
+        self._tarjeta_admins = TarjetaResumenUsuario("key.svg", "#F5B84B")
+        self._tarjeta_accesos = TarjetaResumenUsuario("clock.svg", "#92B6CC")
         tarjetas.addWidget(self._tarjeta_total, 0, 0)
         tarjetas.addWidget(self._tarjeta_activos, 0, 1)
         tarjetas.addWidget(self._tarjeta_admins, 0, 2)
@@ -1249,14 +1249,14 @@ class VistaUsuarios(QWidget):
         layout.setSpacing(10)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        boton_detalle = BotonIconoFilaUsuario("eye.svg", "#E4EACC", "Ver informacion")
-        boton_editar = BotonIconoFilaUsuario("user.svg", "#E4EACC", "Editar usuario")
+        boton_detalle = BotonIconoFilaUsuario("eye.svg", "#75C7F0", "Ver informacion")
+        boton_editar = BotonIconoFilaUsuario("user.svg", "#F5B84B", "Editar usuario")
         boton_estado = BotonIconoFilaUsuario(
             "lock.svg" if usuario.estado == "ACTIVO" else "circle-check.svg",
-            "#E4EACC" if usuario.estado == "ACTIVO" else "#8FAFC7",
+            "#37D399" if usuario.estado == "ACTIVO" else "#92B6CC",
             "Desactivar" if usuario.estado == "ACTIVO" else "Activar",
         )
-        boton_seguridad = BotonIconoFilaUsuario("key.svg", "#8FAFC7", "Gestionar acceso")
+        boton_seguridad = BotonIconoFilaUsuario("key.svg", "#A7B8FF", "Gestionar acceso")
 
         boton_detalle.clicked.connect(
             lambda checked=False, identificador=usuario.identificador: self.detalle_usuario_solicitado.emit(
@@ -1522,3 +1522,4 @@ class VistaUsuarios(QWidget):
             }}
             """
         )
+

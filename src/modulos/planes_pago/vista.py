@@ -31,8 +31,10 @@ from PySide6.QtWidgets import (
 
 from comun.ui import (
     BotonAccionContextual,
+    CampoBusquedaSeleccionSigqua,
     CampoMontoMonetario,
     DialogoBaseSigqua,
+    DialogoConfirmacionSigqua,
     DialogoMensajeSigqua,
     aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
@@ -55,11 +57,12 @@ from modulos.planes_pago.entidades import (
     FILTRO_PLANES_SERVICIO,
     FILTRO_PLANES_TODOS,
     FormularioPlanPago,
+    OpcionAbonadoPlanPago,
     OpcionCasaPlanPago,
     PaginaPlanesPago,
     PlanPago,
+    ResumenConfirmacionPlanPago,
     ResumenPlanesPago,
-    TIPOS_PLAN_VALIDOS,
 )
 from modulos.pagos.entidades import MetodoPago
 
@@ -145,43 +148,54 @@ class BotonIconoFilaPlan(QToolButton):
 class DialogoFormularioPlanPago(DialogoBaseSigqua):
     def __init__(
         self,
-        casas: Iterable[OpcionCasaPlanPago],
         metodos_pago: Iterable[MetodoPago],
+        abonados: Iterable[OpcionAbonadoPlanPago] | None = None,
+        casas: Iterable[OpcionCasaPlanPago] | None = None,
         plan: PlanPago | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self._casas = list(casas)
+        self._abonados = list(abonados or [])
+        self._abonados_por_id = {abonado.abonado_id: abonado for abonado in self._abonados}
+        self._casas = list(casas or [])
+        self._casas_por_id = {casa.casa_id: casa for casa in self._casas}
         self._metodos_pago = list(metodos_pago)
-        self._casas_filtradas = list(self._casas)
+        self._metodos_por_id = {metodo.identificador: metodo for metodo in self._metodos_pago}
         self._plan = plan
-        self.setMinimumWidth(620)
-        self.setMinimumHeight(640)
+        self._abonado_seleccionado_id: int | None = None if plan is None else plan.abonado_id
+        self._casa_seleccionada_id: int | None = None if plan is None else plan.casa_id
+        self.setMinimumWidth(680)
+        self.setMinimumHeight(440)
         self._construir_ui()
 
     def obtener_formulario(self) -> FormularioPlanPago:
+        casa = self._obtener_casa_seleccionada()
+        tipo_plan = self._resolver_tipo_plan(casa)
         return FormularioPlanPago(
             identificador=None if self._plan is None else self._plan.identificador,
-            casa_id=self._combo_casa.currentData(),
-            tipo_plan=self._combo_tipo_plan.currentText(),
-            concepto_financiado=self._combo_tipo_plan.currentText(),
+            casa_id=self._casa_seleccionada_id,
+            tipo_plan=tipo_plan,
+            concepto_financiado=tipo_plan,
             fecha_activacion=self._campo_fecha_activacion.date().toString("yyyy-MM-dd"),
             metodo_pago_id=self._combo_metodo_pago.currentData(),
             referencia_pago=self._campo_referencia_pago.text().strip(),
             monto_activacion_centavos=self._campo_activacion.obtener_centavos(),
-            multa_corte_centavos=self._campo_multa.obtener_centavos(),
             prima_centavos=max(self._campo_prima.obtener_centavos(), 0),
             saldo_financiado_centavos=self._campo_saldo.obtener_centavos(),
             cuota_regular_centavos=self._campo_cuota.obtener_centavos(),
             cantidad_cuotas=self._campo_cantidad.value(),
-            estado=self._combo_estado.currentText(),
-            observaciones=self._campo_observaciones.toPlainText(),
+            estado="ACTIVO" if self._plan is None else self._plan.estado,
+            observaciones=self._campo_observaciones.toPlainText().strip(),
         )
 
     def accept(self) -> None:
         formulario = self.obtener_formulario()
         if formulario.casa_id is None:
             self._mensaje.setText("Selecciona una casa para continuar.")
+            self._mensaje.setVisible(True)
+            return
+        if formulario.prima_centavos <= 0:
+            self._mensaje.setText("Ingresa una prima valida mayor a cero.")
             self._mensaje.setVisible(True)
             return
         if self._plan is None and formulario.metodo_pago_id is None:
@@ -193,15 +207,11 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
             self._mensaje.setVisible(True)
             return
         if formulario.saldo_financiado_centavos <= 0:
-            self._mensaje.setText("Indica el saldo financiado del plan.")
+            self._mensaje.setText("La prima no puede cubrir todo el monto financiado.")
             self._mensaje.setVisible(True)
             return
         if formulario.cuota_regular_centavos <= 0:
-            self._mensaje.setText("Indica la cuota regular del plan.")
-            self._mensaje.setVisible(True)
-            return
-        if formulario.cantidad_cuotas <= 0:
-            self._mensaje.setText("Indica la cantidad de cuotas.")
+            self._mensaje.setText("Indica una cantidad de cuotas valida.")
             self._mensaje.setVisible(True)
             return
         self._mensaje.setVisible(False)
@@ -211,21 +221,48 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
         titulo = QLabel("Editar plan de pago" if self._plan else "Nuevo plan de pago")
         titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
-            "Crea o ajusta planes de activacion. El sistema toma la deuda vigente de la casa, suma la activacion y descuenta la prima para calcular las cuotas."
+            "Busca un abonado, revisa si es apto y luego selecciona una de sus casas elegibles. El sistema fija el tipo, toma la deuda vigente y calcula las cuotas desde la fecha de activacion."
+            if self._plan is None
+            else "Edita solo las observaciones del plan. La estructura financiera queda bloqueada para preservar trazabilidad."
         )
         descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
-        self._campo_busqueda_casa = QLineEdit()
-        self._campo_busqueda_casa.setPlaceholderText("Busca por casa, abonado, DNI o barrio")
-        self._campo_busqueda_casa.textChanged.connect(self._filtrar_casas)
-        self._campo_busqueda_casa.returnPressed.connect(self._confirmar_busqueda_casa)
-        self._campo_busqueda_casa.installEventFilter(self)
-        self._combo_casa = QComboBox()
-        self._combo_tipo_plan = QComboBox()
-        self._combo_tipo_plan.addItems(TIPOS_PLAN_VALIDOS)
-        self._combo_estado = QComboBox()
-        self._combo_estado.addItems(["ACTIVO", "FINALIZADO", "CANCELADO", "ANULADO"])
+        if self._plan is None:
+            self._campo_abonado = CampoBusquedaSeleccionSigqua(
+                texto_sin_resultados="No se encontraron abonados",
+                placeholder="Busca abonado por nombre o DNI",
+            )
+            self._campo_abonado.establecer_opciones(
+                [
+                    (abonado.abonado_id, abonado.etiqueta_busqueda)
+                    for abonado in self._abonados
+                ]
+            )
+            self._campo_abonado.seleccion_cambiada.connect(self._manejar_cambio_abonado)
+            self._campo_casa = None
+        else:
+            self._campo_abonado = None
+            self._campo_casa = CampoBusquedaSeleccionSigqua(
+                texto_sin_resultados="No se encontraron casas aptas para plan",
+                placeholder="Casa del plan",
+            )
+            self._campo_casa.establecer_opciones([(casa.casa_id, casa.etiqueta) for casa in self._casas])
+            self._campo_casa.seleccion_cambiada.connect(self._manejar_cambio_casa)
+
+        self._aviso_aptitud = QLabel("")
+        self._aviso_aptitud.setObjectName("ayudaCampoDialogoSigqua")
+        self._aviso_aptitud.setWordWrap(True)
+        self._aviso_aptitud.setVisible(False)
+
+        self._contenedor_casas = QWidget()
+        self._contenedor_casas.setObjectName("contenedorCasasPlan")
+        self._layout_casas = QGridLayout(self._contenedor_casas)
+        self._layout_casas.setContentsMargins(0, 0, 0, 0)
+        self._layout_casas.setHorizontalSpacing(8)
+        self._layout_casas.setVerticalSpacing(8)
+        self._contenedor_casas.setVisible(False)
+
         self._campo_fecha_activacion = QDateEdit()
         self._campo_fecha_activacion.setDisplayFormat("yyyy-MM-dd")
         self._campo_fecha_activacion.setCalendarPopup(True)
@@ -235,9 +272,8 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
         for metodo in self._metodos_pago:
             self._combo_metodo_pago.addItem(metodo.nombre, metodo.identificador)
         self._campo_referencia_pago = QLineEdit()
-        self._campo_referencia_pago.setPlaceholderText("Referencia de transferencia o deposito, si aplica")
+        self._campo_referencia_pago.setPlaceholderText("Referencia de transferencia o deposito")
         self._campo_activacion = CampoMontoMonetario()
-        self._campo_multa = CampoMontoMonetario()
         self._campo_prima = CampoMontoMonetario()
         self._campo_saldo = CampoMontoMonetario()
         self._campo_saldo.setReadOnly(True)
@@ -249,28 +285,34 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
         self._campo_cantidad.setObjectName("campoCantidadCuotasPlan")
         self._campo_cantidad.setMinimum(1)
         self._campo_cantidad.setMaximum(240)
-        self._campo_cantidad.setMinimumHeight(42)
+        self._campo_cantidad.setMinimumHeight(34)
         self._campo_cantidad.setStyleSheet(
             """
             QSpinBox#campoCantidadCuotasPlan::up-button,
             QSpinBox#campoCantidadCuotasPlan::down-button {
-                width: 28px;
+                width: 24px;
             }
             """
         )
         self._campo_observaciones = QPlainTextEdit()
-        self._campo_observaciones.setFixedHeight(66)
-        self._combo_casa.currentIndexChanged.connect(self._actualizar_resumen_financiado)
-        self._combo_tipo_plan.currentIndexChanged.connect(self._actualizar_resumen_financiado)
+        self._campo_observaciones.setPlaceholderText("Observaciones administrativas del acuerdo")
+        self._campo_observaciones.setFixedHeight(58)
+
+        self._valor_resumen_casa = self._crear_label_resumen()
+        self._valor_resumen_abonado = self._crear_label_resumen()
+        self._valor_resumen_barrio = self._crear_label_resumen()
+        self._valor_resumen_tipo = self._crear_label_resumen()
+        self._valor_resumen_deuda = self._crear_label_resumen()
+        self._valor_resumen_total = self._crear_label_resumen()
+        self._valor_resumen_primer_vencimiento = self._crear_label_resumen()
+
         self._campo_activacion.textChanged.connect(self._actualizar_resumen_financiado)
-        self._campo_multa.textChanged.connect(self._actualizar_resumen_financiado)
         self._campo_prima.textChanged.connect(self._actualizar_resumen_financiado)
-        self._campo_cantidad.valueChanged.connect(self._actualizar_cuota_automatica)
-        self._recargar_casas()
+        self._campo_cantidad.valueChanged.connect(self._actualizar_resumen_financiado)
+        self._campo_fecha_activacion.dateChanged.connect(self._actualizar_resumen_financiado)
+        self._combo_metodo_pago.currentIndexChanged.connect(self._actualizar_visibilidad_referencia)
 
         if self._plan is not None:
-            self._combo_tipo_plan.setCurrentText(self._plan.tipo_plan)
-            self._combo_estado.setCurrentText(self._plan.estado)
             self._campo_fecha_activacion.setDate(
                 QDate.fromString(self._plan.fecha_corte_deuda or QDate.currentDate().toString("yyyy-MM-dd"), "yyyy-MM-dd")
             )
@@ -280,62 +322,87 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
             self._campo_cuota.establecer_desde_centavos(self._plan.cuota_regular_centavos)
             self._campo_cantidad.setValue(max(self._plan.cantidad_cuotas, 1))
             self._campo_observaciones.setPlainText(self._plan.observaciones)
-            self._seleccionar_casa_por_id(self._plan.casa_id)
+            self._campo_casa.seleccionar_por_id(self._plan.casa_id, self._etiqueta_casa_plan(self._plan.casa_id))
+            self._campo_casa.setEnabled(False)
             self._campo_fecha_activacion.setEnabled(False)
             self._combo_metodo_pago.setEnabled(False)
             self._campo_referencia_pago.setEnabled(False)
             self._campo_activacion.setReadOnly(True)
-            self._campo_multa.setReadOnly(True)
-        self._actualizar_cuota_automatica()
-        self._actualizar_resumen_financiado()
-
-        grilla = QGridLayout()
-        grilla.setHorizontalSpacing(10)
-        grilla.setVerticalSpacing(8)
-        grilla.addWidget(self._crear_bloque("Buscar casa", self._campo_busqueda_casa), 0, 0, 1, 2)
-        grilla.addWidget(self._crear_bloque("Casa asociada", self._combo_casa), 1, 0, 1, 2)
-        grilla.addWidget(self._crear_bloque("Tipo de plan", self._combo_tipo_plan), 2, 0)
-        grilla.addWidget(self._crear_bloque("Estado", self._combo_estado), 2, 1)
-        grilla.addWidget(self._crear_bloque("Fecha de activacion", self._campo_fecha_activacion), 3, 0)
-        grilla.addWidget(self._crear_bloque("Metodo de pago de la prima", self._combo_metodo_pago), 3, 1)
-        grilla.addWidget(
-            self._crear_bloque(
-                "Referencia de pago",
-                self._campo_referencia_pago,
-                "Solo se exige cuando el metodo la requiere.",
-            ),
-            4,
-            0,
-            1,
-            2,
-        )
-        grilla.addWidget(self._crear_bloque("Monto de activacion", self._campo_activacion), 5, 0)
-        grilla.addWidget(self._crear_bloque("Multa por corte", self._campo_multa), 5, 1)
-        grilla.addWidget(self._crear_bloque("Prima", self._campo_prima), 6, 0)
-        grilla.addWidget(self._crear_bloque("Saldo financiado", self._campo_saldo), 6, 1)
-        grilla.addWidget(self._crear_bloque("Cuota mensual", self._campo_cuota), 7, 0)
-        grilla.addWidget(self._crear_bloque("Cantidad de cuotas", self._campo_cantidad), 7, 1)
-        ayuda_cuota = QLabel("Calculada automaticamente segun el saldo financiado y la cantidad de cuotas.")
-        ayuda_cuota.setObjectName("ayudaCampoDialogoSigqua")
-        ayuda_cuota.setWordWrap(True)
-        ayuda_cuota.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        grilla.addWidget(ayuda_cuota, 8, 0, 1, 2)
-
-        panel_principal = self._crear_panel(
-            "Estructura del plan",
-            "Define el acuerdo de servicio y su estructura base. La casa se busca desde aqui y el sistema sincroniza internamente la estructura del plan.",
-        )
-        panel_principal.layout().addLayout(grilla)
-
-        panel_notas = self._crear_panel(
-            "Observaciones",
-            "Usa este espacio para dejar el contexto administrativo del acuerdo.",
-        )
-        panel_notas.layout().addWidget(self._crear_bloque("Notas del plan", self._campo_observaciones))
+            self._campo_prima.setReadOnly(True)
+            self._campo_cantidad.setEnabled(False)
 
         self._mensaje = QLabel("")
         self._mensaje.setObjectName("mensajeErrorDialogoSigqua")
         self._mensaje.setVisible(False)
+
+        contenido = QWidget()
+        layout_contenido = QVBoxLayout(contenido)
+        layout_contenido.setContentsMargins(0, 0, 0, 0)
+        layout_contenido.setSpacing(10)
+
+        panel_casa = self._crear_panel(
+            "Seleccion del plan",
+            "Busca el abonado, confirma si es apto y elige una casa elegible para cargar el plan."
+            if self._plan is None
+            else "Resumen fijo de la casa y del contexto financiero original del plan.",
+        )
+        if self._plan is None:
+            panel_casa.layout().addWidget(self._crear_bloque("Abonado", self._campo_abonado))
+            panel_casa.layout().addWidget(self._aviso_aptitud)
+            panel_casa.layout().addWidget(
+                self._crear_bloque(
+                    "Casas elegibles",
+                    self._contenedor_casas,
+                    "Selecciona una casa del abonado para fijar el ID real del plan.",
+                )
+            )
+        else:
+            panel_casa.layout().addWidget(self._crear_bloque("Casa", self._campo_casa))
+        panel_casa.layout().addLayout(self._crear_grilla_resumen_casa())
+
+        panel_financiero = self._crear_panel(
+            "Estructura financiera",
+            "Captura activacion, prima y cantidad de cuotas. El saldo y la cuota mensual se recalculan en tiempo real."
+            if self._plan is None
+            else "La estructura financiera del plan es historica y se muestra solo como referencia.",
+        )
+        panel_financiero.layout().addLayout(self._crear_grilla_financiera())
+
+        panel_prima = self._crear_panel(
+            "Pago de prima",
+            "La prima inicial activa el servicio en el mismo flujo. La referencia solo aparece cuando el metodo de pago la exige."
+            if self._plan is None
+            else "La prima inicial ya fue registrada en la creacion del plan.",
+        )
+        if self._plan is None:
+            panel_prima.layout().addLayout(self._crear_grilla_prima())
+            self._bloque_referencia = self._crear_bloque(
+                "Referencia de pago",
+                self._campo_referencia_pago,
+                "Solo se exige cuando el metodo seleccionado la requiere.",
+            )
+            panel_prima.layout().addWidget(self._bloque_referencia)
+        else:
+            self._bloque_referencia = self._crear_bloque("Referencia de pago", self._campo_referencia_pago)
+        aviso_prorrateo = QLabel(
+            "Aviso: el prorrateo de la primera mensualidad no forma parte del plan y se cobra por el flujo mensual normal si aplica."
+        )
+        aviso_prorrateo.setObjectName("ayudaCampoDialogoSigqua")
+        aviso_prorrateo.setWordWrap(True)
+        panel_prima.layout().addWidget(aviso_prorrateo)
+
+        panel_notas = self._crear_panel(
+            "Observaciones",
+            "Usa este espacio para el contexto administrativo relevante del acuerdo.",
+        )
+        panel_notas.layout().addWidget(self._crear_bloque("Notas del plan", self._campo_observaciones))
+
+        layout_contenido.addWidget(panel_casa)
+        layout_contenido.addWidget(panel_financiero)
+        layout_contenido.addWidget(panel_prima)
+        layout_contenido.addWidget(panel_notas)
+        layout_contenido.addWidget(self._mensaje)
+        layout_contenido.addStretch(1)
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(10)
@@ -355,75 +422,41 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
 
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(panel_principal)
-        self.layout_cuerpo.addWidget(panel_notas)
-        self.layout_cuerpo.addWidget(self._mensaje)
+        self.layout_cuerpo.addWidget(self.crear_area_scroll_cuerpo(contenido, "scrollFormularioPlanPago"))
         self.layout_pie.addLayout(fila_acciones)
 
-    def _recargar_casas(self) -> None:
-        casa_seleccionada = self._combo_casa.currentData() if hasattr(self, "_combo_casa") else None
-        self._combo_casa.blockSignals(True)
-        self._combo_casa.clear()
-        self._combo_casa.addItem("Selecciona una casa", None)
-        for casa in self._casas_filtradas:
-            self._combo_casa.addItem(casa.etiqueta, casa.casa_id)
-        if casa_seleccionada is not None:
-            indice = self._combo_casa.findData(casa_seleccionada)
-            if indice >= 0:
-                self._combo_casa.setCurrentIndex(indice)
-        self._combo_casa.blockSignals(False)
+        self._actualizar_visibilidad_referencia()
+        self._actualizar_resumen_financiado()
 
-    def _filtrar_casas(self, texto: str) -> None:
-        termino = (texto or "").strip().casefold()
-        if not termino:
-            self._casas_filtradas = list(self._casas)
-        else:
-            self._casas_filtradas = [
-                casa
-                for casa in self._casas
-                if termino in casa.etiqueta.casefold()
-                or termino in casa.casa_codigo.casefold()
-                or termino in casa.abonado_nombre.casefold()
-                or termino in casa.abonado_dni.casefold()
-                or termino in (casa.barrio_nombre or "").casefold()
-            ]
-        self._recargar_casas()
-
-    def _seleccionar_casa_por_id(self, casa_id: int) -> None:
-        casa = next((valor for valor in self._casas if valor.casa_id == casa_id), None)
-        if casa is None:
+    def _manejar_cambio_abonado(self, identificador: object, _etiqueta: str) -> None:
+        self._abonado_seleccionado_id = None if identificador is None else int(identificador)
+        self._casa_seleccionada_id = None
+        self._renderizar_chips_casas(())
+        abonado = self._obtener_abonado_seleccionado()
+        if abonado is None:
+            self._aviso_aptitud.clear()
+            self._aviso_aptitud.setVisible(False)
+            self._actualizar_resumen_financiado()
             return
-        self._casas_filtradas = list(self._casas)
-        self._recargar_casas()
-        indice = self._combo_casa.findData(casa_id)
-        if indice >= 0:
-            self._combo_casa.setCurrentIndex(indice)
-        self._campo_busqueda_casa.setText(casa.casa_codigo)
-
-    def _confirmar_busqueda_casa(self) -> None:
-        if self._combo_casa.count() <= 1:
-            self._mensaje.setText("No hay coincidencias para la busqueda actual.")
-            self._mensaje.setVisible(True)
+        if not abonado.apto_para_plan:
+            self._aviso_aptitud.setText(abonado.motivo_no_apto or "El abonado no es apto para crear plan.")
+            self._aviso_aptitud.setVisible(True)
+            self._actualizar_resumen_financiado()
             return
-        self._combo_casa.setCurrentIndex(1)
-        self._combo_casa.setFocus(Qt.FocusReason.TabFocusReason)
-        self._mensaje.setVisible(False)
+        self._aviso_aptitud.setText("Selecciona una casa elegible del abonado.")
+        self._aviso_aptitud.setVisible(True)
+        self._renderizar_chips_casas(abonado.casas_elegibles)
+        self._actualizar_resumen_financiado()
 
-    def eventFilter(self, objeto: object, evento: QEvent) -> bool:
-        if (
-            objeto is getattr(self, "_campo_busqueda_casa", None)
-            and evento.type() == QEvent.Type.KeyPress
-            and getattr(evento, "key", lambda: None)() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
-        ):
-            self._confirmar_busqueda_casa()
-            return True
-        return super().eventFilter(objeto, evento)
+    def _manejar_cambio_casa(self, identificador: object, _etiqueta: str) -> None:
+        self._casa_seleccionada_id = None if identificador is None else int(identificador)
+        self._actualizar_resumen_financiado()
 
     def _crear_bloque(self, etiqueta: str, campo: QWidget, ayuda: str = "") -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(3)
         label = QLabel(etiqueta)
         label.setObjectName("etiquetaDatoDialogoSigqua")
         layout.addWidget(label)
@@ -439,8 +472,8 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
         panel = QFrame()
         panel.setObjectName("bloqueDialogoSigqua")
         layout_panel = QVBoxLayout(panel)
-        layout_panel.setContentsMargins(12, 12, 12, 12)
-        layout_panel.setSpacing(8)
+        layout_panel.setContentsMargins(10, 10, 10, 10)
+        layout_panel.setSpacing(6)
         label_titulo = QLabel(titulo)
         label_titulo.setObjectName("etiquetaDatoDialogoSigqua")
         label_descripcion = QLabel(descripcion)
@@ -450,28 +483,162 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
         layout_panel.addWidget(label_descripcion)
         return panel
 
-    def _actualizar_cuota_automatica(self) -> None:
-        saldo_centavos = self._campo_saldo.obtener_centavos()
-        cantidad_cuotas = self._campo_cantidad.value()
-        if saldo_centavos <= 0 or cantidad_cuotas <= 0:
-            self._campo_cuota.clear()
+    def _crear_label_resumen(self) -> QLabel:
+        label = QLabel("-")
+        label.setObjectName("valorDatoDialogoSigqua")
+        label.setWordWrap(True)
+        return label
+
+    def _crear_campo_resumen(self, etiqueta: str, valor: QLabel) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        label = QLabel(etiqueta)
+        label.setObjectName("etiquetaDatoDialogoSigqua")
+        layout.addWidget(label)
+        layout.addWidget(valor)
+        return widget
+
+    def _crear_grilla_resumen_casa(self) -> QGridLayout:
+        grilla = QGridLayout()
+        grilla.setHorizontalSpacing(8)
+        grilla.setVerticalSpacing(6)
+        grilla.addWidget(self._crear_campo_resumen("Casa", self._valor_resumen_casa), 0, 0)
+        grilla.addWidget(self._crear_campo_resumen("Abonado", self._valor_resumen_abonado), 0, 1)
+        grilla.addWidget(self._crear_campo_resumen("Barrio", self._valor_resumen_barrio), 1, 0)
+        grilla.addWidget(self._crear_campo_resumen("Tipo automatico", self._valor_resumen_tipo), 1, 1)
+        grilla.addWidget(self._crear_campo_resumen("Deuda snapshot", self._valor_resumen_deuda), 2, 0)
+        grilla.addWidget(self._crear_campo_resumen("Total financiado", self._valor_resumen_total), 2, 1)
+        grilla.addWidget(self._crear_campo_resumen("Primer vencimiento", self._valor_resumen_primer_vencimiento), 3, 0, 1, 2)
+        return grilla
+
+    def _crear_grilla_financiera(self) -> QGridLayout:
+        grilla = QGridLayout()
+        grilla.setHorizontalSpacing(8)
+        grilla.setVerticalSpacing(6)
+        grilla.addWidget(self._crear_bloque("Fecha de activacion", self._campo_fecha_activacion), 0, 0)
+        grilla.addWidget(self._crear_bloque("Monto de activacion", self._campo_activacion), 0, 1)
+        grilla.addWidget(self._crear_bloque("Prima", self._campo_prima), 1, 0)
+        grilla.addWidget(self._crear_bloque("Cantidad de cuotas", self._campo_cantidad), 1, 1)
+        grilla.addWidget(self._crear_bloque("Saldo financiado", self._campo_saldo), 2, 0)
+        grilla.addWidget(self._crear_bloque("Cuota mensual", self._campo_cuota), 2, 1)
+        return grilla
+
+    def _crear_grilla_prima(self) -> QGridLayout:
+        grilla = QGridLayout()
+        grilla.setHorizontalSpacing(8)
+        grilla.setVerticalSpacing(6)
+        grilla.addWidget(self._crear_bloque("Metodo de pago de la prima", self._combo_metodo_pago), 0, 0)
+        return grilla
+
+    def _renderizar_chips_casas(self, casas: Iterable[OpcionCasaPlanPago]) -> None:
+        while self._layout_casas.count():
+            item = self._layout_casas.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        casas = tuple(casas)
+        self._contenedor_casas.setVisible(bool(casas))
+        for indice, casa in enumerate(casas):
+            boton = crear_boton_operativo(
+                f"{casa.casa_codigo}  |  {casa.barrio_nombre or 'Sin barrio'}",
+                principal=casa.casa_id == self._casa_seleccionada_id,
+            )
+            boton.setCheckable(True)
+            boton.setChecked(casa.casa_id == self._casa_seleccionada_id)
+            boton.clicked.connect(
+                lambda checked=False, casa_id=casa.casa_id: self._seleccionar_casa_desde_chip(casa_id)
+            )
+            fila = indice // 2
+            columna = indice % 2
+            self._layout_casas.addWidget(boton, fila, columna)
+
+    def _seleccionar_casa_desde_chip(self, casa_id: int) -> None:
+        self._casa_seleccionada_id = casa_id
+        abonado = self._obtener_abonado_seleccionado()
+        if abonado is not None:
+            self._renderizar_chips_casas(abonado.casas_elegibles)
+        self._actualizar_resumen_financiado()
+
+    def _obtener_abonado_seleccionado(self) -> OpcionAbonadoPlanPago | None:
+        if self._abonado_seleccionado_id is None:
+            return None
+        return self._abonados_por_id.get(self._abonado_seleccionado_id)
+
+    def _obtener_casa_seleccionada(self) -> OpcionCasaPlanPago | None:
+        if self._plan is not None and self._casa_seleccionada_id is None:
+            self._casa_seleccionada_id = self._plan.casa_id
+        if self._casa_seleccionada_id is None:
+            return None
+        if self._plan is None:
+            abonado = self._obtener_abonado_seleccionado()
+            if abonado is not None:
+                for casa in abonado.casas_elegibles:
+                    if casa.casa_id == self._casa_seleccionada_id:
+                        return casa
+        return self._casas_por_id.get(self._casa_seleccionada_id)
+
+    def _resolver_tipo_plan(self, casa: OpcionCasaPlanPago | None) -> str:
+        if casa is None:
+            return "RECONEXION"
+        return "RECONEXION" if casa.ha_tenido_servicio_activo else "CONEXION"
+
+    def _valor_centavos_seguro(self, campo: CampoMontoMonetario) -> int:
+        return max(campo.obtener_centavos(), 0)
+
+    def _sumar_meses(self, fecha_base: QDate, meses: int) -> str:
+        if not fecha_base.isValid():
+            return "Sin fecha"
+        return fecha_base.addMonths(meses).toString("yyyy-MM-dd")
+
+    def _actualizar_visibilidad_referencia(self) -> None:
+        if self._plan is not None:
+            self._bloque_referencia.setVisible(False)
             return
-        cuota_regular = saldo_centavos // cantidad_cuotas
-        self._campo_cuota.establecer_desde_centavos(cuota_regular)
+        metodo_id = self._combo_metodo_pago.currentData()
+        metodo = self._metodos_por_id.get(int(metodo_id or 0)) if metodo_id is not None else None
+        requiere = metodo is not None and metodo.requiere_referencia
+        self._bloque_referencia.setVisible(requiere)
+        if not requiere:
+            self._campo_referencia_pago.clear()
 
     def _actualizar_resumen_financiado(self) -> None:
-        casa_id = self._combo_casa.currentData()
-        casa = next((item for item in self._casas if item.casa_id == casa_id), None)
+        casa = self._obtener_casa_seleccionada()
+        abonado = self._obtener_abonado_seleccionado()
         deuda = 0 if casa is None else casa.deuda_total_centavos
-        monto_activacion = self._campo_activacion.obtener_centavos()
-        multa = self._campo_multa.obtener_centavos()
-        if self._combo_tipo_plan.currentText() == "CONEXION" and multa > 0:
-            self._campo_multa.establecer_desde_centavos(0)
-            multa = 0
-        prima = max(self._campo_prima.obtener_centavos(), 0)
-        saldo = max(0, deuda + monto_activacion + multa - prima)
+        monto_activacion = self._valor_centavos_seguro(self._campo_activacion)
+        prima = self._valor_centavos_seguro(self._campo_prima)
+        saldo = max(0, deuda + monto_activacion - prima)
+        cuota = saldo // self._campo_cantidad.value() if saldo > 0 and self._campo_cantidad.value() > 0 else 0
+
+        self._valor_resumen_casa.setText(casa.casa_codigo if casa is not None else "Sin seleccionar")
+        if casa is not None:
+            self._valor_resumen_abonado.setText(f"{casa.abonado_nombre} | DNI {casa.abonado_dni}")
+        elif abonado is not None:
+            self._valor_resumen_abonado.setText(abonado.etiqueta_busqueda)
+        else:
+            self._valor_resumen_abonado.setText("Selecciona un abonado valido")
+        self._valor_resumen_barrio.setText(casa.barrio_nombre if casa and casa.barrio_nombre else "Sin barrio")
+        self._valor_resumen_tipo.setText(self._resolver_tipo_plan(casa).title() if casa is not None else "-")
+        self._valor_resumen_deuda.setText(f"L {deuda / 100:,.2f}")
+        self._valor_resumen_total.setText(f"L {(deuda + monto_activacion) / 100:,.2f}")
+        self._valor_resumen_primer_vencimiento.setText(
+            self._sumar_meses(self._campo_fecha_activacion.date(), 1) if casa is not None else "-"
+        )
         self._campo_saldo.establecer_desde_centavos(saldo)
-        self._actualizar_cuota_automatica()
+        self._campo_cuota.establecer_desde_centavos(cuota)
+
+    def _etiqueta_casa_plan(self, casa_id: int) -> str:
+        casa = self._casas_por_id.get(casa_id)
+        if casa is not None:
+            return casa.etiqueta
+        if self._plan is None:
+            return ""
+        return (
+            f"{self._plan.casa_codigo} | {self._plan.abonado_nombre} | {self._plan.barrio_nombre} | "
+            f"Tipo {self._plan.tipo_plan.title()}"
+        )
 
 
 class DialogoDetallePlanPago(DialogoBaseSigqua):
@@ -823,27 +990,65 @@ class VistaPlanesPago(QWidget):
         self._boton_pagina_siguiente.setEnabled(pagina.pagina_actual < pagina.total_paginas)
 
     def mostrar_mensaje(self, mensaje: str, es_error: bool = False) -> None:
+        self._temporizador_mensaje.stop()
         self._mensaje.setText(mensaje)
         self._mensaje.setProperty("error", es_error)
         self._mensaje.style().unpolish(self._mensaje)
         self._mensaje.style().polish(self._mensaje)
         self._mensaje.setVisible(bool(mensaje))
-        if mensaje:
+        if mensaje and not es_error:
             self._temporizador_mensaje.start(self.DURACION_MENSAJE_MS)
 
     def solicitar_datos_plan(
         self,
-        casas: Iterable[OpcionCasaPlanPago],
         metodos_pago: Iterable[MetodoPago],
+        abonados: Iterable[OpcionAbonadoPlanPago] | None = None,
+        casas: Iterable[OpcionCasaPlanPago] | None = None,
         plan: PlanPago | None = None,
     ) -> FormularioPlanPago | None:
         dialogo = DialogoFormularioPlanPago(
+            abonados=abonados,
             casas=casas,
             metodos_pago=metodos_pago,
             plan=plan,
             parent=self,
         )
         return dialogo.obtener_formulario() if dialogo.exec() == QDialog.DialogCode.Accepted else None
+
+    def confirmar_creacion_plan(
+        self,
+        confirmacion: ResumenConfirmacionPlanPago,
+        formateador_moneda: Callable[[int], str],
+        formateador_fecha: Callable[[str], str],
+    ) -> bool:
+        dialogo = DialogoConfirmacionSigqua(
+            titulo="Confirmar creacion de plan",
+            descripcion=(
+                "Revisa el resumen antes de guardar. La prima inicial se registrara como pago del plan y no podra anularse desde el flujo normal del prototipo."
+            ),
+            detalles=(
+                ("Casa", confirmacion.casa_codigo),
+                ("Abonado", confirmacion.abonado_nombre),
+                ("DNI", confirmacion.abonado_dni),
+                ("Barrio", confirmacion.barrio_nombre or "Sin barrio"),
+                ("Tipo", confirmacion.tipo_plan.title()),
+                ("Fecha activacion", formateador_fecha(confirmacion.fecha_activacion)),
+                ("Metodo", confirmacion.metodo_pago_nombre),
+                ("Referencia", confirmacion.referencia_pago or "No aplica"),
+                ("Deuda snapshot", formateador_moneda(confirmacion.deuda_financiada_centavos)),
+                ("Activacion", formateador_moneda(confirmacion.monto_activacion_centavos)),
+                ("Total financiado", formateador_moneda(confirmacion.monto_total_centavos)),
+                ("Prima", formateador_moneda(confirmacion.prima_centavos)),
+                ("Saldo financiado", formateador_moneda(confirmacion.saldo_financiado_centavos)),
+                ("Cuota mensual", formateador_moneda(confirmacion.cuota_regular_centavos)),
+                ("Cuotas", str(confirmacion.cantidad_cuotas)),
+                ("Primer vencimiento", formateador_fecha(confirmacion.primer_vencimiento)),
+            ),
+            texto_confirmar="Crear plan",
+            variante_confirmar="salida",
+            parent=self,
+        )
+        return dialogo.exec() == QDialog.DialogCode.Accepted
 
     def mostrar_detalle_plan(
         self,
@@ -902,10 +1107,10 @@ class VistaPlanesPago(QWidget):
         tarjetas = QGridLayout()
         tarjetas.setHorizontalSpacing(10)
         tarjetas.setVerticalSpacing(10)
-        self._tarjeta_total = TarjetaResumenPlanPago("key.svg", "#C9DBE9")
+        self._tarjeta_total = TarjetaResumenPlanPago("key.svg", "#75C7F0")
         self._tarjeta_activos = TarjetaResumenPlanPago("circle-check.svg", "#8de8c7")
         self._tarjeta_mora = TarjetaResumenPlanPago("clock.svg", "#f7cc7a")
-        self._tarjeta_saldo = TarjetaResumenPlanPago("alert-triangle.svg", "#8FAFC7")
+        self._tarjeta_saldo = TarjetaResumenPlanPago("alert-triangle.svg", "#F5B84B")
         tarjetas.addWidget(self._tarjeta_total, 0, 0)
         tarjetas.addWidget(self._tarjeta_activos, 0, 1)
         tarjetas.addWidget(self._tarjeta_mora, 0, 2)

@@ -397,6 +397,7 @@ class DialogoDetalleHistorialPago(DialogoBaseSigqua):
         self.accept()
 
     def _aplicar_estilos(self) -> None:
+        paleta = obtener_paleta_tema(TEMA_SIGQUA_PREDETERMINADO)
         self.setStyleSheet(
             self.styleSheet()
             + """
@@ -406,17 +407,17 @@ class DialogoDetalleHistorialPago(DialogoBaseSigqua):
             }
             QFrame#panelContenidoDetalleHistorialPago,
             QFrame#seccionDetalleHistorialPago {
-                background: rgba(29, 54, 78, 0.78);
-                border: 1px solid rgba(83, 112, 139, 0.30);
+                background: rgba(13, 42, 69, 0.78);
+                border: 1px solid rgba(126, 167, 196, 0.30);
                 border-radius: 16px;
             }
             QLabel#codigoHistorialDetalle {
-                color: #C9DBE9;
+                color: #C5DDEE;
                 font-size: 11px;
                 font-weight: 800;
             }
             QLabel#nombreHistorialDetalle {
-                color: #E4EACC;
+                color: #75C7F0;
                 font-size: 20px;
                 font-weight: 900;
             }
@@ -425,46 +426,64 @@ class DialogoDetalleHistorialPago(DialogoBaseSigqua):
                 padding: 6px 10px;
                 font-size: 11px;
                 font-weight: 800;
-                color: #d9fff5;
-                background: rgba(16, 120, 98, 0.22);
-                border: 1px solid rgba(158, 231, 214, 0.26);
+                color: #DDFBF0;
+                background: rgba(55, 211, 153, 0.22);
+                border: 1px solid rgba(55, 211, 153, 0.26);
             }
             QLabel#tituloSeccionDetalleHistorialPago {
-                color: #E4EACC;
+                color: #75C7F0;
                 font-size: 14px;
                 font-weight: 800;
             }
             QLabel#descripcionSeccionDetalleHistorialPago,
             QLabel#etiquetaDetalleHistorialPago {
-                color: #C9DBE9;
+                color: #C5DDEE;
                 font-size: 11px;
                 font-weight: 700;
             }
             QFrame#campoDetalleHistorialPago {
-                background: rgba(16, 42, 64, 0.74);
-                border: 1px solid rgba(83, 112, 139, 0.30);
+                background: rgba(8, 34, 56, 0.74);
+                border: 1px solid rgba(126, 167, 196, 0.30);
                 border-radius: 14px;
             }
             QLabel#valorDetalleHistorialPago {
-                color: #E4EACC;
+                color: #75C7F0;
                 font-size: 13px;
                 font-weight: 700;
             }
-            QTableWidget#tablaDetalleHistorialPago {
-                background: rgba(74, 79, 154, 0.88);
-                border: 1px solid rgba(29, 54, 78, 0.78);
+            """
+            + f"""
+            QTableWidget#tablaDetalleHistorialPago {{
+                background: {paleta["fondo_tabla_cuerpo"]};
+                color: {paleta["texto_tabla"]};
+                border: 1px solid {paleta["borde_tabla"]};
                 border-radius: 14px;
-            }
-            QTableWidget#tablaDetalleHistorialPago QHeaderView::section {
-                background: rgba(108, 113, 190, 0.92);
-                color: #E4EACC;
+                gridline-color: {paleta["borde_tabla"]};
+                alternate-background-color: {paleta["fondo_tabla_fila_alterna"]};
+            }}
+            QTableWidget#tablaDetalleHistorialPago::item {{
+                background: {paleta["fondo_tabla_fila"]};
+                color: {paleta["texto_tabla"]};
+                border-bottom: 1px solid {paleta["borde_tabla"]};
+                padding: 8px 10px;
+            }}
+            QTableWidget#tablaDetalleHistorialPago::item:alternate {{
+                background: {paleta["fondo_tabla_fila_alterna"]};
+            }}
+            QTableWidget#tablaDetalleHistorialPago::item:selected {{
+                background: {paleta["fondo_tabla_seleccion"]};
+                color: {paleta["texto_tabla"]};
+            }}
+            QTableWidget#tablaDetalleHistorialPago QHeaderView::section {{
+                background: {paleta["fondo_tabla_header_destacado"]};
+                color: {paleta["texto_tabla_header"]};
                 border: none;
-                border-right: 1px solid rgba(29, 54, 78, 0.78);
-                border-bottom: 1px solid rgba(29, 54, 78, 0.78);
+                border-right: 1px solid {paleta["borde_tabla"]};
+                border-bottom: 1px solid {paleta["borde_tabla"]};
                 padding: 10px 12px;
                 font-size: 12px;
                 font-weight: 800;
-            }
+            }}
             """
         )
 
@@ -590,10 +609,10 @@ class VistaHistorialPagos(QWidget):
         fila_tarjetas = QGridLayout()
         fila_tarjetas.setHorizontalSpacing(10)
         fila_tarjetas.setVerticalSpacing(10)
-        self._tarjeta_total = TarjetaResumenHistorial("receipt-2.svg", "#C9DBE9")
+        self._tarjeta_total = TarjetaResumenHistorial("receipt-2.svg", "#75C7F0")
         self._tarjeta_hoy = TarjetaResumenHistorial("clock.svg", "#8de8c7")
         self._tarjeta_cobrado = TarjetaResumenHistorial("calendar-stats.svg", "#f7cc7a")
-        self._tarjeta_ultimo = TarjetaResumenHistorial("receipt-2.svg", "#8FAFC7")
+        self._tarjeta_ultimo = TarjetaResumenHistorial("receipt-2.svg", "#37D399")
         fila_tarjetas.addWidget(self._tarjeta_total, 0, 0)
         fila_tarjetas.addWidget(self._tarjeta_hoy, 0, 1)
         fila_tarjetas.addWidget(self._tarjeta_cobrado, 0, 2)
@@ -939,3 +958,4 @@ class VistaHistorialPagos(QWidget):
             }}
             """
         )
+

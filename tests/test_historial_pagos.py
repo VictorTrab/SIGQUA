@@ -27,7 +27,7 @@ from modulos.comprobantes import COPIA_AMBAS, COPIA_JUNTA, ResultadoComprobante 
 from modulos.historial_pagos.controlador import ControladorHistorialPagos  # noqa: E402
 from modulos.historial_pagos.repositorio import RepositorioHistorialPagosSQLite  # noqa: E402
 from modulos.historial_pagos.servicio import ServicioHistorialPagos  # noqa: E402
-from modulos.historial_pagos.vista import VistaHistorialPagos  # noqa: E402
+from modulos.historial_pagos.vista import DialogoDetalleHistorialPago, VistaHistorialPagos  # noqa: E402
 from modulos.pagos.entidades import FormularioPago  # noqa: E402
 from modulos.pagos.repositorio import RepositorioPagosSQLite  # noqa: E402
 from modulos.pagos.servicio import ServicioPagos  # noqa: E402
@@ -134,6 +134,25 @@ class TestHistorialPagos(unittest.TestCase):
         assert detalle is not None
         self.assertGreaterEqual(len(detalle.lineas_detalle), 1)
         self.assertTrue(all(linea.descripcion for linea in detalle.lineas_detalle))
+
+    def test_dialogo_detalle_usa_tabla_con_tokens_actuales_sin_morado_legacy(self) -> None:
+        pagina = self.servicio_historial.listar()
+        detalle = self.servicio_historial.obtener_detalle(pagina.items[0].pago_id)
+        assert detalle is not None
+
+        dialogo = DialogoDetalleHistorialPago(
+            detalle,
+            self.servicio_historial.formatear_moneda,
+            self.servicio_historial.formatear_fecha_hora,
+            self.servicio_historial.etiqueta_tipo_pago,
+        )
+
+        estilos = dialogo.styleSheet()
+        self.assertIn("QTableWidget#tablaDetalleHistorialPago", estilos)
+        self.assertNotIn("rgba(74, 79, 154", estilos)
+        self.assertNotIn("rgba(108, 113, 190", estilos)
+        self.assertIn("#0E2B46", estilos)
+        dialogo.close()
 
     def test_reimpresion_reconstruye_ticket_desde_sqlite_sin_pdf(self) -> None:
         pagina = self.servicio_historial.listar()

@@ -424,6 +424,7 @@ def _registrar_modulos_operativos(ventana_principal: QMainWindow) -> None:
     controlador_morosidad = ControladorMorosidad(
         servicio_morosidad=ventana_principal.servicio_morosidad,
         vista_morosidad=vista_morosidad,
+        obtener_actor_id=lambda: ventana_principal.sesion_activa.usuario.identificador,
     )
     vista_modulo_principal.registrar_modulo("morosidad", vista_morosidad)
 

@@ -7,6 +7,7 @@ from typing import Iterable
 from PySide6.QtCore import QElapsedTimer, QEvent, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QButtonGroup,
     QComboBox,
     QDialog,
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
 
 from comun.ui import (
     BotonAccionContextual,
+    CampoBusquedaSeleccionSigqua,
     DialogoBaseSigqua,
     DialogoConfirmacionSigqua,
     aplicar_estilo_boton_operativo,
@@ -167,12 +169,12 @@ class DialogoFormularioAbonado(DialogoBaseSigqua):
         super().__init__(parent)
         self._barrios = list(barrios)
         self._abonado = abonado
-        self.setMinimumWidth(620)
-        self.setMinimumHeight(560)
+        self.setMinimumWidth(580)
+        self.setMinimumHeight(460)
         self._construir_ui()
 
     def obtener_formulario(self) -> FormularioAbonado:
-        barrio_id = self._combo_barrio.currentData()
+        barrio_id = self._campo_barrio.identificador_seleccionado()
         return FormularioAbonado(
             identificador=None if self._abonado is None else self._abonado.identificador,
             dni=self._campo_dni.text(),
@@ -193,7 +195,7 @@ class DialogoFormularioAbonado(DialogoBaseSigqua):
             self._mensaje.setText("Indica el nombre completo del abonado.")
             self._mensaje.setVisible(True)
             return
-        if self._combo_barrio.currentData() is None:
+        if self._campo_barrio.identificador_seleccionado() is None:
             self._mensaje.setText("Selecciona un barrio valido.")
             self._mensaje.setVisible(True)
             return
@@ -211,8 +213,8 @@ class DialogoFormularioAbonado(DialogoBaseSigqua):
 
         formulario = QGridLayout()
         formulario.setContentsMargins(0, 0, 0, 0)
-        formulario.setHorizontalSpacing(10)
-        formulario.setVerticalSpacing(10)
+        formulario.setHorizontalSpacing(8)
+        formulario.setVerticalSpacing(8)
 
         self._campo_dni = QLineEdit()
         self._campo_dni.setPlaceholderText("DNI del abonado")
@@ -220,26 +222,30 @@ class DialogoFormularioAbonado(DialogoBaseSigqua):
         self._campo_nombre.setPlaceholderText("Nombre completo")
         self._campo_telefono = QLineEdit()
         self._campo_telefono.setPlaceholderText("Telefono")
-        self._combo_barrio = QComboBox()
-        self._combo_barrio.addItem("Selecciona un barrio", None)
-        for barrio in self._barrios:
-            self._combo_barrio.addItem(barrio.nombre, barrio.identificador)
+        self._campo_barrio = CampoBusquedaSeleccionSigqua(
+            texto_sin_resultados="No se encontraron barrios",
+            placeholder="Escribe para buscar un barrio",
+        )
+        self._campo_barrio.establecer_opciones(
+            [(barrio.identificador, barrio.nombre) for barrio in self._barrios]
+        )
         self._combo_estado = QComboBox()
         self._combo_estado.addItems(["ACTIVO", "INACTIVO"])
         self._campo_direccion = QPlainTextEdit()
         self._campo_direccion.setPlaceholderText("Direccion o referencia")
-        self._campo_direccion.setFixedHeight(78)
+        self._campo_direccion.setFixedHeight(60)
         self._campo_observaciones = QPlainTextEdit()
         self._campo_observaciones.setPlaceholderText("Observaciones")
-        self._campo_observaciones.setFixedHeight(78)
+        self._campo_observaciones.setFixedHeight(60)
 
         if self._abonado is not None:
             self._campo_dni.setText(self._abonado.dni)
             self._campo_nombre.setText(self._abonado.nombre_completo)
             self._campo_telefono.setText(self._abonado.telefono)
-            indice_barrio = self._combo_barrio.findData(self._abonado.barrio_id)
-            if indice_barrio >= 0:
-                self._combo_barrio.setCurrentIndex(indice_barrio)
+            self._campo_barrio.seleccionar_por_id(
+                self._abonado.barrio_id,
+                self._abonado.barrio_nombre,
+            )
             self._combo_estado.setCurrentText(self._abonado.estado)
             self._campo_direccion.setPlainText(self._abonado.direccion_referencia)
             self._campo_observaciones.setPlainText(self._abonado.observaciones)
@@ -257,7 +263,7 @@ class DialogoFormularioAbonado(DialogoBaseSigqua):
             1,
             2,
         )
-        formulario.addWidget(self._crear_bloque_formulario("Barrio", self._combo_barrio), 2, 0)
+        formulario.addWidget(self._crear_bloque_formulario("Barrio", self._campo_barrio), 2, 0)
         formulario.addWidget(self._crear_bloque_formulario("Estado", self._combo_estado), 2, 1)
 
         panel_datos = self._crear_panel_formulario(
@@ -272,7 +278,7 @@ class DialogoFormularioAbonado(DialogoBaseSigqua):
         )
         notas_layout = QVBoxLayout()
         notas_layout.setContentsMargins(0, 0, 0, 0)
-        notas_layout.setSpacing(10)
+        notas_layout.setSpacing(8)
         notas_layout.addWidget(
             self._crear_bloque_formulario("Direccion", self._campo_direccion)
         )
@@ -309,18 +315,27 @@ class DialogoFormularioAbonado(DialogoBaseSigqua):
         fila_acciones.addStretch(1)
         fila_acciones.addWidget(boton_guardar)
 
+        contenido_scroll = QWidget()
+        layout_scroll = QVBoxLayout(contenido_scroll)
+        layout_scroll.setContentsMargins(0, 0, 0, 0)
+        layout_scroll.setSpacing(8)
+        layout_scroll.addWidget(panel_datos)
+        layout_scroll.addWidget(panel_notas)
+        layout_scroll.addWidget(self._mensaje)
+        layout_scroll.addStretch(1)
+
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(panel_datos)
-        self.layout_cuerpo.addWidget(panel_notas)
-        self.layout_cuerpo.addWidget(self._mensaje)
+        self.layout_cuerpo.addWidget(
+            self.crear_area_scroll_cuerpo(contenido_scroll, "scrollFormularioAbonado")
+        )
         self.layout_pie.addLayout(fila_acciones)
 
     def _crear_bloque_formulario(self, etiqueta: str, campo: QWidget) -> QWidget:
         bloque = QWidget()
         layout = QVBoxLayout(bloque)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(3)
 
         label = QLabel(etiqueta)
         label.setObjectName("etiquetaDatoDialogoSigqua")
@@ -332,8 +347,8 @@ class DialogoFormularioAbonado(DialogoBaseSigqua):
         panel = QFrame()
         panel.setObjectName("bloqueDialogoSigqua")
         layout_panel = QVBoxLayout(panel)
-        layout_panel.setContentsMargins(14, 14, 14, 14)
-        layout_panel.setSpacing(10)
+        layout_panel.setContentsMargins(12, 12, 12, 12)
+        layout_panel.setSpacing(8)
         label_titulo = QLabel(titulo)
         label_titulo.setObjectName("etiquetaDatoDialogoSigqua")
         label_descripcion = QLabel(descripcion)
@@ -401,11 +416,18 @@ class DialogoDetalleAbonado(DialogoBaseSigqua):
         fila_superior.setSpacing(12)
         bloque_nombre = QVBoxLayout()
         bloque_nombre.setSpacing(4)
+        fila_codigo = QHBoxLayout()
+        fila_codigo.setContentsMargins(0, 0, 0, 0)
+        fila_codigo.setSpacing(6)
         codigo = QLabel(self._abonado.dni)
         codigo.setObjectName("codigoAbonadoDetalle")
+        boton_copiar_id = self._crear_boton_copiar_dni(self._abonado.dni)
         nombre = QLabel(self._abonado.nombre_completo)
         nombre.setObjectName("nombreAbonadoDetalle")
-        bloque_nombre.addWidget(codigo)
+        fila_codigo.addWidget(codigo)
+        fila_codigo.addWidget(boton_copiar_id, alignment=Qt.AlignmentFlag.AlignVCenter)
+        fila_codigo.addStretch(1)
+        bloque_nombre.addLayout(fila_codigo)
         bloque_nombre.addWidget(nombre)
 
         estado = QLabel(self._abonado.estado.title())
@@ -602,6 +624,37 @@ class DialogoDetalleAbonado(DialogoBaseSigqua):
         layout.addWidget(label_valor)
         return tarjeta
 
+    def _crear_boton_copiar_dni(self, dni: str) -> QToolButton:
+        boton = QToolButton()
+        boton.setObjectName("botonCopiarIdDetalle")
+        boton.setText("COPIAR")
+        boton.setProperty("copiado", False)
+        boton.setCursor(Qt.CursorShape.PointingHandCursor)
+        boton.setToolTip(f"Copiar DNI: {dni or 'Sin registro'}")
+        boton.setAutoRaise(False)
+        boton.setEnabled(bool(dni.strip()))
+        boton.clicked.connect(
+            lambda checked=False, valor=dni.strip(), control=boton: self._copiar_texto(valor, control, "DNI")
+        )
+        return boton
+
+    def _copiar_texto(self, valor: str, boton: QToolButton, etiqueta: str) -> None:
+        QApplication.clipboard().setText(valor)
+        boton.setText("OK")
+        boton.setProperty("copiado", True)
+        boton.style().unpolish(boton)
+        boton.style().polish(boton)
+        boton.setToolTip(f"{etiqueta} copiado: {valor}")
+        QTimer.singleShot(900, lambda: self._restaurar_boton_copiar(boton, valor, etiqueta))
+
+    @staticmethod
+    def _restaurar_boton_copiar(boton: QToolButton, valor: str, etiqueta: str) -> None:
+        boton.setText("COPIAR")
+        boton.setProperty("copiado", False)
+        boton.style().unpolish(boton)
+        boton.style().polish(boton)
+        boton.setToolTip(f"Copiar {etiqueta}: {valor or 'Sin registro'}")
+
     def _solicitar_edicion(self) -> None:
         self._accion_resultado = "editar"
         self.accept()
@@ -657,6 +710,27 @@ class DialogoDetalleAbonado(DialogoBaseSigqua):
                 font-size: 12px;
                 font-weight: 800;
                 letter-spacing: 0.08em;
+            }}
+            QToolButton#botonCopiarIdDetalle {{
+                min-height: 22px;
+                min-width: 62px;
+                padding: 0 10px;
+                border-radius: {radio}px;
+                border: 1px solid {paleta["borde_suave"]};
+                background: {paleta["fondo_superficie_suave"]};
+                color: {paleta["texto_secundario"]};
+                font-size: 10px;
+                font-weight: 800;
+            }}
+            QToolButton#botonCopiarIdDetalle:hover {{
+                border-color: {paleta["borde_principal"]};
+                background: {paleta["fondo_superficie_muy_suave"]};
+                color: {paleta["texto_principal"]};
+            }}
+            QToolButton#botonCopiarIdDetalle[copiado="true"] {{
+                border-color: {paleta["borde_badge_activo"]};
+                background: {paleta["fondo_badge_activo"]};
+                color: {paleta["texto_badge_activo"]};
             }}
             QLabel#nombreAbonadoDetalle {{
                 color: {paleta["texto_principal"]};
@@ -918,10 +992,10 @@ class VistaAbonados(QWidget):
         fila_tarjetas = QGridLayout()
         fila_tarjetas.setHorizontalSpacing(10)
         fila_tarjetas.setVerticalSpacing(10)
-        self._tarjeta_total = TarjetaResumenAbonado("user.svg", "#C9DBE9")
+        self._tarjeta_total = TarjetaResumenAbonado("user.svg", "#75C7F0")
         self._tarjeta_activos = TarjetaResumenAbonado("circle-check.svg", "#8de8c7")
         self._tarjeta_con_deuda = TarjetaResumenAbonado("alert-triangle.svg", "#f7cc7a")
-        self._tarjeta_morosos = TarjetaResumenAbonado("clock.svg", "#8FAFC7")
+        self._tarjeta_morosos = TarjetaResumenAbonado("clock.svg", "#F5B84B")
         fila_tarjetas.addWidget(self._tarjeta_total, 0, 0)
         fila_tarjetas.addWidget(self._tarjeta_activos, 0, 1)
         fila_tarjetas.addWidget(self._tarjeta_con_deuda, 0, 2)
@@ -1114,44 +1188,44 @@ class VistaAbonados(QWidget):
                 background: transparent;
             }
             QLabel#tituloModulo {
-                color: #E4EACC;
+                color: #75C7F0;
                 font-size: 19px;
                 font-weight: 900;
             }
             QLabel#descripcionModulo,
             QLabel#textoPieAbonados,
             QLabel#detalleTarjetaResumen {
-                color: #C9DBE9;
+                color: #C5DDEE;
                 font-size: 11px;
                 font-weight: 600;
             }
             QLabel#mensajeAbonados {
-                color: #d9fff5;
+                color: #DDFBF0;
                 font-size: 12px;
                 font-weight: 700;
                 padding: 8px 10px;
                 border-radius: 12px;
-                background-color: rgba(16, 120, 98, 0.16);
-                border: 1px solid rgba(158, 231, 214, 0.26);
+                background-color: rgba(55, 211, 153, 0.16);
+                border: 1px solid rgba(55, 211, 153, 0.26);
             }
             QLabel#mensajeAbonados[error="true"] {
-                color: #ffd4cf;
-                background-color: rgba(180, 35, 24, 0.15);
-                border: 1px solid rgba(255, 205, 199, 0.28);
+                color: #FFE3E3;
+                background-color: rgba(242, 116, 116, 0.15);
+                border: 1px solid rgba(242, 116, 116, 0.28);
             }
             QFrame#panelOperativoAbonados,
             QFrame#tarjetaResumenAbonados {
                 background: """
             + fondo_header_destacado
             + """;
-                border: 1px solid rgba(83, 112, 139, 0.48);
+                border: 1px solid rgba(126, 167, 196, 0.48);
                 border-radius: 18px;
             }
             QFrame#panelTablaAbonados {
                 background: """
             + fondo_header_destacado
             + """;
-                border: 1px solid rgba(83, 112, 139, 0.48);
+                border: 1px solid rgba(126, 167, 196, 0.48);
                 border-radius: """
             + str(radio_panel_tabla)
             + """px;
@@ -1188,7 +1262,7 @@ class VistaAbonados(QWidget):
                 background: """
             + self._paleta_tema["fondo_tabla_header_destacado"]
             + """;
-                color: #E4EACC;
+                color: #75C7F0;
                 border: none;
                 border-right: 1px solid """
             + self._paleta_tema["borde_tabla"]
@@ -1225,64 +1299,64 @@ class VistaAbonados(QWidget):
             + """;
             }
             QLabel#iconoTarjetaResumen {
-                background: rgba(29, 54, 78, 0.78);
-                border: 1px solid rgba(83, 112, 139, 0.30);
+                background: rgba(13, 42, 69, 0.78);
+                border: 1px solid rgba(126, 167, 196, 0.30);
                 border-radius: 12px;
             }
             QLabel#tituloTarjetaResumen {
-                color: #C9DBE9;
+                color: #C5DDEE;
                 font-size: 11px;
                 font-weight: 700;
             }
             QLabel#valorTarjetaResumen {
-                color: #E4EACC;
+                color: #75C7F0;
                 font-size: 20px;
                 font-weight: 900;
             }
             QLineEdit {
                 min-height: 36px;
-                border: 1px solid rgba(83, 112, 139, 0.55);
+                border: 1px solid rgba(126, 167, 196, 0.55);
                 border-radius: 12px;
-                background: rgba(16, 42, 64, 0.98);
-                color: #E4EACC;
+                background: rgba(8, 34, 56, 0.98);
+                color: #75C7F0;
                 padding: 0 10px;
                 font-size: 12px;
             }
             QLineEdit:focus {
-                border-color: rgba(201, 219, 233, 0.55);
-                background: rgba(83, 112, 139, 0.48);
+                border-color: rgba(117, 199, 240, 0.55);
+                background: rgba(126, 167, 196, 0.48);
             }
             QPushButton#chipFiltroAbonado {
                 min-height: 30px;
                 border-radius: 11px;
                 padding: 0 12px;
-                background: rgba(29, 54, 78, 0.88);
-                border: 1px solid rgba(83, 112, 139, 0.30);
-                color: #ecf5ff;
+                background: rgba(13, 42, 69, 0.88);
+                border: 1px solid rgba(126, 167, 196, 0.30);
+                color: #F4FAFF;
                 font-size: 11px;
                 font-weight: 700;
             }
             QPushButton#chipFiltroAbonado:hover {
-                background: rgba(83, 112, 139, 0.30);
+                background: rgba(126, 167, 196, 0.30);
             }
             QPushButton#chipFiltroAbonado:checked {
-                color: #E4EACC;
-                background: #4E6A9C;
-                border-color: rgba(83, 112, 139, 0.55);
+                color: #75C7F0;
+                background: #49A9DC;
+                border-color: rgba(126, 167, 196, 0.55);
             }
             QLabel#badgeEstadoAbonado {
                 border-radius: 11px;
                 padding: 6px 10px;
                 font-size: 11px;
                 font-weight: 800;
-                color: #C9DBE9;
-                background: rgba(132, 146, 166, 0.22);
-                border: 1px solid rgba(83, 112, 139, 0.30);
+                color: #C5DDEE;
+                background: rgba(142, 168, 188, 0.22);
+                border: 1px solid rgba(126, 167, 196, 0.30);
             }
             QLabel#badgeEstadoAbonado[activo="true"] {
-                color: #d9fff5;
-                background: rgba(16, 120, 98, 0.22);
-                border-color: rgba(158, 231, 214, 0.26);
+                color: #DDFBF0;
+                background: rgba(55, 211, 153, 0.22);
+                border-color: rgba(55, 211, 153, 0.26);
             }
             QWidget#contenedorAccionesAbonado {
                 background: transparent;
@@ -1299,13 +1373,14 @@ class VistaAbonados(QWidget):
                 border: none;
             }
             QLabel#estadoVacioAbonados {
-                color: #C9DBE9;
+                color: #C5DDEE;
                 font-size: 12px;
                 font-weight: 700;
                 padding: 20px 14px;
             }
             QLabel {
-                color: #E4EACC;
+                color: #75C7F0;
             }
             """
         )
+

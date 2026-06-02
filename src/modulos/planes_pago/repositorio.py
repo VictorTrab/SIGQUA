@@ -92,6 +92,29 @@ SUBCONSULTA_DEUDA_CASA = """
     GROUP BY casa_id
 """
 
+SUBCONSULTA_PLANES_ACTIVOS_CASA = """
+    SELECT casa_id, COUNT(*) AS total_planes_activos
+    FROM planes_pago
+    WHERE estado = 'ACTIVO'
+    GROUP BY casa_id
+"""
+
+SUBCONSULTA_HISTORIAL_SERVICIO_CASA = """
+    SELECT casa_id, COUNT(*) AS total_activaciones
+    FROM (
+        SELECT casa_id
+        FROM planes_pago
+        WHERE estado IN ('ACTIVO', 'FINALIZADO')
+          AND COALESCE(tipo_activacion_origen, tipo_plan) IN ('CONEXION', 'RECONEXION')
+        UNION ALL
+        SELECT casa_id
+        FROM procesos_servicio
+        WHERE estado = 'EJECUTADO'
+          AND tipo IN ('CONEXION', 'RECONEXION')
+    )
+    GROUP BY casa_id
+"""
+
 
 @dataclass(slots=True)
 class RegistroGuardadoPlanPago:
@@ -348,7 +371,13 @@ class RepositorioPlanesPagoSQLite:
                 c.estado_servicio,
                 COALESCE(c.estado_administrativo, 'OPERATIVA') AS estado_administrativo,
                 a.estado AS abonado_estado,
-                COALESCE(c.ha_tenido_servicio_activo, 0) AS ha_tenido_servicio_activo,
+                CASE
+                    WHEN COALESCE(c.ha_tenido_servicio_activo, 0) = 1
+                      OR COALESCE(hs.total_activaciones, 0) > 0
+                    THEN 1
+                    ELSE 0
+                END AS ha_tenido_servicio_activo,
+                COALESCE(pa.total_planes_activos, 0) AS total_planes_activos,
                 COALESCE(dd.meses_pendientes, 0) AS meses_pendientes,
                 COALESCE(dd.meses_en_mora, 0) AS meses_en_mora,
                 COALESCE(dd.deuda_total_centavos, 0) AS deuda_total_centavos
@@ -356,6 +385,8 @@ class RepositorioPlanesPagoSQLite:
             INNER JOIN abonados a ON a.id = c.abonado_id
             LEFT JOIN barrios b ON b.id = c.barrio_id
             LEFT JOIN ({SUBCONSULTA_DEUDA_CASA}) dd ON dd.casa_id = c.id
+            LEFT JOIN ({SUBCONSULTA_PLANES_ACTIVOS_CASA}) pa ON pa.casa_id = c.id
+            LEFT JOIN ({SUBCONSULTA_HISTORIAL_SERVICIO_CASA}) hs ON hs.casa_id = c.id
             WHERE c.eliminado_en IS NULL
             ORDER BY c.id ASC;
         """
@@ -373,6 +404,7 @@ class RepositorioPlanesPagoSQLite:
                 estado_administrativo=str(fila["estado_administrativo"] or "OPERATIVA"),
                 abonado_estado=str(fila["abonado_estado"] or "ACTIVO"),
                 ha_tenido_servicio_activo=bool(int(fila["ha_tenido_servicio_activo"] or 0)),
+                tiene_plan_activo=bool(int(fila["total_planes_activos"] or 0)),
                 meses_pendientes=int(fila["meses_pendientes"] or 0),
                 meses_en_mora=int(fila["meses_en_mora"] or 0),
                 deuda_total_centavos=int(fila["deuda_total_centavos"] or 0),
@@ -416,11 +448,12 @@ class RepositorioPlanesPagoSQLite:
                             deuda_financiada_centavos,
                             monto_activacion_centavos
                         )
-                        VALUES (?, ?, date('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                         """,
                         (
                             plan.abonado_id,
                             plan.casa_id,
+                            fecha_activacion or plan.fecha_corte_deuda,
                             cuotas[-1][0] if cuotas else None,
                             plan.monto_total_centavos,
                             plan.cuota_regular_centavos,
@@ -776,10 +809,9 @@ class RepositorioPlanesPagoSQLite:
                 pago_id,
                 usuario_id,
                 monto_conexion_centavos,
-                monto_reconexion_centavos,
-                multa_corte_centavos
+                monto_reconexion_centavos
             )
-            VALUES (?, ?, ?, datetime('now', 'localtime'), ?, 'EJECUTADO', ?, ?, ?, ?, ?, ?, ?, ?);
+            VALUES (?, ?, ?, datetime('now', 'localtime'), ?, 'EJECUTADO', ?, ?, ?, ?, ?, ?, ?);
             """,
             (
                 plan.abonado_id,
@@ -793,7 +825,6 @@ class RepositorioPlanesPagoSQLite:
                 actor_id,
                 plan.monto_activacion_centavos if plan.tipo_activacion_origen == "CONEXION" else None,
                 plan.monto_activacion_centavos if plan.tipo_activacion_origen == "RECONEXION" else None,
-                None,
             ),
         )
         proceso_servicio_id = int(cursor_proceso.lastrowid)
@@ -852,6 +883,8 @@ class RepositorioPlanesPagoSQLite:
             SET estado_servicio = 'ACTIVO',
                 estado_administrativo = 'OPERATIVA',
                 motivo_estado_administrativo = 'NINGUNO',
+                estado_aviso_cobro = 'SIN_AVISO',
+                observacion_ultimo_aviso = '',
                 ha_tenido_servicio_activo = 1,
                 actualizado_en = datetime('now', 'localtime')
             WHERE id = ?;

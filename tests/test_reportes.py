@@ -15,7 +15,15 @@ if str(RUTA_SRC) not in sys.path:
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
-from modulos.reportes.entidades import REPORTE_INGRESOS_DIARIOS, REPORTE_PLANES_ACTIVOS  # noqa: E402
+from modulos.reportes.entidades import (  # noqa: E402
+    REPORTE_CASAS_CORTADAS,
+    REPORTE_DEUDA_MENSUAL,
+    REPORTE_DEUDA_POR_CASA,
+    REPORTE_INGRESOS_DIARIOS,
+    REPORTE_NUEVOS_ABONADOS,
+    REPORTE_PAGOS_POR_USUARIO,
+    REPORTE_PLANES_ACTIVOS,
+)
 from modulos.reportes.repositorio import RepositorioReportesSQLite  # noqa: E402
 from modulos.reportes.servicio import ServicioReportes  # noqa: E402
 
@@ -40,7 +48,12 @@ class TestReportes(unittest.TestCase):
     def test_estado_admin_devuelve_catalogo_filtros_y_preview(self) -> None:
         estado = self.servicio.obtener_estado()
 
-        self.assertEqual(len(estado.catalogo), 8)
+        codigos = {tarjeta.codigo for tarjeta in estado.catalogo}
+        self.assertIn(REPORTE_DEUDA_MENSUAL, codigos)
+        self.assertIn(REPORTE_DEUDA_POR_CASA, codigos)
+        self.assertIn(REPORTE_CASAS_CORTADAS, codigos)
+        self.assertIn(REPORTE_NUEVOS_ABONADOS, codigos)
+        self.assertIn(REPORTE_PAGOS_POR_USUARIO, codigos)
         self.assertEqual(len(estado.indicadores), 5)
         self.assertIsNotNone(estado.tabla_actual)
         assert estado.tabla_actual is not None

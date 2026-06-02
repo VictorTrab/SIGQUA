@@ -7,6 +7,7 @@ from typing import Callable
 from PySide6.QtCore import QElapsedTimer, QEvent, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QButtonGroup,
     QComboBox,
     QDialog,
@@ -163,8 +164,8 @@ class DialogoFormularioBarrio(DialogoBaseSigqua):
     def __init__(self, barrio: Barrio | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._barrio = barrio
-        self.setMinimumWidth(540)
-        self.setMinimumHeight(420)
+        self.setMinimumWidth(520)
+        self.setMinimumHeight(340)
         self._construir_ui()
 
     def obtener_formulario(self) -> FormularioBarrio:
@@ -194,7 +195,7 @@ class DialogoFormularioBarrio(DialogoBaseSigqua):
 
         fila_superior = QHBoxLayout()
         fila_superior.setContentsMargins(0, 0, 0, 0)
-        fila_superior.setSpacing(10)
+        fila_superior.setSpacing(8)
 
         self._campo_nombre = QLineEdit()
         self._campo_nombre.setPlaceholderText("Nombre del barrio")
@@ -202,7 +203,7 @@ class DialogoFormularioBarrio(DialogoBaseSigqua):
         self._combo_estado.addItems(["ACTIVO", "INACTIVO"])
         self._campo_observaciones = QPlainTextEdit()
         self._campo_observaciones.setPlaceholderText("Observaciones")
-        self._campo_observaciones.setFixedHeight(82)
+        self._campo_observaciones.setFixedHeight(60)
 
         if self._barrio is not None:
             self._campo_nombre.setText(self._barrio.nombre)
@@ -255,6 +256,14 @@ class DialogoFormularioBarrio(DialogoBaseSigqua):
         fila_acciones.addStretch(1)
         fila_acciones.addWidget(boton_guardar)
 
+        contenido_scroll = QWidget()
+        layout_scroll = QVBoxLayout(contenido_scroll)
+        layout_scroll.setContentsMargins(0, 0, 0, 0)
+        layout_scroll.setSpacing(8)
+        layout_scroll.addWidget(panel_datos)
+        layout_scroll.addWidget(self._mensaje)
+        layout_scroll.addStretch(1)
+
         self.setStyleSheet(
             self.styleSheet()
             + f"""
@@ -267,15 +276,16 @@ class DialogoFormularioBarrio(DialogoBaseSigqua):
         )
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(panel_datos)
-        self.layout_cuerpo.addWidget(self._mensaje)
+        self.layout_cuerpo.addWidget(
+            self.crear_area_scroll_cuerpo(contenido_scroll, "scrollFormularioBarrio")
+        )
         self.layout_pie.addLayout(fila_acciones)
 
     def _crear_bloque_formulario(self, etiqueta: str, campo: QWidget) -> QWidget:
         bloque = QWidget()
         layout = QVBoxLayout(bloque)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(3)
+        layout.setSpacing(2)
 
         label = QLabel(etiqueta)
         label.setObjectName("etiquetaDatoDialogoSigqua")
@@ -287,8 +297,8 @@ class DialogoFormularioBarrio(DialogoBaseSigqua):
         panel = QFrame()
         panel.setObjectName("bloqueDialogoSigqua")
         layout_panel = QVBoxLayout(panel)
-        layout_panel.setContentsMargins(14, 14, 14, 14)
-        layout_panel.setSpacing(8)
+        layout_panel.setContentsMargins(12, 12, 12, 12)
+        layout_panel.setSpacing(6)
         label_titulo = QLabel(titulo)
         label_titulo.setObjectName("etiquetaDatoDialogoSigqua")
         label_descripcion = QLabel(descripcion)
@@ -354,11 +364,18 @@ class DialogoDetalleBarrio(DialogoBaseSigqua):
         fila_superior.setSpacing(12)
         bloque_nombre = QVBoxLayout()
         bloque_nombre.setSpacing(4)
+        fila_codigo = QHBoxLayout()
+        fila_codigo.setContentsMargins(0, 0, 0, 0)
+        fila_codigo.setSpacing(6)
         codigo = QLabel(self._barrio.codigo)
         codigo.setObjectName("codigoBarrioDetalle")
+        boton_copiar_id = self._crear_boton_copiar_id(self._barrio.identificador)
         nombre = QLabel(self._barrio.nombre)
         nombre.setObjectName("nombreBarrioDetalle")
-        bloque_nombre.addWidget(codigo)
+        fila_codigo.addWidget(codigo)
+        fila_codigo.addWidget(boton_copiar_id, alignment=Qt.AlignmentFlag.AlignVCenter)
+        fila_codigo.addStretch(1)
+        bloque_nombre.addLayout(fila_codigo)
         bloque_nombre.addWidget(nombre)
 
         estado = QLabel(self._barrio.estado.title())
@@ -579,6 +596,37 @@ class DialogoDetalleBarrio(DialogoBaseSigqua):
         layout.addLayout(bloque_texto, 1)
         return tarjeta
 
+    def _crear_boton_copiar_id(self, identificador: int | None) -> QToolButton:
+        boton = QToolButton()
+        boton.setObjectName("botonCopiarIdDetalle")
+        boton.setText("COPIAR")
+        boton.setProperty("copiado", False)
+        boton.setCursor(Qt.CursorShape.PointingHandCursor)
+        boton.setToolTip(f"Copiar ID interno: {int(identificador or 0)}")
+        boton.setAutoRaise(False)
+        boton.setEnabled(bool(identificador))
+        boton.clicked.connect(
+            lambda checked=False, valor=int(identificador or 0), control=boton: self._copiar_identificador(valor, control)
+        )
+        return boton
+
+    def _copiar_identificador(self, identificador: int, boton: QToolButton) -> None:
+        QApplication.clipboard().setText(str(identificador))
+        boton.setText("OK")
+        boton.setProperty("copiado", True)
+        boton.style().unpolish(boton)
+        boton.style().polish(boton)
+        boton.setToolTip(f"ID copiado: {identificador}")
+        QTimer.singleShot(900, lambda: self._restaurar_boton_copiar_id(boton, identificador))
+
+    @staticmethod
+    def _restaurar_boton_copiar_id(boton: QToolButton, identificador: int) -> None:
+        boton.setText("COPIAR")
+        boton.setProperty("copiado", False)
+        boton.style().unpolish(boton)
+        boton.style().polish(boton)
+        boton.setToolTip(f"Copiar ID interno: {identificador}")
+
     def _abrir_abonados(self) -> None:
         self._accion_resultado = "ver_abonados"
         self.accept()
@@ -639,6 +687,27 @@ class DialogoDetalleBarrio(DialogoBaseSigqua):
                 font-size: 12px;
                 font-weight: 800;
                 letter-spacing: 0.08em;
+            }}
+            QToolButton#botonCopiarIdDetalle {{
+                min-height: 22px;
+                min-width: 62px;
+                padding: 0 10px;
+                border-radius: {radio}px;
+                border: 1px solid {paleta["borde_suave"]};
+                background: {paleta["fondo_superficie_suave"]};
+                color: {paleta["texto_secundario"]};
+                font-size: 10px;
+                font-weight: 800;
+            }}
+            QToolButton#botonCopiarIdDetalle:hover {{
+                border-color: {paleta["borde_principal"]};
+                background: {paleta["fondo_superficie_muy_suave"]};
+                color: {paleta["texto_principal"]};
+            }}
+            QToolButton#botonCopiarIdDetalle[copiado="true"] {{
+                border-color: {paleta["borde_badge_activo"]};
+                background: {paleta["fondo_badge_activo"]};
+                color: {paleta["texto_badge_activo"]};
             }}
             QLabel#nombreBarrioDetalle {{
                 color: {paleta["texto_principal"]};
@@ -882,10 +951,10 @@ class VistaBarrios(QWidget):
         fila_tarjetas = QGridLayout()
         fila_tarjetas.setHorizontalSpacing(10)
         fila_tarjetas.setVerticalSpacing(10)
-        self._tarjeta_total = TarjetaResumenBarrio("map-pin.svg", "#C9DBE9")
+        self._tarjeta_total = TarjetaResumenBarrio("map-pin.svg", "#75C7F0")
         self._tarjeta_activos = TarjetaResumenBarrio("circle-check.svg", "#8de8c7")
         self._tarjeta_con_abonados = TarjetaResumenBarrio("user.svg", "#f7cc7a")
-        self._tarjeta_destacado = TarjetaResumenBarrio("home.svg", "#8FAFC7")
+        self._tarjeta_destacado = TarjetaResumenBarrio("home.svg", "#37D399")
         fila_tarjetas.addWidget(self._tarjeta_total, 0, 0)
         fila_tarjetas.addWidget(self._tarjeta_activos, 0, 1)
         fila_tarjetas.addWidget(self._tarjeta_con_abonados, 0, 2)
@@ -1040,7 +1109,7 @@ class VistaBarrios(QWidget):
         )
         boton_ver_casas = BotonIconoFilaBarrio(
             "home.svg",
-            "#8FAFC7",
+            "#92B6CC",
             "Ver casas",
         )
         boton_accion_editar = BotonIconoFilaBarrio(
@@ -1108,44 +1177,44 @@ class VistaBarrios(QWidget):
                 background: transparent;
             }
             QLabel#tituloModulo {
-                color: #E4EACC;
+                color: #75C7F0;
                 font-size: 19px;
                 font-weight: 900;
             }
             QLabel#descripcionModulo,
             QLabel#textoPieBarrios,
             QLabel#detalleTarjetaResumen {
-                color: #C9DBE9;
+                color: #C5DDEE;
                 font-size: 11px;
                 font-weight: 600;
             }
             QLabel#mensajeBarrios {
-                color: #d9fff5;
+                color: #DDFBF0;
                 font-size: 12px;
                 font-weight: 700;
                 padding: 8px 10px;
                 border-radius: 12px;
-                background-color: rgba(16, 120, 98, 0.16);
-                border: 1px solid rgba(158, 231, 214, 0.26);
+                background-color: rgba(55, 211, 153, 0.16);
+                border: 1px solid rgba(55, 211, 153, 0.26);
             }
             QLabel#mensajeBarrios[error="true"] {
-                color: #ffd4cf;
-                background-color: rgba(180, 35, 24, 0.15);
-                border: 1px solid rgba(255, 205, 199, 0.28);
+                color: #FFE3E3;
+                background-color: rgba(242, 116, 116, 0.15);
+                border: 1px solid rgba(242, 116, 116, 0.28);
             }
             QFrame#panelOperativoBarrios,
             QFrame#tarjetaResumenBarrios {
                 background: """
             + fondo_header_destacado
             + """;
-                border: 1px solid rgba(83, 112, 139, 0.48);
+                border: 1px solid rgba(126, 167, 196, 0.48);
                 border-radius: 18px;
             }
             QFrame#panelTablaBarrios {
                 background: """
             + fondo_header_destacado
             + """;
-                border: 1px solid rgba(83, 112, 139, 0.48);
+                border: 1px solid rgba(126, 167, 196, 0.48);
                 border-radius: """
             + str(radio_panel_tabla)
             + """px;
@@ -1182,7 +1251,7 @@ class VistaBarrios(QWidget):
                 background: """
             + self._paleta_tema["fondo_tabla_header_destacado"]
             + """;
-                color: #E4EACC;
+                color: #75C7F0;
                 border: none;
                 border-right: 1px solid """
             + self._paleta_tema["borde_tabla"]
@@ -1219,64 +1288,64 @@ class VistaBarrios(QWidget):
             + """;
             }
             QLabel#iconoTarjetaResumen {
-                background: rgba(29, 54, 78, 0.78);
-                border: 1px solid rgba(83, 112, 139, 0.30);
+                background: rgba(13, 42, 69, 0.78);
+                border: 1px solid rgba(126, 167, 196, 0.30);
                 border-radius: 12px;
             }
             QLabel#tituloTarjetaResumen {
-                color: #C9DBE9;
+                color: #C5DDEE;
                 font-size: 11px;
                 font-weight: 700;
             }
             QLabel#valorTarjetaResumen {
-                color: #E4EACC;
+                color: #75C7F0;
                 font-size: 20px;
                 font-weight: 900;
             }
             QLineEdit {
                 min-height: 36px;
-                border: 1px solid rgba(83, 112, 139, 0.55);
+                border: 1px solid rgba(126, 167, 196, 0.55);
                 border-radius: 12px;
-                background: rgba(16, 42, 64, 0.98);
-                color: #E4EACC;
+                background: rgba(8, 34, 56, 0.98);
+                color: #75C7F0;
                 padding: 0 10px;
                 font-size: 12px;
             }
             QLineEdit:focus {
-                border-color: rgba(201, 219, 233, 0.55);
-                background: rgba(83, 112, 139, 0.48);
+                border-color: rgba(117, 199, 240, 0.55);
+                background: rgba(126, 167, 196, 0.48);
             }
             QPushButton#chipFiltroBarrio {
                 min-height: 30px;
                 border-radius: 11px;
                 padding: 0 12px;
-                background: rgba(29, 54, 78, 0.88);
-                border: 1px solid rgba(83, 112, 139, 0.30);
-                color: #ecf5ff;
+                background: rgba(13, 42, 69, 0.88);
+                border: 1px solid rgba(126, 167, 196, 0.30);
+                color: #F4FAFF;
                 font-size: 11px;
                 font-weight: 700;
             }
             QPushButton#chipFiltroBarrio:hover {
-                background: rgba(83, 112, 139, 0.30);
+                background: rgba(126, 167, 196, 0.30);
             }
             QPushButton#chipFiltroBarrio:checked {
-                color: #E4EACC;
-                background: #4E6A9C;
-                border-color: rgba(83, 112, 139, 0.55);
+                color: #75C7F0;
+                background: #49A9DC;
+                border-color: rgba(126, 167, 196, 0.55);
             }
             QLabel#badgeEstadoBarrio {
                 border-radius: 11px;
                 padding: 6px 10px;
                 font-size: 11px;
                 font-weight: 800;
-                color: #C9DBE9;
-                background: rgba(132, 146, 166, 0.22);
-                border: 1px solid rgba(83, 112, 139, 0.30);
+                color: #C5DDEE;
+                background: rgba(142, 168, 188, 0.22);
+                border: 1px solid rgba(126, 167, 196, 0.30);
             }
             QLabel#badgeEstadoBarrio[activo="true"] {
-                color: #d9fff5;
-                background: rgba(16, 120, 98, 0.22);
-                border-color: rgba(158, 231, 214, 0.26);
+                color: #DDFBF0;
+                background: rgba(55, 211, 153, 0.22);
+                border-color: rgba(55, 211, 153, 0.26);
             }
             QWidget#contenedorAccionesBarrio {
                 background: transparent;
@@ -1293,13 +1362,14 @@ class VistaBarrios(QWidget):
                 border: none;
             }
             QLabel#estadoVacioBarrios {
-                color: #C9DBE9;
+                color: #C5DDEE;
                 font-size: 12px;
                 font-weight: 700;
                 padding: 20px 14px;
             }
             QLabel {
-                color: #E4EACC;
+                color: #75C7F0;
             }
             """
         )
+

@@ -261,6 +261,15 @@ class GeneradorPdfReportLab:
             )
         )
         elementos.append(encabezado)
+        elementos.append(
+            Paragraph(
+                self._escapar(
+                    f"Etapa de aviso: {casa.estado_aviso_cobro} | "
+                    f"Ultimo aviso: {casa.fecha_ultimo_aviso or 'Sin registro'}"
+                ),
+                self._estilos["SigquaMetaReporte"],
+            )
+        )
         data = [["Concepto", "Vencimiento", "Saldo"]]
         for linea in casa.lineas_detalle:
             data.append([linea.descripcion, linea.fecha_vencimiento, linea.monto])

@@ -34,6 +34,20 @@ Antes de buscar informacion fuera del proyecto:
 - si la investigacion externa deja una regla, hallazgo o criterio reutilizable para futuras tareas, resumirlo y agregarlo en la skill o rol correspondiente;
 - evitar duplicar la misma regla en varios archivos cuando baste con una referencia clara desde el documento mas adecuado.
 
+## Agent skills
+
+### Issue tracker
+
+El tracker operativo inicial es Markdown local en `docs/agents/issues/` y `docs/agents/prd/`. Ver `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Usar las etiquetas canonicas de trabajo local definidas para `triage`, `to-prd` y `to-issues`. Ver `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+SIGQUA usa un contexto unico de dominio para las skills globales de arquitectura y diagnostico. Ver `docs/agents/domain.md` y `docs/agents/CONTEXT.md`.
+
 ## Reglas obligatorias
 1. Usar arquitectura modular con modulos dentro de `src/modulos/`.
 2. No volver a la estructura interna obligatoria `dominio/`, `aplicacion/`, `infraestructura/` y `presentacion/` dentro de cada modulo.

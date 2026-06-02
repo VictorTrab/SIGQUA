@@ -86,6 +86,12 @@ class TestPagos(unittest.TestCase):
             version_023 = conexion.execute(
                 "SELECT 1 FROM esquema_migraciones WHERE version = '023' LIMIT 1;"
             ).fetchone()
+            version_026 = conexion.execute(
+                "SELECT 1 FROM esquema_migraciones WHERE version = '026' LIMIT 1;"
+            ).fetchone()
+            columnas_procesos = {
+                fila[1] for fila in conexion.execute("PRAGMA table_info(procesos_servicio);").fetchall()
+            }
             deposito = conexion.execute(
                 """
                 SELECT requiere_referencia
@@ -143,6 +149,8 @@ class TestPagos(unittest.TestCase):
         self.assertIsNotNone(version_009)
         self.assertIsNotNone(version_011)
         self.assertIsNotNone(version_023)
+        self.assertIsNotNone(version_026)
+        self.assertNotIn("multa_corte_centavos", columnas_procesos)
         self.assertIsNotNone(deposito)
         self.assertEqual(deposito[0], 1)
         self.assertIsNotNone(correlativo)
@@ -452,6 +460,113 @@ class TestPagos(unittest.TestCase):
         self.assertIn("CONEXION", conceptos)
         self.assertIn("MENSUALIDAD_PRORRATEADA", conceptos)
 
+    def test_reconexion_no_acepta_campo_legacy_multa_corte(self) -> None:
+        casa_id, _dni = self._crear_casa_cortada_para_activacion(ha_tenido_servicio_activo=True)
+
+        with self.assertRaises(TypeError):
+            FormularioPago(  # type: ignore[call-arg]
+                casa_id=casa_id,
+                tipo_pago=TIPO_PAGO_RECONEXION,
+                cantidad_meses=1,
+                metodo_pago_id=self._obtener_metodo("EFECTIVO"),
+                fecha_activacion="2026-05-19",
+                monto_reconexion_centavos=50000,
+                multa_corte_centavos=10000,
+            )
+
+    def test_previsualizacion_reconexion_sin_prorrateo_cobrado_no_incluye_multa(self) -> None:
+        casa_id, _dni = self._crear_casa_cortada_para_activacion(ha_tenido_servicio_activo=True)
+        self._configurar_prorrateo_activacion(False)
+
+        resultado = self.servicio.previsualizar_pago_reconexion(
+            FormularioPago(
+                casa_id=casa_id,
+                tipo_pago=TIPO_PAGO_RECONEXION,
+                cantidad_meses=1,
+                metodo_pago_id=self._obtener_metodo("EFECTIVO"),
+                fecha_activacion="2026-05-19",
+                monto_reconexion_centavos=50000,
+            )
+        )
+
+        self.assertIsInstance(resultado, ResumenConfirmacionPago)
+        assert isinstance(resultado, ResumenConfirmacionPago)
+        conceptos = [detalle.concepto_codigo for detalle in resultado.detalles]
+        self.assertEqual(conceptos, ["RECONEXION"])
+        self.assertNotIn("MULTA", conceptos)
+        self.assertEqual(resultado.total_pago_centavos, 50000)
+        self.assertGreater(resultado.prorrateo_pendiente_centavos, 0)
+
+    def test_registro_reconexion_con_prorrateo_inactivo_crea_cargo_pendiente(self) -> None:
+        casa_id, _dni = self._crear_casa_cortada_para_activacion(ha_tenido_servicio_activo=True)
+        self._configurar_prorrateo_activacion(False)
+
+        resultado = self.servicio.registrar_pago(
+            FormularioPago(
+                casa_id=casa_id,
+                tipo_pago=TIPO_PAGO_RECONEXION,
+                cantidad_meses=1,
+                metodo_pago_id=self._obtener_metodo("EFECTIVO"),
+                fecha_activacion="2026-05-19",
+                monto_reconexion_centavos=50000,
+            ),
+            actor_id=1,
+        )
+
+        self.assertTrue(resultado.exito, resultado.mensaje)
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            detalle_prorrateo = conexion.execute(
+                """
+                SELECT COUNT(*)
+                FROM pagos_detalle pd
+                INNER JOIN conceptos_cobro cc ON cc.id = pd.concepto_id
+                WHERE pd.pago_id = ?
+                  AND cc.codigo = 'MENSUALIDAD_PRORRATEADA';
+                """,
+                (resultado.comprobante.pago_id,),
+            ).fetchone()
+            cargo_prorrateo = conexion.execute(
+                """
+                SELECT ca.estado, ca.saldo_pendiente_centavos
+                FROM cargos ca
+                INNER JOIN conceptos_cobro cc ON cc.id = ca.concepto_id
+                WHERE ca.casa_id = ?
+                  AND cc.codigo = 'MENSUALIDAD_PRORRATEADA'
+                ORDER BY ca.id DESC
+                LIMIT 1;
+                """,
+                (casa_id,),
+            ).fetchone()
+
+        self.assertEqual(detalle_prorrateo[0], 0)
+        self.assertIsNotNone(cargo_prorrateo)
+        self.assertEqual(cargo_prorrateo[0], "PENDIENTE")
+        self.assertGreater(cargo_prorrateo[1], 0)
+
+    def test_reconexion_con_deuda_mensual_regulariza_sin_multa(self) -> None:
+        casa_id, _dni = self._crear_casa_cortada_para_activacion(ha_tenido_servicio_activo=True)
+        self._crear_cargo_mensual_vencido(casa_id, monto_centavos=35000)
+        self._configurar_prorrateo_activacion(False)
+
+        resultado = self.servicio.previsualizar_pago_reconexion(
+            FormularioPago(
+                casa_id=casa_id,
+                tipo_pago=TIPO_PAGO_RECONEXION,
+                cantidad_meses=1,
+                metodo_pago_id=self._obtener_metodo("EFECTIVO"),
+                fecha_activacion="2026-05-19",
+                monto_reconexion_centavos=50000,
+            )
+        )
+
+        self.assertIsInstance(resultado, ResumenConfirmacionPago)
+        assert isinstance(resultado, ResumenConfirmacionPago)
+        conceptos = [detalle.concepto_codigo for detalle in resultado.detalles]
+        self.assertIn("SERVICIO_MENSUAL", conceptos)
+        self.assertIn("RECONEXION", conceptos)
+        self.assertNotIn("MULTA", conceptos)
+        self.assertTrue(resultado.es_operacion_compuesta)
+
     def test_registro_conexion_actualiza_estado_y_antecedente(self) -> None:
         casa_id, _dni = self._crear_casa_cortada_para_activacion(ha_tenido_servicio_activo=False)
         self._configurar_prorrateo_activacion(False)
@@ -494,6 +609,7 @@ class TestPagos(unittest.TestCase):
         self.assertEqual(vista._flujo_mensual._stack.count(), 4)
         self.assertEqual(vista._flujo_conexion._stack.count(), 4)
         self.assertEqual(vista._flujo_reconexion._stack.count(), 4)
+        self.assertFalse(hasattr(vista._flujo_reconexion, "_input_multa"))
         self.assertEqual(vista._flujo_mensual._stack.currentIndex(), vista._flujo_mensual.PASO_BUSQUEDA)
         textos = [label.text() for label in vista.findChildren(type(vista.label_mensaje))]
         self.assertNotIn("Historial reciente de comprobantes", textos)
@@ -994,6 +1110,50 @@ class TestPagos(unittest.TestCase):
                 VALUES (?, ?, NULL, ?, 'Recargo vencido de prueba', 5000, 5000, date('now', 'localtime', '-15 day'), 'VENCIDO', 'MANUAL');
                 """,
                 (casa_id, int(fila[0]), int(fila[1])),
+            )
+            conexion.commit()
+
+    def _crear_cargo_mensual_vencido(self, casa_id: int, *, monto_centavos: int) -> None:
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            fila = conexion.execute(
+                """
+                SELECT c.abonado_id, cc.id
+                FROM casas c
+                CROSS JOIN conceptos_cobro cc
+                WHERE c.id = ?
+                  AND cc.codigo = 'SERVICIO_MENSUAL'
+                LIMIT 1;
+                """,
+                (casa_id,),
+            ).fetchone()
+            assert fila is not None
+            conexion.execute(
+                """
+                INSERT OR IGNORE INTO periodos_cobro(anio, mes, nombre, fecha_inicio, fecha_fin, fecha_vencimiento)
+                VALUES (2026, 4, 'Abril 2026 prueba', '2026-04-01', '2026-04-30', '2026-04-30');
+                """
+            )
+            periodo = conexion.execute(
+                "SELECT id FROM periodos_cobro WHERE anio = 2026 AND mes = 4 LIMIT 1;"
+            ).fetchone()
+            assert periodo is not None
+            conexion.execute(
+                """
+                INSERT INTO cargos(
+                    casa_id,
+                    abonado_id,
+                    periodo_id,
+                    concepto_id,
+                    descripcion,
+                    monto_centavos,
+                    saldo_pendiente_centavos,
+                    fecha_vencimiento,
+                    estado,
+                    origen
+                )
+                VALUES (?, ?, ?, ?, 'Mensualidad vencida de prueba', ?, ?, '2026-04-30', 'VENCIDO', 'MENSUAL');
+                """,
+                (casa_id, int(fila[0]), int(periodo[0]), int(fila[1]), monto_centavos, monto_centavos),
             )
             conexion.commit()
 
