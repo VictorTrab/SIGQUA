@@ -338,16 +338,6 @@ class VistaConfiguracion(QWidget):
         self._campo_junta_nombre = QLineEdit()
         self._campo_junta_telefono = QLineEdit()
         self._campo_junta_correo = QLineEdit()
-
-        layout.addLayout(encabezado)
-        layout.addWidget(self._mensaje)
-        layout.addLayout(tarjetas)
-        layout.addWidget(self._tabs, 1)
-
-    def _crear_tab_datos_junta(self) -> QWidget:
-        self._campo_junta_nombre = QLineEdit()
-        self._campo_junta_telefono = QLineEdit()
-        self._campo_junta_correo = QLineEdit()
         self._campo_junta_identificador = QLineEdit()
         self._campo_junta_sitio_web = QLineEdit()
         self._campo_junta_direccion = QPlainTextEdit()
@@ -357,10 +347,15 @@ class VistaConfiguracion(QWidget):
 
         self._valor_estado_identidad = self._crear_valor_seguridad()
 
-        boton_guardar = crear_boton_operativo("Guardar identidad de la empresa", principal=True)
+        grilla_general = QGridLayout()
+        grilla_general.setHorizontalSpacing(12)
+        grilla_general.setVerticalSpacing(16)
         grilla_general.addWidget(
             self._crear_bloque_campo("Nombre legal o comercial", self._campo_junta_nombre),
-            0, 0, 1, 2,
+            0,
+            0,
+            1,
+            2,
         )
 
         subtitulo_contacto = self._crear_subtitulo_grupo("Contacto institucional")
@@ -370,22 +365,39 @@ class VistaConfiguracion(QWidget):
         grilla_contacto.setVerticalSpacing(16)
         grilla_contacto.addWidget(
             self._crear_bloque_campo("Telefono institucional", self._campo_junta_telefono),
-            0, 0,
+            0,
+            0,
         )
         grilla_contacto.addWidget(
             self._crear_bloque_campo("Correo institucional", self._campo_junta_correo),
-            0, 1,
+            0,
+            1,
         )
         grilla_contacto.addWidget(
             self._crear_bloque_campo("Identificador fiscal", self._campo_junta_identificador),
-            1, 0,
+            1,
+            0,
         )
         grilla_contacto.addWidget(
             self._crear_bloque_campo("Sitio web", self._campo_junta_sitio_web),
-            1, 1,
+            1,
+            1,
         )
 
         subtitulo_ubicacion = self._crear_subtitulo_grupo("Ubicacion y contacto")
+
+        boton_guardar = crear_boton_operativo("Guardar identidad de la empresa", principal=True)
+        boton_guardar.clicked.connect(
+            lambda: self.guardar_datos_junta_solicitado.emit(
+                self._campo_junta_nombre.text().strip(),
+                self._campo_junta_telefono.text().strip(),
+                self._campo_junta_correo.text().strip(),
+                self._campo_junta_identificador.text().strip(),
+                self._campo_junta_sitio_web.text().strip(),
+                self._campo_junta_direccion.toPlainText().strip(),
+                self._campo_junta_mensaje_contacto.toPlainText().strip(),
+            )
+        )
 
         contenido = self._crear_contenedor_scroll()
         contenido.widget().layout().addWidget(
