@@ -28,6 +28,12 @@ from modulos.morosidad.entidades import FILTRO_MOROSIDAD_SEVERA  # noqa: E402
 from modulos.morosidad.repositorio import RepositorioMorosidadSQLite  # noqa: E402
 from modulos.morosidad.servicio import ServicioMorosidad  # noqa: E402
 from modulos.morosidad.vista import VistaMorosidad  # noqa: E402
+from modulos.reportes.entidades import (  # noqa: E402
+    REPORTE_DEUDA_ABONADOS_ESTADO,
+    REPORTE_HISTORIAL_ABONADO_CASA,
+    REPORTE_INGRESOS_MENSUALES_DIARIOS,
+    REPORTE_SERVICIO_CASAS,
+)
 from modulos.reportes.controlador import ControladorReportes  # noqa: E402
 from modulos.reportes.repositorio import RepositorioReportesSQLite  # noqa: E402
 from modulos.reportes.servicio import ServicioReportes  # noqa: E402
@@ -158,17 +164,21 @@ class TestMorosidadReportes(unittest.TestCase):
         servicio = ServicioReportes(RepositorioReportesSQLite(self.gestor_base_datos))
 
         estado = servicio.obtener_estado(
-            codigo_reporte="deuda_abonados_estado",
+            codigo_reporte=REPORTE_DEUDA_ABONADOS_ESTADO,
             filtros={"fecha_desde": "2026-01-01", "fecha_hasta": "2026-12-31"},
         )
-        codigos = {tarjeta.codigo for tarjeta in estado.catalogo}
+        codigos = tuple(tarjeta.codigo for tarjeta in estado.catalogo)
 
         self.assertEqual(len(estado.indicadores), 5)
-        self.assertIn("deuda_abonados_estado", codigos)
-        self.assertIn("abonados_sin_deuda", codigos)
-        self.assertIn("servicio_casas", codigos)
-        self.assertIn("ingresos_mensuales", codigos)
-        self.assertIn("ingresos_diarios", codigos)
+        self.assertEqual(
+            codigos,
+            (
+                REPORTE_DEUDA_ABONADOS_ESTADO,
+                REPORTE_SERVICIO_CASAS,
+                REPORTE_INGRESOS_MENSUALES_DIARIOS,
+                REPORTE_HISTORIAL_ABONADO_CASA,
+            ),
+        )
         self.assertIsNotNone(estado.tabla_actual)
 
     def test_reportes_exportan_pdf_tabular_real(self) -> None:
@@ -177,7 +187,7 @@ class TestMorosidadReportes(unittest.TestCase):
 
         resultado = servicio.exportar_pdf(
             ruta_destino=str(ruta_pdf),
-            codigo_reporte="ingresos_diarios",
+            codigo_reporte=REPORTE_INGRESOS_MENSUALES_DIARIOS,
             filtros={"fecha_desde": "2026-01-01", "fecha_hasta": "2026-12-31"},
         )
 
@@ -240,7 +250,7 @@ class TestMorosidadReportes(unittest.TestCase):
         vista.solicitar_ruta_exportacion = lambda _codigo: str(ruta_pdf)  # type: ignore[method-assign]
 
         controlador._exportar(
-            "ingresos_diarios",
+            REPORTE_INGRESOS_MENSUALES_DIARIOS,
             {"fecha_desde": "2026-01-01", "fecha_hasta": "2026-12-31"},
         )
 

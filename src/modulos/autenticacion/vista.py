@@ -14,10 +14,6 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QColor,
-    QLinearGradient,
-    QPaintEvent,
-    QPainter,
-    QRadialGradient,
 )
 from PySide6.QtWidgets import (
     QFrame,
@@ -28,7 +24,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QSizePolicy,
-    QStackedLayout,
     QStackedWidget,
     QToolButton,
     QVBoxLayout,
@@ -44,17 +39,16 @@ from comun.ui import (
 from modulos.autenticacion.entidades import SesionIniciada, UsuarioAutenticado
 
 
-ANCHO_MAXIMO_TARJETA = 520
-COLOR_GRADIENTE_INICIAL = "#071A2D"
-COLOR_GRADIENTE_FINAL = "#0D2A45"
-COLOR_ICONO_INPUT = "#92B6CC"
+ANCHO_MAXIMO_TARJETA = 420
+ANCHO_PANEL_AUTENTICACION = 720
+UMBRAL_PANEL_INSTITUCIONAL = 720
+COLOR_GRADIENTE_INICIAL = "#001D39"
+COLOR_GRADIENTE_FINAL = "#7BBDE8"
+COLOR_ICONO_INPUT = "#0A6F8F"
 COLOR_ICONO_PRIMARIO = "#061525"
-COLOR_ICONO_SECUNDARIO = "#C5DDEE"
+COLOR_ICONO_SECUNDARIO = "#0A4174"
 COLOR_ICONO_ESTADO = "#75C7F0"
 COLOR_ICONO_ADVERTENCIA = "#F5B84B"
-COLOR_AURORA_CLARA = QColor(117, 199, 240, 22)
-COLOR_AURORA_TURQUESA = QColor(55, 211, 153, 34)
-COLOR_AURORA_AZUL = QColor(73, 169, 220, 28)
 TAMANO_ICONO_ACCION_INPUT = 18
 TAMANO_AREA_ACCION_INPUT = 30
 DESPLAZAMIENTO_ACCION_DERECHA_INPUT = 18
@@ -143,18 +137,18 @@ class CampoAnimado(QLineEdit):
 
     def _aplicar_estilo_animado(self) -> None:
         borde = _interpolar_color(
-            QColor(126, 167, 196, 132),
-            QColor(117, 199, 240, 232),
+            QColor(189, 216, 233, 255),
+            QColor(10, 111, 143, 255),
             self._progreso_realce,
         )
         fondo = _interpolar_color(
-            QColor(8, 34, 56, 228),
-            QColor(13, 42, 69, 242),
+            QColor(255, 255, 255, 255),
+            QColor(244, 250, 255, 255),
             self._progreso_realce,
         )
         sombra = _interpolar_color(
-            QColor(117, 199, 240, 0),
-            QColor(117, 199, 240, 46),
+            QColor(10, 111, 143, 0),
+            QColor(10, 111, 143, 42),
             self._progreso_realce,
         )
         self._sombra.setBlurRadius(16 + (self._progreso_realce * 12))
@@ -166,9 +160,9 @@ class CampoAnimado(QLineEdit):
             f"border: 1px solid rgba({borde.red()}, {borde.green()}, {borde.blue()}, {borde.alpha()});"
             "border-radius: 16px;"
             f"background-color: rgba({fondo.red()}, {fondo.green()}, {fondo.blue()}, {fondo.alpha()});"
-            "color: #F4FAFF;"
-            "selection-background-color: #49A9DC;"
-            "selection-color: #F4FAFF;"
+            "color: #172A3A;"
+            "selection-background-color: #0A6F8F;"
+            "selection-color: #FFFFFF;"
             "font-size: 13px;"
             "}"
         )
@@ -226,13 +220,13 @@ class BotonAnimado(QPushButton):
         self._aplicar_estilo_secundario()
 
     def _aplicar_estilo_primario(self) -> None:
-        base = QColor(117, 199, 240, 246)
-        hover = QColor(154, 216, 245, 255)
-        pressed = QColor(73, 169, 220, 255)
+        base = QColor(10, 111, 143, 255)
+        hover = QColor(11, 127, 163, 255)
+        pressed = QColor(10, 65, 116, 255)
         color_actual = self._color_por_progreso(base, hover, pressed)
         sombra = _interpolar_color(
-            QColor(117, 199, 240, 0),
-            QColor(117, 199, 240, 54),
+            QColor(10, 65, 116, 0),
+            QColor(10, 65, 116, 66),
             min(self._progreso_interaccion, 1.0),
         )
         self._sombra.setBlurRadius(18 + min(self._progreso_interaccion, 1.0) * 10)
@@ -243,7 +237,7 @@ class BotonAnimado(QPushButton):
             "border: none;"
             "border-radius: 16px;"
             f"background-color: rgba({color_actual.red()}, {color_actual.green()}, {color_actual.blue()}, {color_actual.alpha()});"
-            "color: #061525;"
+            "color: #FFFFFF;"
             "font-size: 13px;"
             "font-weight: 700;"
             "padding: 0 18px;"
@@ -251,12 +245,12 @@ class BotonAnimado(QPushButton):
         )
 
     def _aplicar_estilo_secundario(self) -> None:
-        base_fondo = QColor(24, 63, 95, 224)
-        hover_fondo = QColor(33, 80, 111, 242)
-        pressed_fondo = QColor(13, 42, 69, 255)
-        base_borde = QColor(126, 167, 196, 132)
-        hover_borde = QColor(146, 182, 204, 172)
-        pressed_borde = QColor(117, 199, 240, 196)
+        base_fondo = QColor(255, 255, 255, 255)
+        hover_fondo = QColor(232, 245, 252, 255)
+        pressed_fondo = QColor(210, 232, 244, 255)
+        base_borde = QColor(189, 216, 233, 255)
+        hover_borde = QColor(10, 111, 143, 160)
+        pressed_borde = QColor(10, 65, 116, 210)
         fondo_actual = self._color_por_progreso(base_fondo, hover_fondo, pressed_fondo)
         borde_actual = self._color_por_progreso(base_borde, hover_borde, pressed_borde)
         sombra = _interpolar_color(
@@ -272,7 +266,7 @@ class BotonAnimado(QPushButton):
             f"border: 1px solid rgba({borde_actual.red()}, {borde_actual.green()}, {borde_actual.blue()}, {borde_actual.alpha()});"
             "border-radius: 16px;"
             f"background-color: rgba({fondo_actual.red()}, {fondo_actual.green()}, {fondo_actual.blue()}, {fondo_actual.alpha()});"
-            "color: #EAF2F8;"
+            "color: #0A4174;"
             "font-size: 13px;"
             "font-weight: 600;"
             "padding: 0 18px;"
@@ -299,6 +293,7 @@ class VistaAutenticacion(QWidget):
         self._gestor_rutas = gestor_rutas or GestorRutas()
         self._usuario_restablecimiento_actual = ""
         self._tarjetas_por_pagina: dict[QWidget, QFrame] = {}
+        self._paneles_institucionales: list[QFrame] = []
         self._animaciones_activas: list[object] = []
 
         self.setObjectName("vistaAutenticacion")
@@ -330,22 +325,9 @@ class VistaAutenticacion(QWidget):
 
         QTimer.singleShot(0, lambda: self._animar_entrada_pagina(self._pagina_login))
 
-    def paintEvent(self, evento: QPaintEvent) -> None:
-        """Pinta un degradado con auroras suaves para un efecto tipo glass."""
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-        painter.setPen(Qt.PenStyle.NoPen)
-
-        gradiente = QLinearGradient(0, 0, self.width(), 0)
-        gradiente.setColorAt(0.0, QColor(COLOR_GRADIENTE_INICIAL))
-        gradiente.setColorAt(1.0, QColor(COLOR_GRADIENTE_FINAL))
-        painter.setBrush(gradiente)
-        painter.drawRect(self.rect())
-        self._pintar_auroras(painter)
-        painter.end()
-
-        super().paintEvent(evento)
+    def resizeEvent(self, evento) -> None:
+        super().resizeEvent(evento)
+        self._actualizar_paneles_institucionales()
 
     def mostrar_login(self, mensaje: str | None = None, es_exito: bool = False) -> None:
         self._usuario_restablecimiento_actual = ""
@@ -403,13 +385,13 @@ class VistaAutenticacion(QWidget):
         )
 
     def _construir_pagina_login(self) -> QWidget:
-        pagina, tarjeta, contenido = self._crear_pagina_base()
-        self._agregar_logo(tarjeta)
+        pagina, _, contenido = self._crear_pagina_base()
+        self._agregar_logo_compacto_formulario(contenido)
         self._agregar_encabezado(
             contenido,
             contexto="",
-            titulo="",
-            subtitulo="",
+            titulo="Iniciar sesion",
+            subtitulo="Acceso local al sistema administrativo SIGQUA.",
         )
 
         self._campo_usuario = self._crear_input(
@@ -432,7 +414,7 @@ class VistaAutenticacion(QWidget):
         contenido.addWidget(self._mensaje_login)
 
         self._boton_login = self._crear_boton_primario(
-            texto="Iniciar sesion",
+            texto="Entrar",
             icono="login-2.svg",
             accion=self._emitir_login,
         )
@@ -440,7 +422,7 @@ class VistaAutenticacion(QWidget):
 
         contenido.addWidget(
             self._crear_boton_secundario(
-                texto="Olvidé mi contraseña",
+                texto="Necesito ayuda para acceder",
                 icono="key.svg",
                 accion=self.ir_a_olvido_solicitado.emit,
             )
@@ -450,12 +432,15 @@ class VistaAutenticacion(QWidget):
         self._label_pie_login.setObjectName("pieLogin")
         self._label_pie_login.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._label_pie_login.setWordWrap(True)
-        self._label_pie_login.setText(f"Versión {VERSION_SISTEMA}")
+        self._label_pie_login.setText(
+            f"SIGQUA · Junta de Agua de Yarumela · Versión {VERSION_SISTEMA}"
+        )
         contenido.addWidget(self._label_pie_login)
         return pagina
 
     def _construir_pagina_olvido(self) -> QWidget:
         pagina, _, contenido = self._crear_pagina_base()
+        self._agregar_logo_compacto_formulario(contenido)
         self._agregar_encabezado(
             contenido,
             contexto="",
@@ -481,6 +466,7 @@ class VistaAutenticacion(QWidget):
 
     def _construir_pagina_restablecer(self) -> QWidget:
         pagina, _, contenido = self._crear_pagina_base()
+        self._agregar_logo_compacto_formulario(contenido)
         self._agregar_encabezado(
             contenido,
             contexto="",
@@ -546,7 +532,7 @@ class VistaAutenticacion(QWidget):
         pagina.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         pagina.setMinimumSize(0, 0)
         layout_raiz = QVBoxLayout(pagina)
-        layout_raiz.setContentsMargins(28, 24, 28, 24)
+        layout_raiz.setContentsMargins(22, 22, 22, 22)
         layout_raiz.setSpacing(0)
         layout_raiz.setSizeConstraint(QVBoxLayout.SizeConstraint.SetNoConstraint)
         layout_raiz.addStretch(1)
@@ -556,66 +542,144 @@ class VistaAutenticacion(QWidget):
         fila_centrada.setSpacing(0)
         fila_centrada.addStretch(1)
 
-        contenedor_vidrio = QWidget()
-        contenedor_vidrio.setObjectName("contenedorVidrioAutenticacion")
-        contenedor_vidrio.setMaximumWidth(ANCHO_MAXIMO_TARJETA)
-        contenedor_vidrio.setMinimumWidth(ANCHO_MAXIMO_TARJETA)
-        contenedor_vidrio.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Preferred,
-        )
+        contenedor = QFrame()
+        contenedor.setObjectName("contenedorAutenticacion")
+        contenedor.setMaximumWidth(ANCHO_PANEL_AUTENTICACION)
+        contenedor.setMinimumWidth(0)
+        contenedor.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        contenedor.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        contenedor.setGraphicsEffect(self._crear_sombra_tarjeta())
 
-        layout_vidrio = QStackedLayout(contenedor_vidrio)
-        layout_vidrio.setContentsMargins(0, 0, 0, 0)
-        layout_vidrio.setStackingMode(QStackedLayout.StackingMode.StackAll)
+        layout_contenedor = QHBoxLayout(contenedor)
+        layout_contenedor.setContentsMargins(0, 0, 0, 0)
+        layout_contenedor.setSpacing(0)
 
-        fondo_blur = QFrame()
-        fondo_blur.setObjectName("fondoBlurTarjeta")
-        fondo_blur.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        fondo_blur.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        fondo_blur.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        fondo_blur.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Expanding,
-        )
-        # Evita bloqueos de render al apilar varias paginas en Windows.
-        # Conservamos el efecto vidrio con una capa translucida, sin blur en tiempo real.
-        fondo_blur.setGraphicsEffect(None)
+        panel_institucional = self._crear_panel_institucional_login()
+        self._paneles_institucionales.append(panel_institucional)
 
         tarjeta = QFrame()
-        tarjeta.setObjectName("tarjetaAutenticacion")
+        tarjeta.setObjectName("panelFormularioLogin")
         tarjeta.setMaximumWidth(ANCHO_MAXIMO_TARJETA)
-        tarjeta.setMinimumWidth(ANCHO_MAXIMO_TARJETA)
+        tarjeta.setMinimumWidth(340)
         tarjeta.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Preferred,
         )
         tarjeta.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        tarjeta.setGraphicsEffect(self._crear_sombra_tarjeta())
 
         layout_tarjeta = QVBoxLayout(tarjeta)
-        layout_tarjeta.setContentsMargins(52, 32, 52, 34)
+        layout_tarjeta.setContentsMargins(34, 30, 34, 30)
         layout_tarjeta.setSpacing(12)
 
-        layout_vidrio.addWidget(fondo_blur)
-        layout_vidrio.addWidget(tarjeta)
-        layout_vidrio.setCurrentWidget(tarjeta)
+        layout_contenedor.addWidget(panel_institucional, 1)
+        layout_contenedor.addWidget(tarjeta, 1)
 
-        fila_centrada.addWidget(contenedor_vidrio, 1)
+        fila_centrada.addWidget(contenedor, 1)
         fila_centrada.addStretch(1)
         layout_raiz.addLayout(fila_centrada)
         layout_raiz.addStretch(1)
         self._tarjetas_por_pagina[pagina] = tarjeta
+        QTimer.singleShot(0, self._actualizar_paneles_institucionales)
         return pagina, tarjeta, layout_tarjeta
 
-    def _agregar_logo(self, tarjeta: QFrame) -> None:
+    def _crear_panel_institucional_login(self) -> QFrame:
+        panel = QFrame()
+        panel.setObjectName("panelInstitucionalLogin")
+        panel.setMinimumWidth(0)
+        panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(34, 32, 30, 32)
+        layout.setSpacing(14)
+
+        self._crear_decoracion_login(panel, "decoracionLoginSuperior")
+        self._agregar_logo_institucional(layout)
+
+        nombre = QLabel("SIGQUA")
+        nombre.setObjectName("nombreSistemaLogin")
+        nombre.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(nombre)
+
+        subtitulo = QLabel("Gestion administrativa de la Junta de Agua de Yarumela")
+        subtitulo.setObjectName("subtituloSistemaLogin")
+        subtitulo.setWordWrap(True)
+        layout.addWidget(subtitulo)
+
+        texto = QLabel(
+            "Control local de abonados, casas, pagos, morosidad y reportes "
+            "en una operacion compacta y segura."
+        )
+        texto.setObjectName("textoPrincipalLogin")
+        texto.setWordWrap(True)
+        layout.addWidget(texto)
+
+        fila_chips = QHBoxLayout()
+        fila_chips.setContentsMargins(0, 4, 0, 4)
+        fila_chips.setSpacing(8)
+        fila_chips.addWidget(self._crear_chip_login("Abonados"))
+        fila_chips.addWidget(self._crear_chip_login("Pagos"))
+        fila_chips.addWidget(self._crear_chip_login("Reportes"))
+        fila_chips.addStretch(1)
+        layout.addLayout(fila_chips)
+
+        layout.addStretch(1)
+
+        microcopy = QLabel("Autenticacion local · Asistencia administrativa · Sin correo externo")
+        microcopy.setObjectName("microcopyLogin")
+        microcopy.setWordWrap(True)
+        layout.addWidget(microcopy)
+
+        self._crear_decoracion_login(panel, "decoracionLoginInferior")
+        return panel
+
+    @staticmethod
+    def _crear_chip_login(texto: str) -> QLabel:
+        chip = QLabel(texto)
+        chip.setObjectName("chipLogin")
+        chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        return chip
+
+    @staticmethod
+    def _crear_decoracion_login(panel: QFrame, object_name: str) -> QLabel:
+        decoracion = QLabel(panel)
+        decoracion.setObjectName(object_name)
+        decoracion.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        decoracion.resize(116, 116)
+        if object_name.endswith("Superior"):
+            decoracion.move(242, 18)
+        else:
+            decoracion.move(24, 392)
+        decoracion.lower()
+        return decoracion
+
+    def _agregar_logo_institucional(self, layout_destino: QVBoxLayout) -> None:
         ruta_logo = self._gestor_rutas.obtener_ruta_logo_marca()
         if not ruta_logo.exists():
             return
 
         pixmap_logo = obtener_pixmap_marca(
             ruta_marca=ruta_logo,
-            ancho_logico=248,
+            ancho_logico=176,
+            factor_escala=self.devicePixelRatioF(),
+        )
+        if pixmap_logo.isNull():
+            return
+
+        label_logo = QLabel()
+        label_logo.setObjectName("logoMarcaLoginInstitucional")
+        label_logo.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        label_logo.setPixmap(pixmap_logo)
+        layout_destino.addWidget(label_logo)
+
+    def _agregar_logo_compacto_formulario(self, layout_destino: QVBoxLayout) -> None:
+        ruta_logo = self._gestor_rutas.obtener_ruta_logo_marca()
+        if not ruta_logo.exists():
+            return
+
+        pixmap_logo = obtener_pixmap_marca(
+            ruta_marca=ruta_logo,
+            ancho_logico=142,
             factor_escala=self.devicePixelRatioF(),
         )
         if pixmap_logo.isNull():
@@ -624,7 +688,7 @@ class VistaAutenticacion(QWidget):
         bloque_marca = QWidget()
         bloque_marca.setObjectName("bloqueMarcaLogin")
         layout_marca = QVBoxLayout(bloque_marca)
-        layout_marca.setContentsMargins(0, 0, 0, 4)
+        layout_marca.setContentsMargins(0, 0, 0, 2)
         layout_marca.setSpacing(2)
 
         label_logo = QLabel()
@@ -632,9 +696,9 @@ class VistaAutenticacion(QWidget):
         label_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label_logo.setPixmap(pixmap_logo)
         brillo_logo = QGraphicsDropShadowEffect(label_logo)
-        brillo_logo.setBlurRadius(18)
+        brillo_logo.setBlurRadius(14)
         brillo_logo.setOffset(0, 0)
-        brillo_logo.setColor(QColor(0, 166, 214, 56))
+        brillo_logo.setColor(QColor(10, 111, 143, 40))
         label_logo.setGraphicsEffect(brillo_logo)
         layout_marca.addWidget(label_logo)
 
@@ -643,7 +707,12 @@ class VistaAutenticacion(QWidget):
         lema.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lema.setWordWrap(True)
         layout_marca.addWidget(lema)
-        tarjeta.layout().addWidget(bloque_marca)
+        layout_destino.addWidget(bloque_marca)
+
+    def _actualizar_paneles_institucionales(self) -> None:
+        mostrar_panel = self.width() >= UMBRAL_PANEL_INSTITUCIONAL
+        for panel in self._paneles_institucionales:
+            panel.setVisible(mostrar_panel)
 
     def _agregar_encabezado(
         self,
@@ -789,31 +858,6 @@ class VistaAutenticacion(QWidget):
         sombra.setColor(QColor(3, 10, 22, 118))
         return sombra
 
-    def _pintar_auroras(self, painter: QPainter) -> None:
-        ancho = max(self.width(), 1)
-        alto = max(self.height(), 1)
-
-        aurora_izquierda = QRadialGradient(ancho * 0.17, alto * 0.18, ancho * 0.26)
-        aurora_izquierda.setColorAt(0.0, COLOR_AURORA_TURQUESA)
-        aurora_izquierda.setColorAt(0.42, QColor(56, 189, 248, 14))
-        aurora_izquierda.setColorAt(1.0, QColor(56, 189, 248, 0))
-        painter.setBrush(aurora_izquierda)
-        painter.drawEllipse(int(ancho * 0.0), int(alto * -0.04), int(ancho * 0.38), int(alto * 0.42))
-
-        aurora_derecha = QRadialGradient(ancho * 0.84, alto * 0.16, ancho * 0.24)
-        aurora_derecha.setColorAt(0.0, COLOR_AURORA_AZUL)
-        aurora_derecha.setColorAt(0.45, QColor(53, 230, 168, 10))
-        aurora_derecha.setColorAt(1.0, QColor(53, 230, 168, 0))
-        painter.setBrush(aurora_derecha)
-        painter.drawEllipse(int(ancho * 0.62), int(alto * -0.02), int(ancho * 0.32), int(alto * 0.34))
-
-        halo_central = QRadialGradient(ancho * 0.5, alto * 0.52, ancho * 0.18)
-        halo_central.setColorAt(0.0, COLOR_AURORA_CLARA)
-        halo_central.setColorAt(0.58, QColor(201, 219, 233, 6))
-        halo_central.setColorAt(1.0, QColor(201, 219, 233, 0))
-        painter.setBrush(halo_central)
-        painter.drawEllipse(int(ancho * 0.36), int(alto * 0.28), int(ancho * 0.28), int(alto * 0.32))
-
     @staticmethod
     def _alternar_visibilidad_contrasena(campo: QLineEdit, accion_visibilidad: object) -> None:
         es_visible = campo.echoMode() == QLineEdit.EchoMode.Normal
@@ -848,9 +892,9 @@ class VistaAutenticacion(QWidget):
         return label
 
     def _mostrar_mensaje(self, label: QLabel, mensaje: str, es_exito: bool) -> None:
-        color_borde = "rgba(55, 211, 153, 0.36)" if es_exito else "rgba(242, 116, 116, 0.34)"
-        color_texto = "#DDFBF0" if es_exito else "#FFE3E3"
-        color_fondo = "rgba(55, 211, 153, 0.18)" if es_exito else "rgba(242, 116, 116, 0.18)"
+        color_borde = "rgba(25, 135, 84, 0.30)" if es_exito else "rgba(180, 55, 55, 0.30)"
+        color_texto = "#0F5132" if es_exito else "#842029"
+        color_fondo = "rgba(55, 211, 153, 0.16)" if es_exito else "rgba(242, 116, 116, 0.14)"
         label.setStyleSheet(
             "QLabel {"
             f"border: 1px solid {color_borde};"
@@ -955,88 +999,138 @@ class VistaAutenticacion(QWidget):
 
     def _aplicar_estilos(self) -> None:
         self.setStyleSheet(
-            """
-            QWidget#vistaAutenticacion {
-                background: transparent;
-            }
-            QStackedWidget#stackAutenticacion,
-            QWidget#paginaAutenticacion {
-                background: transparent;
-            }
-            QWidget#contenedorVidrioAutenticacion {
-                background: transparent;
-            }
-            QWidget#bloqueMarcaLogin {
-                background: transparent;
-            }
-            QFrame#fondoBlurTarjeta {
-                background: rgba(7, 26, 45, 58);
-                border: 1px solid rgba(146, 182, 204, 62);
-                border-radius: 32px;
-            }
-            QFrame#tarjetaAutenticacion {
+            f"""
+            QWidget#vistaAutenticacion {{
                 background: qlineargradient(
                     x1: 0, y1: 0,
                     x2: 1, y2: 1,
-                    stop: 0 rgba(13, 42, 69, 224),
-                    stop: 0.48 rgba(18, 53, 83, 206),
-                    stop: 1 rgba(8, 34, 56, 226)
+                    stop: 0 #E8F4FA,
+                    stop: 0.58 #F7FBFE,
+                    stop: 1 #D7ECF6
                 );
-                border: 1px solid rgba(146, 182, 204, 98);
-                border-radius: 30px;
-            }
-            QLabel#logoMarcaLogin {
+            }}
+            QStackedWidget#stackAutenticacion,
+            QWidget#paginaAutenticacion {{
+                background: transparent;
+            }}
+            QFrame#contenedorAutenticacion {{
+                background: transparent;
+                border-radius: 28px;
+            }}
+            QFrame#panelInstitucionalLogin {{
+                background: qlineargradient(
+                    x1: 0, y1: 0,
+                    x2: 1, y2: 1,
+                    stop: 0 {COLOR_GRADIENTE_INICIAL},
+                    stop: 0.58 #0A4174,
+                    stop: 1 {COLOR_GRADIENTE_FINAL}
+                );
+                border-top-left-radius: 28px;
+                border-bottom-left-radius: 28px;
+            }}
+            QFrame#panelFormularioLogin {{
+                background: #F8FCFF;
+                border: 1px solid rgba(10, 65, 116, 0.14);
+                border-top-right-radius: 28px;
+                border-bottom-right-radius: 28px;
+            }}
+            QWidget#bloqueMarcaLogin {{
+                background: transparent;
+            }}
+            QLabel#logoMarcaLogin {{
                 margin-bottom: 0;
-            }
-            QLabel#lemaMarcaLogin {
-                color: rgba(197, 221, 238, 220);
-                font-size: 12px;
+            }}
+            QLabel#logoMarcaLoginInstitucional {{
+                margin-bottom: 2px;
+            }}
+            QLabel#lemaMarcaLogin {{
+                color: #47697F;
+                font-size: 11px;
+                font-weight: 700;
+                padding: 0 6px 0 6px;
+            }}
+            QLabel#nombreSistemaLogin {{
+                color: #FFFFFF;
+                font-size: 34px;
+                font-weight: 900;
+                letter-spacing: 2.2px;
+            }}
+            QLabel#subtituloSistemaLogin {{
+                color: rgba(238, 248, 255, 0.92);
+                font-size: 14px;
+                font-weight: 800;
+                line-height: 1.25;
+            }}
+            QLabel#textoPrincipalLogin {{
+                color: rgba(239, 249, 255, 0.84);
+                font-size: 13px;
                 font-weight: 600;
-                padding: 0 6px 2px 6px;
-            }
-            QLabel#badgeContexto {
-                color: #C5DDEE;
-                background-color: rgba(8, 34, 56, 214);
-                border: 1px solid rgba(126, 167, 196, 118);
+                line-height: 1.28;
+            }}
+            QLabel#chipLogin {{
+                color: #EAF8FF;
+                background-color: rgba(255, 255, 255, 0.14);
+                border: 1px solid rgba(255, 255, 255, 0.24);
+                border-radius: 12px;
+                font-size: 11px;
+                font-weight: 800;
+                padding: 5px 10px;
+            }}
+            QLabel#microcopyLogin {{
+                color: rgba(245, 252, 255, 0.78);
+                font-size: 11px;
+                font-weight: 700;
+                line-height: 1.2;
+            }}
+            QLabel#decoracionLoginSuperior,
+            QLabel#decoracionLoginInferior {{
+                background: rgba(255, 255, 255, 0.10);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                border-radius: 58px;
+            }}
+            QLabel#badgeContexto {{
+                color: #0A4174;
+                background-color: rgba(10, 111, 143, 0.10);
+                border: 1px solid rgba(10, 111, 143, 0.18);
                 border-radius: 11px;
                 font-size: 10px;
-                font-weight: 700;
-                letter-spacing: 1.6px;
+                font-weight: 800;
+                letter-spacing: 1.4px;
                 padding: 5px 10px;
                 margin: 0 0 4px 0;
-            }
-            QLabel#emblemaPagina {
-                color: #75C7F0;
+            }}
+            QLabel#emblemaPagina {{
+                color: {COLOR_ICONO_SECUNDARIO};
                 margin-bottom: 0;
-            }
-            QLabel#tituloPagina {
-                color: #F4FAFF;
-                font-size: 23px;
-                font-weight: 800;
-                letter-spacing: 0.2px;
-            }
+            }}
+            QLabel#tituloPagina {{
+                color: #123044;
+                font-size: 22px;
+                font-weight: 900;
+                letter-spacing: 0.1px;
+            }}
             QLabel#subtituloPagina,
-            QLabel#textoExplicativo {
-                color: #C5DDEE;
-                font-size: 13px;
+            QLabel#textoExplicativo {{
+                color: #5D788B;
+                font-size: 12px;
                 line-height: 1.25;
-            }
-            QLabel#pieLogin {
-                color: rgba(146, 182, 204, 210);
+            }}
+            QLabel#pieLogin {{
+                color: #6A8798;
+                font-size: 11px;
+                font-weight: 700;
+                padding-top: 0;
+            }}
+            QLabel#etiquetaCampo {{
+                color: #264A60;
                 font-size: 12px;
-                font-weight: 600;
-                padding-top: 2px;
-            }
-            QLabel#etiquetaCampo {
-                color: #F4FAFF;
-                font-size: 12px;
-                font-weight: 600;
-                letter-spacing: 0.2px;
-            }
+                font-weight: 800;
+                letter-spacing: 0.1px;
+            }}
             QLineEdit,
             QPushButton#botonPrimario,
-            QPushButton#botonSecundario {
+            QPushButton#botonSecundario {{
                 outline: none;
-            }
+            }}
             """
         )

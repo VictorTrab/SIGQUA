@@ -18,7 +18,7 @@ if str(RUTA_SRC) not in sys.path:
     sys.path.insert(0, str(RUTA_SRC))
 
 from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtWidgets import QApplication, QLabel, QScrollArea, QTableWidget, QTextEdit, QToolButton, QWidget  # noqa: E402
+from PySide6.QtWidgets import QApplication, QFrame, QLabel, QScrollArea, QTableWidget, QTextEdit, QToolButton, QWidget  # noqa: E402
 
 from app import (  # noqa: E402
     ALTO_VENTANA_AUTENTICACION,
@@ -98,25 +98,34 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
     def test_vista_usa_tres_paginas_reutilizables_y_navegacion_local(self) -> None:
         vista = VistaAutenticacion()
-        fondo_blur = vista._pagina_login.findChild(type(vista._boton_login.parentWidget()), "fondoBlurTarjeta")
+        panel_institucional = vista._pagina_login.findChild(QFrame, "panelInstitucionalLogin")
+        panel_formulario = vista._pagina_login.findChild(QFrame, "panelFormularioLogin")
+        logo_institucional = vista._pagina_login.findChild(QLabel, "logoMarcaLoginInstitucional")
         logo_login = vista._pagina_login.findChild(QLabel, "logoMarcaLogin")
         lema_login = vista._pagina_login.findChild(QLabel, "lemaMarcaLogin")
 
         self.assertEqual(vista._gestor_rutas.obtener_ruta_logo_marca().name, "sigqua_logo.svg")
         self.assertEqual(vista._stack.count(), 3)
-        self.assertEqual(vista._boton_login.parentWidget().maximumWidth(), ANCHO_MAXIMO_TARJETA)
+        self.assertEqual(panel_formulario.maximumWidth(), ANCHO_MAXIMO_TARJETA)
         self.assertGreater(vista.maximumWidth(), ANCHO_MAXIMO_TARJETA)
-        self.assertEqual(COLOR_GRADIENTE_INICIAL, "#071A2D")
-        self.assertEqual(COLOR_GRADIENTE_FINAL, "#0D2A45")
-        self.assertIsNotNone(fondo_blur)
+        self.assertEqual(COLOR_GRADIENTE_INICIAL, "#001D39")
+        self.assertEqual(COLOR_GRADIENTE_FINAL, "#7BBDE8")
+        self.assertIn("qlineargradient", vista.styleSheet())
+        self.assertIsNotNone(panel_institucional)
+        self.assertIsNotNone(panel_formulario)
+        self.assertEqual(panel_institucional.objectName(), "panelInstitucionalLogin")
+        self.assertEqual(panel_formulario.objectName(), "panelFormularioLogin")
+        self.assertIsNotNone(logo_institucional)
+        self.assertIsNotNone(logo_institucional.pixmap())
+        self.assertFalse(logo_institucional.pixmap().isNull())
+        self.assertEqual(logo_institucional.pixmap().deviceIndependentSize().toSize().width(), 176)
         self.assertIsNotNone(logo_login)
         self.assertIsNotNone(logo_login.pixmap())
         self.assertFalse(logo_login.pixmap().isNull())
-        self.assertEqual(logo_login.pixmap().deviceIndependentSize().toSize().width(), 248)
+        self.assertEqual(logo_login.pixmap().deviceIndependentSize().toSize().width(), 142)
         self.assertIsNotNone(lema_login)
         self.assertEqual(lema_login.text(), "Sistema Integrado de Gestión para Juntas de Agua")
         self.assertIn("Versión 2.2.0", vista._label_pie_login.text())
-        self.assertIsNone(fondo_blur.graphicsEffect())
         accion_limpiar_usuario = next(
             accion
             for accion in vista._campo_usuario.actions()

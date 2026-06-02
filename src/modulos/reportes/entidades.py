@@ -6,19 +6,9 @@ from dataclasses import dataclass, field
 
 
 REPORTE_DEUDA_ABONADOS_ESTADO = "deuda_abonados_estado"
-REPORTE_ABONADOS_SIN_DEUDA = "abonados_sin_deuda"
 REPORTE_SERVICIO_CASAS = "servicio_casas"
-REPORTE_INGRESOS_MENSUALES = "ingresos_mensuales"
-REPORTE_INGRESOS_DIARIOS = "ingresos_diarios"
-REPORTE_HISTORIAL_ABONADO = "historial_abonado"
-REPORTE_HISTORIAL_CASA = "historial_casa"
-REPORTE_PLANES_ACTIVOS = "planes_activos"
-REPORTE_DEUDA_MENSUAL = "deuda_mensual"
-REPORTE_DEUDA_POR_CASA = "deuda_por_casa"
-REPORTE_CASAS_CORTADAS = "casas_cortadas"
-REPORTE_CASAS_SUSPENDIDAS_INACTIVAS = "casas_suspendidas_inactivas"
-REPORTE_NUEVOS_ABONADOS = "nuevos_abonados"
-REPORTE_PAGOS_POR_USUARIO = "pagos_por_usuario"
+REPORTE_INGRESOS_MENSUALES_DIARIOS = "ingresos_mensuales_diarios"
+REPORTE_HISTORIAL_ABONADO_CASA = "historial_abonado_casa"
 
 TIPO_FILTRO_COMBO = "combo"
 TIPO_FILTRO_FECHA = "fecha"
