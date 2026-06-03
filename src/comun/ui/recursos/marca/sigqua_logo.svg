@@ -2,9 +2,9 @@
   <title id="titulo">SIGQUA</title>
   <desc id="descripcion">Logotipo tipografico de la marca SIGQUA.</desc>
   <text
-    x="360"
+    x="0"
     y="106"
-    text-anchor="middle"
+    text-anchor="start"
     dominant-baseline="middle"
     font-family="Montserrat, Avenir Next, Trebuchet MS, sans-serif"
     font-size="96"

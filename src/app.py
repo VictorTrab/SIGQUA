@@ -6,7 +6,7 @@ import sys
 from typing import Callable
 
 from dotenv import load_dotenv
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QCloseEvent, QFont, QIcon
 from PySide6.QtWidgets import QApplication, QDialog, QMainWindow, QSizePolicy
 
@@ -99,12 +99,13 @@ from modulos.usuarios import (
 )
 
 logger = obtener_logger_sigqua("app")
-ANCHO_VENTANA_AUTENTICACION = 760
+ANCHO_VENTANA_AUTENTICACION = 960
 ALTO_VENTANA_AUTENTICACION = 680
 ANCHO_VENTANA_PRINCIPAL = 1360
 ALTO_VENTANA_PRINCIPAL = 820
 MARGEN_VENTANA_PRINCIPAL = 72
 MAXIMO_TAMANO_VENTANA = 16777215
+RETARDO_FASE_ARRANQUE_MS = 18
 FLAGS_VENTANA_AUTENTICACION = (
     Qt.WindowType.Window
     | Qt.WindowType.WindowTitleHint
@@ -315,6 +316,12 @@ def _manejar_autenticacion_exitosa(
         "Autenticacion exitosa para '%s'. Abriendo modulo principal.",
         sesion_iniciada.usuario.nombre_usuario,
     )
+    _iniciar_arranque_post_login(
+        ventana_principal=ventana_principal,
+        servicio_autenticacion=servicio_autenticacion,
+        sesion_iniciada=sesion_iniciada,
+    )
+    return
 
     if not hasattr(ventana_principal, "vista_modulo_principal"):
         vista_modulo_principal = VistaModuloPrincipal()
@@ -363,6 +370,387 @@ def _manejar_autenticacion_exitosa(
     ventana_principal.setWindowTitle("SIGQUA | Módulo principal")
     ventana_principal.contenedor_central.setCurrentWidget(vista_modulo_principal)
     _aplicar_modo_principal(ventana_principal)
+
+
+def _iniciar_arranque_post_login(
+    ventana_principal: QMainWindow,
+    servicio_autenticacion: ServicioAutenticacion,
+    sesion_iniciada: SesionIniciada,
+) -> None:
+    """Orquesta el arranque del shell principal en fases cortas."""
+    if getattr(ventana_principal, "_arranque_login_en_progreso", False):
+        return
+
+    usuario = sesion_iniciada.usuario
+    ventana_principal._arranque_login_en_progreso = True
+    ventana_principal._indice_fase_arranque = 0
+    ventana_principal.vista_autenticacion.mostrar_estado_arranque_login(
+        "Credenciales correctas. Preparando acceso..."
+    )
+    ventana_principal._fases_arranque_login = [
+        (
+            "Preparando entorno seguro...",
+            lambda: _asegurar_shell_principal_instanciado(
+                ventana_principal,
+                servicio_autenticacion,
+            ),
+        ),
+        (
+            "Cargando módulos base...",
+            lambda: _registrar_modulos_operativos_por_codigos(
+                ventana_principal,
+                ("barrios", "abonados", "casas", "planes_pago"),
+            ),
+        ),
+        (
+            "Cargando operaciones diarias...",
+            lambda: _registrar_modulos_operativos_por_codigos(
+                ventana_principal,
+                ("pagos", "historial_pagos", "morosidad"),
+            ),
+        ),
+        (
+            "Cargando administración...",
+            lambda: (
+                _registrar_modulos_operativos_por_codigos(
+                    ventana_principal,
+                    ("reportes", "usuarios", "configuracion"),
+                ),
+                _asegurar_mantenimiento_disponible(ventana_principal, usuario),
+            ),
+        ),
+        (
+            "Sincronizando datos iniciales...",
+            lambda: _refrescar_modulos_operativos_por_codigos(
+                ventana_principal,
+                usuario,
+                (
+                    "barrios",
+                    "abonados",
+                    "casas",
+                    "planes_pago",
+                    "pagos",
+                    "historial_pagos",
+                    "morosidad",
+                    "reportes",
+                    "usuarios",
+                    "configuracion",
+                ),
+            ),
+        ),
+        (
+            "Abriendo SIGQUA...",
+            lambda: _finalizar_arranque_post_login(ventana_principal, usuario),
+        ),
+    ]
+    _programar_siguiente_fase_arranque(ventana_principal)
+
+
+def _programar_siguiente_fase_arranque(ventana_principal: QMainWindow) -> None:
+    """Ejecuta la siguiente fase de arranque cediendo control al event loop."""
+    fases = getattr(ventana_principal, "_fases_arranque_login", [])
+    indice = getattr(ventana_principal, "_indice_fase_arranque", 0)
+    if indice >= len(fases):
+        _limpiar_estado_arranque_post_login(ventana_principal)
+        return
+
+    mensaje, accion = fases[indice]
+    ventana_principal.vista_autenticacion.mostrar_estado_arranque_login(mensaje)
+
+    def _ejecutar_fase() -> None:
+        try:
+            accion()
+        except Exception as error:
+            _manejar_error_arranque_post_login(ventana_principal, error, mensaje)
+            return
+        ventana_principal._indice_fase_arranque = indice + 1
+        if getattr(ventana_principal, "_arranque_login_en_progreso", False):
+            _programar_siguiente_fase_arranque(ventana_principal)
+
+    QTimer.singleShot(RETARDO_FASE_ARRANQUE_MS, _ejecutar_fase)
+
+
+def _limpiar_estado_arranque_post_login(ventana_principal: QMainWindow) -> None:
+    """Restablece marcadores internos usados por el arranque diferido."""
+    ventana_principal._arranque_login_en_progreso = False
+    ventana_principal._indice_fase_arranque = 0
+    ventana_principal._fases_arranque_login = []
+
+
+def _manejar_error_arranque_post_login(
+    ventana_principal: QMainWindow,
+    error: Exception,
+    fase: str,
+) -> None:
+    """Recupera el flujo al login si falla la inicializacion del shell."""
+    logger.exception(
+        "Fallo el arranque del shell principal durante la fase '%s': %s",
+        fase,
+        error,
+    )
+    _limpiar_estado_arranque_post_login(ventana_principal)
+    ventana_principal.sesion_activa = None
+    ventana_principal.setWindowTitle("SIGQUA | Autenticación")
+    ventana_principal.contenedor_central.setCurrentWidget(
+        ventana_principal.vista_autenticacion
+    )
+    _aplicar_modo_autenticacion(ventana_principal)
+    ventana_principal.vista_autenticacion.mostrar_login(
+        mensaje=(
+            "No fue posible abrir SIGQUA. Intenta de nuevo o revisa el módulo que falló."
+        ),
+        es_exito=False,
+    )
+
+
+def _asegurar_shell_principal_instanciado(
+    ventana_principal: QMainWindow,
+    servicio_autenticacion: ServicioAutenticacion,
+) -> None:
+    """Construye el shell principal una sola vez y deja sus callbacks conectados."""
+    if hasattr(ventana_principal, "vista_modulo_principal"):
+        return
+
+    vista_modulo_principal = VistaModuloPrincipal()
+    servicio_modulo_principal = ServicioModuloPrincipal(
+        RepositorioModuloPrincipalSQLite(ventana_principal.gestor_base_datos),
+    )
+    controlador_modulo_principal = ControladorModuloPrincipal(
+        servicio_modulo_principal=servicio_modulo_principal,
+        vista_modulo_principal=vista_modulo_principal,
+    )
+    controlador_modulo_principal.configurar_callback_cierre_sesion(
+        lambda: _manejar_cierre_sesion(
+            ventana_principal=ventana_principal,
+            servicio_autenticacion=servicio_autenticacion,
+        )
+    )
+    controlador_modulo_principal.configurar_callback_apertura_mantenimiento(
+        lambda: _manejar_apertura_mantenimiento(ventana_principal)
+    )
+    ventana_principal.contenedor_central.addWidget(vista_modulo_principal)
+    ventana_principal.vista_modulo_principal = vista_modulo_principal
+    ventana_principal.controlador_modulo_principal = controlador_modulo_principal
+    ventana_principal.servicio_modulo_principal = servicio_modulo_principal
+
+
+def _asegurar_mantenimiento_disponible(
+    ventana_principal: QMainWindow,
+    usuario: object,
+) -> None:
+    """Instancia mantenimiento tecnico si la sesion puede usarlo."""
+    if not usuario.tiene_permiso("mantenimiento.ver") or hasattr(
+        ventana_principal,
+        "vista_mantenimiento",
+    ):
+        return
+
+    vista_mantenimiento = VistaMantenimiento()
+    controlador_mantenimiento = ControladorMantenimiento(
+        servicio_mantenimiento=ventana_principal.servicio_mantenimiento,
+        vista_mantenimiento=vista_mantenimiento,
+    )
+    controlador_mantenimiento.configurar_callback_volver(
+        lambda: _manejar_retorno_desde_mantenimiento(ventana_principal)
+    )
+    ventana_principal.contenedor_central.addWidget(vista_mantenimiento)
+    ventana_principal.vista_mantenimiento = vista_mantenimiento
+    ventana_principal.controlador_mantenimiento = controlador_mantenimiento
+
+
+def _finalizar_arranque_post_login(
+    ventana_principal: QMainWindow,
+    usuario: object,
+) -> None:
+    """Abre el shell principal cuando los modulos iniciales ya estan listos."""
+    controlador_modulo_principal = ventana_principal.controlador_modulo_principal
+    vista_modulo_principal = ventana_principal.vista_modulo_principal
+    controlador_modulo_principal.mostrar_inicio(usuario)
+    ventana_principal.setWindowTitle("SIGQUA | Módulo principal")
+    ventana_principal.contenedor_central.setCurrentWidget(vista_modulo_principal)
+    _aplicar_modo_principal(ventana_principal)
+    ventana_principal.vista_autenticacion.restablecer_estado_login()
+    _limpiar_estado_arranque_post_login(ventana_principal)
+
+
+def _registrar_modulos_operativos_por_codigos(
+    ventana_principal: QMainWindow,
+    codigos: tuple[str, ...],
+) -> None:
+    """Registra paginas persistentes dentro del shell principal por lotes."""
+    for codigo in codigos:
+        _registrar_modulo_operativo(ventana_principal, codigo)
+
+
+def _registrar_modulo_operativo(
+    ventana_principal: QMainWindow,
+    codigo: str,
+) -> None:
+    """Crea y registra un modulo del shell solo si aun no existe."""
+    vista_modulo_principal = ventana_principal.vista_modulo_principal
+
+    if codigo == "barrios" and not hasattr(ventana_principal, "vista_barrios"):
+        vista_barrios = VistaBarrios()
+        controlador_barrios = ControladorBarrios(
+            servicio_barrios=ventana_principal.servicio_barrios,
+            vista_barrios=vista_barrios,
+        )
+        controlador_barrios.configurar_callback_ver_abonados(
+            lambda termino: _navegar_a_abonados_con_busqueda(ventana_principal, termino)
+        )
+        controlador_barrios.configurar_callback_ver_casas(
+            lambda termino: _navegar_a_casas_con_busqueda(ventana_principal, termino)
+        )
+        vista_modulo_principal.registrar_modulo("barrios", vista_barrios)
+        ventana_principal.vista_barrios = vista_barrios
+        ventana_principal.controlador_barrios = controlador_barrios
+        return
+
+    if codigo == "abonados" and not hasattr(ventana_principal, "vista_abonados"):
+        vista_abonados = VistaAbonados()
+        controlador_abonados = ControladorAbonados(
+            servicio_abonados=ventana_principal.servicio_abonados,
+            vista_abonados=vista_abonados,
+        )
+        controlador_abonados.configurar_callback_ver_casas(
+            lambda termino: _navegar_a_casas_con_busqueda(ventana_principal, termino)
+        )
+        vista_modulo_principal.registrar_modulo("abonados", vista_abonados)
+        ventana_principal.vista_abonados = vista_abonados
+        ventana_principal.controlador_abonados = controlador_abonados
+        return
+
+    if codigo == "casas" and not hasattr(ventana_principal, "vista_casas"):
+        vista_casas = VistaCasas()
+        controlador_casas = ControladorCasas(
+            servicio_casas=ventana_principal.servicio_casas,
+            vista_casas=vista_casas,
+        )
+        vista_modulo_principal.registrar_modulo("casas", vista_casas)
+        ventana_principal.vista_casas = vista_casas
+        ventana_principal.controlador_casas = controlador_casas
+        return
+
+    if codigo == "planes_pago" and not hasattr(ventana_principal, "vista_planes_pago"):
+        vista_planes_pago = VistaPlanesPago()
+        controlador_planes_pago = ControladorPlanesPago(
+            servicio_planes_pago=ventana_principal.servicio_planes_pago,
+            vista_planes_pago=vista_planes_pago,
+        )
+        vista_modulo_principal.registrar_modulo("planes_pago", vista_planes_pago)
+        ventana_principal.vista_planes_pago = vista_planes_pago
+        ventana_principal.controlador_planes_pago = controlador_planes_pago
+        return
+
+    if codigo == "pagos" and not hasattr(ventana_principal, "vista_pagos"):
+        vista_pagos = VistaPagos()
+        controlador_pagos = ControladorPagos(
+            servicio_pagos=ventana_principal.servicio_pagos,
+            vista_pagos=vista_pagos,
+        )
+        vista_modulo_principal.registrar_modulo("pagos", vista_pagos)
+        ventana_principal.vista_pagos = vista_pagos
+        ventana_principal.controlador_pagos = controlador_pagos
+        return
+
+    if codigo == "historial_pagos" and not hasattr(ventana_principal, "vista_historial_pagos"):
+        vista_historial_pagos = VistaHistorialPagos()
+        controlador_historial_pagos = ControladorHistorialPagos(
+            servicio_historial=ventana_principal.servicio_historial_pagos,
+            vista_historial=vista_historial_pagos,
+        )
+        vista_modulo_principal.registrar_modulo("historial_pagos", vista_historial_pagos)
+        ventana_principal.vista_historial_pagos = vista_historial_pagos
+        ventana_principal.controlador_historial_pagos = controlador_historial_pagos
+        return
+
+    if codigo == "morosidad" and not hasattr(ventana_principal, "vista_morosidad"):
+        vista_morosidad = VistaMorosidad()
+        controlador_morosidad = ControladorMorosidad(
+            servicio_morosidad=ventana_principal.servicio_morosidad,
+            vista_morosidad=vista_morosidad,
+            obtener_actor_id=lambda: ventana_principal.sesion_activa.usuario.identificador,
+        )
+        vista_modulo_principal.registrar_modulo("morosidad", vista_morosidad)
+        ventana_principal.vista_morosidad = vista_morosidad
+        ventana_principal.controlador_morosidad = controlador_morosidad
+        return
+
+    if codigo == "reportes" and not hasattr(ventana_principal, "vista_reportes"):
+        vista_reportes = VistaReportes()
+        controlador_reportes = ControladorReportes(
+            servicio_reportes=ventana_principal.servicio_reportes,
+            vista_reportes=vista_reportes,
+        )
+        vista_modulo_principal.registrar_modulo("reportes", vista_reportes)
+        ventana_principal.vista_reportes = vista_reportes
+        ventana_principal.controlador_reportes = controlador_reportes
+        return
+
+    if codigo == "usuarios" and not hasattr(ventana_principal, "vista_usuarios"):
+        vista_usuarios = VistaUsuarios()
+        controlador_usuarios = ControladorUsuarios(
+            servicio_usuarios=ventana_principal.servicio_usuarios,
+            vista_usuarios=vista_usuarios,
+        )
+        vista_modulo_principal.registrar_modulo("usuarios", vista_usuarios)
+        ventana_principal.vista_usuarios = vista_usuarios
+        ventana_principal.controlador_usuarios = controlador_usuarios
+        return
+
+    if codigo == "configuracion" and not hasattr(ventana_principal, "vista_configuracion"):
+        vista_configuracion = VistaConfiguracion()
+        controlador_configuracion = ControladorConfiguracion(
+            servicio_configuracion=ventana_principal.servicio_configuracion,
+            vista_configuracion=vista_configuracion,
+        )
+        vista_modulo_principal.registrar_modulo("configuracion", vista_configuracion)
+        ventana_principal.vista_configuracion = vista_configuracion
+        ventana_principal.controlador_configuracion = controlador_configuracion
+
+
+def _refrescar_modulos_operativos_por_codigos(
+    ventana_principal: QMainWindow,
+    usuario: object,
+    codigos: tuple[str, ...],
+) -> None:
+    """Actualiza los modulos dependientes de sesion por lotes."""
+    for codigo in codigos:
+        if codigo == "barrios" and hasattr(ventana_principal, "controlador_barrios"):
+            ventana_principal.controlador_barrios.mostrar()
+            continue
+        if codigo == "abonados" and hasattr(ventana_principal, "controlador_abonados"):
+            ventana_principal.controlador_abonados.mostrar_para_actor(usuario)
+            continue
+        if codigo == "casas" and hasattr(ventana_principal, "controlador_casas"):
+            ventana_principal.controlador_casas.mostrar_para_actor(usuario)
+            continue
+        if codigo == "planes_pago" and hasattr(ventana_principal, "controlador_planes_pago"):
+            ventana_principal.controlador_planes_pago.mostrar_para_actor(usuario)
+            continue
+        if codigo == "pagos" and hasattr(ventana_principal, "controlador_pagos"):
+            ventana_principal.controlador_pagos.mostrar_para_actor(usuario)
+            continue
+        if codigo == "historial_pagos" and hasattr(
+            ventana_principal,
+            "controlador_historial_pagos",
+        ):
+            ventana_principal.controlador_historial_pagos.mostrar()
+            continue
+        if codigo == "morosidad" and hasattr(ventana_principal, "controlador_morosidad"):
+            ventana_principal.controlador_morosidad.mostrar()
+            continue
+        if codigo == "reportes" and hasattr(ventana_principal, "controlador_reportes"):
+            ventana_principal.controlador_reportes.mostrar()
+            continue
+        if codigo == "usuarios" and hasattr(ventana_principal, "controlador_usuarios"):
+            ventana_principal.controlador_usuarios.mostrar_para_actor(usuario)
+            continue
+        if codigo == "configuracion" and hasattr(
+            ventana_principal,
+            "controlador_configuracion",
+        ):
+            ventana_principal.controlador_configuracion.mostrar_para_actor(usuario)
 
 
 def _registrar_modulos_operativos(ventana_principal: QMainWindow) -> None:

@@ -36,6 +36,9 @@ class ControladorAutenticacion:
         self.vista_autenticacion.volver_a_login_solicitado.connect(self._mostrar_login)
 
     def _procesar_login(self, nombre_usuario: str, contrasena: str) -> None:
+        if self.vista_autenticacion.login_en_progreso():
+            return
+        self.vista_autenticacion.mostrar_estado_validando_login()
         resultado = self.servicio_autenticacion.iniciar_sesion(
             CredencialesUsuario(
                 nombre_usuario=nombre_usuario,
@@ -45,12 +48,16 @@ class ControladorAutenticacion:
         if resultado.exito and resultado.usuario is not None:
             if resultado.requiere_cambio_contrasena:
                 self.vista_autenticacion.limpiar_campos_sensibles()
+                self.vista_autenticacion.restablecer_estado_login()
                 self.vista_autenticacion.mostrar_restablecer(
                     resultado.usuario.nombre_usuario,
                     resultado.mensaje,
                 )
                 return
             self.vista_autenticacion.limpiar_campos_sensibles()
+            self.vista_autenticacion.mostrar_estado_arranque_login(
+                "Credenciales correctas. Preparando acceso..."
+            )
             self.vista_autenticacion.notificar_autenticacion_exitosa(
                 resultado.usuario,
                 resultado.token_sesion or "",

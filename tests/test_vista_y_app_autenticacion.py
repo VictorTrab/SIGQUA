@@ -18,7 +18,8 @@ if str(RUTA_SRC) not in sys.path:
     sys.path.insert(0, str(RUTA_SRC))
 
 from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtWidgets import QApplication, QFrame, QLabel, QScrollArea, QTableWidget, QTextEdit, QToolButton, QWidget  # noqa: E402
+from PySide6.QtTest import QTest  # noqa: E402
+from PySide6.QtWidgets import QApplication, QFrame, QLabel, QPushButton, QScrollArea, QTableWidget, QTextEdit, QToolButton, QWidget  # noqa: E402
 
 from app import (  # noqa: E402
     ALTO_VENTANA_AUTENTICACION,
@@ -30,8 +31,6 @@ from modulos.autenticacion.controlador import ControladorAutenticacion  # noqa: 
 from modulos.autenticacion.entidades import SesionIniciada, UsuarioAutenticado  # noqa: E402
 from modulos.autenticacion.vista import (  # noqa: E402
     ANCHO_MAXIMO_TARJETA,
-    COLOR_GRADIENTE_FINAL,
-    COLOR_GRADIENTE_INICIAL,
     VistaAutenticacion,
 )
 from modulos.mantenimiento.vista import VistaMantenimiento  # noqa: E402
@@ -96,36 +95,85 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         (raiz_temporal / "database" / "migrations").mkdir(parents=True, exist_ok=True)
         return raiz_temporal
 
+    def _esperar_arranque_principal(
+        self,
+        ventana_principal: QWidget,
+        timeout_ms: int = 700,
+    ) -> None:
+        transcurrido = 0
+        while transcurrido < timeout_ms:
+            self.aplicacion.processEvents()
+            if isinstance(
+                ventana_principal.contenedor_central.currentWidget(),
+                VistaModuloPrincipal,
+            ):
+                return
+            QTest.qWait(25)
+            transcurrido += 25
+        self.fail("El modulo principal no termino de cargar dentro del tiempo esperado.")
+
     def test_vista_usa_tres_paginas_reutilizables_y_navegacion_local(self) -> None:
         vista = VistaAutenticacion()
         panel_institucional = vista._pagina_login.findChild(QFrame, "panelInstitucionalLogin")
         panel_formulario = vista._pagina_login.findChild(QFrame, "panelFormularioLogin")
+        badge_contexto = vista._pagina_login.findChild(QFrame, "badgeContexto")
+        badge_icono = vista._pagina_login.findChild(QLabel, "badgeContextoIcono")
+        badge_texto = vista._pagina_login.findChild(QLabel, "badgeContextoTexto")
         logo_institucional = vista._pagina_login.findChild(QLabel, "logoMarcaLoginInstitucional")
         logo_login = vista._pagina_login.findChild(QLabel, "logoMarcaLogin")
         lema_login = vista._pagina_login.findChild(QLabel, "lemaMarcaLogin")
+        titulo_repetido = vista._pagina_login.findChild(QLabel, "nombreSistemaLogin")
+        texto_ayuda = vista._pagina_login.findChild(QLabel, "textoAyudaLogin")
+        enlace_ayuda = vista._pagina_login.findChild(QPushButton, "enlaceAyudaLogin")
+        estado_acceso = vista._pagina_login.findChild(QFrame, "estadoAccesoLogin")
+        texto_estado_acceso = vista._pagina_login.findChild(QLabel, "textoEstadoAccesoLogin")
 
         self.assertEqual(vista._gestor_rutas.obtener_ruta_logo_marca().name, "sigqua_logo.svg")
+        self.assertFalse(hasattr(vista._gestor_rutas, "obtener_ruta_fondo_login"))
         self.assertEqual(vista._stack.count(), 3)
         self.assertEqual(panel_formulario.maximumWidth(), ANCHO_MAXIMO_TARJETA)
         self.assertGreater(vista.maximumWidth(), ANCHO_MAXIMO_TARJETA)
-        self.assertEqual(COLOR_GRADIENTE_INICIAL, "#001D39")
-        self.assertEqual(COLOR_GRADIENTE_FINAL, "#7BBDE8")
+        self.assertIn("font-size: 10px;", vista.styleSheet())
         self.assertIn("qlineargradient", vista.styleSheet())
+        self.assertNotIn("fondo_login.png", vista.styleSheet())
+        self.assertNotIn("border-image", vista.styleSheet())
+        self.assertNotIn("background-image", vista.styleSheet())
         self.assertIsNotNone(panel_institucional)
         self.assertIsNotNone(panel_formulario)
         self.assertEqual(panel_institucional.objectName(), "panelInstitucionalLogin")
         self.assertEqual(panel_formulario.objectName(), "panelFormularioLogin")
+        self.assertIn("QFrame#panelInstitucionalLogin", vista.styleSheet())
+        self.assertIn("QFrame#panelFormularioLogin", vista.styleSheet())
+        self.assertIn("background: #FFFFFF", vista.styleSheet())
+        self.assertIsNotNone(badge_contexto)
+        self.assertIsNotNone(badge_icono)
+        self.assertIsNotNone(badge_texto)
+        self.assertIn("Bienvenido", [label.text() for label in vista._pagina_login.findChildren(QLabel)])
+        self.assertEqual(badge_texto.text(), "Acceso seguro")
+        self.assertEqual(vista._boton_login.text(), "Iniciar sesión")
+        self.assertIsNotNone(texto_ayuda)
+        self.assertEqual(texto_ayuda.text(), "¿Necesitas ayuda?")
+        self.assertIsNotNone(enlace_ayuda)
+        self.assertEqual(enlace_ayuda.text(), "Contacta al administrador")
+        self.assertIsNotNone(estado_acceso)
+        self.assertFalse(estado_acceso.isVisible())
+        self.assertIsNotNone(texto_estado_acceso)
+        self.assertEqual(texto_estado_acceso.text(), "Accediendo...")
+        self.assertFalse(vista.login_en_progreso())
         self.assertIsNotNone(logo_institucional)
         self.assertIsNotNone(logo_institucional.pixmap())
         self.assertFalse(logo_institucional.pixmap().isNull())
-        self.assertEqual(logo_institucional.pixmap().deviceIndependentSize().toSize().width(), 176)
-        self.assertIsNotNone(logo_login)
-        self.assertIsNotNone(logo_login.pixmap())
-        self.assertFalse(logo_login.pixmap().isNull())
-        self.assertEqual(logo_login.pixmap().deviceIndependentSize().toSize().width(), 142)
-        self.assertIsNotNone(lema_login)
-        self.assertEqual(lema_login.text(), "Sistema Integrado de Gestión para Juntas de Agua")
+        self.assertEqual(logo_institucional.pixmap().deviceIndependentSize().toSize().width(), 194)
+        self.assertEqual(
+            vista._pagina_login.findChild(QLabel, "subtituloSistemaLogin").text().splitlines(),
+            ["Sistema Integrado de Gestión", "para Juntas de Agua"],
+        )
+        self.assertIsNone(logo_login)
+        self.assertIsNone(lema_login)
+        self.assertIsNone(titulo_repetido)
         self.assertIn("Versión 2.2.0", vista._label_pie_login.text())
+        self.assertNotIn("SIGQUA", vista._label_pie_login.text())
+        self.assertFalse(vista._campo_usuario.property("icono_usuario_a_la_derecha"))
         accion_limpiar_usuario = next(
             accion
             for accion in vista._campo_usuario.actions()
@@ -137,7 +185,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertTrue(accion_limpiar_usuario.isVisible())
         accion_limpiar_usuario.trigger()
         self.assertEqual(vista._campo_usuario.text(), "")
-        self.assertEqual(len(vista._campo_contrasena.actions()), 2)
+        self.assertEqual(len(vista._campo_contrasena.actions()), 1)
         self.assertEqual(vista._campo_contrasena.echoMode(), vista._campo_contrasena.EchoMode.Password)
 
         vista._campo_contrasena.actions()[-1].trigger()
@@ -156,11 +204,13 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
         vista.mostrar_olvido_contrasena()
         self.assertIs(vista._stack.currentWidget(), vista._pagina_olvido)
+        boton_volver_olvido = vista._pagina_olvido.findChild(type(vista._boton_login), "botonPrimario")
+        self.assertIsNotNone(boton_volver_olvido)
         textos_olvido = [
             label.text().lower()
             for label in vista._pagina_olvido.findChildren(type(vista._label_pie_login))
         ]
-        self.assertTrue(any("soporte o administracion" in texto for texto in textos_olvido))
+        self.assertTrue(any("soporte o administración" in texto for texto in textos_olvido))
         self.assertFalse(any("primera version" in texto for texto in textos_olvido))
 
     def test_vista_olvido_muestra_mensaje_informativo_y_restablecer_retorna_a_login(self) -> None:
@@ -171,7 +221,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             label.text().lower()
             for label in vista._pagina_olvido.findChildren(type(vista._label_pie_login))
         ]
-        self.assertTrue(any("soporte o administracion" in texto for texto in textos))
+        self.assertTrue(any("soporte o administración" in texto for texto in textos))
         self.assertFalse(any("primera version" in texto for texto in textos))
 
         vista.mostrar_restablecer("admin", "Cambio obligatorio pendiente.")
@@ -194,10 +244,39 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista._campo_usuario.setText("admin")
         vista._campo_contrasena.setText("Admin123!")
         vista._boton_login.click()
-        vista._pagina_login.findChild(type(vista._boton_login), "botonSecundario").click()
+        vista._pagina_login.findChild(QPushButton, "enlaceAyudaLogin").click()
 
         self.assertEqual(eventos_login, [("admin", "Admin123!")])
         self.assertEqual(eventos_olvido, [True])
+
+    def test_estado_acceso_login_bloquea_interaccion_y_se_restablece(self) -> None:
+        vista = VistaAutenticacion()
+        eventos_login = []
+        vista.iniciar_sesion_solicitada.connect(
+            lambda usuario, contrasena: eventos_login.append((usuario, contrasena))
+        )
+        vista._campo_usuario.setText("admin")
+        vista._campo_contrasena.setText("Admin123!")
+
+        vista.mostrar_estado_validando_login()
+
+        self.assertTrue(vista.login_en_progreso())
+        self.assertFalse(vista._campo_usuario.isEnabled())
+        self.assertFalse(vista._campo_contrasena.isEnabled())
+        self.assertFalse(vista._boton_login.isEnabled())
+        self.assertFalse(vista._estado_acceso_login.isHidden())
+
+        vista._boton_login.click()
+        vista._campo_contrasena.returnPressed.emit()
+        self.assertEqual(eventos_login, [])
+
+        vista.restablecer_estado_login()
+
+        self.assertFalse(vista.login_en_progreso())
+        self.assertTrue(vista._campo_usuario.isEnabled())
+        self.assertTrue(vista._campo_contrasena.isEnabled())
+        self.assertTrue(vista._boton_login.isEnabled())
+        self.assertTrue(vista._estado_acceso_login.isHidden())
 
     def test_app_compone_ventana_y_deja_login_con_tamano_fijo(self) -> None:
         raiz_temporal = self._crear_raiz_temporal_prueba("test_login_fijo")
@@ -248,6 +327,13 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 )
             )
             self.aplicacion.processEvents()
+            self.assertIs(
+                ventana_principal.contenedor_central.currentWidget(),
+                vista_autenticacion,
+            )
+            self.assertTrue(vista_autenticacion.login_en_progreso())
+            self.assertFalse(vista_autenticacion._estado_acceso_login.isHidden())
+            self._esperar_arranque_principal(ventana_principal)
 
             self.assertIs(ventana_principal.centralWidget(), ventana_principal.contenedor_central)
             self.assertIsInstance(
@@ -293,6 +379,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                     token_sesion="token-prueba-456",
                 )
             )
+            self._esperar_arranque_principal(ventana_principal)
 
             alto_minimo_principal = ventana_principal.minimumSizeHint().height()
             ventana_principal.vista_modulo_principal.cerrar_sesion_solicitada.emit()
@@ -345,6 +432,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                     token_sesion="token-dashboard",
                 )
             )
+            self._esperar_arranque_principal(ventana_principal)
 
             vista_principal = ventana_principal.vista_modulo_principal
             ventana_principal.show()
@@ -417,6 +505,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                     token_sesion="token-superadmin-1",
                 )
             )
+            self._esperar_arranque_principal(ventana_principal)
 
             self.assertFalse(ventana_principal.vista_modulo_principal._boton_mantenimiento.isHidden())
             ventana_principal.vista_modulo_principal._boton_mantenimiento.click()
