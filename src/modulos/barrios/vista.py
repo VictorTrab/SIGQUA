@@ -1,4 +1,4 @@
-"""Vista PySide6 del modulo de barrios."""
+﻿"""Vista PySide6 del modulo de barrios."""
 
 from __future__ import annotations
 
@@ -30,13 +30,20 @@ from PySide6.QtWidgets import (
 
 from comun.ui import (
     BotonAccionContextual,
+    CampoDetalleSigqua,
     DialogoBaseSigqua,
     DialogoConfirmacionSigqua,
     DialogoMensajeSigqua,
+    EncabezadoDetalleSigqua,
+    SeccionDetalleSigqua,
+    TarjetaResumenDetalleSigqua,
     aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
+    crear_badge_estado_detalle_sigqua,
+    crear_boton_copiar_detalle_sigqua,
     crear_boton_operativo,
     crear_item_tabla,
+    obtener_estilo_detalle_sigqua,
     obtener_icono_tabler_coloreado,
     resolver_variante_boton_modal,
 )
@@ -336,17 +343,10 @@ class DialogoDetalleBarrio(DialogoBaseSigqua):
         titulo = QLabel("Detalle de barrio")
         titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
-            "Consulta información general, estado operativo y estadísticas del barrio."
+            "Consulta informaciÃ³n general, estado operativo y estadÃ­sticas del barrio."
         )
         descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
-
-        scroll = QScrollArea()
-        scroll.setObjectName("scrollDetalleBarrio")
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
 
         contenedor_scroll = QWidget()
         contenedor_scroll.setObjectName("contenedorScrollDetalleBarrio")
@@ -355,7 +355,87 @@ class DialogoDetalleBarrio(DialogoBaseSigqua):
         layout_scroll.setSpacing(12)
 
         panel_detalle = QFrame()
-        panel_detalle.setObjectName("panelContenidoDetalleBarrio")
+        panel_detalle.setObjectName("panelDetalleSigqua")
+        panel_detalle_layout = QVBoxLayout(panel_detalle)
+        panel_detalle_layout.setContentsMargins(18, 18, 18, 18)
+        panel_detalle_layout.setSpacing(14)
+
+        encabezado = EncabezadoDetalleSigqua(
+            self._barrio.codigo,
+            self._barrio.nombre,
+            boton_copiar=crear_boton_copiar_detalle_sigqua(
+                str(self._barrio.identificador or ""),
+                etiqueta="ID interno",
+            ),
+            badges=(
+                crear_badge_estado_detalle_sigqua(
+                    self._barrio.estado.title(),
+                    "activo" if self._barrio.estado == "ACTIVO" else "info",
+                ),
+            ),
+        )
+
+        grid_info = QGridLayout()
+        grid_info.setHorizontalSpacing(14)
+        grid_info.setVerticalSpacing(14)
+        grid_info.addWidget(CampoDetalleSigqua("Codigo", self._barrio.codigo), 0, 0)
+        grid_info.addWidget(CampoDetalleSigqua("Estado", self._barrio.estado.title()), 0, 1)
+        grid_info.addWidget(CampoDetalleSigqua("Creado", self._fecha_creacion), 1, 0)
+        grid_info.addWidget(CampoDetalleSigqua("Ultima actualizacion", self._fecha_actualizada), 1, 1)
+
+        fila_metricas = QHBoxLayout()
+        fila_metricas.setSpacing(12)
+        fila_metricas.addWidget(TarjetaResumenDetalleSigqua("Abonados", str(self._barrio.total_abonados)), 1)
+        fila_metricas.addWidget(TarjetaResumenDetalleSigqua("Casas", str(self._barrio.total_casas)), 1)
+
+        observaciones = CampoDetalleSigqua(
+            "Observaciones",
+            self._barrio.observaciones or "Sin observaciones registradas.",
+        )
+
+        fila_acciones = QHBoxLayout()
+        fila_acciones.setSpacing(10)
+        variante_cerrar = resolver_variante_boton_modal("Cerrar", "neutro")
+        variante_ver = resolver_variante_boton_modal("Ver detalle", "informacion")
+        boton_cerrar = BotonAccionContextual("Cerrar", icono="x.svg", variante=variante_cerrar, centrado=True, mostrar_icono=True)
+        boton_ver_abonados = BotonAccionContextual("Ver abonados", icono="users.svg", variante=variante_ver, centrado=True, mostrar_icono=True)
+        boton_ver_casas = BotonAccionContextual("Ver casas", icono="home.svg", variante=variante_ver, centrado=True, mostrar_icono=True)
+        boton_editar = BotonAccionContextual("Editar", icono="edit.svg", variante="edicion", centrado=True, mostrar_icono=True)
+        boton_cerrar.setMinimumWidth(124)
+        boton_ver_abonados.setMinimumWidth(140)
+        boton_ver_casas.setMinimumWidth(132)
+        boton_editar.setMinimumWidth(124)
+        boton_cerrar.clicked.connect(self.reject)
+        boton_ver_abonados.clicked.connect(self._abrir_abonados)
+        boton_ver_casas.clicked.connect(self._abrir_casas)
+        boton_editar.clicked.connect(self._solicitar_edicion)
+        fila_acciones.addWidget(boton_cerrar)
+        fila_acciones.addStretch(1)
+        fila_acciones.addWidget(boton_ver_abonados)
+        fila_acciones.addWidget(boton_ver_casas)
+        fila_acciones.addWidget(boton_editar)
+
+        panel_detalle_layout.addWidget(encabezado)
+        panel_detalle_layout.addWidget(SeccionDetalleSigqua("Contexto territorial", "Consulta el codigo, estado operativo y las fechas base del barrio.", grid_info))
+        panel_detalle_layout.addWidget(SeccionDetalleSigqua("Cobertura operativa", "Resume la cantidad de abonados y casas relacionadas con el barrio.", fila_metricas))
+        panel_detalle_layout.addWidget(SeccionDetalleSigqua("Observaciones", "Notas administrativas o contexto adicional del barrio.", [observaciones]))
+        layout_scroll.addWidget(panel_detalle)
+
+        self.layout_cabecera.addWidget(titulo)
+        self.layout_cabecera.addWidget(descripcion)
+        self.layout_cuerpo.addWidget(self.crear_area_scroll_cuerpo(contenedor_scroll, "scrollDetalleBarrio"))
+        self.layout_pie.addLayout(fila_acciones)
+        self._aplicar_estilos()
+        return
+
+        contenedor_scroll = QWidget()
+        contenedor_scroll.setObjectName("contenedorScrollDetalleBarrio")
+        layout_scroll = QVBoxLayout(contenedor_scroll)
+        layout_scroll.setContentsMargins(0, 0, 0, 0)
+        layout_scroll.setSpacing(12)
+
+        panel_detalle = QFrame()
+        panel_detalle.setObjectName("panelDetalleSigqua")
         panel_detalle_layout = QVBoxLayout(panel_detalle)
         panel_detalle_layout.setContentsMargins(18, 18, 18, 18)
         panel_detalle_layout.setSpacing(14)
@@ -389,12 +469,12 @@ class DialogoDetalleBarrio(DialogoBaseSigqua):
 
         encabezado_contexto = self._crear_encabezado_seccion_detalle(
             "Contexto territorial",
-            "Consulta el código, estado operativo y las fechas base del barrio.",
+            "Consulta el cÃ³digo, estado operativo y las fechas base del barrio.",
         )
         grid_info = QGridLayout()
         grid_info.setHorizontalSpacing(14)
         grid_info.setVerticalSpacing(14)
-        grid_info.addWidget(self._crear_campo_detalle("Código", self._barrio.codigo, "barcode.svg"), 0, 0)
+        grid_info.addWidget(self._crear_campo_detalle("CÃ³digo", self._barrio.codigo, "barcode.svg"), 0, 0)
         grid_info.addWidget(self._crear_campo_detalle("Estado", self._barrio.estado.title(), "circle-check.svg"), 0, 1)
         grid_info.addWidget(
             self._crear_campo_detalle("Creado", self._fecha_creacion, "calendar-plus.svg"),
@@ -402,7 +482,7 @@ class DialogoDetalleBarrio(DialogoBaseSigqua):
             0,
         )
         grid_info.addWidget(
-            self._crear_campo_detalle("Última actualización", self._fecha_actualizada, "calendar-time.svg"),
+            self._crear_campo_detalle("Ãšltima actualizaciÃ³n", self._fecha_actualizada, "calendar-time.svg"),
             1,
             1,
         )
@@ -640,6 +720,19 @@ class DialogoDetalleBarrio(DialogoBaseSigqua):
         self.accept()
 
     def _aplicar_estilos(self) -> None:
+        self.setStyleSheet(
+            self.styleSheet()
+            + f"""
+            QScrollArea#scrollDetalleBarrio,
+            QWidget#contenedorScrollDetalleBarrio {{
+                background: transparent;
+                border: none;
+            }}
+            """
+            + obtener_estilo_detalle_sigqua(self._nombre_tema)
+        )
+        return
+
         radio = RADIO_TARJETA_DIALOGO
         paleta = self._paleta_tema
         self.setStyleSheet(
@@ -761,9 +854,9 @@ class DialogoConfirmacionEstadoBarrio(DialogoConfirmacionSigqua):
             ),
             detalles=(
                 ("Barrio", self._barrio.nombre),
-                ("Código", self._barrio.codigo),
+                ("CÃ³digo", self._barrio.codigo),
                 ("Estado actual", self._barrio.estado.title()),
-                ("Acción", nuevo_estado.title()),
+                ("AcciÃ³n", nuevo_estado.title()),
             ),
             texto_confirmar=nuevo_estado.title(),
             icono="alert-triangle.svg",
@@ -823,7 +916,7 @@ class VistaBarrios(QWidget):
         self._tarjeta_activos.actualizar(
             "Barrios activos",
             str(resumen.barrios_activos),
-            "Disponibles para operación diaria.",
+            "Disponibles para operaciÃ³n diaria.",
         )
         self._tarjeta_con_abonados.actualizar(
             "Barrios con abonados",
@@ -868,7 +961,7 @@ class VistaBarrios(QWidget):
             f"Mostrando {pagina.indice_inicio}-{pagina.indice_fin} de {pagina.total_registros} registros"
         )
         self._label_numero_pagina.setText(
-            f"Página {self._pagina_actual} de {self._total_paginas}"
+            f"PÃ¡gina {self._pagina_actual} de {self._total_paginas}"
         )
         self._boton_pagina_anterior.setEnabled(self._pagina_actual > 1)
         self._boton_pagina_siguiente.setEnabled(self._pagina_actual < self._total_paginas)
@@ -1009,12 +1102,12 @@ class VistaBarrios(QWidget):
         configurar_tabla_operativa(
             self._tabla,
             [
-                "Código",
+                "CÃ³digo",
                 "Barrio",
                 "Abonados",
                 "Casas",
                 "Estado",
-                "Última actualización",
+                "Ãšltima actualizaciÃ³n",
                 "Acciones",
             ],
         )
@@ -1056,7 +1149,7 @@ class VistaBarrios(QWidget):
         self._boton_pagina_siguiente.clicked.connect(
             lambda: self.pagina_cambiada.emit(self._pagina_actual + 1)
         )
-        self._label_numero_pagina = QLabel("Página 1 de 1")
+        self._label_numero_pagina = QLabel("PÃ¡gina 1 de 1")
         self._label_numero_pagina.setObjectName("textoPieBarrios")
         pie_tabla.addWidget(self._boton_pagina_anterior)
         pie_tabla.addWidget(self._label_numero_pagina)
@@ -1372,4 +1465,5 @@ class VistaBarrios(QWidget):
             }
             """
         )
+
 

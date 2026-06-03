@@ -218,14 +218,14 @@ class TestDialogosSigqua(unittest.TestCase):
             )
         )
 
-        panel_contenido = dialogo.findChild(type(dialogo._cuerpo), "panelContenidoDetalleBarrio")
-        observaciones = dialogo.findChild(type(dialogo._cuerpo), "campoDetalleBarrioAmplio")
+        panel_contenido = dialogo.findChild(type(dialogo._cuerpo), "panelDetalleSigqua")
+        observaciones = dialogo.findChild(type(dialogo._cuerpo), "campoDetalleSigqua")
 
         self.assertIsNotNone(panel_contenido)
         self.assertIsNotNone(observaciones)
         self.assertTrue(dialogo._pie.isVisible())
         self.assertGreater(dialogo.layout_pie.count(), 0)
-        self.assertIn("panelContenidoDetalleBarrio", dialogo.styleSheet())
+        self.assertIn("panelDetalleSigqua", dialogo.styleSheet())
         self.assertIn(f"border-radius: {RADIO_TARJETA_DIALOGO}px;", dialogo.styleSheet())
         dialogo.close()
 

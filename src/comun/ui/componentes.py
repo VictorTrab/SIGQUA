@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QSize, Qt, Signal
+import shiboken6
+
+from PySide6.QtCore import QEvent, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QIcon, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -10,7 +12,9 @@ from PySide6.QtWidgets import (
     QCompleter,
     QDialog,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
+    QLayout,
     QLabel,
     QLineEdit,
     QListView,
@@ -20,6 +24,7 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -682,6 +687,281 @@ class DialogoBaseSigqua(QDialog):
         if pantalla is None:
             return None
         return pantalla.availableGeometry()
+
+
+def obtener_estilo_detalle_sigqua(nombre_tema: str | None = None) -> str:
+    """Devuelve el stylesheet comun para modales de detalle administrativos."""
+    paleta = obtener_paleta_tema(
+        resolver_nombre_tema(nombre_tema or obtener_tema_actual())
+    )
+    radio = RADIO_TARJETA_DIALOGO
+    return f"""
+    QFrame#panelDetalleSigqua {{
+        background: {paleta["fondo_dialogo"]};
+        border: 1px solid {paleta["borde_principal"]};
+        border-radius: {radio}px;
+    }}
+    QFrame#seccionDetalleSigqua {{
+        background: {paleta["fondo_superficie"]};
+        border: 1px solid {paleta["borde_principal"]};
+        border-radius: {radio}px;
+    }}
+    QFrame#campoDetalleSigqua,
+    QFrame#tarjetaResumenDetalleSigqua {{
+        background: {paleta["fondo_superficie_suave"]};
+        border: 1px solid {paleta["borde_suave"]};
+        border-radius: {radio}px;
+    }}
+    QLabel#codigoIdentificacionDetalleSigqua {{
+        color: {paleta["icono_tarjeta_info"]};
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+    }}
+    QLabel#nombreIdentificacionDetalleSigqua {{
+        color: {paleta["texto_principal"]};
+        font-size: 19px;
+        font-weight: 900;
+    }}
+    QLabel#tituloSeccionDetalleSigqua {{
+        color: {paleta["texto_principal"]};
+        font-size: 14px;
+        font-weight: 800;
+    }}
+    QLabel#descripcionSeccionDetalleSigqua,
+    QLabel#etiquetaCampoDetalleSigqua {{
+        color: {paleta["texto_suave"]};
+        font-size: 11px;
+        font-weight: 600;
+    }}
+    QLabel#valorCampoDetalleSigqua {{
+        color: {paleta["texto_principal"]};
+        font-size: 13px;
+        font-weight: 700;
+    }}
+    QLabel#valorResumenDetalleSigqua {{
+        color: {paleta["texto_principal"]};
+        font-size: 15px;
+        font-weight: 800;
+    }}
+    QLabel#badgeEstadoDetalleSigqua {{
+        border-radius: 11px;
+        padding: 6px 10px;
+        font-size: 11px;
+        font-weight: 800;
+        color: {paleta["texto_badge"]};
+        background: {paleta["fondo_badge"]};
+        border: 1px solid {paleta["borde_suave"]};
+    }}
+    QLabel#badgeEstadoDetalleSigqua[tono="activo"] {{
+        color: {paleta["texto_badge_activo"]};
+        background: {paleta["fondo_badge_activo"]};
+        border-color: {paleta["borde_badge_activo"]};
+    }}
+    QLabel#badgeEstadoDetalleSigqua[tono="info"] {{
+        color: {paleta["texto_info"]};
+        background: {paleta["fondo_info"]};
+        border-color: {paleta["borde_info"]};
+    }}
+    QLabel#badgeEstadoDetalleSigqua[tono="advertencia"] {{
+        color: {paleta["texto_advertencia"]};
+        background: {paleta["fondo_advertencia"]};
+        border-color: {paleta["borde_advertencia"]};
+    }}
+    QLabel#badgeEstadoDetalleSigqua[tono="error"] {{
+        color: {paleta["texto_error"]};
+        background: {paleta["fondo_error"]};
+        border-color: {paleta["borde_error"]};
+    }}
+    QToolButton#botonCopiarIdDetalle {{
+        min-height: 22px;
+        min-width: 62px;
+        padding: 0 10px;
+        border-radius: {radio}px;
+        border: 1px solid {paleta["borde_suave"]};
+        background: {paleta["fondo_superficie_suave"]};
+        color: {paleta["texto_secundario"]};
+        font-size: 10px;
+        font-weight: 800;
+    }}
+    QToolButton#botonCopiarIdDetalle:hover {{
+        border-color: {paleta["borde_principal"]};
+        background: {paleta["fondo_superficie_muy_suave"]};
+        color: {paleta["texto_principal"]};
+    }}
+    QToolButton#botonCopiarIdDetalle[copiado="true"] {{
+        border-color: {paleta["borde_badge_activo"]};
+        background: {paleta["fondo_badge_activo"]};
+        color: {paleta["texto_badge_activo"]};
+    }}
+    """
+
+
+def crear_badge_estado_detalle_sigqua(
+    texto: str,
+    tono: str = "neutro",
+) -> QLabel:
+    """Crea un badge semantico comun para encabezados de detalle."""
+    badge = QLabel(texto)
+    badge.setObjectName("badgeEstadoDetalleSigqua")
+    badge.setProperty("tono", tono if tono in {"activo", "info", "advertencia", "error"} else "neutro")
+    badge.style().unpolish(badge)
+    badge.style().polish(badge)
+    return badge
+
+
+def crear_boton_copiar_detalle_sigqua(
+    valor_copiable: str,
+    *,
+    etiqueta: str,
+) -> QToolButton:
+    """Crea la microaccion comun de copia rapida para encabezados de detalle."""
+    boton = QToolButton()
+    valor_copiable = valor_copiable.strip()
+    boton.setObjectName("botonCopiarIdDetalle")
+    boton.setText("COPIAR")
+    boton.setProperty("copiado", False)
+    boton.setCursor(Qt.CursorShape.PointingHandCursor)
+    boton.setToolTip(f"Copiar {etiqueta}: {valor_copiable or 'Sin registro'}")
+    boton.setAutoRaise(False)
+    boton.setEnabled(bool(valor_copiable))
+
+    def _restaurar() -> None:
+        if not shiboken6.isValid(boton):
+            return
+        boton.setText("COPIAR")
+        boton.setProperty("copiado", False)
+        boton.style().unpolish(boton)
+        boton.style().polish(boton)
+        boton.setToolTip(f"Copiar {etiqueta}: {valor_copiable or 'Sin registro'}")
+
+    def _copiar() -> None:
+        QApplication.clipboard().setText(valor_copiable)
+        boton.setText("OK")
+        boton.setProperty("copiado", True)
+        boton.style().unpolish(boton)
+        boton.style().polish(boton)
+        boton.setToolTip(f"{etiqueta} copiado: {valor_copiable}")
+        QTimer.singleShot(900, _restaurar)
+
+    boton.clicked.connect(_copiar)
+    return boton
+
+
+class EncabezadoDetalleSigqua(QWidget):
+    """Bloque comun de identificacion principal para modales de detalle."""
+
+    def __init__(
+        self,
+        codigo: str,
+        nombre: str,
+        *,
+        boton_copiar: QToolButton | None = None,
+        badges: tuple[QWidget, ...] = (),
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+
+        bloque_principal = QVBoxLayout()
+        bloque_principal.setContentsMargins(0, 0, 0, 0)
+        bloque_principal.setSpacing(4)
+
+        fila_codigo = QHBoxLayout()
+        fila_codigo.setContentsMargins(0, 0, 0, 0)
+        fila_codigo.setSpacing(6)
+        label_codigo = QLabel(codigo)
+        label_codigo.setObjectName("codigoIdentificacionDetalleSigqua")
+        fila_codigo.addWidget(label_codigo)
+        if boton_copiar is not None:
+            fila_codigo.addWidget(boton_copiar, alignment=Qt.AlignmentFlag.AlignVCenter)
+        fila_codigo.addStretch(1)
+
+        label_nombre = QLabel(nombre)
+        label_nombre.setObjectName("nombreIdentificacionDetalleSigqua")
+        label_nombre.setWordWrap(True)
+
+        bloque_principal.addLayout(fila_codigo)
+        bloque_principal.addWidget(label_nombre)
+
+        layout.addLayout(bloque_principal, 1)
+        if badges:
+            columna_badges = QVBoxLayout()
+            columna_badges.setContentsMargins(0, 0, 0, 0)
+            columna_badges.setSpacing(6)
+            for badge in badges:
+                columna_badges.addWidget(badge, alignment=Qt.AlignmentFlag.AlignRight)
+            layout.addLayout(columna_badges)
+
+
+class CampoDetalleSigqua(QFrame):
+    """Campo informativo simple sin iconos internos."""
+
+    def __init__(self, etiqueta: str, valor: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("campoDetalleSigqua")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(5)
+        label_etiqueta = QLabel(etiqueta)
+        label_etiqueta.setObjectName("etiquetaCampoDetalleSigqua")
+        label_valor = QLabel(valor)
+        label_valor.setObjectName("valorCampoDetalleSigqua")
+        label_valor.setWordWrap(True)
+        layout.addWidget(label_etiqueta)
+        layout.addWidget(label_valor)
+
+
+class TarjetaResumenDetalleSigqua(QFrame):
+    """Tarjeta compacta de metrica o resumen sin icono interno."""
+
+    def __init__(self, etiqueta: str, valor: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("tarjetaResumenDetalleSigqua")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(4)
+        label_etiqueta = QLabel(etiqueta)
+        label_etiqueta.setObjectName("etiquetaCampoDetalleSigqua")
+        label_valor = QLabel(valor)
+        label_valor.setObjectName("valorResumenDetalleSigqua")
+        label_valor.setWordWrap(True)
+        layout.addWidget(label_etiqueta)
+        layout.addWidget(label_valor)
+
+
+class SeccionDetalleSigqua(QFrame):
+    """Bloque comun con titulo, descripcion y contenido variable."""
+
+    def __init__(
+        self,
+        titulo: str,
+        descripcion: str,
+        contenido: QLayout | QWidget | list[QWidget | QLayout],
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("seccionDetalleSigqua")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+
+        label_titulo = QLabel(titulo)
+        label_titulo.setObjectName("tituloSeccionDetalleSigqua")
+        label_descripcion = QLabel(descripcion)
+        label_descripcion.setObjectName("descripcionSeccionDetalleSigqua")
+        label_descripcion.setWordWrap(True)
+        layout.addWidget(label_titulo)
+        layout.addWidget(label_descripcion)
+
+        elementos = contenido if isinstance(contenido, list) else [contenido]
+        for elemento in elementos:
+            if isinstance(elemento, QWidget):
+                layout.addWidget(elemento)
+            else:
+                layout.addLayout(elemento)
 
 
 class BotonAccionContextual(QPushButton):

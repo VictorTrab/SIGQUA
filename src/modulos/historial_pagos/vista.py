@@ -28,11 +28,17 @@ from PySide6.QtWidgets import (
 
 from comun.ui import (
     BotonAccionContextual,
+    CampoDetalleSigqua,
     DialogoBaseSigqua,
     DialogoMensajeSigqua,
+    EncabezadoDetalleSigqua,
+    SeccionDetalleSigqua,
+    TarjetaResumenDetalleSigqua,
     configurar_tabla_operativa,
+    crear_badge_estado_detalle_sigqua,
     crear_boton_operativo,
     crear_item_tabla,
+    obtener_estilo_detalle_sigqua,
     obtener_icono_tabler_coloreado,
     resolver_variante_boton_modal,
 )
@@ -185,6 +191,104 @@ class DialogoDetalleHistorialPago(DialogoBaseSigqua):
         )
         descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
+
+        contenedor = QWidget()
+        layout_scroll = QVBoxLayout(contenedor)
+        layout_scroll.setContentsMargins(0, 0, 0, 0)
+        layout_scroll.setSpacing(12)
+
+        panel = QFrame()
+        panel.setObjectName("panelDetalleSigqua")
+        layout_panel = QVBoxLayout(panel)
+        layout_panel.setContentsMargins(18, 18, 18, 18)
+        layout_panel.setSpacing(14)
+
+        encabezado = EncabezadoDetalleSigqua(
+            self._detalle.numero_comprobante,
+            self._detalle.abonado_nombre,
+            badges=(
+                crear_badge_estado_detalle_sigqua(
+                    self._formateador_tipo(self._detalle.tipo_pago),
+                    "info",
+                ),
+            ),
+        )
+
+        identificacion = QGridLayout()
+        identificacion.setHorizontalSpacing(14)
+        identificacion.setVerticalSpacing(14)
+        identificacion.addWidget(CampoDetalleSigqua("Numero", self._detalle.numero_comprobante), 0, 0)
+        identificacion.addWidget(CampoDetalleSigqua("Fecha y hora", self._formateador_fecha_hora(self._detalle.fecha_pago)), 0, 1)
+        identificacion.addWidget(CampoDetalleSigqua("Tipo", self._formateador_tipo(self._detalle.tipo_pago)), 1, 0)
+
+        servicio = QGridLayout()
+        servicio.setHorizontalSpacing(14)
+        servicio.setVerticalSpacing(14)
+        servicio.addWidget(CampoDetalleSigqua("Casa", self._detalle.casa_codigo), 0, 0)
+        servicio.addWidget(CampoDetalleSigqua("Abonado", self._detalle.abonado_nombre), 0, 1)
+        servicio.addWidget(CampoDetalleSigqua("DNI", self._detalle.abonado_dni), 1, 0)
+        servicio.addWidget(CampoDetalleSigqua("Barrio", self._detalle.barrio_nombre or "Sin barrio"), 1, 1)
+        servicio.addWidget(CampoDetalleSigqua("Direccion", self._detalle.direccion_casa or "Sin referencia"), 2, 0, 1, 2)
+
+        operativos = QGridLayout()
+        operativos.setHorizontalSpacing(14)
+        operativos.setVerticalSpacing(14)
+        operativos.addWidget(CampoDetalleSigqua("Metodo", self._detalle.metodo_pago), 0, 0)
+        operativos.addWidget(CampoDetalleSigqua("Referencia", self._detalle.referencia or "No aplica"), 0, 1)
+        operativos.addWidget(CampoDetalleSigqua("Registrado por", self._detalle.usuario_registro or "Sin registro"), 1, 0, 1, 2)
+
+        tabla = QTableWidget(0, 2)
+        tabla.setObjectName("tablaDetalleHistorialPago")
+        configurar_tabla_operativa(tabla, ["Concepto", "Monto"])
+        tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        tabla.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        tabla.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        tabla.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        tabla.verticalHeader().setDefaultSectionSize(46)
+        tabla.setRowCount(len(self._detalle.lineas_detalle))
+        for fila, linea in enumerate(self._detalle.lineas_detalle):
+            tabla.setItem(fila, 0, crear_item_tabla(linea.descripcion))
+            tabla.setItem(fila, 1, crear_item_tabla(self._formateador_moneda(linea.monto_pagado_centavos)))
+        tabla.resizeRowsToContents()
+
+        totales = QHBoxLayout()
+        totales.setSpacing(12)
+        totales.addWidget(TarjetaResumenDetalleSigqua("Total pagado", self._formateador_moneda(self._detalle.total_pagado_centavos)), 1)
+        totales.addWidget(TarjetaResumenDetalleSigqua("Saldo posterior", self._formateador_moneda(self._detalle.saldo_posterior_centavos)), 1)
+
+        fila_acciones = QHBoxLayout()
+        fila_acciones.setSpacing(10)
+        boton_cerrar = BotonAccionContextual("Cerrar", icono="x.svg", variante=resolver_variante_boton_modal("Cerrar", "neutro"), centrado=True, mostrar_icono=True)
+        boton_reimprimir = BotonAccionContextual("Reimprimir", icono="receipt-2.svg", variante=resolver_variante_boton_modal("Reimprimir copia", "informacion"), centrado=True, mostrar_icono=True)
+        self._combo_reimpresion = QComboBox()
+        self._combo_reimpresion.addItem("Ambas copias", "AMBAS")
+        self._combo_reimpresion.addItem("Original abonado", "ORIGINAL")
+        self._combo_reimpresion.addItem("Copia Junta", "JUNTA")
+        self._combo_reimpresion.setMinimumWidth(170)
+        boton_cerrar.setMinimumWidth(124)
+        boton_reimprimir.setMinimumWidth(164)
+        boton_cerrar.clicked.connect(self.reject)
+        boton_reimprimir.clicked.connect(self._solicitar_reimpresion)
+        fila_acciones.addWidget(boton_cerrar)
+        fila_acciones.addStretch(1)
+        fila_acciones.addWidget(self._combo_reimpresion)
+        fila_acciones.addWidget(boton_reimprimir)
+
+        layout_panel.addWidget(encabezado)
+        layout_panel.addWidget(SeccionDetalleSigqua("Identificacion del comprobante", "Datos principales del recibo emitido.", identificacion))
+        layout_panel.addWidget(SeccionDetalleSigqua("Datos del servicio", "Contexto del abonado y la casa a la que se aplico el pago.", servicio))
+        layout_panel.addWidget(SeccionDetalleSigqua("Datos operativos", "Metodo, referencia y usuario que registro la operacion.", operativos))
+        layout_panel.addWidget(SeccionDetalleSigqua("Detalle aplicado", "Lineas reales registradas en pagos_detalle para este comprobante.", [tabla]))
+        layout_panel.addWidget(SeccionDetalleSigqua("Totales", "Resumen final del comprobante.", totales))
+        layout_scroll.addWidget(panel)
+
+        self.layout_cabecera.addWidget(titulo)
+        self.layout_cabecera.addWidget(descripcion)
+        self.layout_cuerpo.addWidget(self.crear_area_scroll_cuerpo(contenedor, "scrollDetalleHistorialPago"))
+        self.layout_pie.addLayout(fila_acciones)
+        self._aplicar_estilos()
+        return
 
         scroll = QScrollArea()
         scroll.setObjectName("scrollDetalleHistorialPago")
@@ -405,53 +509,8 @@ class DialogoDetalleHistorialPago(DialogoBaseSigqua):
                 background: transparent;
                 border: none;
             }
-            QFrame#panelContenidoDetalleHistorialPago,
-            QFrame#seccionDetalleHistorialPago {
-                background: rgba(13, 42, 69, 0.78);
-                border: 1px solid rgba(126, 167, 196, 0.30);
-                border-radius: 16px;
-            }
-            QLabel#codigoHistorialDetalle {
-                color: #C5DDEE;
-                font-size: 11px;
-                font-weight: 800;
-            }
-            QLabel#nombreHistorialDetalle {
-                color: #75C7F0;
-                font-size: 20px;
-                font-weight: 900;
-            }
-            QLabel#badgeTipoHistorial {
-                border-radius: 11px;
-                padding: 6px 10px;
-                font-size: 11px;
-                font-weight: 800;
-                color: #DDFBF0;
-                background: rgba(55, 211, 153, 0.22);
-                border: 1px solid rgba(55, 211, 153, 0.26);
-            }
-            QLabel#tituloSeccionDetalleHistorialPago {
-                color: #75C7F0;
-                font-size: 14px;
-                font-weight: 800;
-            }
-            QLabel#descripcionSeccionDetalleHistorialPago,
-            QLabel#etiquetaDetalleHistorialPago {
-                color: #C5DDEE;
-                font-size: 11px;
-                font-weight: 700;
-            }
-            QFrame#campoDetalleHistorialPago {
-                background: rgba(8, 34, 56, 0.74);
-                border: 1px solid rgba(126, 167, 196, 0.30);
-                border-radius: 14px;
-            }
-            QLabel#valorDetalleHistorialPago {
-                color: #75C7F0;
-                font-size: 13px;
-                font-weight: 700;
-            }
             """
+            + obtener_estilo_detalle_sigqua(TEMA_SIGQUA_PREDETERMINADO)
             + f"""
             QTableWidget#tablaDetalleHistorialPago {{
                 background: {paleta["fondo_tabla_cuerpo"]};

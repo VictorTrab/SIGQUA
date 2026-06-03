@@ -32,14 +32,20 @@ from PySide6.QtWidgets import (
 from comun.ui import (
     BotonAccionContextual,
     CampoBusquedaSeleccionSigqua,
+    CampoDetalleSigqua,
     CampoMontoMonetario,
     DialogoBaseSigqua,
     DialogoConfirmacionSigqua,
     DialogoMensajeSigqua,
+    EncabezadoDetalleSigqua,
+    SeccionDetalleSigqua,
+    TarjetaResumenDetalleSigqua,
     aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
+    crear_badge_estado_detalle_sigqua,
     crear_boton_operativo,
     crear_item_tabla,
+    obtener_estilo_detalle_sigqua,
     obtener_icono_tabler_coloreado,
     resolver_variante_boton_modal,
 )
@@ -227,6 +233,103 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
         )
         descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
+
+        contenedor = QWidget()
+        layout_scroll = QVBoxLayout(contenedor)
+        layout_scroll.setContentsMargins(0, 0, 0, 0)
+        layout_scroll.setSpacing(12)
+
+        panel = QFrame()
+        panel.setObjectName("panelDetalleSigqua")
+        layout_panel = QVBoxLayout(panel)
+        layout_panel.setContentsMargins(18, 18, 18, 18)
+        layout_panel.setSpacing(14)
+
+        encabezado = EncabezadoDetalleSigqua(
+            plan.codigo,
+            plan.abonado_nombre,
+            badges=(
+                crear_badge_estado_detalle_sigqua(
+                    plan.estado.title(),
+                    "activo" if plan.estado == "ACTIVO" else "info",
+                ),
+            ),
+        )
+
+        datos = QGridLayout()
+        datos.setHorizontalSpacing(12)
+        datos.setVerticalSpacing(12)
+        datos.addWidget(CampoDetalleSigqua("Casa", plan.casa_codigo), 0, 0)
+        datos.addWidget(CampoDetalleSigqua("DNI", plan.abonado_dni), 0, 1)
+        datos.addWidget(CampoDetalleSigqua("Tipo de plan", plan.tipo_plan.replace("_", " ").title()), 1, 0)
+        datos.addWidget(CampoDetalleSigqua("Concepto", plan.concepto_financiado.replace("_", " ").title()), 1, 1)
+        datos.addWidget(CampoDetalleSigqua("Prima", self._formateador_moneda(plan.prima_centavos)), 2, 0)
+        datos.addWidget(CampoDetalleSigqua("Saldo financiado", self._formateador_moneda(plan.saldo_financiado_centavos)), 2, 1)
+        datos.addWidget(CampoDetalleSigqua("Cuota", self._formateador_moneda(plan.cuota_regular_centavos)), 3, 0)
+        datos.addWidget(CampoDetalleSigqua("Proxima fecha", self._formateador_fecha(plan.proxima_fecha)), 3, 1)
+        datos.addWidget(CampoDetalleSigqua("Creado", self._formateador_fecha(plan.creado_en)), 4, 0)
+        datos.addWidget(CampoDetalleSigqua("Ultima actualizacion", self._formateador_fecha(plan.actualizado_en)), 4, 1)
+        datos.addWidget(CampoDetalleSigqua("Creado por", plan.creado_por_nombre or "Sin registro"), 5, 0, 1, 2)
+
+        fila_metricas = QHBoxLayout()
+        fila_metricas.setSpacing(12)
+        fila_metricas.addWidget(TarjetaResumenDetalleSigqua("Pendientes", str(plan.cuotas_pendientes)), 1)
+        fila_metricas.addWidget(TarjetaResumenDetalleSigqua("En mora", str(plan.cuotas_en_mora)), 1)
+        fila_metricas.addWidget(TarjetaResumenDetalleSigqua("Saldo", self._formateador_moneda(plan.saldo_pendiente_centavos)), 1)
+
+        tabla = QTableWidget(0, 4)
+        tabla.setObjectName("tablaCuotasPlan")
+        configurar_tabla_operativa(tabla, ["Cuota", "Vencimiento", "Saldo", "Estado"])
+        tabla.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        tabla.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        tabla.setAlternatingRowColors(True)
+        tabla.setFrameShape(QFrame.Shape.NoFrame)
+        tabla.setViewportMargins(0, 0, 0, 18)
+        tabla.viewport().setObjectName("viewportTablaCuotasPlan")
+        tabla.viewport().setAutoFillBackground(False)
+        tabla.horizontalHeader().setStretchLastSection(True)
+        tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        tabla.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        tabla.setRowCount(len(self._detalle.cuotas))
+        for fila, cuota in enumerate(self._detalle.cuotas):
+            tabla.setItem(fila, 0, crear_item_tabla(f"#{cuota.numero_cuota}"))
+            tabla.setItem(fila, 1, crear_item_tabla(self._formateador_fecha(cuota.fecha_vencimiento)))
+            tabla.setItem(fila, 2, crear_item_tabla(self._formateador_moneda(cuota.saldo_pendiente_centavos)))
+            tabla.setItem(fila, 3, crear_item_tabla(cuota.estado.title()))
+
+        cargos = QLabel(
+            "\n".join(self._detalle.cargos_vinculados) if self._detalle.cargos_vinculados else "Sin cargos vinculados automaticamente."
+        )
+        cargos.setObjectName("textoCargosPlan")
+        cargos.setWordWrap(True)
+
+        fila_acciones = QHBoxLayout()
+        fila_acciones.setSpacing(10)
+        boton_cerrar = BotonAccionContextual("Cerrar", icono="x.svg", variante="neutro", centrado=True, mostrar_icono=True)
+        boton_editar = BotonAccionContextual("Editar", icono="edit.svg", variante="edicion", centrado=True, mostrar_icono=True)
+        boton_cerrar.setMinimumWidth(124)
+        boton_editar.setMinimumWidth(124)
+        boton_cerrar.clicked.connect(self.reject)
+        boton_editar.clicked.connect(self._solicitar_edicion)
+        fila_acciones.addWidget(boton_cerrar)
+        fila_acciones.addStretch(1)
+        fila_acciones.addWidget(boton_editar)
+
+        layout_panel.addWidget(encabezado)
+        layout_panel.addWidget(SeccionDetalleSigqua("Contexto del plan", "Resumen principal del acuerdo y su relacion con la casa.", datos))
+        layout_panel.addWidget(SeccionDetalleSigqua("Estado financiero", "Cuotas pendientes, mora y saldo vivo del plan.", fila_metricas))
+        layout_panel.addWidget(SeccionDetalleSigqua("Cuotas del plan", "Detalle de cada cuota actualmente registrada.", [tabla]))
+        layout_panel.addWidget(SeccionDetalleSigqua("Cargos vinculados", "Cargos reales de la casa que el plan intenta cubrir cuando aplica.", [cargos]))
+        layout_scroll.addWidget(panel)
+
+        self.layout_cabecera.addWidget(titulo)
+        self.layout_cabecera.addWidget(descripcion)
+        self.layout_cuerpo.addWidget(self.crear_area_scroll_cuerpo(contenedor, "scrollDetallePlan"))
+        self.layout_pie.addLayout(fila_acciones)
+        self._aplicar_estilos_detalle()
+        return
 
         if self._plan is None:
             self._campo_abonado = CampoBusquedaSeleccionSigqua(
@@ -849,40 +952,13 @@ class DialogoDetallePlanPago(DialogoBaseSigqua):
                 background: transparent;
                 border: none;
             }}
-            QFrame#panelContenidoDetallePlan,
-            QFrame#seccionDetallePlan,
-            QFrame#campoDetallePlan,
-            QFrame#tarjetaMiniDetallePlan {{
-                background: {paleta['fondo_superficie']};
-                border: 1px solid {paleta['borde_principal']};
-                border-radius: 14px;
-            }}
-            QLabel#codigoPlanDetalle,
-            QLabel#etiquetaDetallePlan,
             QLabel#descripcionSeccionDetallePlan,
             QLabel#textoCargosPlan {{
                 color: {paleta['texto_secundario']};
             }}
-            QLabel#nombrePlanDetalle,
-            QLabel#valorDetallePlan,
-            QLabel#valorTarjetaMiniDetallePlan,
-            QLabel#tituloSeccionDetallePlan {{
-                color: {paleta['texto_principal']};
-            }}
-            QLabel#badgeDetallePlan {{
-                border-radius: 11px;
-                padding: 6px 10px;
-                font-size: 11px;
-                font-weight: 800;
-                color: {paleta['texto_badge']};
-                background: {paleta['fondo_badge']};
-                border: 1px solid {paleta['borde_suave']};
-            }}
-            QLabel#badgeDetallePlan[activo="true"] {{
-                color: {paleta['texto_badge_activo']};
-                background: {paleta['fondo_badge_activo']};
-                border-color: {paleta['borde_badge_activo']};
-            }}
+            """
+            + obtener_estilo_detalle_sigqua(self._tema_actual)
+            + f"""
             QTableWidget#tablaCuotasPlan {{
                 background: {paleta['fondo_tabla_cuerpo']};
                 background-clip: padding;

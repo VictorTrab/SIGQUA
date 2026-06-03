@@ -636,7 +636,7 @@ class VistaAutenticacion(QWidget):
         layout.setSpacing(0)
 
         self._agregar_logo_institucional(layout)
-        layout.addSpacing(54)
+        layout.addSpacing(28)
 
         subtitulo = QLabel("Sistema Integrado de Gestión\npara Juntas de Agua")
         subtitulo.setObjectName("subtituloSistemaLogin")

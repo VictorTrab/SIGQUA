@@ -31,12 +31,17 @@ from PySide6.QtWidgets import (
 
 from comun.ui import (
     BotonAccionContextual,
+    CampoDetalleSigqua,
     DialogoBaseSigqua,
     DialogoConfirmacionSigqua,
+    EncabezadoDetalleSigqua,
+    SeccionDetalleSigqua,
     aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
+    crear_badge_estado_detalle_sigqua,
     crear_boton_operativo,
     crear_item_tabla,
+    obtener_estilo_detalle_sigqua,
     obtener_icono_tabler_coloreado,
 )
 from comun.ui.temas import (
@@ -407,6 +412,84 @@ class DialogoDetalleUsuario(DialogoBaseSigqua):
         descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
+        contenedor = QWidget()
+        layout_scroll = QVBoxLayout(contenedor)
+        layout_scroll.setContentsMargins(0, 0, 0, 0)
+        layout_scroll.setSpacing(12)
+
+        panel = QFrame()
+        panel.setObjectName("panelDetalleSigqua")
+        layout_panel = QVBoxLayout(panel)
+        layout_panel.setContentsMargins(16, 16, 16, 16)
+        layout_panel.setSpacing(12)
+
+        encabezado = EncabezadoDetalleSigqua(
+            self._usuario.nombre_usuario,
+            self._usuario.nombre_completo,
+            badges=(
+                crear_badge_estado_detalle_sigqua(
+                    self._usuario.estado.title(),
+                    "activo" if self._usuario.estado == "ACTIVO" else "info",
+                ),
+            ),
+        )
+
+        grid_identidad = QGridLayout()
+        grid_identidad.setHorizontalSpacing(14)
+        grid_identidad.setVerticalSpacing(14)
+        grid_identidad.addWidget(CampoDetalleSigqua("Correo", self._usuario.correo), 0, 0)
+        grid_identidad.addWidget(CampoDetalleSigqua("Rol visible", self._usuario.rol_principal), 0, 1)
+        grid_identidad.addWidget(CampoDetalleSigqua("Estado", self._usuario.estado.title()), 1, 0)
+        grid_identidad.addWidget(
+            CampoDetalleSigqua(
+                "Cambio obligatorio",
+                "Pendiente" if self._usuario.requiere_cambio_contrasena else "No",
+            ),
+            1,
+            1,
+        )
+
+        grid_actividad = QGridLayout()
+        grid_actividad.setHorizontalSpacing(14)
+        grid_actividad.setVerticalSpacing(14)
+        grid_actividad.addWidget(CampoDetalleSigqua("Ultimo acceso", self._formateador_fecha(self._usuario.ultimo_acceso_en)), 0, 0)
+        grid_actividad.addWidget(CampoDetalleSigqua("Creado", self._formateador_fecha(self._usuario.creado_en)), 0, 1)
+        grid_actividad.addWidget(CampoDetalleSigqua("Creado por", self._usuario.creado_por_nombre or "Sin registro"), 1, 0)
+        grid_actividad.addWidget(CampoDetalleSigqua("Ultima actualizacion", self._formateador_fecha(self._usuario.actualizado_en)), 1, 1)
+        grid_actividad.addWidget(CampoDetalleSigqua("Actualizado por", self._usuario.actualizado_por_nombre or "Sin registro"), 2, 0)
+        grid_actividad.addWidget(CampoDetalleSigqua("Sesiones registradas", str(self._usuario.total_sesiones)), 2, 1)
+        grid_actividad.addWidget(CampoDetalleSigqua("Intentos fallidos", str(self._usuario.intentos_fallidos)), 3, 0, 1, 2)
+
+        observaciones = CampoDetalleSigqua(
+            "Observaciones",
+            self._usuario.observaciones or "Sin observaciones registradas.",
+        )
+
+        fila_acciones = QHBoxLayout()
+        fila_acciones.setSpacing(10)
+        boton_cerrar = BotonAccionContextual("Cerrar", icono="x.svg", variante="neutro", centrado=True, mostrar_icono=True)
+        boton_editar = BotonAccionContextual("Editar", icono="edit.svg", variante="edicion", centrado=True, mostrar_icono=True)
+        boton_cerrar.setMinimumWidth(124)
+        boton_editar.setMinimumWidth(124)
+        boton_cerrar.clicked.connect(self.reject)
+        boton_editar.clicked.connect(self._solicitar_edicion)
+        fila_acciones.addWidget(boton_cerrar)
+        fila_acciones.addStretch(1)
+        fila_acciones.addWidget(boton_editar)
+
+        layout_panel.addWidget(encabezado)
+        layout_panel.addWidget(SeccionDetalleSigqua("Identidad y acceso", "Datos visibles del usuario y rol asignado.", grid_identidad))
+        layout_panel.addWidget(SeccionDetalleSigqua("Actividad reciente", "Indicadores operativos de acceso y seguridad.", grid_actividad))
+        layout_panel.addWidget(SeccionDetalleSigqua("Observaciones", "Notas administrativas internas de la cuenta.", [observaciones]))
+        layout_scroll.addWidget(panel)
+
+        self.layout_cabecera.addWidget(titulo)
+        self.layout_cabecera.addWidget(descripcion)
+        self.layout_cuerpo.addWidget(self.crear_area_scroll_cuerpo(contenedor, "scrollDetalleUsuario"))
+        self.layout_pie.addLayout(fila_acciones)
+        self._aplicar_estilos()
+        return
+
         scroll = QScrollArea()
         scroll.setObjectName("scrollDetalleUsuario")
         scroll.setWidgetResizable(True)
@@ -610,6 +693,18 @@ class DialogoDetalleUsuario(DialogoBaseSigqua):
         self.accept()
 
     def _aplicar_estilos(self) -> None:
+        self.setStyleSheet(
+            self.styleSheet()
+            + """
+            QScrollArea#scrollDetalleUsuario {
+                background: transparent;
+                border: none;
+            }
+            """
+            + obtener_estilo_detalle_sigqua(self._nombre_tema)
+        )
+        return
+
         self.setStyleSheet(
             self.styleSheet()
             + """

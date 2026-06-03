@@ -1,4 +1,4 @@
-"""Vista PySide6 del modulo de casas."""
+﻿"""Vista PySide6 del modulo de casas."""
 
 from __future__ import annotations
 
@@ -31,12 +31,19 @@ from PySide6.QtWidgets import (
 from comun.ui import (
     BotonAccionContextual,
     CampoBusquedaSeleccionSigqua,
+    CampoDetalleSigqua,
+    EncabezadoDetalleSigqua,
     DialogoBaseSigqua,
     DialogoConfirmacionSigqua,
+    SeccionDetalleSigqua,
+    TarjetaResumenDetalleSigqua,
     aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
+    crear_badge_estado_detalle_sigqua,
+    crear_boton_copiar_detalle_sigqua,
     crear_boton_operativo,
     crear_item_tabla,
+    obtener_estilo_detalle_sigqua,
     obtener_icono_tabler_coloreado,
     resolver_variante_boton_modal,
 )
@@ -874,6 +881,127 @@ class DialogoDetalleCasa(DialogoBaseSigqua):
         descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
+        contenedor_scroll = QWidget()
+        contenedor_scroll.setObjectName("contenedorScrollDetalleCasa")
+        layout_scroll = QVBoxLayout(contenedor_scroll)
+        layout_scroll.setContentsMargins(0, 0, 0, 0)
+        layout_scroll.setSpacing(12)
+
+        panel_detalle = QFrame()
+        panel_detalle.setObjectName("panelDetalleSigqua")
+        layout_panel = QVBoxLayout(panel_detalle)
+        layout_panel.setContentsMargins(18, 18, 18, 18)
+        layout_panel.setSpacing(14)
+
+        encabezado = EncabezadoDetalleSigqua(
+            casa.codigo,
+            casa.resumen_propietario,
+            boton_copiar=crear_boton_copiar_detalle_sigqua(
+                str(casa.identificador or ""),
+                etiqueta="ID interno",
+            ),
+            badges=(
+                crear_badge_estado_detalle_sigqua(
+                    casa.estado_servicio.title(),
+                    "activo" if casa.estado_servicio == ESTADO_SERVICIO_ACTIVO else "advertencia" if casa.estado_servicio == ESTADO_SERVICIO_CORTADO else "info",
+                ),
+                crear_badge_estado_detalle_sigqua(
+                    casa.estado_administrativo.title(),
+                    "activo" if casa.estado_administrativo == ESTADO_ADMINISTRATIVO_OPERATIVA else "advertencia",
+                ),
+            ),
+        )
+
+        grid_info = QGridLayout()
+        grid_info.setHorizontalSpacing(14)
+        grid_info.setVerticalSpacing(14)
+        grid_info.addWidget(CampoDetalleSigqua("DNI del abonado", casa.abonado_dni or "Sin registro"), 0, 0)
+        grid_info.addWidget(CampoDetalleSigqua("Barrio", casa.barrio_nombre or "Sin barrio"), 0, 1)
+        grid_info.addWidget(CampoDetalleSigqua("Propietario operativo", "Si" if casa.propietario_operativo else "No"), 1, 0)
+        grid_info.addWidget(CampoDetalleSigqua("Antecedente de servicio", casa.resumen_antecedente_servicio), 1, 1)
+        grid_info.addWidget(CampoDetalleSigqua("Creado", self._formateador_fecha(casa.creado_en)), 2, 0)
+        grid_info.addWidget(CampoDetalleSigqua("Ultima actualizacion", self._formateador_fecha(casa.actualizado_en)), 2, 1)
+        grid_info.addWidget(CampoDetalleSigqua("Ultimo cambio de dueno", self._formateador_fecha(self._detalle.ultima_fecha_cambio_dueno)), 3, 0)
+        grid_info.addWidget(
+            CampoDetalleSigqua(
+                "Motivo administrativo",
+                casa.motivo_estado_administrativo.replace("_", " ").title()
+                if casa.motivo_estado_administrativo != MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO
+                else "Sin bloqueo administrativo",
+            ),
+            3,
+            1,
+        )
+
+        fila_metricas = QHBoxLayout()
+        fila_metricas.setSpacing(12)
+        fila_metricas.addWidget(TarjetaResumenDetalleSigqua("Meses pendientes", str(casa.meses_pendientes)), 1)
+        fila_metricas.addWidget(TarjetaResumenDetalleSigqua("Meses en mora", str(casa.meses_en_mora)), 1)
+        fila_metricas.addWidget(TarjetaResumenDetalleSigqua("Deuda", self._formateador_moneda(casa.deuda_total_centavos)), 1)
+
+        plan_texto = "Sin plan activo asociado."
+        if self._detalle.plan_activo is not None:
+            plan = self._detalle.plan_activo
+            plan_texto = (
+                f"{plan.codigo} | Cuota {self._formateador_moneda(plan.cuota_regular_centavos)} | "
+                f"Pendientes {plan.cuotas_pendientes} | "
+                f"Saldo {self._formateador_moneda(plan.saldo_pendiente_centavos)} | "
+                f"Proxima fecha {self._formateador_fecha(plan.proxima_fecha)}"
+            )
+
+        plan_campo = CampoDetalleSigqua("Plan activo", plan_texto)
+        direccion = CampoDetalleSigqua("Referencia", casa.direccion_referencia or "Sin referencia registrada.")
+        if self._detalle.historial_propietarios:
+            primera_linea = self._detalle.historial_propietarios[0]
+            historial_texto = (
+                f"{self._formateador_fecha(primera_linea.fecha_cambio)} | "
+                f"{primera_linea.abonado_anterior_nombre} -> {primera_linea.abonado_nuevo_nombre}"
+            )
+        else:
+            historial_texto = "Sin cambios de propietario registrados."
+        historial = CampoDetalleSigqua("Historial reciente", historial_texto)
+        observaciones = CampoDetalleSigqua("Observaciones", casa.observaciones or "Sin observaciones registradas.")
+        reactivacion = CampoDetalleSigqua(
+            "Reactivacion fisica",
+            "Resolver desde Pagos > Conexion/Reconexion."
+            if casa.estado_servicio == ESTADO_SERVICIO_CORTADO
+            else "Disponible desde la accion Cortar servicio cuando corresponda.",
+        )
+
+        fila_acciones = QHBoxLayout()
+        fila_acciones.setSpacing(10)
+        boton_cerrar = BotonAccionContextual("Cerrar", icono="x.svg", variante=resolver_variante_boton_modal("Cerrar", "neutro"), centrado=True, mostrar_icono=True)
+        boton_historial = BotonAccionContextual("Ver historial", icono="clock.svg", variante="informacion", centrado=True, mostrar_icono=True)
+        boton_dueno = BotonAccionContextual("Cambiar dueno", icono="user.svg", variante="edicion", centrado=True, mostrar_icono=True)
+        boton_editar = BotonAccionContextual("Editar", icono="edit.svg", variante="edicion", centrado=True, mostrar_icono=True)
+        boton_corte = BotonAccionContextual("Cortar servicio", icono="alert-triangle.svg", variante="salida", centrado=True, mostrar_icono=True)
+        boton_cerrar.clicked.connect(self.reject)
+        boton_historial.clicked.connect(self._abrir_historial)
+        boton_dueno.clicked.connect(self._abrir_cambio_dueno)
+        boton_editar.clicked.connect(self._solicitar_edicion)
+        boton_corte.clicked.connect(self._solicitar_corte_servicio)
+        fila_acciones.addWidget(boton_cerrar)
+        fila_acciones.addStretch(1)
+        fila_acciones.addWidget(boton_historial)
+        fila_acciones.addWidget(boton_dueno)
+        if casa.estado_servicio == ESTADO_SERVICIO_ACTIVO:
+            fila_acciones.addWidget(boton_corte)
+        fila_acciones.addWidget(boton_editar)
+
+        layout_panel.addWidget(encabezado)
+        layout_panel.addWidget(SeccionDetalleSigqua("Contexto operativo", "Identifica el propietario actual, barrio y trazabilidad base de la casa.", grid_info))
+        layout_panel.addWidget(SeccionDetalleSigqua("Estado financiero", "Resume periodos pendientes, mora y deuda acumulada de la casa.", fila_metricas))
+        layout_panel.addWidget(SeccionDetalleSigqua("Plan y localizacion", "Muestra el plan activo vinculado y la referencia operativa de la casa.", [plan_campo, direccion]))
+        layout_panel.addWidget(SeccionDetalleSigqua("Trazabilidad", "Conserva el ultimo movimiento y las observaciones administrativas de la casa.", [historial, observaciones, reactivacion]))
+        layout_scroll.addWidget(panel_detalle)
+
+        self.layout_cabecera.addWidget(titulo)
+        self.layout_cabecera.addWidget(descripcion)
+        self.layout_cuerpo.addWidget(self.crear_area_scroll_cuerpo(contenedor_scroll, "scrollDetalleCasa"))
+        self.layout_pie.addLayout(fila_acciones)
+        self._aplicar_estilos()
+        return
+
         scroll = QScrollArea()
         scroll.setObjectName("scrollDetalleCasa")
         scroll.setWidgetResizable(True)
@@ -1265,6 +1393,19 @@ class DialogoDetalleCasa(DialogoBaseSigqua):
         boton.setToolTip(f"Copiar ID interno: {identificador}")
 
     def _aplicar_estilos(self) -> None:
+        self.setStyleSheet(
+            self.styleSheet()
+            + f"""
+            QScrollArea#scrollDetalleCasa,
+            QWidget#contenedorScrollDetalleCasa {{
+                background: transparent;
+                border: none;
+            }}
+            """
+            + obtener_estilo_detalle_sigqua(self._nombre_tema)
+        )
+        return
+
         radio = RADIO_TARJETA_DIALOGO
         paleta = self._paleta_tema
         self.setStyleSheet(
@@ -1453,7 +1594,7 @@ class DialogoCorteServicioCasa(DialogoBaseSigqua):
         titulo = QLabel("Confirmar corte de servicio")
         titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
-            "Esta accion registra un corte fisico del servicio. La reactivacion posterior se gestiona desde Pagos > Conexión/Reconexion."
+            "Esta accion registra un corte fisico del servicio. La reactivacion posterior se gestiona desde Pagos > ConexiÃ³n/Reconexion."
         )
         descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
@@ -2191,4 +2332,5 @@ class VistaCasas(QWidget):
             }
             """
         )
+
 

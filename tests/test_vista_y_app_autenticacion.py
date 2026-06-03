@@ -795,8 +795,8 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertIsNotNone(scroll)
         self.assertTrue(scroll.widgetResizable())
         self.assertIn("QScrollArea#scrollDetalleCasa", dialogo_detalle.styleSheet())
-        self.assertIn("QFrame#seccionDetalleCasa", dialogo_detalle.styleSheet())
-        self.assertIn("QLabel#tituloSeccionDetalleCasa", dialogo_detalle.styleSheet())
+        self.assertIn("QFrame#seccionDetalleSigqua", dialogo_detalle.styleSheet())
+        self.assertIn("QLabel#tituloSeccionDetalleSigqua", dialogo_detalle.styleSheet())
 
         dialogo_historial = DialogoHistorialPropietariosCasa(
             casa=casa,
@@ -842,8 +842,8 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         scroll_abonado = dialogo_abonado.findChild(QScrollArea, "scrollDetalleAbonado")
         self.assertIsNotNone(scroll_abonado)
         self.assertTrue(scroll_abonado.widgetResizable())
-        self.assertIn("QFrame#seccionDetalleAbonado", dialogo_abonado.styleSheet())
-        self.assertIn("QLabel#tituloSeccionDetalleAbonado", dialogo_abonado.styleSheet())
+        self.assertIn("QFrame#seccionDetalleSigqua", dialogo_abonado.styleSheet())
+        self.assertIn("QLabel#tituloSeccionDetalleSigqua", dialogo_abonado.styleSheet())
 
         dialogo_barrio = DialogoDetalleBarrio(
             barrio=Barrio(
@@ -863,8 +863,8 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         scroll_barrio = dialogo_barrio.findChild(QScrollArea, "scrollDetalleBarrio")
         self.assertIsNotNone(scroll_barrio)
         self.assertTrue(scroll_barrio.widgetResizable())
-        self.assertIn("QFrame#seccionDetalleBarrio", dialogo_barrio.styleSheet())
-        self.assertIn("QLabel#tituloSeccionDetalleBarrio", dialogo_barrio.styleSheet())
+        self.assertIn("QFrame#seccionDetalleSigqua", dialogo_barrio.styleSheet())
+        self.assertIn("QLabel#tituloSeccionDetalleSigqua", dialogo_barrio.styleSheet())
 
         dialogo_abonado.close()
         dialogo_barrio.close()

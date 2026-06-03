@@ -31,12 +31,19 @@ from PySide6.QtWidgets import (
 from comun.ui import (
     BotonAccionContextual,
     CampoBusquedaSeleccionSigqua,
+    CampoDetalleSigqua,
+    EncabezadoDetalleSigqua,
     DialogoBaseSigqua,
     DialogoConfirmacionSigqua,
+    SeccionDetalleSigqua,
+    TarjetaResumenDetalleSigqua,
     aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
+    crear_badge_estado_detalle_sigqua,
+    crear_boton_copiar_detalle_sigqua,
     crear_boton_operativo,
     crear_item_tabla,
+    obtener_estilo_detalle_sigqua,
     obtener_icono_tabler_coloreado,
     resolver_variante_boton_modal,
 )
@@ -393,13 +400,6 @@ class DialogoDetalleAbonado(DialogoBaseSigqua):
         descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
-        scroll = QScrollArea()
-        scroll.setObjectName("scrollDetalleAbonado")
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-
         contenedor_scroll = QWidget()
         contenedor_scroll.setObjectName("contenedorScrollDetalleAbonado")
         layout_scroll = QVBoxLayout(contenedor_scroll)
@@ -407,98 +407,82 @@ class DialogoDetalleAbonado(DialogoBaseSigqua):
         layout_scroll.setSpacing(12)
 
         panel_detalle = QFrame()
-        panel_detalle.setObjectName("panelContenidoDetalleAbonado")
+        panel_detalle.setObjectName("panelDetalleSigqua")
         panel_detalle_layout = QVBoxLayout(panel_detalle)
         panel_detalle_layout.setContentsMargins(18, 18, 18, 18)
         panel_detalle_layout.setSpacing(14)
 
-        fila_superior = QHBoxLayout()
-        fila_superior.setSpacing(12)
-        bloque_nombre = QVBoxLayout()
-        bloque_nombre.setSpacing(4)
-        fila_codigo = QHBoxLayout()
-        fila_codigo.setContentsMargins(0, 0, 0, 0)
-        fila_codigo.setSpacing(6)
-        codigo = QLabel(self._abonado.dni)
-        codigo.setObjectName("codigoAbonadoDetalle")
-        boton_copiar_id = self._crear_boton_copiar_dni(self._abonado.dni)
-        nombre = QLabel(self._abonado.nombre_completo)
-        nombre.setObjectName("nombreAbonadoDetalle")
-        fila_codigo.addWidget(codigo)
-        fila_codigo.addWidget(boton_copiar_id, alignment=Qt.AlignmentFlag.AlignVCenter)
-        fila_codigo.addStretch(1)
-        bloque_nombre.addLayout(fila_codigo)
-        bloque_nombre.addWidget(nombre)
-
-        estado = QLabel(self._abonado.estado.title())
-        estado.setObjectName("badgeDetalleAbonado")
-        estado.setProperty("activo", self._abonado.estado == "ACTIVO")
-        estado.style().unpolish(estado)
-        estado.style().polish(estado)
-
-        fila_superior.addLayout(bloque_nombre, 1)
-        fila_superior.addWidget(estado, alignment=Qt.AlignmentFlag.AlignTop)
-
-        encabezado_contexto = self._crear_encabezado_seccion_detalle(
-            "Contexto operativo",
-            "Consulta contacto, barrio y fechas operativas principales del abonado.",
+        encabezado = EncabezadoDetalleSigqua(
+            self._abonado.dni,
+            self._abonado.nombre_completo,
+            boton_copiar=crear_boton_copiar_detalle_sigqua(
+                self._abonado.dni,
+                etiqueta="DNI",
+            ),
+            badges=(
+                crear_badge_estado_detalle_sigqua(
+                    self._abonado.estado.title(),
+                    "activo" if self._abonado.estado == "ACTIVO" else "info",
+                ),
+            ),
         )
+
         grid_info = QGridLayout()
         grid_info.setHorizontalSpacing(14)
         grid_info.setVerticalSpacing(14)
         grid_info.addWidget(
-            self._crear_campo_detalle("Telefono", self._abonado.telefono or "Sin telefono"),
+            CampoDetalleSigqua("Telefono", self._abonado.telefono or "Sin telefono"),
             0,
             0,
         )
         grid_info.addWidget(
-            self._crear_campo_detalle("Barrio", self._abonado.barrio_nombre or "Sin barrio"),
+            CampoDetalleSigqua("Barrio", self._abonado.barrio_nombre or "Sin barrio"),
             0,
             1,
         )
         grid_info.addWidget(
-            self._crear_campo_detalle("Plan activo", "Si" if self._abonado.tiene_plan_activo else "No"),
+            CampoDetalleSigqua(
+                "Plan activo",
+                "Si" if self._abonado.tiene_plan_activo else "No",
+            ),
             1,
             0,
         )
-        grid_info.addWidget(self._crear_campo_detalle("Creado", self._fecha_creacion), 1, 1)
+        grid_info.addWidget(CampoDetalleSigqua("Creado", self._fecha_creacion), 1, 1)
         grid_info.addWidget(
-            self._crear_campo_detalle("Ultima actualizacion", self._fecha_actualizada),
+            CampoDetalleSigqua("Ultima actualizacion", self._fecha_actualizada),
             2,
             0,
             1,
             2,
         )
 
-        encabezado_finanzas = self._crear_encabezado_seccion_detalle(
-            "Resumen financiero",
-            "Visualiza rapidamente casas asociadas, mora y deuda pendiente.",
-        )
         fila_metricas = QHBoxLayout()
         fila_metricas.setSpacing(12)
         fila_metricas.addWidget(
-            self._crear_tarjeta_detalle("Casas", str(self._abonado.total_casas)),
+            TarjetaResumenDetalleSigqua("Casas", str(self._abonado.total_casas)),
             1,
         )
         fila_metricas.addWidget(
-            self._crear_tarjeta_detalle("Meses en mora", str(self._abonado.meses_en_mora)),
+            TarjetaResumenDetalleSigqua(
+                "Meses en mora",
+                str(self._abonado.meses_en_mora),
+            ),
             1,
         )
         fila_metricas.addWidget(
-            self._crear_tarjeta_detalle("Deuda", self._deuda_formateada),
+            TarjetaResumenDetalleSigqua("Deuda", self._deuda_formateada),
             1,
         )
 
-        direccion = self._crear_campo_detalle(
+        direccion = CampoDetalleSigqua(
             "Direccion",
             self._abonado.direccion_referencia or "Sin referencia registrada.",
         )
-        direccion.setObjectName("campoDetalleAbonadoAmplio")
-        observaciones = self._crear_campo_detalle(
+        observaciones = CampoDetalleSigqua(
             "Observaciones",
             self._abonado.observaciones or "Sin observaciones registradas.",
         )
-        observaciones.setObjectName("campoDetalleAbonadoAmplio")
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(10)
@@ -535,125 +519,37 @@ class DialogoDetalleAbonado(DialogoBaseSigqua):
         fila_acciones.addWidget(boton_ver_casas)
         fila_acciones.addWidget(boton_editar)
 
-        panel_detalle_layout.addLayout(fila_superior)
+        panel_detalle_layout.addWidget(encabezado)
         panel_detalle_layout.addWidget(
-            self._crear_bloque_seccion_detalle(encabezado_contexto, grid_info)
+            SeccionDetalleSigqua(
+                "Contexto operativo",
+                "Consulta contacto, barrio y fechas operativas principales del abonado.",
+                grid_info,
+            )
         )
         panel_detalle_layout.addWidget(
-            self._crear_bloque_seccion_detalle(encabezado_finanzas, fila_metricas)
+            SeccionDetalleSigqua(
+                "Resumen financiero",
+                "Visualiza rapidamente casas asociadas, mora y deuda pendiente.",
+                fila_metricas,
+            )
         )
         panel_detalle_layout.addWidget(
-            self._crear_bloque_seccion_detalle(
-                self._crear_encabezado_seccion_detalle(
-                    "Ubicacion y notas",
-                    "Incluye la referencia operativa y observaciones administrativas del abonado.",
-                ),
+            SeccionDetalleSigqua(
+                "Ubicacion y notas",
+                "Incluye la referencia operativa y observaciones administrativas del abonado.",
                 [direccion, observaciones],
             )
         )
         layout_scroll.addWidget(panel_detalle)
-        scroll.setWidget(contenedor_scroll)
 
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(scroll)
+        self.layout_cuerpo.addWidget(
+            self.crear_area_scroll_cuerpo(contenedor_scroll, "scrollDetalleAbonado")
+        )
         self.layout_pie.addLayout(fila_acciones)
         self._aplicar_estilos()
-
-    def _crear_encabezado_seccion_detalle(self, titulo: str, descripcion: str) -> QWidget:
-        bloque = QWidget()
-        layout = QVBoxLayout(bloque)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
-        label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("tituloSeccionDetalleAbonado")
-        label_descripcion = QLabel(descripcion)
-        label_descripcion.setObjectName("descripcionSeccionDetalleAbonado")
-        label_descripcion.setWordWrap(True)
-        layout.addWidget(label_titulo)
-        layout.addWidget(label_descripcion)
-        return bloque
-
-    def _crear_bloque_seccion_detalle(
-        self,
-        encabezado: QWidget,
-        contenido: QGridLayout | QHBoxLayout | list[QWidget],
-    ) -> QFrame:
-        bloque = QFrame()
-        bloque.setObjectName("seccionDetalleAbonado")
-        layout = QVBoxLayout(bloque)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(10)
-        layout.addWidget(encabezado)
-        if isinstance(contenido, list):
-            for widget in contenido:
-                layout.addWidget(widget)
-        else:
-            layout.addLayout(contenido)
-        return bloque
-
-    def _crear_campo_detalle(self, etiqueta: str, valor: str) -> QFrame:
-        tarjeta = QFrame()
-        tarjeta.setObjectName("campoDetalleAbonado")
-        layout = QVBoxLayout(tarjeta)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(5)
-
-        label_etiqueta = QLabel(etiqueta)
-        label_etiqueta.setObjectName("etiquetaDetalleAbonado")
-        label_valor = QLabel(valor)
-        label_valor.setObjectName("valorDetalleAbonado")
-        label_valor.setWordWrap(True)
-
-        layout.addWidget(label_etiqueta)
-        layout.addWidget(label_valor)
-        return tarjeta
-
-    def _crear_tarjeta_detalle(self, titulo: str, valor: str) -> QFrame:
-        tarjeta = QFrame()
-        tarjeta.setObjectName("tarjetaMiniDetalleAbonado")
-        layout = QVBoxLayout(tarjeta)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(4)
-
-        label_titulo = QLabel(titulo)
-        label_titulo.setObjectName("etiquetaDetalleAbonado")
-        label_valor = QLabel(valor)
-        label_valor.setObjectName("valorTarjetaMiniDetalleAbonado")
-        layout.addWidget(label_titulo)
-        layout.addWidget(label_valor)
-        return tarjeta
-
-    def _crear_boton_copiar_dni(self, dni: str) -> QToolButton:
-        boton = QToolButton()
-        boton.setObjectName("botonCopiarIdDetalle")
-        boton.setText("COPIAR")
-        boton.setProperty("copiado", False)
-        boton.setCursor(Qt.CursorShape.PointingHandCursor)
-        boton.setToolTip(f"Copiar DNI: {dni or 'Sin registro'}")
-        boton.setAutoRaise(False)
-        boton.setEnabled(bool(dni.strip()))
-        boton.clicked.connect(
-            lambda checked=False, valor=dni.strip(), control=boton: self._copiar_texto(valor, control, "DNI")
-        )
-        return boton
-
-    def _copiar_texto(self, valor: str, boton: QToolButton, etiqueta: str) -> None:
-        QApplication.clipboard().setText(valor)
-        boton.setText("OK")
-        boton.setProperty("copiado", True)
-        boton.style().unpolish(boton)
-        boton.style().polish(boton)
-        boton.setToolTip(f"{etiqueta} copiado: {valor}")
-        QTimer.singleShot(900, lambda: self._restaurar_boton_copiar(boton, valor, etiqueta))
-
-    @staticmethod
-    def _restaurar_boton_copiar(boton: QToolButton, valor: str, etiqueta: str) -> None:
-        boton.setText("COPIAR")
-        boton.setProperty("copiado", False)
-        boton.style().unpolish(boton)
-        boton.style().polish(boton)
-        boton.setToolTip(f"Copiar {etiqueta}: {valor or 'Sin registro'}")
 
     def _solicitar_edicion(self) -> None:
         self._accion_resultado = "editar"
@@ -664,8 +560,6 @@ class DialogoDetalleAbonado(DialogoBaseSigqua):
         self.accept()
 
     def _aplicar_estilos(self) -> None:
-        radio = RADIO_TARJETA_DIALOGO
-        paleta = self._paleta_tema
         self.setStyleSheet(
             self.styleSheet()
             + f"""
@@ -674,99 +568,8 @@ class DialogoDetalleAbonado(DialogoBaseSigqua):
                 background: transparent;
                 border: none;
             }}
-            QFrame#panelContenidoDetalleAbonado {{
-                background: {self._color_fondo_dialogo};
-                border: 1px solid {paleta["borde_principal"]};
-                border-radius: {radio}px;
-            }}
-            QFrame#seccionDetalleAbonado {{
-                background: {paleta["fondo_superficie"]};
-                border: 1px solid {paleta["borde_principal"]};
-                border-radius: {radio}px;
-            }}
-            QFrame#campoDetalleAbonado,
-            QFrame#campoDetalleAbonadoAmplio,
-            QFrame#tarjetaMiniDetalleAbonado {{
-                background: {paleta["fondo_superficie_suave"]};
-                border: 1px solid {paleta["borde_suave"]};
-                border-radius: {radio}px;
-            }}
-            QFrame#separadorDetalleAbonado {{
-                background: {paleta["borde_principal"]};
-                border: none;
-            }}
-            QLabel#tituloSeccionDetalleAbonado {{
-                color: {paleta["texto_principal"]};
-                font-size: 14px;
-                font-weight: 800;
-            }}
-            QLabel#descripcionSeccionDetalleAbonado {{
-                color: {paleta["texto_suave"]};
-                font-size: 11px;
-                font-weight: 600;
-            }}
-            QLabel#codigoAbonadoDetalle {{
-                color: {paleta["icono_tarjeta_info"]};
-                font-size: 12px;
-                font-weight: 800;
-                letter-spacing: 0.08em;
-            }}
-            QToolButton#botonCopiarIdDetalle {{
-                min-height: 22px;
-                min-width: 62px;
-                padding: 0 10px;
-                border-radius: {radio}px;
-                border: 1px solid {paleta["borde_suave"]};
-                background: {paleta["fondo_superficie_suave"]};
-                color: {paleta["texto_secundario"]};
-                font-size: 10px;
-                font-weight: 800;
-            }}
-            QToolButton#botonCopiarIdDetalle:hover {{
-                border-color: {paleta["borde_principal"]};
-                background: {paleta["fondo_superficie_muy_suave"]};
-                color: {paleta["texto_principal"]};
-            }}
-            QToolButton#botonCopiarIdDetalle[copiado="true"] {{
-                border-color: {paleta["borde_badge_activo"]};
-                background: {paleta["fondo_badge_activo"]};
-                color: {paleta["texto_badge_activo"]};
-            }}
-            QLabel#nombreAbonadoDetalle {{
-                color: {paleta["texto_principal"]};
-                font-size: 19px;
-                font-weight: 900;
-            }}
-            QLabel#badgeDetalleAbonado {{
-                border-radius: {radio}px;
-                padding: 6px 10px;
-                font-size: 12px;
-                font-weight: 800;
-                color: {paleta["texto_badge"]};
-                background: {paleta["fondo_badge"]};
-                border: 1px solid {paleta["borde_suave"]};
-            }}
-            QLabel#badgeDetalleAbonado[activo="true"] {{
-                color: {paleta["texto_badge_activo"]};
-                background: {paleta["fondo_badge_activo"]};
-                border-color: {paleta["borde_badge_activo"]};
-            }}
-            QLabel#etiquetaDetalleAbonado {{
-                color: {paleta["texto_muted"]};
-                font-size: 11px;
-                font-weight: 700;
-            }}
-            QLabel#valorDetalleAbonado {{
-                color: {paleta["texto_input"]};
-                font-size: 12px;
-                font-weight: 700;
-            }}
-            QLabel#valorTarjetaMiniDetalleAbonado {{
-                color: {paleta["texto_principal"]};
-                font-size: 20px;
-                font-weight: 900;
-            }}
             """
+            + obtener_estilo_detalle_sigqua(self._nombre_tema)
         )
 
 
