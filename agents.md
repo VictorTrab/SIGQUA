@@ -29,24 +29,19 @@ Para cada tarea:
 
 ## Regla de consulta documental
 Antes de buscar informacion fuera del proyecto:
-- revisar primero la documentacion ya presente en el repositorio, `AGENTS.md`, roles, skills, notas tecnicas y comentarios utiles del codigo;
+- revisar primero `agents.md`, roles, skills y comentarios utiles del codigo;
+- cuando se necesite contexto documental del proyecto, consultar la boveda externa de SIGQUA solo si aporta valor real y no duplica informacion existente;
 - si la respuesta no existe o es insuficiente, buscar en la web usando como fuente principal la documentacion oficial aplicable;
 - si la investigacion externa deja una regla, hallazgo o criterio reutilizable para futuras tareas, resumirlo y agregarlo en la skill o rol correspondiente;
 - evitar duplicar la misma regla en varios archivos cuando baste con una referencia clara desde el documento mas adecuado.
 
 ## Agent skills
 
-### Issue tracker
+### Documentacion del proyecto
 
-El tracker operativo inicial es Markdown local en `docs/agents/issues/` y `docs/agents/prd/`. Ver `docs/agents/issue-tracker.md`.
+La documentacion funcional, tecnica, academica, bitacoras, decisiones y notas duraderas de SIGQUA se gestionan en la boveda externa solo cuando aportan valor real y no duplican informacion existente.
 
-### Triage labels
-
-Usar las etiquetas canonicas de trabajo local definidas para `triage`, `to-prd` y `to-issues`. Ver `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-SIGQUA usa un contexto unico de dominio para las skills globales de arquitectura y diagnostico. Ver `docs/agents/domain.md` y `docs/agents/CONTEXT.md`.
+El repositorio conserva unicamente reglas operativas minimas para Codex: `agents.md`, roles y skills.
 
 ## Reglas obligatorias
 1. Usar arquitectura modular con modulos dentro de `src/modulos/`.

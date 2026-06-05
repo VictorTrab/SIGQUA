@@ -343,7 +343,7 @@ class DialogoDetalleBarrio(DialogoBaseSigqua):
         titulo = QLabel("Detalle de barrio")
         titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
-            "Consulta informaciÃ³n general, estado operativo y estadÃ­sticas del barrio."
+            "Consulta información general, estado operativo y estadísticas del barrio."
         )
         descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
@@ -469,12 +469,12 @@ class DialogoDetalleBarrio(DialogoBaseSigqua):
 
         encabezado_contexto = self._crear_encabezado_seccion_detalle(
             "Contexto territorial",
-            "Consulta el cÃ³digo, estado operativo y las fechas base del barrio.",
+            "Consulta el código, estado operativo y las fechas base del barrio.",
         )
         grid_info = QGridLayout()
         grid_info.setHorizontalSpacing(14)
         grid_info.setVerticalSpacing(14)
-        grid_info.addWidget(self._crear_campo_detalle("CÃ³digo", self._barrio.codigo, "barcode.svg"), 0, 0)
+        grid_info.addWidget(self._crear_campo_detalle("Código", self._barrio.codigo, "barcode.svg"), 0, 0)
         grid_info.addWidget(self._crear_campo_detalle("Estado", self._barrio.estado.title(), "circle-check.svg"), 0, 1)
         grid_info.addWidget(
             self._crear_campo_detalle("Creado", self._fecha_creacion, "calendar-plus.svg"),
@@ -482,7 +482,7 @@ class DialogoDetalleBarrio(DialogoBaseSigqua):
             0,
         )
         grid_info.addWidget(
-            self._crear_campo_detalle("Ãšltima actualizaciÃ³n", self._fecha_actualizada, "calendar-time.svg"),
+            self._crear_campo_detalle("Última actualización", self._fecha_actualizada, "calendar-time.svg"),
             1,
             1,
         )
@@ -854,9 +854,9 @@ class DialogoConfirmacionEstadoBarrio(DialogoConfirmacionSigqua):
             ),
             detalles=(
                 ("Barrio", self._barrio.nombre),
-                ("CÃ³digo", self._barrio.codigo),
+                ("Código", self._barrio.codigo),
                 ("Estado actual", self._barrio.estado.title()),
-                ("AcciÃ³n", nuevo_estado.title()),
+                ("Acción", nuevo_estado.title()),
             ),
             texto_confirmar=nuevo_estado.title(),
             icono="alert-triangle.svg",
@@ -916,7 +916,7 @@ class VistaBarrios(QWidget):
         self._tarjeta_activos.actualizar(
             "Barrios activos",
             str(resumen.barrios_activos),
-            "Disponibles para operaciÃ³n diaria.",
+            "Disponibles para operación diaria.",
         )
         self._tarjeta_con_abonados.actualizar(
             "Barrios con abonados",
@@ -961,7 +961,7 @@ class VistaBarrios(QWidget):
             f"Mostrando {pagina.indice_inicio}-{pagina.indice_fin} de {pagina.total_registros} registros"
         )
         self._label_numero_pagina.setText(
-            f"PÃ¡gina {self._pagina_actual} de {self._total_paginas}"
+            f"Página {self._pagina_actual} de {self._total_paginas}"
         )
         self._boton_pagina_anterior.setEnabled(self._pagina_actual > 1)
         self._boton_pagina_siguiente.setEnabled(self._pagina_actual < self._total_paginas)
@@ -1102,12 +1102,12 @@ class VistaBarrios(QWidget):
         configurar_tabla_operativa(
             self._tabla,
             [
-                "CÃ³digo",
+                "Código",
                 "Barrio",
                 "Abonados",
                 "Casas",
                 "Estado",
-                "Ãšltima actualizaciÃ³n",
+                "Última actualización",
                 "Acciones",
             ],
         )
@@ -1149,7 +1149,7 @@ class VistaBarrios(QWidget):
         self._boton_pagina_siguiente.clicked.connect(
             lambda: self.pagina_cambiada.emit(self._pagina_actual + 1)
         )
-        self._label_numero_pagina = QLabel("PÃ¡gina 1 de 1")
+        self._label_numero_pagina = QLabel("Página 1 de 1")
         self._label_numero_pagina.setObjectName("textoPieBarrios")
         pie_tabla.addWidget(self._boton_pagina_anterior)
         pie_tabla.addWidget(self._label_numero_pagina)

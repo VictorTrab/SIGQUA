@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -67,13 +66,6 @@ class GestorRutas:
     def obtener_ruta_icono_tabler(self, nombre_icono: str) -> Path:
         return self.obtener_ruta_directorio_iconos_tabler() / nombre_icono
 
-    def obtener_ruta_documentacion_tecnica(self) -> Path:
-        ruta_configurada = os.getenv("RUTA_DOCUMENTACION_TECNICA")
-        if ruta_configurada:
-            return Path(ruta_configurada).expanduser()
-
-        return Path.home() / "Documents" / f"{NOMBRE_APLICACION} DOCUMENTACION"
-
     def asegurar_directorios_base(self) -> None:
         self.obtener_ruta_directorio_base_datos().mkdir(parents=True, exist_ok=True)
         self.obtener_ruta_migraciones_base_datos().mkdir(parents=True, exist_ok=True)
@@ -82,4 +74,3 @@ class GestorRutas:
         self.obtener_ruta_respaldos().mkdir(parents=True, exist_ok=True)
         self.obtener_ruta_exportaciones_comprobantes().mkdir(parents=True, exist_ok=True)
         self.obtener_ruta_exportaciones_reportes().mkdir(parents=True, exist_ok=True)
-        self.obtener_ruta_documentacion_tecnica().mkdir(parents=True, exist_ok=True)
