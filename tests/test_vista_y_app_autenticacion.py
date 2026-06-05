@@ -232,6 +232,23 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertIs(vista._stack.currentWidget(), vista._pagina_login)
         self.assertIn("actualizo correctamente", vista._mensaje_login.text().lower())
 
+    def test_mostrar_login_limpia_campos_al_regresar(self) -> None:
+        vista = VistaAutenticacion()
+
+        vista._campo_usuario.setText("admin")
+        vista._campo_contrasena.setText("Admin123!")
+        vista.mostrar_restablecer("admin")
+        vista._campo_nueva_contrasena.setText("Nueva123!")
+        vista._campo_confirmacion_contrasena.setText("Nueva123!")
+
+        vista.mostrar_login()
+
+        self.assertEqual(vista._campo_usuario.text(), "")
+        self.assertEqual(vista._campo_contrasena.text(), "")
+        self.assertEqual(vista._campo_nueva_contrasena.text(), "")
+        self.assertEqual(vista._campo_confirmacion_contrasena.text(), "")
+        self.assertIs(vista._stack.currentWidget(), vista._pagina_login)
+
     def test_capa_blur_no_bloquea_acciones_del_login(self) -> None:
         vista = VistaAutenticacion()
         eventos_login = []

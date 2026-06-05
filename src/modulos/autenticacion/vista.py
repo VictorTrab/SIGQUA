@@ -353,7 +353,10 @@ class VistaAutenticacion(QWidget):
         self.restablecer_estado_login()
         self._limpiar_mensaje(self._mensaje_olvido)
         self._limpiar_mensaje(self._mensaje_restablecer)
+        self._campo_usuario.clear()
         self._campo_contrasena.clear()
+        self._campo_nueva_contrasena.clear()
+        self._campo_confirmacion_contrasena.clear()
         self._mostrar_pagina(self._pagina_login, self._campo_usuario)
         if mensaje:
             self._mostrar_mensaje(self._mensaje_login, mensaje, es_exito=es_exito)
