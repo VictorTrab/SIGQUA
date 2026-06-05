@@ -95,10 +95,26 @@ class OperacionConfiguracion:
     respaldo_secundario_activo: bool
     comprimir_zip: bool
     organizar_por_periodo: bool
-    retencion_dias: int
+    retencion_maxima: int
     proxima_ejecucion_programada: str
     ruta_exportaciones_comprobantes: str
     ruta_exportaciones_reportes: str
+
+
+@dataclass(slots=True)
+class RespaldoDisponible:
+    """Respaldo registrado en historial y candidato a restauracion."""
+
+    identificador: int
+    nombre_archivo: str
+    ruta_archivo: str
+    tamano_bytes: int
+    hash_archivo: str
+    tipo_respaldo: str
+    estado: str
+    generado_en: str
+    generado_por: str
+    observaciones: str = ""
 
 
 @dataclass(slots=True)
@@ -125,19 +141,6 @@ class InformacionConfiguracion:
 
 
 @dataclass(slots=True)
-class LaboratorioVisualConfiguracion:
-    """Configuracion temporal para explorar fondos y modales."""
-
-    fondo_aplicado: bool
-    fondo_modo: str
-    fondo_color_primario: str
-    fondo_color_secundario: str
-    modal_modo: str
-    modal_color_primario: str
-    modal_color_secundario: str
-
-
-@dataclass(slots=True)
 class EstadoConfiguracion:
     """Estado agregado mostrado en la UI de configuracion."""
 
@@ -145,9 +148,9 @@ class EstadoConfiguracion:
     parametros_cobro: ParametrosCobro
     factura: FacturaConfiguracion
     operacion: OperacionConfiguracion
+    respaldos_disponibles: tuple[RespaldoDisponible, ...]
     seguridad: SeguridadConfiguracion
     informacion: InformacionConfiguracion
-    laboratorio_visual: LaboratorioVisualConfiguracion
 
     @property
     def datos_junta(self) -> IdentidadEmpresa:

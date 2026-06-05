@@ -31,6 +31,9 @@ class RepositorioConfiguracion(Protocol):
     def obtener_detalle_ultimo_respaldo(self) -> dict[str, object]:
         """Retorna metadatos del ultimo respaldo registrado."""
 
+    def listar_respaldos_disponibles(self, limite: int = 5) -> tuple[dict[str, object], ...]:
+        """Retorna respaldos del historial para restauracion."""
+
     def registrar_respaldo(
         self,
         nombre_archivo: str,
@@ -43,6 +46,19 @@ class RepositorioConfiguracion(Protocol):
         generado_por: int | None = None,
     ) -> None:
         """Registra un respaldo generado desde la capa operativa."""
+
+    def registrar_evento_tecnico(
+        self,
+        categoria: str,
+        severidad: str,
+        mensaje: str,
+        detalle: str = "",
+        origen: str = "configuracion",
+        entidad: str = "",
+        entidad_id: int | None = None,
+        registrado_por: int | None = None,
+    ) -> None:
+        """Registra un evento tecnico auditable."""
 
 
 class RepositorioConfiguracionSQLite:
@@ -192,6 +208,46 @@ class RepositorioConfiguracionSQLite:
             "generado_por_nombre": str(fila["generado_por_nombre"] or ""),
         }
 
+    def listar_respaldos_disponibles(self, limite: int = 5) -> tuple[dict[str, object], ...]:
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            filas = conexion.execute(
+                """
+                SELECT
+                    hr.id,
+                    COALESCE(hr.nombre_archivo, '') AS nombre_archivo,
+                    COALESCE(hr.ruta_archivo, '') AS ruta_archivo,
+                    COALESCE(hr.tamano_bytes, 0) AS tamano_bytes,
+                    COALESCE(hr.hash_archivo, '') AS hash_archivo,
+                    COALESCE(hr.tipo_respaldo, '') AS tipo_respaldo,
+                    COALESCE(hr.estado, '') AS estado,
+                    COALESCE(hr.observaciones, '') AS observaciones,
+                    COALESCE(hr.generado_en, '') AS generado_en,
+                    COALESCE(u.nombre_completo, u.nombre_usuario, '') AS generado_por_nombre
+                FROM historial_respaldos hr
+                LEFT JOIN usuarios u ON u.id = hr.generado_por
+                WHERE hr.estado IN ('GENERADO', 'VALIDADO')
+                  AND hr.tipo_respaldo IN ('MANUAL', 'AUTOMATICO', 'PRE_MANTENIMIENTO')
+                ORDER BY hr.generado_en DESC, hr.id DESC
+                LIMIT ?;
+                """,
+                (max(int(limite), 1),),
+            ).fetchall()
+        return tuple(
+            {
+                "id": int(fila["id"]),
+                "nombre_archivo": str(fila["nombre_archivo"] or ""),
+                "ruta_archivo": str(fila["ruta_archivo"] or ""),
+                "tamano_bytes": int(fila["tamano_bytes"] or 0),
+                "hash_archivo": str(fila["hash_archivo"] or ""),
+                "tipo_respaldo": str(fila["tipo_respaldo"] or ""),
+                "estado": str(fila["estado"] or ""),
+                "observaciones": str(fila["observaciones"] or ""),
+                "generado_en": str(fila["generado_en"] or ""),
+                "generado_por_nombre": str(fila["generado_por_nombre"] or ""),
+            }
+            for fila in filas
+        )
+
     def registrar_respaldo(
         self,
         nombre_archivo: str,
@@ -228,6 +284,45 @@ class RepositorioConfiguracionSQLite:
                         estado,
                         observaciones,
                         generado_por,
+                    ),
+                )
+
+    def registrar_evento_tecnico(
+        self,
+        categoria: str,
+        severidad: str,
+        mensaje: str,
+        detalle: str = "",
+        origen: str = "configuracion",
+        entidad: str = "",
+        entidad_id: int | None = None,
+        registrado_por: int | None = None,
+    ) -> None:
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            with conexion:
+                conexion.execute(
+                    """
+                    INSERT INTO eventos_tecnicos(
+                        categoria,
+                        severidad,
+                        mensaje,
+                        detalle,
+                        origen,
+                        entidad,
+                        entidad_id,
+                        registrado_por
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        categoria,
+                        severidad,
+                        mensaje,
+                        detalle,
+                        origen,
+                        entidad,
+                        entidad_id,
+                        registrado_por,
                     ),
                 )
 

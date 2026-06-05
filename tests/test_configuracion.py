@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import os
 import shutil
+import sqlite3
 import sys
 import unittest
 import uuid
@@ -17,7 +20,7 @@ if str(RUTA_SRC) not in sys.path:
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
-from comun.respaldo import ServicioRespaldoLocal  # noqa: E402
+from comun.respaldo import ConfiguracionRespaldoLocal, ServicioRespaldoLocal  # noqa: E402
 from modulos.configuracion.repositorio import RepositorioConfiguracionSQLite  # noqa: E402
 from modulos.configuracion.servicio import ServicioConfiguracion  # noqa: E402
 
@@ -77,11 +80,12 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.informacion.version_sistema, "2.2.0")
         self.assertEqual(estado.seguridad.maximo_intentos_fallidos, 5)
         self.assertEqual(estado.informacion.actualizado_por, "Sistema")
-        self.assertFalse(estado.laboratorio_visual.fondo_aplicado)
-        self.assertEqual(estado.laboratorio_visual.fondo_modo, "DEGRADADO")
-        self.assertEqual(estado.laboratorio_visual.fondo_color_primario, "#071A2D")
-        self.assertEqual(estado.laboratorio_visual.modal_modo, "SOLIDO")
-        self.assertEqual(estado.laboratorio_visual.modal_color_primario, "#0D2A45")
+        self.assertFalse(hasattr(estado, "laboratorio_visual"))
+        with sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos()) as conexion:
+            parametros_laboratorio = conexion.execute(
+                "SELECT COUNT(*) FROM configuracion_sistema WHERE clave LIKE 'ui.laboratorio.%';"
+            ).fetchone()[0]
+        self.assertEqual(parametros_laboratorio, 0)
 
     def test_guardado_datos_junta_y_cobro_actualiza_base(self) -> None:
         resultado_junta = self.servicio.guardar_datos_junta(
@@ -154,13 +158,13 @@ class TestConfiguracion(unittest.TestCase):
             secundaria_activa=True,
             comprimir_zip=True,
             organizar_por_periodo=True,
-            retencion_dias=15,
-            duracion_sesion_horas=4.0,
             actor_id=1,
         )
+        resultado_sesion = self.servicio.guardar_duracion_sesion(4.0, actor_id=1)
 
         self.assertTrue(resultado_factura.exito)
         self.assertTrue(resultado_respaldo.exito)
+        self.assertTrue(resultado_sesion.exito)
 
         estado = self.servicio.obtener_estado()
         self.assertEqual(estado.factura.titulo_documento, "RECIBO OFICIAL DE PAGO")
@@ -182,8 +186,6 @@ class TestConfiguracion(unittest.TestCase):
             secundaria_activa=True,
             comprimir_zip=True,
             organizar_por_periodo=True,
-            retencion_dias=30,
-            duracion_sesion_horas=8.0,
             actor_id=1,
         )
 
@@ -203,6 +205,123 @@ class TestConfiguracion(unittest.TestCase):
         self.assertTrue(estado.operacion.total_respaldos >= 1)
         self.assertTrue(bool(estado.operacion.ultimo_respaldo_hash))
         self.assertEqual(estado.operacion.ultimo_respaldo_generado_por, "Administrador del Sistema")
+        self.assertEqual(estado.operacion.retencion_maxima, 5)
+        self.assertTrue(estado.respaldos_disponibles)
+
+    def test_retencion_conserva_solo_cinco_respaldos_recientes(self) -> None:
+        ruta_respaldos = self.gestor_rutas.obtener_ruta_respaldos()
+        ruta_respaldos.mkdir(parents=True, exist_ok=True)
+        for indice in range(7):
+            archivo = ruta_respaldos / f"SIGQUA_RESPALDO_PRUEBA_{indice}.zip"
+            archivo.write_bytes(b"contenido")
+            marca_tiempo = 1_700_000_000 + indice
+
+            os.utime(archivo, (marca_tiempo, marca_tiempo))
+
+        self.servicio_respaldo.aplicar_retencion(
+            ConfiguracionRespaldoLocal(
+                ruta_principal=str(ruta_respaldos),
+                ruta_secundaria="",
+                secundaria_activa=False,
+                comprimir_zip=True,
+                organizar_por_periodo=False,
+                retencion_maxima=5,
+                version_sistema="test",
+            )
+        )
+
+        archivos = sorted(archivo.name for archivo in ruta_respaldos.glob("SIGQUA_RESPALDO_PRUEBA_*.zip"))
+        self.assertEqual(
+            archivos,
+            [f"SIGQUA_RESPALDO_PRUEBA_{indice}.zip" for indice in range(2, 7)],
+        )
+
+    def test_restaurar_respaldo_desde_historial_reemplaza_base_y_registra_evento(self) -> None:
+        self.servicio.guardar_operacion_respaldo(
+            ruta_principal=str(self.gestor_rutas.obtener_ruta_respaldos()),
+            ruta_secundaria="",
+            secundaria_activa=False,
+            comprimir_zip=True,
+            organizar_por_periodo=False,
+            actor_id=1,
+        )
+        resultado_respaldo = self.servicio.crear_respaldo_manual(actor_id=1)
+        self.assertTrue(resultado_respaldo.exito)
+        respaldo = self.servicio.obtener_estado().respaldos_disponibles[0]
+
+        with sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos()) as conexion:
+            conexion.execute("CREATE TABLE marcador_post_respaldo(id INTEGER PRIMARY KEY);")
+            conexion.commit()
+
+        resultado = self.servicio.restaurar_respaldo(respaldo.identificador, actor_id=1)
+
+        self.assertTrue(resultado.exito)
+        with sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos()) as conexion:
+            marcador = conexion.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'marcador_post_respaldo';"
+            ).fetchone()
+            restaurado = conexion.execute(
+                "SELECT COUNT(*) FROM historial_respaldos WHERE estado = 'RESTAURADO';"
+            ).fetchone()[0]
+            eventos = conexion.execute(
+                "SELECT COUNT(*) FROM eventos_tecnicos WHERE categoria = 'RESTAURACION';"
+            ).fetchone()[0]
+        self.assertIsNone(marcador)
+        self.assertGreaterEqual(restaurado, 1)
+        self.assertGreaterEqual(eventos, 1)
+
+    def test_restaurar_respaldo_rechaza_archivo_faltante_hash_zip_y_db_invalidos(self) -> None:
+        ruta_respaldos = self.gestor_rutas.obtener_ruta_respaldos()
+        ruta_respaldos.mkdir(parents=True, exist_ok=True)
+
+        ruta_hash_invalido = ruta_respaldos / "SIGQUA_RESPALDO_HASH_INVALIDO.zip"
+        ruta_hash_invalido.write_bytes(b"contenido corrupto")
+        ruta_zip_invalido = ruta_respaldos / "SIGQUA_RESPALDO_ZIP_INVALIDO.zip"
+        ruta_zip_invalido.write_bytes(b"no es zip")
+        ruta_db_invalida = ruta_respaldos / "SIGQUA_RESPALDO_DB_INVALIDA.zip"
+        with zipfile.ZipFile(ruta_db_invalida, "w") as archivo_zip:
+            archivo_zip.writestr("sigqua.db", b"no es una base sqlite")
+
+        casos = (
+            (
+                "archivo faltante",
+                ruta_respaldos / "SIGQUA_RESPALDO_FALTANTE.zip",
+                "0" * 64,
+            ),
+            (
+                "hash invalido",
+                ruta_hash_invalido,
+                "1" * 64,
+            ),
+            (
+                "zip invalido",
+                ruta_zip_invalido,
+                self._calcular_hash_prueba(ruta_zip_invalido),
+            ),
+            (
+                "db invalida",
+                ruta_db_invalida,
+                self._calcular_hash_prueba(ruta_db_invalida),
+            ),
+        )
+
+        for etiqueta, ruta_archivo, hash_archivo in casos:
+            with self.subTest(etiqueta=etiqueta):
+                respaldo_id = self._registrar_respaldo_prueba(ruta_archivo, hash_archivo)
+                resultado = self.servicio.restaurar_respaldo(respaldo_id, actor_id=1)
+                self.assertFalse(resultado.exito)
+                self.assertEqual(resultado.codigo, "ERROR_RESTAURACION")
+
+        with sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos()) as conexion:
+            fallidos = conexion.execute(
+                "SELECT COUNT(*) FROM historial_respaldos WHERE estado = 'FALLIDO';"
+            ).fetchone()[0]
+            eventos = conexion.execute(
+                "SELECT COUNT(*) FROM eventos_tecnicos WHERE categoria = 'RESTAURACION' AND severidad = 'ERROR';"
+            ).fetchone()[0]
+
+        self.assertGreaterEqual(fallidos, 4)
+        self.assertGreaterEqual(eventos, 4)
 
     def test_firma_visual_vacia_usa_texto_predeterminado(self) -> None:
         resultado = self.servicio.guardar_parametros_factura(
@@ -277,6 +396,30 @@ class TestConfiguracion(unittest.TestCase):
 
         self.assertFalse(resultado.exito)
         self.assertEqual(resultado.codigo, "VALIDACION")
+
+    def _registrar_respaldo_prueba(self, ruta_archivo: Path, hash_archivo: str) -> int:
+        self.repositorio.registrar_respaldo(
+            nombre_archivo=ruta_archivo.name,
+            ruta_archivo=str(ruta_archivo),
+            tamano_bytes=ruta_archivo.stat().st_size if ruta_archivo.exists() else 0,
+            hash_archivo=hash_archivo,
+            tipo_respaldo="MANUAL",
+            estado="GENERADO",
+            observaciones="Respaldo de prueba.",
+            generado_por=1,
+        )
+        for respaldo in self.servicio.obtener_estado().respaldos_disponibles:
+            if respaldo.nombre_archivo == ruta_archivo.name:
+                return respaldo.identificador
+        self.fail(f"No se registro el respaldo de prueba {ruta_archivo.name}.")
+
+    @staticmethod
+    def _calcular_hash_prueba(ruta_archivo: Path) -> str:
+        acumulador = hashlib.sha256()
+        with ruta_archivo.open("rb") as archivo:
+            for bloque in iter(lambda: archivo.read(1024 * 1024), b""):
+                acumulador.update(bloque)
+        return acumulador.hexdigest()
 
 if __name__ == "__main__":
     unittest.main()

@@ -242,6 +242,27 @@ class TestMigracionesBaseDatos(unittest.TestCase):
         self.assertIn("contrasena_temporal_expira_en", columnas_usuarios)
         self.assertIsNotNone(version_016_recuperada)
 
+    def test_migracion_027_elimina_parametros_de_laboratorio_visual(self) -> None:
+        ruta_migraciones_origen = RAIZ_PROYECTO / "database" / "migrations"
+        for ruta in ruta_migraciones_origen.glob("*.sql"):
+            destino = self.raiz_temporal / "database" / "migrations" / ruta.name
+            destino.write_text(ruta.read_text(encoding="utf-8"), encoding="utf-8")
+
+        gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
+        gestor = GestorBaseDatos(gestor_rutas)
+        ruta_db = gestor.inicializar_base_datos(incluir_datos_prueba=True)
+
+        with closing(sqlite3.connect(ruta_db)) as conexion:
+            parametros = conexion.execute(
+                "SELECT COUNT(*) FROM configuracion_sistema WHERE clave LIKE 'ui.laboratorio.%';"
+            ).fetchone()[0]
+            version = conexion.execute(
+                "SELECT 1 FROM esquema_migraciones WHERE version = '027' LIMIT 1;"
+            ).fetchone()
+
+        self.assertEqual(parametros, 0)
+        self.assertIsNotNone(version)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -39,6 +39,12 @@ class ControladorConfiguracion:
         self._vista_configuracion.crear_respaldo_manual_solicitado.connect(
             self._crear_respaldo_manual
         )
+        self._vista_configuracion.restaurar_respaldo_solicitado.connect(
+            self._restaurar_respaldo
+        )
+        self._vista_configuracion.guardar_duracion_sesion_solicitado.connect(
+            self._guardar_duracion_sesion
+        )
         self._vista_configuracion.probar_impresora_comprobantes_solicitado.connect(
             self._probar_impresora_comprobantes
         )
@@ -171,8 +177,6 @@ class ControladorConfiguracion:
         secundaria_activa: bool,
         comprimir_zip: bool,
         organizar_por_periodo: bool,
-        retencion_dias: int,
-        duracion_sesion_horas: float,
     ) -> None:
         resultado = self._servicio_configuracion.guardar_operacion_respaldo(
             ruta_principal=ruta_principal,
@@ -180,8 +184,6 @@ class ControladorConfiguracion:
             secundaria_activa=secundaria_activa,
             comprimir_zip=comprimir_zip,
             organizar_por_periodo=organizar_por_periodo,
-            retencion_dias=retencion_dias,
-            duracion_sesion_horas=duracion_sesion_horas,
             actor_id=None if self._actor is None else self._actor.identificador,
         )
         self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
@@ -190,6 +192,23 @@ class ControladorConfiguracion:
 
     def _crear_respaldo_manual(self) -> None:
         resultado = self._servicio_configuracion.crear_respaldo_manual(
+            actor_id=None if self._actor is None else self._actor.identificador,
+        )
+        self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
+        if resultado.exito:
+            self._refrescar()
+
+    def _restaurar_respaldo(self, respaldo_id: int) -> None:
+        resultado = self._servicio_configuracion.restaurar_respaldo(
+            respaldo_id=respaldo_id,
+            actor_id=None if self._actor is None else self._actor.identificador,
+        )
+        self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
+        self._refrescar()
+
+    def _guardar_duracion_sesion(self, duracion_sesion_horas: float) -> None:
+        resultado = self._servicio_configuracion.guardar_duracion_sesion(
+            duracion_sesion_horas=duracion_sesion_horas,
             actor_id=None if self._actor is None else self._actor.identificador,
         )
         self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)

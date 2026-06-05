@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
@@ -29,7 +29,7 @@ class ConfiguracionRespaldoLocal:
     secundaria_activa: bool
     comprimir_zip: bool
     organizar_por_periodo: bool
-    retencion_dias: int
+    retencion_maxima: int
     version_sistema: str
 
 
@@ -46,6 +46,17 @@ class DetalleRespaldoLocal:
     generado_en: str
     observaciones: str = ""
     ruta_archivo_secundaria: str = ""
+
+
+@dataclass(slots=True)
+class ResultadoRestauracionLocal:
+    """Resultado tecnico de una restauracion de respaldo."""
+
+    nombre_archivo: str
+    ruta_archivo: str
+    respaldo_seguridad: str
+    estado: str
+    observaciones: str
 
 
 class RepositorioHistorialRespaldos(Protocol):
@@ -181,9 +192,8 @@ class ServicioRespaldoLocal:
         return detalle
 
     def aplicar_retencion(self, configuracion: ConfiguracionRespaldoLocal) -> None:
-        if configuracion.retencion_dias < 1:
+        if configuracion.retencion_maxima < 1:
             return
-        limite = datetime.now() - timedelta(days=configuracion.retencion_dias)
         rutas = (
             configuracion.ruta_principal,
             configuracion.ruta_secundaria if configuracion.secundaria_activa else "",
@@ -192,9 +202,71 @@ class ServicioRespaldoLocal:
             directorio = Path(ruta_base).expanduser()
             if not directorio.exists():
                 continue
-            for archivo in directorio.rglob("SIGQUA_RESPALDO_*"):
-                if archivo.is_file() and datetime.fromtimestamp(archivo.stat().st_mtime) < limite:
-                    archivo.unlink(missing_ok=True)
+            archivos = sorted(
+                (
+                    archivo
+                    for archivo in directorio.rglob("SIGQUA_RESPALDO_*")
+                    if archivo.is_file() and archivo.suffix.lower() in {".zip", ".db"}
+                ),
+                key=lambda archivo: archivo.stat().st_mtime,
+                reverse=True,
+            )
+            for archivo in archivos[configuracion.retencion_maxima :]:
+                archivo.unlink(missing_ok=True)
+
+    def restaurar_respaldo(
+        self,
+        ruta_respaldo: str,
+        hash_esperado: str,
+        configuracion: ConfiguracionRespaldoLocal,
+        repositorio_historial: RepositorioHistorialRespaldos,
+        generado_por: int | None = None,
+    ) -> ResultadoRestauracionLocal:
+        ruta_origen = Path(ruta_respaldo).expanduser()
+        if not ruta_origen.exists() or not ruta_origen.is_file():
+            raise FileNotFoundError("El archivo de respaldo registrado no existe.")
+
+        hash_actual = self._calcular_hash_archivo(ruta_origen)
+        if hash_esperado.strip() and hash_actual.lower() != hash_esperado.strip().lower():
+            raise ValueError("El hash del respaldo no coincide con el historial.")
+
+        with tempfile.TemporaryDirectory(prefix="sigqua_restauracion_") as directorio_temporal:
+            ruta_temporal_db = Path(directorio_temporal) / "sigqua_restaurada.db"
+            self._extraer_base_respaldo(ruta_origen, ruta_temporal_db)
+            self._validar_base_generada(ruta_temporal_db)
+
+            respaldo_seguridad = self.crear_respaldo_manual(
+                configuracion=configuracion,
+                repositorio_historial=repositorio_historial,
+                generado_por=generado_por,
+                tipo_respaldo="PRE_MANTENIMIENTO",
+            )
+            ruta_base_datos = self._gestor_rutas.obtener_ruta_base_datos()
+            ruta_base_datos.parent.mkdir(parents=True, exist_ok=True)
+            self._reemplazar_base_datos(ruta_temporal_db, ruta_base_datos)
+
+        return ResultadoRestauracionLocal(
+            nombre_archivo=ruta_origen.name,
+            ruta_archivo=str(ruta_origen),
+            respaldo_seguridad=respaldo_seguridad.ruta_archivo,
+            estado="RESTAURADO",
+            observaciones="Base restaurada correctamente. Reinicia SIGQUA para recargar la sesion.",
+        )
+
+    @staticmethod
+    def _extraer_base_respaldo(ruta_origen: Path, ruta_destino: Path) -> None:
+        if ruta_origen.suffix.lower() == ".zip":
+            with zipfile.ZipFile(ruta_origen, "r") as archivo_zip:
+                nombres = set(archivo_zip.namelist())
+                if "sigqua.db" not in nombres:
+                    raise ValueError("El ZIP de respaldo no contiene sigqua.db.")
+                with archivo_zip.open("sigqua.db", "r") as origen, ruta_destino.open("wb") as destino:
+                    shutil.copyfileobj(origen, destino)
+            return
+        if ruta_origen.suffix.lower() == ".db":
+            shutil.copy2(ruta_origen, ruta_destino)
+            return
+        raise ValueError("El respaldo debe ser un archivo .zip o .db generado por SIGQUA.")
 
     def _copiar_base_segura(self, ruta_destino: Path) -> None:
         conexion_origen = self._gestor_base_datos.obtener_conexion()
@@ -204,6 +276,28 @@ class ServicioRespaldoLocal:
         finally:
             conexion_destino.close()
             conexion_origen.close()
+
+    def _reemplazar_base_datos(self, ruta_origen: Path, ruta_base_datos: Path) -> None:
+        self._cerrar_estado_sqlite_pendiente(ruta_base_datos)
+        conexion_origen = sqlite3.connect(ruta_origen)
+        conexion_destino = sqlite3.connect(ruta_base_datos)
+        try:
+            conexion_origen.backup(conexion_destino)
+            conexion_destino.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        finally:
+            conexion_destino.close()
+            conexion_origen.close()
+        self._validar_base_generada(ruta_base_datos)
+
+    @staticmethod
+    def _cerrar_estado_sqlite_pendiente(ruta_base_datos: Path) -> None:
+        if not ruta_base_datos.exists():
+            return
+        conexion = sqlite3.connect(ruta_base_datos)
+        try:
+            conexion.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        finally:
+            conexion.close()
 
     @staticmethod
     def _validar_base_generada(ruta_base_datos: Path) -> None:

@@ -23,9 +23,9 @@ from modulos.configuracion.entidades import (
     FacturaConfiguracion,
     IdentidadEmpresa,
     InformacionConfiguracion,
-    LaboratorioVisualConfiguracion,
     OperacionConfiguracion,
     ParametrosCobro,
+    RespaldoDisponible,
     ResultadoGestionConfiguracion,
     SeguridadConfiguracion,
 )
@@ -77,27 +77,12 @@ CLAVES_SISTEMA = (
     "respaldo.secundaria_activa",
     "respaldo.comprimir_zip",
     "respaldo.organizar_por_periodo",
-    "respaldo.retencion_dias",
     "mantenimiento.ruta_respaldos",
-    "mantenimiento.dias_retencion_respaldos",
-)
-CLAVES_LABORATORIO_VISUAL = (
-    "ui.laboratorio.fondo_aplicado",
-    "ui.laboratorio.fondo_modo",
-    "ui.laboratorio.fondo_color_primario",
-    "ui.laboratorio.fondo_color_secundario",
-    "ui.laboratorio.modal_modo",
-    "ui.laboratorio.modal_color_primario",
-    "ui.laboratorio.modal_color_secundario",
 )
 TEXTO_FIRMA_PREDETERMINADO = "Firma autorizada"
 DURACIONES_SESION_HORAS_VALIDAS = (0.5, 1.0, 2.0, 4.0, 8.0, 12.0)
 MAXIMO_INTENTOS_FALLIDOS_OPERATIVO = 5
-MODOS_LABORATORIO_VISUAL_VALIDOS = ("SOLIDO", "DEGRADADO")
-COLOR_HEX_PREDETERMINADO_FONDO = "#071A2D"
-COLOR_HEX_PREDETERMINADO_FONDO_SECUNDARIO = "#0D2A45"
-COLOR_HEX_PREDETERMINADO_MODAL = "#0D2A45"
-COLOR_HEX_PREDETERMINADO_MODAL_SECUNDARIO = "#123553"
+RETENCION_MAXIMA_RESPALDOS = 5
 
 
 class ServicioConfiguracion:
@@ -123,7 +108,6 @@ class ServicioConfiguracion:
             + CLAVES_COBRO
             + CLAVES_FACTURA
             + CLAVES_SISTEMA
-            + CLAVES_LABORATORIO_VISUAL
         )
         parametros = self._repositorio_configuracion.listar_por_claves(claves)
         correlativo_actual, ultimo_comprobante, total_comprobantes = (
@@ -239,7 +223,7 @@ class ServicioConfiguracion:
             respaldo_secundario_activo=configuracion_respaldo.secundaria_activa,
             comprimir_zip=configuracion_respaldo.comprimir_zip,
             organizar_por_periodo=configuracion_respaldo.organizar_por_periodo,
-            retencion_dias=configuracion_respaldo.retencion_dias,
+            retencion_maxima=configuracion_respaldo.retencion_maxima,
             proxima_ejecucion_programada="Activo al cerrar sesion",
             ruta_exportaciones_comprobantes="No aplica: los comprobantes se imprimen por ESC/POS.",
             ruta_exportaciones_reportes=str(self._gestor_rutas.obtener_ruta_exportaciones_reportes()),
@@ -262,61 +246,7 @@ class ServicioConfiguracion:
             restablecimiento_administrativo=True,
             cambio_contrasena_obligatorio=True,
         )
-        laboratorio_visual = LaboratorioVisualConfiguracion(
-            fondo_aplicado=self._a_booleano(
-                self._valor_parametro(
-                    parametros,
-                    "ui.laboratorio.fondo_aplicado",
-                    "0",
-                )
-            ),
-            fondo_modo=self._resolver_modo_laboratorio_visual(
-                self._valor_parametro(
-                    parametros,
-                    "ui.laboratorio.fondo_modo",
-                    "DEGRADADO",
-                )
-            ),
-            fondo_color_primario=self._resolver_color_hex_laboratorio_visual(
-                self._valor_parametro(
-                    parametros,
-                    "ui.laboratorio.fondo_color_primario",
-                    COLOR_HEX_PREDETERMINADO_FONDO,
-                ),
-                COLOR_HEX_PREDETERMINADO_FONDO,
-            ),
-            fondo_color_secundario=self._resolver_color_hex_laboratorio_visual(
-                self._valor_parametro(
-                    parametros,
-                    "ui.laboratorio.fondo_color_secundario",
-                    COLOR_HEX_PREDETERMINADO_FONDO_SECUNDARIO,
-                ),
-                COLOR_HEX_PREDETERMINADO_FONDO_SECUNDARIO,
-            ),
-            modal_modo=self._resolver_modo_laboratorio_visual(
-                self._valor_parametro(
-                    parametros,
-                    "ui.laboratorio.modal_modo",
-                    "SOLIDO",
-                )
-            ),
-            modal_color_primario=self._resolver_color_hex_laboratorio_visual(
-                self._valor_parametro(
-                    parametros,
-                    "ui.laboratorio.modal_color_primario",
-                    COLOR_HEX_PREDETERMINADO_MODAL,
-                ),
-                COLOR_HEX_PREDETERMINADO_MODAL,
-            ),
-            modal_color_secundario=self._resolver_color_hex_laboratorio_visual(
-                self._valor_parametro(
-                    parametros,
-                    "ui.laboratorio.modal_color_secundario",
-                    COLOR_HEX_PREDETERMINADO_MODAL_SECUNDARIO,
-                ),
-                COLOR_HEX_PREDETERMINADO_MODAL_SECUNDARIO,
-            ),
-        )
+        respaldos_disponibles = self._listar_respaldos_disponibles()
         return EstadoConfiguracion(
             identidad_empresa=IdentidadEmpresa(
                 nombre=identidad.nombre,
@@ -330,9 +260,9 @@ class ServicioConfiguracion:
             parametros_cobro=parametros_cobro,
             factura=factura,
             operacion=operacion,
+            respaldos_disponibles=respaldos_disponibles,
             seguridad=seguridad,
             informacion=informacion,
-            laboratorio_visual=laboratorio_visual,
         )
 
     def guardar_datos_junta(
@@ -503,17 +433,11 @@ class ServicioConfiguracion:
         secundaria_activa: bool,
         comprimir_zip: bool,
         organizar_por_periodo: bool,
-        retencion_dias: int,
-        duracion_sesion_horas: float,
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
         ruta_principal = ruta_principal.strip()
         ruta_secundaria = ruta_secundaria.strip()
 
-        if duracion_sesion_horas not in DURACIONES_SESION_HORAS_VALIDAS:
-            return ResultadoGestionConfiguracion(False, "Selecciona un tiempo de sesion valido.", "VALIDACION")
-        if retencion_dias < 1:
-            return ResultadoGestionConfiguracion(False, "La retencion minima debe ser de 1 dia.", "VALIDACION")
         valido_principal, mensaje_principal = self._validar_directorio_respaldo(ruta_principal)
         if not valido_principal:
             return ResultadoGestionConfiguracion(False, mensaje_principal, "VALIDACION")
@@ -528,13 +452,11 @@ class ServicioConfiguracion:
             self._repositorio_configuracion.actualizar_valores(
                 {
                     "sistema.respaldo_automatico": "1",
-                    "seguridad.duracion_sesion_horas": self._duracion_a_texto(duracion_sesion_horas),
                     "respaldo.ruta_principal": ruta_principal,
                     "respaldo.ruta_secundaria": ruta_secundaria,
                     "respaldo.secundaria_activa": "1" if secundaria_activa else "0",
                     "respaldo.comprimir_zip": "1" if comprimir_zip else "0",
                     "respaldo.organizar_por_periodo": "1" if organizar_por_periodo else "0",
-                    "respaldo.retencion_dias": str(retencion_dias),
                 },
                 actor_id=actor_id,
             )
@@ -542,72 +464,84 @@ class ServicioConfiguracion:
             return ResultadoGestionConfiguracion(False, "No fue posible actualizar el control de respaldos.", "ERROR_SQLITE")
         return ResultadoGestionConfiguracion(True, "Respaldos actualizados. El respaldo automatico se ejecutara al cerrar sesion.", "OK")
 
-    def guardar_laboratorio_visual(
+    def guardar_duracion_sesion(
         self,
-        fondo_aplicado: bool,
-        fondo_modo: str,
-        fondo_color_primario: str,
-        fondo_color_secundario: str,
-        modal_modo: str,
-        modal_color_primario: str,
-        modal_color_secundario: str,
+        duracion_sesion_horas: float,
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
-        fondo_modo = self._resolver_modo_laboratorio_visual(fondo_modo)
-        modal_modo = self._resolver_modo_laboratorio_visual(modal_modo)
-        fondo_color_primario = self._resolver_color_hex_laboratorio_visual(
-            fondo_color_primario,
-            "",
-        )
-        fondo_color_secundario = self._resolver_color_hex_laboratorio_visual(
-            fondo_color_secundario,
-            "",
-        )
-        modal_color_primario = self._resolver_color_hex_laboratorio_visual(
-            modal_color_primario,
-            "",
-        )
-        modal_color_secundario = self._resolver_color_hex_laboratorio_visual(
-            modal_color_secundario,
-            "",
-        )
-
-        if not fondo_color_primario:
-            return ResultadoGestionConfiguracion(False, "Indica un color primario valido para el fondo temporal.", "VALIDACION")
-        if fondo_modo == "DEGRADADO" and not fondo_color_secundario:
-            return ResultadoGestionConfiguracion(False, "Indica un color secundario valido para el degradado del fondo temporal.", "VALIDACION")
-        if not modal_color_primario:
-            return ResultadoGestionConfiguracion(False, "Indica un color primario valido para el modal temporal.", "VALIDACION")
-        if modal_modo == "DEGRADADO" and not modal_color_secundario:
-            return ResultadoGestionConfiguracion(False, "Indica un color secundario valido para el degradado del modal temporal.", "VALIDACION")
-
-        if fondo_modo == "SOLIDO":
-            fondo_color_secundario = fondo_color_primario
-        if modal_modo == "SOLIDO":
-            modal_color_secundario = modal_color_primario
+        if duracion_sesion_horas not in DURACIONES_SESION_HORAS_VALIDAS:
+            return ResultadoGestionConfiguracion(False, "Selecciona un tiempo de sesion valido.", "VALIDACION")
 
         try:
             self._repositorio_configuracion.actualizar_valores(
-                {
-                    "ui.laboratorio.fondo_aplicado": "1" if fondo_aplicado else "0",
-                    "ui.laboratorio.fondo_modo": fondo_modo,
-                    "ui.laboratorio.fondo_color_primario": fondo_color_primario,
-                    "ui.laboratorio.fondo_color_secundario": fondo_color_secundario,
-                    "ui.laboratorio.modal_modo": modal_modo,
-                    "ui.laboratorio.modal_color_primario": modal_color_primario,
-                    "ui.laboratorio.modal_color_secundario": modal_color_secundario,
-                },
+                {"seguridad.duracion_sesion_horas": self._duracion_a_texto(duracion_sesion_horas)},
                 actor_id=actor_id,
             )
         except Exception:
-            return ResultadoGestionConfiguracion(False, "No fue posible guardar el laboratorio visual temporal.", "ERROR_SQLITE")
-        return ResultadoGestionConfiguracion(True, "Laboratorio visual temporal actualizado.", "OK")
+            return ResultadoGestionConfiguracion(False, "No fue posible actualizar la duracion de sesion.", "ERROR_SQLITE")
+        return ResultadoGestionConfiguracion(True, "Duracion de sesion actualizada.", "OK")
 
     def crear_respaldo_manual(self, actor_id: int | None = None) -> ResultadoGestionConfiguracion:
         return self._crear_respaldo("MANUAL", actor_id=actor_id)
 
     def crear_respaldo_automatico(self, actor_id: int | None = None) -> ResultadoGestionConfiguracion:
         return self._crear_respaldo("AUTOMATICO", actor_id=actor_id)
+
+    def restaurar_respaldo(
+        self,
+        respaldo_id: int,
+        actor_id: int | None = None,
+    ) -> ResultadoGestionConfiguracion:
+        if self._servicio_respaldo is None:
+            return ResultadoGestionConfiguracion(False, "El backend de respaldo no esta disponible.", "ERROR_CONFIG")
+        respaldo = self._obtener_respaldo_disponible(respaldo_id)
+        if respaldo is None:
+            return ResultadoGestionConfiguracion(False, "Selecciona un respaldo disponible para restaurar.", "VALIDACION")
+        estado = self.obtener_estado()
+        configuracion = ConfiguracionRespaldoLocal(
+            ruta_principal=estado.operacion.ruta_respaldos_principal,
+            ruta_secundaria=estado.operacion.ruta_respaldos_secundaria,
+            secundaria_activa=estado.operacion.respaldo_secundario_activo,
+            comprimir_zip=estado.operacion.comprimir_zip,
+            organizar_por_periodo=estado.operacion.organizar_por_periodo,
+            retencion_maxima=RETENCION_MAXIMA_RESPALDOS,
+            version_sistema=estado.informacion.version_sistema or "Sin version",
+        )
+        try:
+            resultado = self._servicio_respaldo.restaurar_respaldo(
+                ruta_respaldo=respaldo.ruta_archivo,
+                hash_esperado=respaldo.hash_archivo,
+                configuracion=configuracion,
+                repositorio_historial=self._repositorio_configuracion,
+                generado_por=actor_id,
+            )
+            self._repositorio_configuracion.registrar_respaldo(
+                nombre_archivo=resultado.nombre_archivo,
+                ruta_archivo=resultado.ruta_archivo,
+                tamano_bytes=0,
+                hash_archivo=respaldo.hash_archivo,
+                tipo_respaldo=respaldo.tipo_respaldo or "MANUAL",
+                estado="RESTAURADO",
+                observaciones=resultado.observaciones,
+                generado_por=actor_id,
+            )
+            self._repositorio_configuracion.registrar_evento_tecnico(
+                categoria="RESTAURACION",
+                severidad="ADVERTENCIA",
+                mensaje=f"Respaldo restaurado: {resultado.nombre_archivo}",
+                detalle=f"Respaldo de seguridad previo: {resultado.respaldo_seguridad}",
+                entidad="historial_respaldos",
+                entidad_id=respaldo.identificador,
+                registrado_por=actor_id,
+            )
+        except Exception as error:
+            self._registrar_fallo_restauracion(respaldo, str(error), actor_id)
+            return ResultadoGestionConfiguracion(False, f"No fue posible restaurar el respaldo: {error}", "ERROR_RESTAURACION")
+        return ResultadoGestionConfiguracion(
+            True,
+            "Respaldo restaurado correctamente. Reinicia SIGQUA para recargar la base restaurada.",
+            "OK",
+        )
 
     def probar_impresora_comprobantes(self, nombre_impresora: str) -> ResultadoGestionConfiguracion:
         nombre_impresora = nombre_impresora.strip()
@@ -655,7 +589,7 @@ class ServicioConfiguracion:
                     secundaria_activa=estado.operacion.respaldo_secundario_activo,
                     comprimir_zip=estado.operacion.comprimir_zip,
                     organizar_por_periodo=estado.operacion.organizar_por_periodo,
-                    retencion_dias=estado.operacion.retencion_dias,
+                    retencion_maxima=RETENCION_MAXIMA_RESPALDOS,
                     version_sistema=estado.informacion.version_sistema or "Sin version",
                 ),
                 repositorio_historial=self._repositorio_configuracion,
@@ -665,6 +599,63 @@ class ServicioConfiguracion:
         except Exception as error:
             return ResultadoGestionConfiguracion(False, f"No fue posible generar el respaldo: {error}", "ERROR_RESPALDO")
         return ResultadoGestionConfiguracion(True, f"Respaldo generado: {detalle.nombre_archivo}", "OK")
+
+    def _listar_respaldos_disponibles(self) -> tuple[RespaldoDisponible, ...]:
+        return tuple(
+            RespaldoDisponible(
+                identificador=int(fila.get("id", 0)),
+                nombre_archivo=str(fila.get("nombre_archivo", "")),
+                ruta_archivo=str(fila.get("ruta_archivo", "")),
+                tamano_bytes=int(fila.get("tamano_bytes", 0) or 0),
+                hash_archivo=str(fila.get("hash_archivo", "")),
+                tipo_respaldo=str(fila.get("tipo_respaldo", "")),
+                estado=str(fila.get("estado", "")),
+                generado_en=str(fila.get("generado_en", "")),
+                generado_por=self._resolver_autoria(
+                    str(fila.get("generado_por_nombre", "")),
+                    bool(fila.get("generado_en", "")),
+                ),
+                observaciones=str(fila.get("observaciones", "")),
+            )
+            for fila in self._repositorio_configuracion.listar_respaldos_disponibles(
+                RETENCION_MAXIMA_RESPALDOS
+            )
+        )
+
+    def _obtener_respaldo_disponible(self, respaldo_id: int) -> RespaldoDisponible | None:
+        for respaldo in self._listar_respaldos_disponibles():
+            if respaldo.identificador == respaldo_id:
+                return respaldo
+        return None
+
+    def _registrar_fallo_restauracion(
+        self,
+        respaldo: RespaldoDisponible,
+        detalle: str,
+        actor_id: int | None,
+    ) -> None:
+        try:
+            self._repositorio_configuracion.registrar_respaldo(
+                nombre_archivo=respaldo.nombre_archivo,
+                ruta_archivo=respaldo.ruta_archivo,
+                tamano_bytes=respaldo.tamano_bytes,
+                hash_archivo=respaldo.hash_archivo,
+                tipo_respaldo=respaldo.tipo_respaldo or "MANUAL",
+                estado="FALLIDO",
+                observaciones=detalle,
+                generado_por=actor_id,
+            )
+            self._repositorio_configuracion.registrar_evento_tecnico(
+                categoria="RESTAURACION",
+                severidad="ERROR",
+                mensaje=f"Fallo la restauracion del respaldo: {respaldo.nombre_archivo}",
+                detalle=detalle,
+                entidad="historial_respaldos",
+                entidad_id=respaldo.identificador,
+                registrado_por=actor_id,
+            )
+        except Exception:
+            pass
 
     def opciones_duracion_sesion(self) -> tuple[tuple[str, float], ...]:
         return (
@@ -766,13 +757,6 @@ class ServicioConfiguracion:
                 str(self._gestor_rutas.obtener_ruta_respaldos()),
             ),
         )
-        retencion_predeterminada = self._a_entero(
-            self._valor_parametro(
-                parametros,
-                "respaldo.retencion_dias",
-                self._valor_parametro(parametros, "mantenimiento.dias_retencion_respaldos", "30"),
-            )
-        )
         return ConfiguracionRespaldoLocal(
             ruta_principal=self._normalizar_ruta_configurada(ruta_predeterminada),
             ruta_secundaria=self._normalizar_ruta_configurada(
@@ -783,7 +767,7 @@ class ServicioConfiguracion:
             organizar_por_periodo=self._a_booleano(
                 self._valor_parametro(parametros, "respaldo.organizar_por_periodo", "1")
             ),
-            retencion_dias=max(retencion_predeterminada, 1),
+            retencion_maxima=RETENCION_MAXIMA_RESPALDOS,
             version_sistema=self._valor_parametro(parametros, "sistema.version", ""),
         )
 
@@ -816,19 +800,3 @@ class ServicioConfiguracion:
         if not ruta_path.is_absolute():
             ruta_path = self._gestor_rutas.raiz_proyecto / ruta_path
         return str(ruta_path)
-
-    @staticmethod
-    def _resolver_modo_laboratorio_visual(valor: str) -> str:
-        valor_limpio = str(valor or "").strip().upper()
-        return valor_limpio if valor_limpio in MODOS_LABORATORIO_VISUAL_VALIDOS else "SOLIDO"
-
-    @staticmethod
-    def _resolver_color_hex_laboratorio_visual(valor: str, predeterminado: str) -> str:
-        valor_limpio = str(valor or "").strip().upper()
-        if (
-            len(valor_limpio) == 7
-            and valor_limpio.startswith("#")
-            and all(caracter in "0123456789ABCDEF" for caracter in valor_limpio[1:])
-        ):
-            return valor_limpio
-        return predeterminado

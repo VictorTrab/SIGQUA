@@ -1,19 +1,62 @@
-__pycache__/
-*.pyc
+# Entornos locales
 .env
-*.db
-*.sqlite
+.env.*
+!.env.example
 .venv/
 venv/
-dist/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Build y empaquetado
 build/
+dist/
+*.egg-info/
 *.spec
-logs/*.log
-logs/*.txt
-respaldos/
-.codex-temp/
-.sicap-webengine/
+
+# Base de datos y estado local
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
+database/*.db
+database/*.sqlite*
+database/*.db-*
+
+# Archivos operativos generados por SIGQUA
+/logs/*
+!/logs/.gitkeep
+/respaldos/
+/exportaciones/
+/tmp/
+/.codex-temp/
+/.sicap-webengine/
+
+# Temporales de pruebas
 tests/_tmp*/
-credenciales_desarrollo_temporales.txt
+tests/tmp*/
+tests/**/_tmp*/
+tests/**/tmp*/
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+
+# Herramientas locales
 .tmp_figma_make
-tmp
+credenciales_desarrollo_temporales.txt
