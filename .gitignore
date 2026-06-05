@@ -38,6 +38,8 @@ database/*.db-*
 # Archivos operativos generados por SIGQUA
 /logs/*
 !/logs/.gitkeep
+*.log
+*.log.*
 /respaldos/
 /exportaciones/
 /tmp/

@@ -7,6 +7,10 @@ from copy import deepcopy
 
 TEMA_SIGQUA_PREDETERMINADO = "tema_sigqua"
 
+# ---------------------------------------------------------------------------
+# Paleta de colores y estilos compartidos para el tema SIGQUA
+# ---------------------------------------------------------------------------
+
 _PALETA_TEMA_SIGQUA: dict[str, object] = {
     "nombre": "tema sigqua",
     "familia_tipografica": "Segoe UI",
@@ -17,6 +21,8 @@ _PALETA_TEMA_SIGQUA: dict[str, object] = {
     "peso_titulo": 800,
     "peso_subtitulo": 700,
     "peso_cuerpo": 600,
+
+    # Fondo general y superficies principales
     "fondo_principal": "#071A2D",
     "fondo_sidebar": "#061525",
     "fondo_header": "#0D2A45",
@@ -26,6 +32,8 @@ _PALETA_TEMA_SIGQUA: dict[str, object] = {
     "fondo_superficie_muy_suave": "#082238",
     "fondo_superficie_destacada": "#183F5F",
     "fondo_panel_accion": "#123553",
+
+    # Fondos de componentes específicos
     "fondo_input": "#082238",
     "fondo_input_focus": "#0D2A45",
     "fondo_tabla_header": "#0A3152",
@@ -48,6 +56,8 @@ _PALETA_TEMA_SIGQUA: dict[str, object] = {
     "fondo_avatar": "rgba(117, 199, 240, 0.14)",
     "fondo_menu_activo": "rgba(117, 199, 240, 0.24)",
     "fondo_menu_hover": "rgba(117, 199, 240, 0.13)",
+
+    # Bordes y contornos
     "borde_principal": "rgba(126, 167, 196, 0.48)",
     "borde_suave": "rgba(126, 167, 196, 0.30)",
     "borde_tabla": "rgba(126, 167, 196, 0.28)",
@@ -62,6 +72,8 @@ _PALETA_TEMA_SIGQUA: dict[str, object] = {
     "borde_neutro": "rgba(142, 168, 188, 0.28)",
     "borde_avatar": "rgba(126, 167, 196, 0.32)",
     "borde_menu_activo": "rgba(117, 199, 240, 0.66)",
+
+    # Texto y tipografía por superficie
     "texto_principal": "#F4FAFF",
     "texto_secundario": "#C5DDEE",
     "texto_suave": "#C5DDEE",
@@ -87,6 +99,8 @@ _PALETA_TEMA_SIGQUA: dict[str, object] = {
     "texto_menu_activo": "#F4FAFF",
     "texto_menu_normal": "#C5DDEE",
     "texto_menu_seccion": "#92B6CC",
+
+    # Tarjetas, gráficos y componentes visuales específicos
     "tarjeta_panel_stop_1": "#0D2A45",
     "tarjeta_panel_stop_2": "#123553",
     "tarjeta_panel_stop_3": "#0A3152",
@@ -125,6 +139,8 @@ _PALETA_TEMA_SIGQUA: dict[str, object] = {
     "icono_tema_activo": "#75C7F0",
     "icono_tema_inactivo": "#C5DDEE",
     "icono_menu_activo": "#75C7F0",
+
+    # Iconos por función
     "icono_menu_normal": "#C5DDEE",
     "icono_ver": "#75C7F0",
     "icono_editar": "#F5B84B",
@@ -132,9 +148,13 @@ _PALETA_TEMA_SIGQUA: dict[str, object] = {
     "icono_historial": "#A7B8FF",
     "icono_peligro": "#F27474",
     "icono_aviso": "#F5B84B",
+
+    # Acentos y estados interactivos
     "acento_primario": "#75C7F0",
     "acento_hover": "#49A9DC",
     "acento_seleccion": "rgba(117, 199, 240, 0.22)",
+
+    # Botones principales, secundarios y de peligro
     "boton_primario_fondo": "#75C7F0",
     "boton_primario_texto": "#061525",
     "boton_primario_hover": "#9AD8F5",
@@ -146,6 +166,8 @@ _PALETA_TEMA_SIGQUA: dict[str, object] = {
     "boton_peligro_hover": "#A84B58",
     "boton_deshabilitado_fondo": "#243A4D",
     "boton_deshabilitado_texto": "#92B6CC",
+
+    # Modales y componentes de diálogo
     "modal_fondo": "#0D2A45",
     "modal_fondo_seccion": "#123553",
     "modal_fondo_campo": "#082238",
@@ -162,7 +184,16 @@ _PALETA_TEMA_SIGQUA: dict[str, object] = {
     "modal_icono_accion_principal": "#061525",
 }
 
+# ---------------------------------------------------------------------------
+# Estado interno del tema activo
+# ---------------------------------------------------------------------------
+
 _tema_actual = TEMA_SIGQUA_PREDETERMINADO
+
+
+# ---------------------------------------------------------------------------
+# API de temas: resolución, lectura y escritura del tema actual
+# ---------------------------------------------------------------------------
 
 
 def obtener_tema_actual() -> str:
