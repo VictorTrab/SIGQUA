@@ -43,6 +43,12 @@ class GestorRutas:
     def obtener_ruta_exportaciones_reportes(self) -> Path:
         return self.obtener_ruta_exportaciones() / "reportes"
 
+    def obtener_ruta_descargas_usuario(self) -> Path:
+        return Path.home() / "Downloads"
+
+    def obtener_ruta_reportes_predeterminada(self) -> Path:
+        return self.obtener_ruta_descargas_usuario() / "SIGQUA Reportes"
+
     def obtener_ruta_env(self) -> Path:
         return self.raiz_proyecto / ".env"
 

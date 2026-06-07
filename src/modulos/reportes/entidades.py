@@ -9,8 +9,11 @@ REPORTE_DEUDA_ABONADOS_ESTADO = "deuda_abonados_estado"
 REPORTE_SERVICIO_CASAS = "servicio_casas"
 REPORTE_INGRESOS_MENSUALES_DIARIOS = "ingresos_mensuales_diarios"
 REPORTE_HISTORIAL_ABONADO_CASA = "historial_abonado_casa"
+ORIENTACION_VERTICAL = "VERTICAL"
+ORIENTACION_HORIZONTAL = "HORIZONTAL"
 
 TIPO_FILTRO_COMBO = "combo"
+TIPO_FILTRO_BUSQUEDA = "busqueda"
 TIPO_FILTRO_FECHA = "fecha"
 TIPO_FILTRO_BOOL = "bool"
 
@@ -63,6 +66,18 @@ class TablaReporte:
     descripcion: str
     columnas: tuple[str, ...]
     filas: tuple[tuple[str, ...], ...]
+    resumen: tuple[tuple[str, str], ...] = ()
+    orientacion: str = ORIENTACION_VERTICAL
+
+
+@dataclass(frozen=True, slots=True)
+class ConfiguracionSalidaReportePdf:
+    """Preferencias efectivas para exportar reportes."""
+
+    ruta_salida: str
+    abrir_automaticamente: bool
+    firma_habilitada: bool
+    firma_texto_linea: str
 
 
 @dataclass(slots=True)

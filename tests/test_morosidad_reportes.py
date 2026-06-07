@@ -38,6 +38,7 @@ from modulos.reportes.entidades import (  # noqa: E402
     REPORTE_INGRESOS_MENSUALES_DIARIOS,
     REPORTE_SERVICIO_CASAS,
 )
+import modulos.reportes.controlador as controlador_reportes_modulo  # noqa: E402
 from modulos.reportes.controlador import ControladorReportes  # noqa: E402
 from modulos.reportes.repositorio import RepositorioReportesSQLite  # noqa: E402
 from modulos.reportes.servicio import ServicioReportes  # noqa: E402
@@ -292,23 +293,32 @@ class TestMorosidadReportes(unittest.TestCase):
 
     def test_controlador_reportes_exporta_pdf_solo_bajo_demanda(self) -> None:
         _app = QApplication.instance() or QApplication([])
-        servicio = ServicioReportes(RepositorioReportesSQLite(self.gestor_base_datos))
+        servicio = ServicioReportes(
+            RepositorioReportesSQLite(self.gestor_base_datos),
+            gestor_rutas=self.gestor_rutas,
+        )
         vista = VistaReportes()
         controlador = ControladorReportes(servicio, vista)
         mensajes: list[str] = []
         vista.mostrar_mensaje = lambda mensaje, es_error=False: mensajes.append(mensaje)  # type: ignore[method-assign]
-        ruta_pdf = self.raiz_temporal / "exportaciones" / "reportes" / "historial_pagos.pdf"
-        vista.solicitar_ruta_exportacion = lambda _codigo: str(ruta_pdf)  # type: ignore[method-assign]
+        directorio = self.raiz_temporal / "exportaciones" / "reportes"
+        helper_original = controlador_reportes_modulo.abrir_documento_pdf
+        controlador_reportes_modulo.abrir_documento_pdf = lambda _ruta: False  # type: ignore[assignment]
 
-        controlador._exportar(
-            REPORTE_INGRESOS_MENSUALES_DIARIOS,
-            {"fecha_desde": "2026-01-01", "fecha_hasta": "2026-12-31"},
-        )
+        try:
+            controlador._exportar_en(
+                REPORTE_INGRESOS_MENSUALES_DIARIOS,
+                {"fecha_desde": "2026-01-01", "fecha_hasta": "2026-12-31"},
+                str(directorio),
+            )
+        finally:
+            controlador_reportes_modulo.abrir_documento_pdf = helper_original  # type: ignore[assignment]
 
         self.assertTrue(mensajes)
-        self.assertIn("reporte pdf generado correctamente", mensajes[-1].lower())
-        self.assertTrue(ruta_pdf.exists())
-        self.assertTrue(ruta_pdf.read_bytes().startswith(b"%PDF"))
+        self.assertIn("reporte generado:", mensajes[-1].lower())
+        archivos = tuple(directorio.glob("SIGQUA_INGRESOS_MENSUALES_DIARIOS_*.pdf"))
+        self.assertEqual(len(archivos), 1)
+        self.assertTrue(archivos[0].read_bytes().startswith(b"%PDF"))
         vista.close()
 
 

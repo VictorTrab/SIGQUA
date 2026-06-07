@@ -10,6 +10,8 @@ from modulos.reportes.entidades import (
     EstadoReportes,
     FiltroReporte,
     IndicadorReporte,
+    ORIENTACION_HORIZONTAL,
+    ORIENTACION_VERTICAL,
     OpcionFiltroReporte,
     REPORTE_DEUDA_ABONADOS_ESTADO,
     REPORTE_HISTORIAL_ABONADO_CASA,
@@ -17,6 +19,7 @@ from modulos.reportes.entidades import (
     REPORTE_SERVICIO_CASAS,
     TablaReporte,
     TarjetaReporte,
+    TIPO_FILTRO_BUSQUEDA,
 )
 
 
@@ -138,7 +141,7 @@ class RepositorioReportesSQLite:
                     FiltroReporte(
                         clave="barrio",
                         etiqueta="Barrio",
-                        tipo="combo",
+                        tipo=TIPO_FILTRO_BUSQUEDA,
                         opciones=self._opciones_barrios(),
                         valor=filtros.get("barrio", "TODOS"),
                     ),
@@ -187,14 +190,14 @@ class RepositorioReportesSQLite:
                     FiltroReporte(
                         clave="abonado_id",
                         etiqueta="Abonado",
-                        tipo="combo",
+                        tipo=TIPO_FILTRO_BUSQUEDA,
                         opciones=self._opciones_abonados(),
                         valor=filtros.get("abonado_id", "TODOS"),
                     ),
                     FiltroReporte(
                         clave="casa_id",
                         etiqueta="Casa",
-                        tipo="combo",
+                        tipo=TIPO_FILTRO_BUSQUEDA,
                         opciones=self._opciones_casas(),
                         valor=filtros.get("casa_id", "TODOS"),
                     ),
@@ -222,7 +225,10 @@ class RepositorioReportesSQLite:
             condiciones.append("deuda.estado_servicio = ?")
             parametros.append(filtros["estado_servicio"])
         if filtros.get("barrio", "TODOS") != "TODOS":
-            condiciones.append("deuda.barrio_nombre = ?")
+            condiciones.append(
+                "deuda.barrio_nombre = "
+                "(SELECT nombre FROM barrios WHERE id = ? LIMIT 1)"
+            )
             parametros.append(filtros["barrio"])
         consulta = f"""
             WITH meses_por_casa AS (
@@ -267,6 +273,12 @@ class RepositorioReportesSQLite:
         """
         filas = conexion.execute(consulta, tuple(parametros)).fetchall()
         incluir_mora = filtros.get("incluir_mora", "1") != "0"
+        deuda_total_centavos = sum(
+            int(fila["deuda_base_centavos"] or 0)
+            + (int(fila["mora_centavos"] or 0) if incluir_mora else 0)
+            + int(fila["saldo_plan_centavos"] or 0)
+            for fila in filas
+        )
         return TablaReporte(
             codigo=REPORTE_DEUDA_ABONADOS_ESTADO,
             titulo="Deuda total por abonados",
@@ -288,6 +300,11 @@ class RepositorioReportesSQLite:
                 )
                 for fila in filas
             ),
+            resumen=(
+                ("Abonados listados", str(len(filas))),
+                ("Deuda consolidada", self._moneda(deuda_total_centavos)),
+            ),
+            orientacion=ORIENTACION_HORIZONTAL,
         )
 
     def _tabla_servicio_casas(self, conexion: object, filtros: dict[str, str]) -> TablaReporte:
@@ -300,7 +317,7 @@ class RepositorioReportesSQLite:
             condiciones.append("c.estado_servicio = ?")
             parametros.append(filtros["estado_servicio"])
         if filtros.get("barrio", "TODOS") != "TODOS":
-            condiciones.append("COALESCE(b.nombre, '') = ?")
+            condiciones.append("b.id = ?")
             parametros.append(filtros["barrio"])
         consulta = f"""
             SELECT
@@ -318,6 +335,10 @@ class RepositorioReportesSQLite:
             ORDER BY c.estado_servicio ASC, c.id ASC;
         """
         filas = conexion.execute(consulta, tuple(parametros)).fetchall()
+        conteos_estado: dict[str, int] = {}
+        for fila in filas:
+            estado = str(fila["estado_servicio"] or "SIN ESTADO")
+            conteos_estado[estado] = conteos_estado.get(estado, 0) + 1
         return TablaReporte(
             codigo=REPORTE_SERVICIO_CASAS,
             titulo="Servicio por casa",
@@ -335,6 +356,14 @@ class RepositorioReportesSQLite:
                 )
                 for fila in filas
             ),
+            resumen=(
+                ("Casas listadas", str(len(filas))),
+                *tuple(
+                    (estado.title(), str(total))
+                    for estado, total in sorted(conteos_estado.items())
+                ),
+            ),
+            orientacion=ORIENTACION_HORIZONTAL,
         )
 
     def _tabla_ingresos_mensuales_diarios(self, conexion: object, filtros: dict[str, str]) -> TablaReporte:
@@ -366,6 +395,11 @@ class RepositorioReportesSQLite:
                 )
                 for fila in filas
             ),
+            resumen=(
+                ("Pagos confirmados", str(sum(int(fila["total_pagos"] or 0) for fila in filas))),
+                ("Ingresos del periodo", self._moneda(sum(int(fila["total_centavos"] or 0) for fila in filas))),
+            ),
+            orientacion=ORIENTACION_VERTICAL,
         )
 
     def _tabla_historial_abonado_casa(self, conexion: object, filtros: dict[str, str]) -> TablaReporte:
@@ -406,6 +440,11 @@ class RepositorioReportesSQLite:
                 )
                 for fila in filas
             ),
+            resumen=(
+                ("Movimientos", str(len(filas))),
+                ("Monto total", self._moneda(sum(int(fila["total_pagado_centavos"] or 0) for fila in filas))),
+            ),
+            orientacion=ORIENTACION_HORIZONTAL,
         )
 
     def _opciones_abonados(self) -> tuple[OpcionFiltroReporte, ...]:
@@ -436,15 +475,17 @@ class RepositorioReportesSQLite:
 
     def _opciones_barrios(self) -> tuple[OpcionFiltroReporte, ...]:
         consulta = """
-            SELECT DISTINCT barrio_nombre
-            FROM vw_reportes_deuda_abonado_estado
-            WHERE trim(COALESCE(barrio_nombre, '')) <> ''
-            ORDER BY barrio_nombre ASC;
+            SELECT DISTINCT b.id AS barrio_id, b.nombre AS barrio_nombre
+            FROM barrios b
+            INNER JOIN casas c ON c.barrio_id = b.id
+            WHERE c.eliminado_en IS NULL
+              AND trim(COALESCE(b.nombre, '')) <> ''
+            ORDER BY b.nombre ASC;
         """
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             filas = conexion.execute(consulta).fetchall()
         return (OpcionFiltroReporte("TODOS", "Todos"),) + tuple(
-            OpcionFiltroReporte(str(fila["barrio_nombre"]), str(fila["barrio_nombre"]))
+            OpcionFiltroReporte(str(fila["barrio_id"]), str(fila["barrio_nombre"]))
             for fila in filas
         )
 

@@ -72,6 +72,13 @@ class TestConfiguracion(unittest.TestCase):
         self.assertTrue(estado.factura.impresora_termica_corte_automatico)
         self.assertEqual(estado.factura.impresora_termica_codigo_pagina, "cp850")
         self.assertEqual(estado.factura.impresora_reportes_nombre, "")
+        self.assertEqual(
+            estado.reportes_pdf.ruta_salida,
+            str(self.gestor_rutas.obtener_ruta_reportes_predeterminada()),
+        )
+        self.assertTrue(estado.reportes_pdf.abrir_automaticamente)
+        self.assertFalse(estado.reportes_pdf.firma_habilitada)
+        self.assertEqual(estado.reportes_pdf.firma_texto_linea, "Firma autorizada")
         self.assertEqual(estado.factura.comprobantes_pendientes_impresion, 0)
         self.assertTrue(estado.factura.correlativo_actual.startswith("REC-"))
         self.assertEqual(estado.operacion.total_respaldos, 0)
@@ -178,6 +185,36 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.factura.impresora_reportes_nombre, "Impresora Administrativa")
         self.assertTrue(estado.operacion.respaldo_automatico)
         self.assertEqual(estado.seguridad.duracion_sesion_horas, 4.0)
+
+    def test_guardado_reportes_pdf_actualiza_claves_independientes(self) -> None:
+        ruta = self.raiz_temporal / "reportes_personalizados"
+
+        resultado = self.servicio.guardar_reportes_pdf(
+            ruta_salida=str(ruta),
+            abrir_automaticamente=False,
+            firma_habilitada=True,
+            firma_texto_linea="Responsable administrativo",
+            actor_id=1,
+        )
+
+        self.assertTrue(resultado.exito)
+        estado = self.servicio.obtener_estado()
+        self.assertEqual(estado.reportes_pdf.ruta_salida, str(ruta))
+        self.assertFalse(estado.reportes_pdf.abrir_automaticamente)
+        self.assertTrue(estado.reportes_pdf.firma_habilitada)
+        self.assertEqual(
+            estado.reportes_pdf.firma_texto_linea,
+            "Responsable administrativo",
+        )
+        parametros = self.repositorio.listar_por_claves(
+            (
+                "reportes.ruta_salida",
+                "reportes.abrir_automaticamente",
+                "reportes.firma_habilitada",
+                "reportes.firma_texto_linea",
+            )
+        )
+        self.assertEqual(len(parametros), 4)
 
     def test_crear_respaldo_manual_genera_zip_y_registra_historial(self) -> None:
         self.servicio.guardar_operacion_respaldo(

@@ -95,6 +95,7 @@ class VistaConfiguracion(QWidget):
     crear_respaldo_manual_solicitado = Signal()
     restaurar_respaldo_solicitado = Signal(int)
     guardar_duracion_sesion_solicitado = Signal(float)
+    guardar_reportes_pdf_solicitado = Signal(str, bool, bool, str)
 
     DURACION_MENSAJE_MS = 3200
     OPCIONES_DURACION_SESION = (
@@ -240,6 +241,12 @@ class VistaConfiguracion(QWidget):
         self._valor_retencion.setText(f"{estado.operacion.retencion_maxima} respaldos recientes")
         self._valor_ruta_comprobantes.setText(estado.operacion.ruta_exportaciones_comprobantes)
         self._valor_ruta_reportes.setText(estado.operacion.ruta_exportaciones_reportes)
+        self._campo_ruta_reportes_pdf.setText(estado.reportes_pdf.ruta_salida)
+        self._ruta_reportes_predeterminada = estado.reportes_pdf.ruta_predeterminada
+        self._check_abrir_reportes_pdf.setChecked(estado.reportes_pdf.abrir_automaticamente)
+        self._check_firma_reportes_pdf.setChecked(estado.reportes_pdf.firma_habilitada)
+        self._campo_firma_reportes_pdf.setText(estado.reportes_pdf.firma_texto_linea)
+        self._actualizar_estado_firma_reportes_pdf()
         self._actualizar_respaldos_disponibles(estado)
 
         self._valor_autenticacion.setText("Local")
@@ -314,6 +321,7 @@ class VistaConfiguracion(QWidget):
         self._tabs.addTab(self._crear_tab_impresoras(), "Impresoras")
         self._tabs.addTab(self._crear_tab_cobros(), "Cobros")
         self._tabs.addTab(self._crear_tab_morosidad(), "Morosidad")
+        self._tabs.addTab(self._crear_tab_reportes_pdf(), "Reportes PDF")
 
         layout.addLayout(encabezado)
         layout.addWidget(self._mensaje)
@@ -656,6 +664,69 @@ class VistaConfiguracion(QWidget):
             )
         )
         contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
+        return contenido
+
+    def _crear_tab_reportes_pdf(self) -> QWidget:
+        self._ruta_reportes_predeterminada = ""
+        self._campo_ruta_reportes_pdf = QLineEdit()
+        self._campo_ruta_reportes_pdf.setReadOnly(True)
+        self._check_abrir_reportes_pdf = QCheckBox(
+            "Abrir reporte automaticamente despues de generarlo"
+        )
+        self._check_firma_reportes_pdf = QCheckBox(
+            "Mostrar linea de firma en reportes"
+        )
+        self._check_firma_reportes_pdf.toggled.connect(
+            self._actualizar_estado_firma_reportes_pdf
+        )
+        self._campo_firma_reportes_pdf = QLineEdit()
+        self._campo_firma_reportes_pdf.setPlaceholderText("Firma autorizada")
+
+        boton_seleccionar = crear_boton_operativo("Seleccionar carpeta")
+        boton_seleccionar.clicked.connect(self._seleccionar_carpeta_reportes_pdf)
+        boton_restaurar = crear_boton_operativo("Restaurar predeterminada")
+        boton_restaurar.clicked.connect(self._restaurar_ruta_reportes_pdf)
+        fila_ruta = QHBoxLayout()
+        fila_ruta.setSpacing(8)
+        fila_ruta.addWidget(self._campo_ruta_reportes_pdf, 1)
+        fila_ruta.addWidget(boton_seleccionar)
+        fila_ruta.addWidget(boton_restaurar)
+
+        panel_salida = self._crear_panel(
+            "Salida de reportes",
+            "Carpeta usada por Generar PDF. Guardar en permite elegir otra carpeta solo para una exportacion.",
+            [
+                self._crear_bloque_campo("Ruta actual", self._envolver_layout(fila_ruta)),
+                self._check_abrir_reportes_pdf,
+            ],
+        )
+        panel_firma = self._crear_panel(
+            "Firma de reportes",
+            "Configuracion independiente de comprobantes termicos y documentos de deuda.",
+            [
+                self._check_firma_reportes_pdf,
+                self._crear_bloque_campo(
+                    "Texto bajo la firma",
+                    self._campo_firma_reportes_pdf,
+                ),
+            ],
+        )
+        boton_guardar = crear_boton_operativo("Guardar reportes PDF", principal=True)
+        boton_guardar.clicked.connect(self._emitir_guardado_reportes_pdf)
+
+        contenido = self._crear_contenedor_scroll()
+        contenido.widget().layout().addWidget(panel_salida)
+        contenido.widget().layout().addWidget(panel_firma)
+        contenido.widget().layout().addWidget(
+            self._crear_aviso(
+                "Los reportes se generan bajo demanda. No modifica comprobantes ESC/POS ni agrega reportes nuevos."
+            )
+        )
+        contenido.widget().layout().addWidget(
+            boton_guardar,
+            alignment=Qt.AlignmentFlag.AlignRight,
+        )
+        self._actualizar_estado_firma_reportes_pdf()
         return contenido
 
     def _crear_tab_operacion_respaldo(self) -> QWidget:
@@ -1092,6 +1163,12 @@ class VistaConfiguracion(QWidget):
         layout.addWidget(valor, 2)
         return fila
 
+    @staticmethod
+    def _envolver_layout(layout_origen: QHBoxLayout) -> QWidget:
+        contenedor = QWidget()
+        contenedor.setLayout(layout_origen)
+        return contenedor
+
     def _emitir_guardado_parametros_factura(self) -> None:
         self.guardar_parametros_factura_solicitado.emit(
             self._campo_titulo_documento.text(),
@@ -1120,6 +1197,31 @@ class VistaConfiguracion(QWidget):
             self._check_respaldo_secundario.isChecked(),
             self._check_comprimir_zip.isChecked(),
             self._check_organizar_periodo.isChecked(),
+        )
+
+    def _emitir_guardado_reportes_pdf(self) -> None:
+        self.guardar_reportes_pdf_solicitado.emit(
+            self._campo_ruta_reportes_pdf.text().strip(),
+            self._check_abrir_reportes_pdf.isChecked(),
+            self._check_firma_reportes_pdf.isChecked(),
+            self._campo_firma_reportes_pdf.text().strip(),
+        )
+
+    def _seleccionar_carpeta_reportes_pdf(self) -> None:
+        ruta = QFileDialog.getExistingDirectory(
+            self,
+            "Seleccionar carpeta de reportes PDF",
+            self._campo_ruta_reportes_pdf.text().strip(),
+        )
+        if ruta:
+            self._campo_ruta_reportes_pdf.setText(ruta)
+
+    def _restaurar_ruta_reportes_pdf(self) -> None:
+        self._campo_ruta_reportes_pdf.setText(self._ruta_reportes_predeterminada)
+
+    def _actualizar_estado_firma_reportes_pdf(self) -> None:
+        self._campo_firma_reportes_pdf.setEnabled(
+            self._check_firma_reportes_pdf.isChecked()
         )
 
     def _confirmar_restauracion_respaldo(self) -> None:

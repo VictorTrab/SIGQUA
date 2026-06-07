@@ -51,6 +51,9 @@ class ControladorConfiguracion:
         self._vista_configuracion.probar_impresora_reportes_solicitado.connect(
             self._probar_impresora_reportes
         )
+        self._vista_configuracion.guardar_reportes_pdf_solicitado.connect(
+            self._guardar_reportes_pdf
+        )
 
     def _guardar_datos_junta(
         self,
@@ -169,6 +172,31 @@ class ControladorConfiguracion:
     def _probar_impresora_reportes(self, nombre_impresora: str) -> None:
         resultado = self._servicio_configuracion.probar_impresora_reportes(nombre_impresora)
         self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
+
+    def _guardar_reportes_pdf(
+        self,
+        ruta_salida: str,
+        abrir_automaticamente: bool,
+        firma_habilitada: bool,
+        firma_texto_linea: str,
+    ) -> None:
+        resultado = self._servicio_configuracion.guardar_reportes_pdf(
+            ruta_salida=ruta_salida,
+            abrir_automaticamente=abrir_automaticamente,
+            firma_habilitada=firma_habilitada,
+            firma_texto_linea=firma_texto_linea,
+            actor_id=None if self._actor is None else self._actor.identificador,
+        )
+        self._vista_configuracion.mostrar_mensaje(
+            resultado.mensaje,
+            es_error=not resultado.exito,
+        )
+        if resultado.exito:
+            self._refrescar()
+            bus_actualizaciones_modulos.emitir(
+                modulo_origen="configuracion",
+                modulos_afectados=("reportes",),
+            )
 
     def _guardar_operacion_respaldo(
         self,

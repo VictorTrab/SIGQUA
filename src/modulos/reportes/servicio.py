@@ -13,7 +13,9 @@ from comun.configuracion.documentos import lineas_encabezado_documental
 from comun.configuracion.gestor_rutas import GestorRutas
 from modulos.configuracion.repositorio import RepositorioConfiguracionSQLite
 from modulos.documentos import ServicioReportePdf
+from modulos.documentos.servicios.servicio_reporte_pdf import ResultadoGeneracionReportePdf
 from modulos.reportes.entidades import (
+    ConfiguracionSalidaReportePdf,
     EstadoReportes,
     REPORTE_DEUDA_ABONADOS_ESTADO,
     REPORTE_HISTORIAL_ABONADO_CASA,
@@ -34,6 +36,12 @@ class ServicioReportes:
         "factura.mostrar_telefono",
         "factura.mostrar_direccion",
         "factura.mostrar_identificador_fiscal",
+    )
+    CLAVES_SALIDA_PDF = (
+        "reportes.ruta_salida",
+        "reportes.abrir_automaticamente",
+        "reportes.firma_habilitada",
+        "reportes.firma_texto_linea",
     )
 
     CATALOGO_REPORTES = (
@@ -99,20 +107,70 @@ class ServicioReportes:
 
     def exportar_pdf(
         self,
-        ruta_destino: str,
+        ruta_destino: str | None,
         codigo_reporte: str,
         filtros: dict[str, str] | None = None,
+        generado_por: str = "Sistema",
+        directorio_destino: str | None = None,
     ) -> str:
+        return self.exportar_pdf_con_resultado(
+            ruta_destino=ruta_destino,
+            codigo_reporte=codigo_reporte,
+            filtros=filtros,
+            generado_por=generado_por,
+            directorio_destino=directorio_destino,
+        ).ruta
+
+    def exportar_pdf_con_resultado(
+        self,
+        ruta_destino: str | None,
+        codigo_reporte: str,
+        filtros: dict[str, str] | None = None,
+        generado_por: str = "Sistema",
+        directorio_destino: str | None = None,
+    ) -> ResultadoGeneracionReportePdf:
         estado = self.obtener_estado(codigo_reporte=codigo_reporte, filtros=filtros)
         if estado.tabla_actual is None:
             raise ValueError("No existe vista previa para el reporte seleccionado.")
         filtros_norm = self._normalizar_filtros(filtros)
-        return self._servicio_reporte_pdf.generar_pdf(
+        configuracion = self.obtener_configuracion_salida_pdf()
+        return self._servicio_reporte_pdf.generar_pdf_con_resultado(
             tabla=estado.tabla_actual,
             fecha_desde=filtros_norm.get("fecha_desde", ""),
             fecha_hasta=filtros_norm.get("fecha_hasta", ""),
             lineas_encabezado=self._obtener_lineas_encabezado_documental(),
             ruta_destino=ruta_destino,
+            directorio_destino=directorio_destino or configuracion.ruta_salida,
+            generado_por=generado_por,
+            firma_habilitada=configuracion.firma_habilitada,
+            firma_texto_linea=configuracion.firma_texto_linea,
+        )
+
+    def obtener_configuracion_salida_pdf(self) -> ConfiguracionSalidaReportePdf:
+        ruta_predeterminada = str(self._gestor_rutas.obtener_ruta_reportes_predeterminada())
+        if self._repositorio_configuracion is None:
+            return ConfiguracionSalidaReportePdf(
+                ruta_salida=ruta_predeterminada,
+                abrir_automaticamente=True,
+                firma_habilitada=False,
+                firma_texto_linea="Firma autorizada",
+            )
+        parametros = self._repositorio_configuracion.listar_por_claves(
+            self.CLAVES_SALIDA_PDF
+        )
+        valores = {clave: parametro.valor for clave, parametro in parametros.items()}
+        return ConfiguracionSalidaReportePdf(
+            ruta_salida=valores.get("reportes.ruta_salida", "").strip() or ruta_predeterminada,
+            abrir_automaticamente=self._a_booleano(
+                valores.get("reportes.abrir_automaticamente", "1")
+            ),
+            firma_habilitada=self._a_booleano(
+                valores.get("reportes.firma_habilitada", "0")
+            ),
+            firma_texto_linea=(
+                valores.get("reportes.firma_texto_linea", "").strip()
+                or "Firma autorizada"
+            ),
         )
 
     @staticmethod

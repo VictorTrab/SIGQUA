@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 import unittest
 import uuid
 from pathlib import Path
 
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 RAIZ_PROYECTO = Path(__file__).resolve().parents[1]
 RUTA_SRC = RAIZ_PROYECTO / "src"
@@ -15,15 +18,21 @@ if str(RUTA_SRC) not in sys.path:
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from comun.ui import CampoBusquedaSeleccionSigqua  # noqa: E402
 import modulos.reportes.entidades as entidades_reportes  # noqa: E402
 from modulos.reportes.entidades import (  # noqa: E402
+    ORIENTACION_HORIZONTAL,
+    ORIENTACION_VERTICAL,
     REPORTE_DEUDA_ABONADOS_ESTADO,
     REPORTE_HISTORIAL_ABONADO_CASA,
     REPORTE_INGRESOS_MENSUALES_DIARIOS,
     REPORTE_SERVICIO_CASAS,
+    TIPO_FILTRO_BUSQUEDA,
 )
 from modulos.reportes.repositorio import RepositorioReportesSQLite  # noqa: E402
 from modulos.reportes.servicio import ServicioReportes  # noqa: E402
+from modulos.reportes.vista import TarjetaSeleccionReporte, VistaReportes  # noqa: E402
+from PySide6.QtWidgets import QApplication, QComboBox  # noqa: E402
 
 
 class TestReportes(unittest.TestCase):
@@ -99,6 +108,23 @@ class TestReportes(unittest.TestCase):
                 assert estado.tabla_actual is not None
                 self.assertEqual(estado.tabla_actual.codigo, codigo)
                 self.assertGreater(len(estado.tabla_actual.columnas), 0)
+                self.assertTrue(estado.tabla_actual.resumen)
+
+    def test_orientacion_es_adaptativa_por_reporte(self) -> None:
+        for codigo in (
+            REPORTE_DEUDA_ABONADOS_ESTADO,
+            REPORTE_SERVICIO_CASAS,
+            REPORTE_HISTORIAL_ABONADO_CASA,
+        ):
+            tabla = self.servicio.obtener_estado(codigo_reporte=codigo).tabla_actual
+            assert tabla is not None
+            self.assertEqual(tabla.orientacion, ORIENTACION_HORIZONTAL)
+
+        ingresos = self.servicio.obtener_estado(
+            codigo_reporte=REPORTE_INGRESOS_MENSUALES_DIARIOS
+        ).tabla_actual
+        assert ingresos is not None
+        self.assertEqual(ingresos.orientacion, ORIENTACION_VERTICAL)
 
     def test_reportes_fusionados_tienen_columnas_esperadas(self) -> None:
         ingresos = self.servicio.obtener_estado(
@@ -132,6 +158,95 @@ class TestReportes(unittest.TestCase):
                 claves = tuple(filtro.clave for filtro in estado.filtros_visibles)
 
                 self.assertEqual(claves, claves_esperadas)
+
+    def test_filtros_grandes_exponen_ids_reales_para_busqueda(self) -> None:
+        deuda = self.servicio.obtener_estado(
+            codigo_reporte=REPORTE_DEUDA_ABONADOS_ESTADO
+        )
+        historial = self.servicio.obtener_estado(
+            codigo_reporte=REPORTE_HISTORIAL_ABONADO_CASA
+        )
+        filtros = {
+            filtro.clave: filtro
+            for filtro in (*deuda.filtros_visibles, *historial.filtros_visibles)
+        }
+
+        for clave in ("barrio", "abonado_id", "casa_id"):
+            with self.subTest(clave=clave):
+                filtro = filtros[clave]
+                self.assertEqual(filtro.tipo, TIPO_FILTRO_BUSQUEDA)
+                self.assertEqual(filtro.opciones[0].valor, "TODOS")
+                self.assertTrue(all(opcion.valor.isdigit() for opcion in filtro.opciones[1:]))
+
+    def test_filtro_barrio_aplica_id_real_en_el_servicio(self) -> None:
+        estado_inicial = self.servicio.obtener_estado(
+            codigo_reporte=REPORTE_SERVICIO_CASAS
+        )
+        filtro_barrio = next(
+            filtro for filtro in estado_inicial.filtros_visibles if filtro.clave == "barrio"
+        )
+        opcion = filtro_barrio.opciones[1]
+
+        estado_filtrado = self.servicio.obtener_estado(
+            codigo_reporte=REPORTE_SERVICIO_CASAS,
+            filtros={"barrio": opcion.valor},
+        )
+
+        self.assertEqual(estado_filtrado.filtros_aplicados["barrio"], opcion.valor)
+        assert estado_filtrado.tabla_actual is not None
+        self.assertTrue(estado_filtrado.tabla_actual.filas)
+        self.assertTrue(
+            all(fila[3] == opcion.etiqueta for fila in estado_filtrado.tabla_actual.filas)
+        )
+
+    def test_vista_captura_ids_de_busqueda_y_vacio_como_todos(self) -> None:
+        _app = QApplication.instance() or QApplication([])
+        estado = self.servicio.obtener_estado(
+            codigo_reporte=REPORTE_HISTORIAL_ABONADO_CASA
+        )
+        vista = VistaReportes()
+        vista.mostrar_estado(estado)
+
+        campo_abonado = vista._filtros_widgets["abonado_id"]
+        campo_casa = vista._filtros_widgets["casa_id"]
+        self.assertIsInstance(campo_abonado, CampoBusquedaSeleccionSigqua)
+        self.assertIsInstance(campo_casa, CampoBusquedaSeleccionSigqua)
+        self.assertNotIsInstance(campo_abonado, QComboBox)
+
+        filtro_abonado = next(
+            filtro for filtro in estado.filtros_visibles if filtro.clave == "abonado_id"
+        )
+        opcion = filtro_abonado.opciones[1]
+        campo_abonado.seleccionar_por_id(int(opcion.valor), opcion.etiqueta)
+
+        capturados = vista._capturar_filtros()
+
+        self.assertEqual(capturados["abonado_id"], opcion.valor)
+        self.assertEqual(capturados["casa_id"], "TODOS")
+        vista.close()
+
+        vista_barrio = VistaReportes()
+        vista_barrio.mostrar_estado(
+            self.servicio.obtener_estado(codigo_reporte=REPORTE_SERVICIO_CASAS)
+        )
+        self.assertIsInstance(
+            vista_barrio._filtros_widgets["barrio"],
+            CampoBusquedaSeleccionSigqua,
+        )
+        vista_barrio.close()
+
+    def test_tarjetas_reportes_tienen_altura_y_estados_visuales_diferenciados(self) -> None:
+        _app = QApplication.instance() or QApplication([])
+        vista = VistaReportes()
+        vista.mostrar_estado(self.servicio.obtener_estado())
+        tarjeta = next(iter(vista._tarjetas.values()))
+
+        self.assertEqual(tarjeta.minimumHeight(), TarjetaSeleccionReporte.ALTURA)
+        self.assertGreaterEqual(TarjetaSeleccionReporte.ALTURA, 160)
+        self.assertIn("QPushButton#tarjetaReporteAdmin:hover", vista.styleSheet())
+        self.assertIn("QPushButton#tarjetaReporteAdmin:checked", vista.styleSheet())
+        self.assertIn('border: 2px solid', vista.styleSheet())
+        vista.close()
 
 
 if __name__ == "__main__":

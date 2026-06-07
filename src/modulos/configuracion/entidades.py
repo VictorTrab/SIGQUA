@@ -79,6 +79,17 @@ class FacturaConfiguracion:
 
 
 @dataclass(slots=True)
+class ReportesPdfConfiguracion:
+    """Preferencias independientes para reportes administrativos PDF."""
+
+    ruta_salida: str
+    ruta_predeterminada: str
+    abrir_automaticamente: bool
+    firma_habilitada: bool
+    firma_texto_linea: str
+
+
+@dataclass(slots=True)
 class OperacionConfiguracion:
     """Resumen operativo conectado a respaldo y soporte."""
 
@@ -147,6 +158,7 @@ class EstadoConfiguracion:
     identidad_empresa: IdentidadEmpresa
     parametros_cobro: ParametrosCobro
     factura: FacturaConfiguracion
+    reportes_pdf: ReportesPdfConfiguracion
     operacion: OperacionConfiguracion
     respaldos_disponibles: tuple[RespaldoDisponible, ...]
     seguridad: SeguridadConfiguracion

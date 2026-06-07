@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from comun.actualizaciones import EventoModuloActualizado, bus_actualizaciones_modulos
+from comun.ui.documentos_pdf import abrir_documento_pdf
+from modulos.autenticacion.entidades import UsuarioAutenticado
 from modulos.reportes.servicio import ServicioReportes
 from modulos.reportes.vista import VistaReportes
 
@@ -19,9 +23,11 @@ class ControladorReportes:
         self.vista_reportes = vista_reportes
         self._codigo_reporte_actual = ""
         self._filtros_actuales: dict[str, str] = {}
+        self._actor: UsuarioAutenticado | None = None
         self.vista_reportes.reporte_seleccionado.connect(self._seleccionar_reporte)
         self.vista_reportes.filtros_aplicados.connect(self._aplicar_filtros)
         self.vista_reportes.exportar_solicitado.connect(self._exportar)
+        self.vista_reportes.exportar_en_solicitado.connect(self._exportar_en)
         bus_actualizaciones_modulos.actualizacion_emitida.connect(self._manejar_actualizacion_modulo)
 
     def mostrar(self) -> None:
@@ -36,6 +42,10 @@ class ControladorReportes:
         if not self._codigo_reporte_actual:
             self._codigo_reporte_actual = estado.reporte_actual
         self.vista_reportes.mostrar_estado(estado)
+
+    def mostrar_para_actor(self, actor: UsuarioAutenticado) -> None:
+        self._actor = actor
+        self.mostrar()
 
     def _seleccionar_reporte(self, codigo_reporte: str) -> None:
         self._codigo_reporte_actual = codigo_reporte
@@ -55,6 +65,26 @@ class ControladorReportes:
         self.vista_reportes.mostrar_mensaje(evento.mensaje, es_error=False)
 
     def _exportar(self, codigo_reporte: str, filtros: object) -> None:
+        self._ejecutar_exportacion(codigo_reporte, filtros, directorio_destino=None)
+
+    def _exportar_en(
+        self,
+        codigo_reporte: str,
+        filtros: object,
+        directorio_destino: str,
+    ) -> None:
+        self._ejecutar_exportacion(
+            codigo_reporte,
+            filtros,
+            directorio_destino=directorio_destino,
+        )
+
+    def _ejecutar_exportacion(
+        self,
+        codigo_reporte: str,
+        filtros: object,
+        directorio_destino: str | None,
+    ) -> None:
         codigo = codigo_reporte or self._codigo_reporte_actual
         if not codigo:
             self.vista_reportes.mostrar_mensaje(
@@ -62,19 +92,35 @@ class ControladorReportes:
                 es_error=True,
             )
             return
-        ruta = self.vista_reportes.solicitar_ruta_exportacion(codigo)
-        if not ruta:
-            return
+        self.vista_reportes.establecer_exportacion_en_curso(True)
         try:
-            ruta_pdf = self.servicio_reportes.exportar_pdf(
-                ruta_destino=ruta,
+            resultado = self.servicio_reportes.exportar_pdf_con_resultado(
+                ruta_destino=None,
                 codigo_reporte=codigo,
                 filtros=dict(filtros or {}),
+                generado_por=self._resolver_nombre_actor(),
+                directorio_destino=directorio_destino,
             )
         except (OSError, ValueError) as error:
             self.vista_reportes.mostrar_mensaje(str(error), es_error=True)
             return
-        self.vista_reportes.mostrar_mensaje(
-            f"Reporte PDF generado correctamente: {ruta_pdf}",
-            es_error=False,
-        )
+        finally:
+            self.vista_reportes.establecer_exportacion_en_curso(False)
+
+        configuracion = self.servicio_reportes.obtener_configuracion_salida_pdf()
+        advertencias: list[str] = []
+        if resultado.uso_fallback:
+            advertencias.append("se uso la carpeta interna de respaldo")
+        if configuracion.abrir_automaticamente and not abrir_documento_pdf(
+            Path(resultado.ruta).resolve()
+        ):
+            advertencias.append("no fue posible abrirlo automaticamente")
+        mensaje = f"Reporte generado: {Path(resultado.ruta).name}"
+        if advertencias:
+            mensaje = f"{mensaje}. Advertencia: {'; '.join(advertencias)}."
+        self.vista_reportes.mostrar_mensaje(mensaje, es_error=False)
+
+    def _resolver_nombre_actor(self) -> str:
+        if self._actor is None:
+            return "Sistema"
+        return self._actor.nombre_completo.strip() or self._actor.nombre_usuario.strip() or "Sistema"

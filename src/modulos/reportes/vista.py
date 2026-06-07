@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QDate, Qt, Signal
+from PySide6.QtCore import QDate, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from comun.ui import (
+    CampoBusquedaSeleccionSigqua,
     ContenedorTarjetasResumenOperativo,
     TarjetaResumenOperativa,
     configurar_tabla_operativa,
@@ -41,11 +42,14 @@ from modulos.reportes.entidades import (
     REPORTE_DEUDA_ABONADOS_ESTADO,
     TablaReporte,
     TarjetaReporte,
+    TIPO_FILTRO_BUSQUEDA,
 )
 
 
 class TarjetaSeleccionReporte(QPushButton):
     """Tarjeta visual para seleccionar un reporte administrativo."""
+
+    ALTURA = 164
 
     def __init__(self, tarjeta: TarjetaReporte, color_icono: str) -> None:
         super().__init__()
@@ -54,12 +58,12 @@ class TarjetaSeleccionReporte(QPushButton):
         self.setCheckable(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setObjectName("tarjetaReporteAdmin")
-        self.setMinimumHeight(116)
-        self.setMaximumHeight(116)
+        self.setMinimumHeight(self.ALTURA)
+        self.setMaximumHeight(self.ALTURA)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(6)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(8)
         icono = QLabel()
         icono.setObjectName("iconoTarjetaReporte")
         icono.setFixedSize(38, 38)
@@ -67,15 +71,23 @@ class TarjetaSeleccionReporte(QPushButton):
         icono.setPixmap(obtener_icono_tabler_coloreado(tarjeta.icono, color_icono, tamano=20).pixmap(20, 20))
         titulo = QLabel(tarjeta.titulo)
         titulo.setObjectName("tituloTarjetaReporte")
+        titulo.setWordWrap(True)
+        titulo.setMinimumWidth(0)
+        titulo.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         descripcion = QLabel(tarjeta.descripcion)
         descripcion.setObjectName("descripcionTarjetaReporte")
         descripcion.setWordWrap(True)
+        descripcion.setMinimumWidth(0)
+        descripcion.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         resumen = QLabel(tarjeta.resumen)
         resumen.setObjectName("resumenTarjetaReporte")
         resumen.setWordWrap(True)
+        resumen.setMinimumWidth(0)
+        resumen.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         layout.addWidget(icono, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(titulo)
-        layout.addWidget(descripcion, 1)
+        layout.addWidget(descripcion)
+        layout.addStretch(1)
         layout.addWidget(resumen)
 
 
@@ -85,6 +97,8 @@ class VistaReportes(QWidget):
     reporte_seleccionado = Signal(str)
     filtros_aplicados = Signal(str, object)
     exportar_solicitado = Signal(str, object)
+    exportar_en_solicitado = Signal(str, object, str)
+    DURACION_MENSAJE_MS = 10000
 
     def __init__(self) -> None:
         super().__init__()
@@ -96,6 +110,9 @@ class VistaReportes(QWidget):
         self._filtros_actuales: dict[str, str] = {}
         self._reporte_actual_codigo = REPORTE_DEUDA_ABONADOS_ESTADO
         self._tabla_actual: TablaReporte | None = None
+        self._temporizador_mensaje = QTimer(self)
+        self._temporizador_mensaje.setSingleShot(True)
+        self._temporizador_mensaje.timeout.connect(lambda: self._mensaje.setVisible(False))
         self._construir_ui()
         self._aplicar_estilos()
 
@@ -113,15 +130,19 @@ class VistaReportes(QWidget):
         self._mensaje.style().unpolish(self._mensaje)
         self._mensaje.style().polish(self._mensaje)
         self._mensaje.setVisible(bool(mensaje))
+        if mensaje:
+            self._temporizador_mensaje.start(self.DURACION_MENSAJE_MS)
 
     def solicitar_ruta_exportacion(self, codigo_reporte: str) -> str:
-        ruta, _ = QFileDialog.getSaveFileName(
+        return QFileDialog.getExistingDirectory(
             self,
-            "Exportar reporte",
-            f"{codigo_reporte}.pdf",
-            "PDF (*.pdf)",
+            "Guardar reporte en",
+            "",
         )
-        return ruta
+
+    def establecer_exportacion_en_curso(self, en_curso: bool) -> None:
+        self._boton_exportar.setEnabled(not en_curso)
+        self._boton_guardar_en.setEnabled(not en_curso)
 
     def _construir_ui(self) -> None:
         layout_raiz = QVBoxLayout(self)
@@ -181,14 +202,19 @@ class VistaReportes(QWidget):
         self._grilla_filtros = QGridLayout()
         self._grilla_filtros.setHorizontalSpacing(12)
         self._grilla_filtros.setVerticalSpacing(10)
+        self._grilla_filtros.setColumnStretch(0, 1)
+        self._grilla_filtros.setColumnStretch(1, 1)
         fila_acciones = QHBoxLayout()
         fila_acciones.addStretch(1)
         boton_aplicar = crear_boton_operativo("Aplicar filtros")
         boton_aplicar.clicked.connect(self._emitir_filtros)
-        boton_exportar = crear_boton_operativo("Generar PDF", principal=True)
-        boton_exportar.clicked.connect(self._emitir_exportacion)
+        self._boton_guardar_en = crear_boton_operativo("Guardar en...")
+        self._boton_guardar_en.clicked.connect(self._emitir_exportacion_en)
+        self._boton_exportar = crear_boton_operativo("Generar PDF", principal=True)
+        self._boton_exportar.clicked.connect(self._emitir_exportacion)
+        fila_acciones.addWidget(self._boton_guardar_en)
         fila_acciones.addWidget(boton_aplicar)
-        fila_acciones.addWidget(boton_exportar)
+        fila_acciones.addWidget(self._boton_exportar)
         panel_filtros_layout.addWidget(self._titulo_preview)
         panel_filtros_layout.addWidget(self._descripcion_preview)
         panel_filtros_layout.addLayout(self._grilla_filtros)
@@ -228,7 +254,10 @@ class VistaReportes(QWidget):
             self._tarjetas[tarjeta.codigo] = widget
             self._grilla_tarjetas.addWidget(widget, indice // 4, indice % 4)
         filas = max(1, (len(catalogo) + 3) // 4)
-        alto_tarjetas = filas * 116 + max(0, filas - 1) * self._grilla_tarjetas.verticalSpacing()
+        alto_tarjetas = (
+            filas * TarjetaSeleccionReporte.ALTURA
+            + max(0, filas - 1) * self._grilla_tarjetas.verticalSpacing()
+        )
         self._contenedor_tarjetas.setMinimumHeight(alto_tarjetas)
         self._contenedor_tarjetas.setMaximumHeight(alto_tarjetas)
 
@@ -250,6 +279,28 @@ class VistaReportes(QWidget):
             self._grilla_filtros.addWidget(widget, fila + 1, columna)
 
     def _crear_widget_filtro(self, filtro: FiltroReporte) -> QWidget:
+        if filtro.tipo == TIPO_FILTRO_BUSQUEDA:
+            campo = CampoBusquedaSeleccionSigqua(
+                texto_sin_resultados=f"No se encontraron opciones para {filtro.etiqueta.lower()}",
+                placeholder=f"Todos. Escribe para buscar {filtro.etiqueta.lower()}",
+            )
+            opciones = [
+                (int(opcion.valor), opcion.etiqueta)
+                for opcion in filtro.opciones
+                if opcion.valor != "TODOS" and opcion.valor.isdigit()
+            ]
+            campo.establecer_opciones(opciones)
+            if filtro.valor != "TODOS" and filtro.valor.isdigit():
+                etiqueta = next(
+                    (
+                        opcion.etiqueta
+                        for opcion in filtro.opciones
+                        if opcion.valor == filtro.valor
+                    ),
+                    "",
+                )
+                campo.seleccionar_por_id(int(filtro.valor), etiqueta)
+            return campo
         if filtro.tipo == "combo":
             combo = QComboBox()
             combo.setObjectName("campoFiltroReporte")
@@ -305,10 +356,22 @@ class VistaReportes(QWidget):
     def _emitir_exportacion(self) -> None:
         self.exportar_solicitado.emit(self._reporte_actual_codigo, self._capturar_filtros())
 
+    def _emitir_exportacion_en(self) -> None:
+        directorio = self.solicitar_ruta_exportacion(self._reporte_actual_codigo)
+        if directorio:
+            self.exportar_en_solicitado.emit(
+                self._reporte_actual_codigo,
+                self._capturar_filtros(),
+                directorio,
+            )
+
     def _capturar_filtros(self) -> dict[str, str]:
         valores: dict[str, str] = {}
         for clave, widget in self._filtros_widgets.items():
-            if isinstance(widget, QComboBox):
+            if isinstance(widget, CampoBusquedaSeleccionSigqua):
+                identificador = widget.identificador_seleccionado()
+                valores[clave] = str(identificador) if identificador is not None else "TODOS"
+            elif isinstance(widget, QComboBox):
                 valores[clave] = str(widget.currentData() or "TODOS")
             elif isinstance(widget, QDateEdit):
                 valores[clave] = widget.date().toString("yyyy-MM-dd")
@@ -380,14 +443,27 @@ class VistaReportes(QWidget):
                 border-radius: 18px;
             }}
             QPushButton#tarjetaReporteAdmin {{
-                background-color: {fondo_panel};
+                background-color: {paleta["fondo_superficie_suave"]};
                 border: 1px solid {paleta["borde_medio"]};
-                border-radius: 18px;
+                border-radius: 12px;
                 text-align: left;
             }}
+            QPushButton#tarjetaReporteAdmin:hover {{
+                background-color: {paleta["fondo_superficie_destacada"]};
+                border: 1px solid {paleta["acento_hover"]};
+            }}
             QPushButton#tarjetaReporteAdmin:checked {{
-                background-color: {paleta["fondo_chip_activo"]};
-                border: 1px solid {paleta["borde_chip_activo"]};
+                background-color: {paleta["fondo_menu_activo"]};
+                border: 2px solid {paleta["acento_primario"]};
+            }}
+            QPushButton#tarjetaReporteAdmin:checked QLabel#tituloTarjetaReporte,
+            QPushButton#tarjetaReporteAdmin:checked QLabel#resumenTarjetaReporte {{
+                color: {paleta["texto_principal"]};
+            }}
+            QLabel#iconoTarjetaReporte {{
+                background-color: {paleta["fondo_superficie_muy_suave"]};
+                border: 1px solid {paleta["borde_suave"]};
+                border-radius: 8px;
             }}
             QLabel#tarjetaTitulo {{
                 color: {paleta["texto_secundario"]};
@@ -400,13 +476,35 @@ class VistaReportes(QWidget):
                 font-weight: {paleta["peso_titulo"]};
             }}
             QComboBox#campoFiltroReporte,
-            QDateEdit#campoFechaReporte {{
+            QDateEdit#campoFechaReporte,
+            QWidget#campoBusquedaSeleccionSigqua QLineEdit#campoBusquedaSeleccionSigqua {{
                 background-color: {paleta["fondo_input"]};
                 border: 1px solid {paleta["borde_medio"]};
-                border-radius: 12px;
+                border-radius: 8px;
                 color: {paleta["texto_input"]};
                 min-height: 36px;
                 padding: 0 10px;
+            }}
+            QComboBox#campoFiltroReporte:focus,
+            QDateEdit#campoFechaReporte:focus,
+            QWidget#campoBusquedaSeleccionSigqua QLineEdit#campoBusquedaSeleccionSigqua:focus {{
+                background-color: {paleta["fondo_input_focus"]};
+                border: 1px solid {paleta["borde_foco_input"]};
+            }}
+            QListView#popupBusquedaSeleccionSigqua {{
+                background-color: {paleta["fondo_superficie"]};
+                border: 1px solid {paleta["borde_medio"]};
+                color: {paleta["texto_principal"]};
+                outline: none;
+                padding: 3px;
+            }}
+            QListView#popupBusquedaSeleccionSigqua::item {{
+                min-height: 28px;
+                padding: 5px 8px;
+            }}
+            QListView#popupBusquedaSeleccionSigqua::item:selected {{
+                background-color: {paleta["fondo_menu_activo"]};
+                color: {paleta["texto_principal"]};
             }}
             QCheckBox#checkFiltroReporte {{
                 color: {paleta["texto_principal"]};

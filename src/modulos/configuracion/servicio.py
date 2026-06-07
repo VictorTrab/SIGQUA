@@ -25,6 +25,7 @@ from modulos.configuracion.entidades import (
     InformacionConfiguracion,
     OperacionConfiguracion,
     ParametrosCobro,
+    ReportesPdfConfiguracion,
     RespaldoDisponible,
     ResultadoGestionConfiguracion,
     SeguridadConfiguracion,
@@ -79,6 +80,12 @@ CLAVES_SISTEMA = (
     "respaldo.organizar_por_periodo",
     "mantenimiento.ruta_respaldos",
 )
+CLAVES_REPORTES_PDF = (
+    "reportes.ruta_salida",
+    "reportes.abrir_automaticamente",
+    "reportes.firma_habilitada",
+    "reportes.firma_texto_linea",
+)
 TEXTO_FIRMA_PREDETERMINADO = "Firma autorizada"
 DURACIONES_SESION_HORAS_VALIDAS = (0.5, 1.0, 2.0, 4.0, 8.0, 12.0)
 MAXIMO_INTENTOS_FALLIDOS_OPERATIVO = 5
@@ -108,6 +115,7 @@ class ServicioConfiguracion:
             + CLAVES_COBRO
             + CLAVES_FACTURA
             + CLAVES_SISTEMA
+            + CLAVES_REPORTES_PDF
         )
         parametros = self._repositorio_configuracion.listar_por_claves(claves)
         correlativo_actual, ultimo_comprobante, total_comprobantes = (
@@ -205,6 +213,35 @@ class ServicioConfiguracion:
             total_comprobantes_emitidos=total_comprobantes,
         )
         duracion_sesion_horas = self._resolver_duracion_sesion_horas(parametros)
+        ruta_reportes_predeterminada = self._gestor_rutas.obtener_ruta_reportes_predeterminada()
+        ruta_reportes_configurada = self._valor_parametro(
+            parametros,
+            "reportes.ruta_salida",
+            "",
+        ).strip()
+        ruta_reportes_efectiva = (
+            Path(ruta_reportes_configurada).expanduser()
+            if ruta_reportes_configurada
+            else ruta_reportes_predeterminada
+        )
+        reportes_pdf = ReportesPdfConfiguracion(
+            ruta_salida=str(ruta_reportes_efectiva),
+            ruta_predeterminada=str(ruta_reportes_predeterminada),
+            abrir_automaticamente=self._a_booleano(
+                self._valor_parametro(parametros, "reportes.abrir_automaticamente", "1")
+            ),
+            firma_habilitada=self._a_booleano(
+                self._valor_parametro(parametros, "reportes.firma_habilitada", "0")
+            ),
+            firma_texto_linea=(
+                self._valor_parametro(
+                    parametros,
+                    "reportes.firma_texto_linea",
+                    TEXTO_FIRMA_PREDETERMINADO,
+                ).strip()
+                or TEXTO_FIRMA_PREDETERMINADO
+            ),
+        )
         configuracion_respaldo = self._construir_configuracion_respaldo(parametros)
         operacion = OperacionConfiguracion(
             respaldo_automatico=True,
@@ -226,7 +263,7 @@ class ServicioConfiguracion:
             retencion_maxima=configuracion_respaldo.retencion_maxima,
             proxima_ejecucion_programada="Activo al cerrar sesion",
             ruta_exportaciones_comprobantes="No aplica: los comprobantes se imprimen por ESC/POS.",
-            ruta_exportaciones_reportes=str(self._gestor_rutas.obtener_ruta_exportaciones_reportes()),
+            ruta_exportaciones_reportes=reportes_pdf.ruta_salida,
         )
         informacion = InformacionConfiguracion(
             nombre_sistema=self._valor_parametro(parametros, "sistema.nombre", "SIGQUA"),
@@ -259,6 +296,7 @@ class ServicioConfiguracion:
             ),
             parametros_cobro=parametros_cobro,
             factura=factura,
+            reportes_pdf=reportes_pdf,
             operacion=operacion,
             respaldos_disponibles=respaldos_disponibles,
             seguridad=seguridad,
@@ -371,6 +409,45 @@ class ServicioConfiguracion:
         except Exception:
             return ResultadoGestionConfiguracion(False, "No fue posible actualizar la configuracion de comprobantes.", "ERROR_SQLITE")
         return ResultadoGestionConfiguracion(True, "Documentos y comprobantes actualizados.", "OK")
+
+    def guardar_reportes_pdf(
+        self,
+        ruta_salida: str,
+        abrir_automaticamente: bool,
+        firma_habilitada: bool,
+        firma_texto_linea: str,
+        actor_id: int | None = None,
+    ) -> ResultadoGestionConfiguracion:
+        ruta_salida = ruta_salida.strip()
+        ruta_predeterminada = self._gestor_rutas.obtener_ruta_reportes_predeterminada()
+        ruta_efectiva = Path(ruta_salida).expanduser() if ruta_salida else ruta_predeterminada
+        try:
+            ruta_efectiva.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return ResultadoGestionConfiguracion(
+                False,
+                "No fue posible crear o acceder a la carpeta de reportes.",
+                "RUTA_INVALIDA",
+            )
+        texto_firma = firma_texto_linea.strip() or TEXTO_FIRMA_PREDETERMINADO
+        valor_ruta = "" if ruta_efectiva == ruta_predeterminada else str(ruta_efectiva)
+        try:
+            self._repositorio_configuracion.actualizar_valores(
+                {
+                    "reportes.ruta_salida": valor_ruta,
+                    "reportes.abrir_automaticamente": "1" if abrir_automaticamente else "0",
+                    "reportes.firma_habilitada": "1" if firma_habilitada else "0",
+                    "reportes.firma_texto_linea": texto_firma,
+                },
+                actor_id=actor_id,
+            )
+        except Exception:
+            return ResultadoGestionConfiguracion(
+                False,
+                "No fue posible guardar la configuracion de reportes PDF.",
+                "ERROR_SQLITE",
+            )
+        return ResultadoGestionConfiguracion(True, "Configuracion de reportes PDF actualizada.", "OK")
 
     def guardar_parametros_cobro(
         self,

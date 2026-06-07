@@ -741,7 +741,7 @@ def _refrescar_modulos_operativos_por_codigos(
             ventana_principal.controlador_morosidad.mostrar()
             continue
         if codigo == "reportes" and hasattr(ventana_principal, "controlador_reportes"):
-            ventana_principal.controlador_reportes.mostrar()
+            ventana_principal.controlador_reportes.mostrar_para_actor(usuario)
             continue
         if codigo == "usuarios" and hasattr(ventana_principal, "controlador_usuarios"):
             ventana_principal.controlador_usuarios.mostrar_para_actor(usuario)
@@ -915,7 +915,7 @@ def _refrescar_modulos_operativos(
     if hasattr(ventana_principal, "controlador_morosidad"):
         ventana_principal.controlador_morosidad.mostrar()
     if hasattr(ventana_principal, "controlador_reportes"):
-        ventana_principal.controlador_reportes.mostrar()
+        ventana_principal.controlador_reportes.mostrar_para_actor(usuario)
     if hasattr(ventana_principal, "controlador_usuarios"):
         ventana_principal.controlador_usuarios.mostrar_para_actor(usuario)
     if hasattr(ventana_principal, "controlador_configuracion"):
