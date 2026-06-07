@@ -15,7 +15,12 @@ from comun.configuracion.gestor_rutas import GestorRutas
 from comun.respaldo import ServicioRespaldoLocal
 from comun.logs import obtener_logger_sigqua
 from comun.sesion import SesionAplicacion
-from comun.ui import ContenedorApiladoAjustable, DialogoConfirmacionSigqua, DialogoMensajeSigqua
+from comun.ui import (
+    BarraTituloVentana,
+    ContenedorApiladoAjustable,
+    DialogoConfirmacionSigqua,
+    DialogoMensajeSigqua,
+)
 from comun.ui.qt_mensajes import configurar_filtro_mensajes_qt
 from modulos.autenticacion import (
     ControladorAutenticacion,
@@ -100,7 +105,9 @@ from modulos.usuarios import (
 
 logger = obtener_logger_sigqua("app")
 ANCHO_VENTANA_AUTENTICACION = 960
-ALTO_VENTANA_AUTENTICACION = 680
+ALTO_CONTENIDO_AUTENTICACION = 680
+ALTO_BARRA_TITULO = 34
+ALTO_VENTANA_AUTENTICACION = ALTO_CONTENIDO_AUTENTICACION + ALTO_BARRA_TITULO
 ANCHO_VENTANA_PRINCIPAL = 1360
 ALTO_VENTANA_PRINCIPAL = 820
 MARGEN_VENTANA_PRINCIPAL = 72
@@ -108,18 +115,11 @@ MAXIMO_TAMANO_VENTANA = 16777215
 RETARDO_FASE_ARRANQUE_MS = 18
 FLAGS_VENTANA_AUTENTICACION = (
     Qt.WindowType.Window
-    | Qt.WindowType.WindowTitleHint
-    | Qt.WindowType.WindowSystemMenuHint
-    | Qt.WindowType.WindowMinimizeButtonHint
-    | Qt.WindowType.WindowCloseButtonHint
+    | Qt.WindowType.FramelessWindowHint
 )
 FLAGS_VENTANA_PRINCIPAL = (
     Qt.WindowType.Window
-    | Qt.WindowType.WindowTitleHint
-    | Qt.WindowType.WindowSystemMenuHint
-    | Qt.WindowType.WindowMinimizeButtonHint
-    | Qt.WindowType.WindowMaximizeButtonHint
-    | Qt.WindowType.WindowCloseButtonHint
+    | Qt.WindowType.FramelessWindowHint
 )
 
 
@@ -128,10 +128,44 @@ class VentanaPrincipalSigqua(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
+        self.setObjectName("ventanaPrincipalSigqua")
         self._callback_cierre_controlado: Callable[[], bool] | None = None
+        self.barra_titulo = BarraTituloVentana(self)
+        self.setMenuWidget(self.barra_titulo)
+        self.barra_titulo.minimizar_solicitado.connect(self.showMinimized)
+        self.barra_titulo.cerrar_solicitado.connect(self.close)
+        self.barra_titulo.mover_solicitado.connect(self._iniciar_movimiento_sistema)
+        self.windowTitleChanged.connect(self.barra_titulo.actualizar_titulo)
+        self.setStyleSheet(
+            """
+            QMainWindow#ventanaPrincipalSigqua {
+                background: #101214;
+                border: none;
+            }
+            QMainWindow#ventanaPrincipalSigqua[modoAutenticacion="true"] {
+                border: 1px solid rgba(117, 199, 240, 0.24);
+            }
+            """
+        )
 
     def configurar_callback_cierre_controlado(self, callback: Callable[[], bool]) -> None:
         self._callback_cierre_controlado = callback
+
+    def actualizar_icono_barra(self) -> None:
+        self.barra_titulo.actualizar_icono(self.windowIcon())
+
+    def establecer_modo_autenticacion(self, activo: bool) -> None:
+        self.barra_titulo.establecer_movimiento_habilitado(activo)
+        self.setProperty("modoAutenticacion", activo)
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+    def _iniciar_movimiento_sistema(self) -> None:
+        if not self.barra_titulo.movimiento_habilitado() or self.isMaximized():
+            return
+        ventana = self.windowHandle()
+        if ventana is not None:
+            ventana.startSystemMove()
 
     def closeEvent(self, evento: QCloseEvent) -> None:  # noqa: N802
         if self._callback_cierre_controlado is None:
@@ -237,9 +271,10 @@ def crear_ventana_principal(
     ventana_principal = VentanaPrincipalSigqua()
     ventana_principal.setWindowTitle("SIGQUA | Autenticación")
     ventana_principal.setCentralWidget(contenedor_central)
-    _aplicar_modo_autenticacion(ventana_principal)
     if not icono.isNull():
         ventana_principal.setWindowIcon(icono)
+    ventana_principal.actualizar_icono_barra()
+    _aplicar_modo_autenticacion(ventana_principal)
 
     controlador = ControladorAutenticacion(
         servicio_autenticacion=servicio_autenticacion,
@@ -1044,6 +1079,8 @@ def _aplicar_modo_autenticacion(ventana_principal: QMainWindow) -> None:
         ventana_principal.hide()
     ventana_principal.showNormal()
     ventana_principal.setWindowFlags(FLAGS_VENTANA_AUTENTICACION)
+    if isinstance(ventana_principal, VentanaPrincipalSigqua):
+        ventana_principal.establecer_modo_autenticacion(True)
     ventana_principal.setMinimumSize(
         ANCHO_VENTANA_AUTENTICACION,
         ALTO_VENTANA_AUTENTICACION,
@@ -1070,6 +1107,8 @@ def _aplicar_modo_principal(ventana_principal: QMainWindow) -> None:
         ventana_principal.hide()
     ventana_principal.showNormal()
     ventana_principal.setWindowFlags(FLAGS_VENTANA_PRINCIPAL)
+    if isinstance(ventana_principal, VentanaPrincipalSigqua):
+        ventana_principal.establecer_modo_autenticacion(False)
     ventana_principal.setMinimumSize(0, 0)
     ventana_principal.setMaximumSize(MAXIMO_TAMANO_VENTANA, MAXIMO_TAMANO_VENTANA)
     pantalla = ventana_principal.screen() or QApplication.primaryScreen()

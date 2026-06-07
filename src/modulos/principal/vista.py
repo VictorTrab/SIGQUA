@@ -89,7 +89,7 @@ from modulos.principal.entidades import (
 COLOR_FONDO_PRINCIPAL = "#101214"
 ANCHO_MINIMO_SHELL_PRINCIPAL = 960
 ALTO_MINIMO_SHELL_PRINCIPAL = 640
-ANCHO_SIDEBAR = 232
+ANCHO_SIDEBAR = 216
 ANCHO_RUPTURA_DASHBOARD_AMPLIO = 1320
 ANCHO_RUPTURA_DASHBOARD_MEDIO = 980
 ANCHO_RUPTURA_METRICAS_6_COLUMNAS = 1120
@@ -1746,7 +1746,8 @@ class VistaModuloPrincipal(QWidget):
                         if boton.property("activo") is True
                         else str(self._paleta_tema["icono_tema_inactivo"])
                     )
-                    boton.setIcon(obtener_icono_tabler_coloreado(nombre_icono, color_icono, tamano=18))
+                    boton.setIcon(obtener_icono_tabler_coloreado(nombre_icono, color_icono, tamano=16))
+                    boton.setIconSize(QSize(16, 16))
         for pagina in self._paginas_modulos.values():
             if hasattr(pagina, "aplicar_tema"):
                 pagina.aplicar_tema(self._tema_actual)
@@ -1769,7 +1770,8 @@ class VistaModuloPrincipal(QWidget):
                     if codigo_boton == codigo
                     else str(self._paleta_tema["icono_tema_inactivo"])
                 )
-                boton.setIcon(obtener_icono_tabler_coloreado(nombre_icono, color_icono, tamano=18))
+                boton.setIcon(obtener_icono_tabler_coloreado(nombre_icono, color_icono, tamano=16))
+                boton.setIconSize(QSize(16, 16))
         for titulo, seccion in self._secciones_sidebar.items():
             seccion.marcar_modulo_activo(codigo)
 
@@ -1784,7 +1786,7 @@ class VistaModuloPrincipal(QWidget):
         self._sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         layout_sidebar = QVBoxLayout(self._sidebar)
         self._layout_sidebar = layout_sidebar
-        layout_sidebar.setContentsMargins(8, 14, 8, 12)
+        layout_sidebar.setContentsMargins(4, 14, 4, 12)
         layout_sidebar.setSpacing(10)
 
         layout_sidebar.addWidget(self._crear_encabezado_sidebar())
@@ -2343,10 +2345,10 @@ class VistaModuloPrincipal(QWidget):
             obtener_icono_tabler_coloreado(
                 modulo.icono,
                 str(self._paleta_tema["icono_tema_inactivo"]),
-                tamano=18,
+                tamano=16,
             )
         )
-        boton.setIconSize(boton.iconSize())
+        boton.setIconSize(QSize(16, 16))
         boton.setToolTip(modulo.descripcion or modulo.titulo)
         return boton
 
@@ -2376,7 +2378,7 @@ class VistaModuloPrincipal(QWidget):
 
         pixmap_logo = obtener_pixmap_marca(
             ruta_marca=ruta_logo,
-            ancho_logico=136,
+            ancho_logico=128,
             factor_escala=self.devicePixelRatioF(),
         )
         if pixmap_logo.isNull():
@@ -2833,7 +2835,7 @@ class VistaModuloPrincipal(QWidget):
                 letter-spacing: 0.06em;
             }}
             QPushButton#botonSidebar {{
-                min-height: 38px;
+                min-height: 36px;
                 border: 1px solid transparent;
                 border-radius: 6px;
                 background: transparent;
@@ -2841,11 +2843,11 @@ class VistaModuloPrincipal(QWidget):
                 font-size: {paleta["tamano_fuente_base"]}px;
                 font-weight: {paleta["peso_titulo"]};
                 text-align: left;
-                padding: 0 6px;
+                padding: 0 2px;
             }}
             QPushButton#botonSidebar[tipoSidebar="modulo"] {{
                 margin-left: 0;
-                padding-left: 8px;
+                padding-left: 4px;
             }}
             QPushButton#botonSidebar[tipoSidebar="accion"] {{
                 background: transparent;
