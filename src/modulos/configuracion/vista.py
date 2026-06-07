@@ -28,7 +28,9 @@ from PySide6.QtWidgets import (
 from comun.ui import (
     BotonAccionContextual,
     CampoMontoMonetario,
+    ContenedorTarjetasResumenOperativo,
     DialogoConfirmacionSigqua,
+    TarjetaResumenOperativa,
     crear_boton_operativo,
 )
 from comun.ui.comprobante_termico import (
@@ -46,30 +48,15 @@ from comun.ui.temas import (
 from modulos.configuracion.entidades import EstadoConfiguracion
 
 
-class TarjetaResumenConfiguracion(QFrame):
+class TarjetaResumenConfiguracion(TarjetaResumenOperativa):
     """Tarjeta de resumen para configuracion."""
 
-    def __init__(self, titulo: str) -> None:
-        super().__init__()
-        self.setObjectName("tarjetaResumenConfiguracion")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(6)
-        self.setMinimumHeight(104)
-        self._titulo = QLabel(titulo)
-        self._titulo.setObjectName("tituloTarjetaResumenConfiguracion")
-        self._valor = QLabel("")
-        self._valor.setObjectName("valorTarjetaResumenConfiguracion")
-        self._detalle = QLabel("")
-        self._detalle.setObjectName("detalleTarjetaResumenConfiguracion")
-        self._detalle.setWordWrap(True)
-        layout.addWidget(self._titulo)
-        layout.addWidget(self._valor)
-        layout.addWidget(self._detalle)
+    def __init__(self, titulo: str, icono: str, color_icono: str) -> None:
+        super().__init__(icono, color_icono)
+        self._titulo_fijo = titulo
 
     def actualizar(self, valor: str, detalle: str) -> None:
-        self._valor.setText(valor)
-        self._detalle.setText(detalle)
+        super().actualizar(self._titulo_fijo, valor, detalle)
 
 
 class VistaConfiguracion(QWidget):
@@ -289,8 +276,8 @@ class VistaConfiguracion(QWidget):
 
     def _construir_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+        layout.setContentsMargins(6, 4, 6, 6)
+        layout.setSpacing(12)
 
         encabezado = QHBoxLayout()
         encabezado.setSpacing(12)
@@ -309,17 +296,14 @@ class VistaConfiguracion(QWidget):
         self._mensaje.setVisible(False)
         self._mensaje.setWordWrap(True)
 
-        tarjetas = QGridLayout()
-        tarjetas.setHorizontalSpacing(10)
-        tarjetas.setVerticalSpacing(10)
-        self._tarjeta_precio = TarjetaResumenConfiguracion("Precio mensual")
-        self._tarjeta_correlativo = TarjetaResumenConfiguracion("Proximo recibo")
-        self._tarjeta_adelantos = TarjetaResumenConfiguracion("Pago adelantado")
-        self._tarjeta_respaldo = TarjetaResumenConfiguracion("Respaldo automatico")
-        tarjetas.addWidget(self._tarjeta_precio, 0, 0)
-        tarjetas.addWidget(self._tarjeta_correlativo, 0, 1)
-        tarjetas.addWidget(self._tarjeta_adelantos, 0, 2)
-        tarjetas.addWidget(self._tarjeta_respaldo, 0, 3)
+        tarjetas = ContenedorTarjetasResumenOperativo()
+        self._tarjeta_precio = TarjetaResumenConfiguracion("Precio mensual", "receipt-2.svg", "#75C7F0")
+        self._tarjeta_correlativo = TarjetaResumenConfiguracion("Proximo recibo", "barcode.svg", "#8de8c7")
+        self._tarjeta_adelantos = TarjetaResumenConfiguracion("Pago adelantado", "calendar-plus.svg", "#f7cc7a")
+        self._tarjeta_respaldo = TarjetaResumenConfiguracion("Respaldo automatico", "tool.svg", "#92B6CC")
+        tarjetas.establecer_tarjetas(
+            (self._tarjeta_precio, self._tarjeta_correlativo, self._tarjeta_adelantos, self._tarjeta_respaldo)
+        )
 
         self._tabs = QTabWidget()
         self._tabs.setObjectName("tabsConfiguracion")
@@ -333,7 +317,7 @@ class VistaConfiguracion(QWidget):
 
         layout.addLayout(encabezado)
         layout.addWidget(self._mensaje)
-        layout.addLayout(tarjetas)
+        layout.addWidget(tarjetas)
         layout.addWidget(self._tabs, 1)
 
     def _crear_tab_datos_junta(self) -> QWidget:

@@ -22,6 +22,8 @@ from PySide6.QtWidgets import (
 )
 
 from comun.ui import (
+    ContenedorTarjetasResumenOperativo,
+    TarjetaResumenOperativa,
     configurar_tabla_operativa,
     crear_boton_operativo,
     crear_item_tabla,
@@ -52,14 +54,15 @@ class TarjetaSeleccionReporte(QPushButton):
         self.setCheckable(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setObjectName("tarjetaReporteAdmin")
-        self.setMinimumHeight(158)
+        self.setMinimumHeight(116)
+        self.setMaximumHeight(116)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(10)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(6)
         icono = QLabel()
         icono.setObjectName("iconoTarjetaReporte")
-        icono.setFixedSize(42, 42)
+        icono.setFixedSize(38, 38)
         icono.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icono.setPixmap(obtener_icono_tabler_coloreado(tarjeta.icono, color_icono, tamano=20).pixmap(20, 20))
         titulo = QLabel(tarjeta.titulo)
@@ -134,44 +137,23 @@ class VistaReportes(QWidget):
         contenido = QWidget()
         contenido.setObjectName("contenidoReportes")
         layout = QVBoxLayout(contenido)
-        layout.setContentsMargins(10, 8, 10, 10)
-        layout.setSpacing(16)
-
-        encabezado = QVBoxLayout()
-        titulo = QLabel("Reportes")
-        titulo.setObjectName("tituloModuloReportes")
-        descripcion = QLabel("Generacion y consulta de reportes administrativos en PDF.")
-        descripcion.setObjectName("descripcionModuloReportes")
-        encabezado.addWidget(titulo)
-        encabezado.addWidget(descripcion)
-        layout.addLayout(encabezado)
+        layout.setContentsMargins(6, 4, 6, 6)
+        layout.setSpacing(12)
 
         self._mensaje = QLabel("")
         self._mensaje.setObjectName("mensajeReportes")
         self._mensaje.setVisible(False)
         layout.addWidget(self._mensaje)
 
-        fila_kpis = QHBoxLayout()
-        fila_kpis.setSpacing(12)
-        self._indicadores: list[tuple[QLabel, QLabel, QLabel]] = []
-        for _ in range(5):
-            tarjeta = QFrame()
-            tarjeta.setObjectName("tarjetaResumenSimple")
-            tarjeta_layout = QVBoxLayout(tarjeta)
-            tarjeta_layout.setContentsMargins(16, 14, 16, 14)
-            titulo_kpi = QLabel("-")
-            titulo_kpi.setObjectName("tarjetaTitulo")
-            valor_kpi = QLabel("0")
-            valor_kpi.setObjectName("tarjetaValor")
-            detalle_kpi = QLabel("")
-            detalle_kpi.setObjectName("tarjetaDetalle")
-            detalle_kpi.setWordWrap(True)
-            tarjeta_layout.addWidget(titulo_kpi)
-            tarjeta_layout.addWidget(valor_kpi)
-            tarjeta_layout.addWidget(detalle_kpi)
-            fila_kpis.addWidget(tarjeta)
-            self._indicadores.append((titulo_kpi, valor_kpi, detalle_kpi))
-        layout.addLayout(fila_kpis)
+        contenedor_indicadores = ContenedorTarjetasResumenOperativo()
+        iconos_indicadores = ("chart-bar.svg", "users.svg", "home.svg", "receipt-2.svg", "alert-triangle.svg")
+        colores_indicadores = ("#75C7F0", "#8de8c7", "#92B6CC", "#f7cc7a", "#F5B84B")
+        self._indicadores: list[TarjetaResumenOperativa] = [
+            TarjetaResumenOperativa(icono, color)
+            for icono, color in zip(iconos_indicadores, colores_indicadores, strict=True)
+        ]
+        contenedor_indicadores.establecer_tarjetas(tuple(self._indicadores))
+        layout.addWidget(contenedor_indicadores)
 
         titulo_selector = QLabel("Seleccione el tipo de reporte")
         titulo_selector.setObjectName("tituloSeccionReportes")
@@ -246,7 +228,7 @@ class VistaReportes(QWidget):
             self._tarjetas[tarjeta.codigo] = widget
             self._grilla_tarjetas.addWidget(widget, indice // 4, indice % 4)
         filas = max(1, (len(catalogo) + 3) // 4)
-        alto_tarjetas = filas * 158 + max(0, filas - 1) * self._grilla_tarjetas.verticalSpacing()
+        alto_tarjetas = filas * 116 + max(0, filas - 1) * self._grilla_tarjetas.verticalSpacing()
         self._contenedor_tarjetas.setMinimumHeight(alto_tarjetas)
         self._contenedor_tarjetas.setMaximumHeight(alto_tarjetas)
 
@@ -291,17 +273,12 @@ class VistaReportes(QWidget):
         return check
 
     def _mostrar_indicadores(self, estado: EstadoReportes) -> None:
-        for indice, widgets in enumerate(self._indicadores):
-            titulo, valor, detalle = widgets
+        for indice, tarjeta in enumerate(self._indicadores):
             if indice < len(estado.indicadores):
                 indicador = estado.indicadores[indice]
-                titulo.setText(indicador.titulo)
-                valor.setText(indicador.valor)
-                detalle.setText(indicador.detalle)
+                tarjeta.actualizar(indicador.titulo, indicador.valor, indicador.detalle)
             else:
-                titulo.setText("-")
-                valor.setText("0")
-                detalle.setText("")
+                tarjeta.actualizar("-", "0", "")
 
     def _mostrar_tabla_actual(self, tabla: TablaReporte | None) -> None:
         self._tabla_actual = tabla
@@ -439,11 +416,20 @@ class VistaReportes(QWidget):
                 alternate-background-color: {paleta["fondo_tabla_fila_alterna"]};
                 border: none;
                 border-radius: 18px;
+                padding: 0 0 18px 0;
                 color: {paleta["texto_principal"]};
             }}
             QWidget#viewportTablaReportes {{
                 background: transparent;
                 border: none;
+                border-bottom-left-radius: 18px;
+                border-bottom-right-radius: 18px;
+            }}
+            QTableWidget#tablaOperativaOscura QHeaderView::section:first {{
+                border-top-left-radius: 18px;
+            }}
+            QTableWidget#tablaOperativaOscura QHeaderView::section:last {{
+                border-top-right-radius: 18px;
             }}
             QHeaderView::section {{
                 background-color: {paleta["fondo_tabla_header_destacado"]};

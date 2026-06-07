@@ -33,6 +33,8 @@ from comun.ui import (
     DialogoMensajeSigqua,
     EncabezadoDetalleSigqua,
     SeccionDetalleSigqua,
+    ContenedorTarjetasResumenOperativo,
+    TarjetaResumenOperativa,
     TarjetaResumenDetalleSigqua,
     configurar_tabla_operativa,
     crear_badge_estado_detalle_sigqua,
@@ -66,49 +68,8 @@ from modulos.historial_pagos.entidades import (
 )
 
 
-class TarjetaResumenHistorial(QFrame):
-    """Tarjeta de resumen del modulo."""
-
-    def __init__(self, icono: str, color_icono: str) -> None:
-        super().__init__()
-        self.setObjectName("tarjetaResumenHistorialPagos")
-        self.setMinimumHeight(96)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(10)
-
-        self._icono = QLabel("")
-        self._icono.setObjectName("iconoTarjetaResumen")
-        self._icono.setFixedSize(38, 38)
-        self._icono.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._icono.setPixmap(
-            obtener_icono_tabler_coloreado(icono, color_icono, tamano=18).pixmap(18, 18)
-        )
-
-        bloque = QVBoxLayout()
-        bloque.setContentsMargins(0, 0, 0, 0)
-        bloque.setSpacing(2)
-        self._titulo = QLabel("")
-        self._titulo.setObjectName("tituloTarjetaResumen")
-        self._valor = QLabel("")
-        self._valor.setObjectName("valorTarjetaResumen")
-        self._detalle = QLabel("")
-        self._detalle.setObjectName("detalleTarjetaResumen")
-        self._detalle.setWordWrap(True)
-        bloque.addWidget(self._titulo)
-        bloque.addWidget(self._valor)
-        bloque.addWidget(self._detalle)
-        bloque.addStretch(1)
-
-        layout.addWidget(self._icono, alignment=Qt.AlignmentFlag.AlignTop)
-        layout.addLayout(bloque, 1)
-
-    def actualizar(self, titulo: str, valor: str, detalle: str) -> None:
-        self._titulo.setText(titulo)
-        self._valor.setText(valor)
-        self._detalle.setText(detalle)
+class TarjetaResumenHistorial(TarjetaResumenOperativa):
+    """Adaptador del resumen comun para mantener nombres del modulo."""
 
 
 class BotonIconoFilaHistorial(QToolButton):
@@ -656,7 +617,7 @@ class VistaHistorialPagos(QWidget):
 
     def _construir_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(26, 24, 26, 24)
+        layout.setContentsMargins(6, 4, 6, 6)
         layout.setSpacing(12)
 
         self._mensaje = QLabel("")
@@ -665,18 +626,15 @@ class VistaHistorialPagos(QWidget):
         self._mensaje.setWordWrap(True)
         layout.addWidget(self._mensaje)
 
-        fila_tarjetas = QGridLayout()
-        fila_tarjetas.setHorizontalSpacing(10)
-        fila_tarjetas.setVerticalSpacing(10)
+        contenedor_tarjetas = ContenedorTarjetasResumenOperativo()
         self._tarjeta_total = TarjetaResumenHistorial("receipt-2.svg", "#75C7F0")
         self._tarjeta_hoy = TarjetaResumenHistorial("clock.svg", "#8de8c7")
         self._tarjeta_cobrado = TarjetaResumenHistorial("calendar-stats.svg", "#f7cc7a")
         self._tarjeta_ultimo = TarjetaResumenHistorial("receipt-2.svg", "#37D399")
-        fila_tarjetas.addWidget(self._tarjeta_total, 0, 0)
-        fila_tarjetas.addWidget(self._tarjeta_hoy, 0, 1)
-        fila_tarjetas.addWidget(self._tarjeta_cobrado, 0, 2)
-        fila_tarjetas.addWidget(self._tarjeta_ultimo, 0, 3)
-        layout.addLayout(fila_tarjetas)
+        contenedor_tarjetas.establecer_tarjetas(
+            (self._tarjeta_total, self._tarjeta_hoy, self._tarjeta_cobrado, self._tarjeta_ultimo)
+        )
+        layout.addWidget(contenedor_tarjetas)
 
         panel_filtros = QFrame()
         panel_filtros.setObjectName("panelOperativoHistorialPagos")

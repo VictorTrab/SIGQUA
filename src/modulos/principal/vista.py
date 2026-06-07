@@ -15,9 +15,11 @@ from PySide6.QtCharts import (
     QValueAxis,
 )
 from PySide6.QtCore import (
+    QAbstractAnimation,
     QEvent,
     QEasingCurve,
     QMargins,
+    QParallelAnimationGroup,
     QPauseAnimation,
     QPoint,
     QPropertyAnimation,
@@ -58,6 +60,7 @@ from PySide6.QtWidgets import (
 from comun.configuracion.gestor_rutas import GestorRutas
 from comun.ui import (
     BotonAccionContextual,
+    DialogoBaseSigqua,
     DialogoConfirmacionSigqua,
     DialogoMensajeSigqua,
     VistaPlaceholderModulo,
@@ -85,9 +88,12 @@ from modulos.principal.entidades import (
 )
 
 
-COLOR_FONDO_PRINCIPAL = "#071A2D"
+COLOR_FONDO_PRINCIPAL = "#101214"
 ANCHO_MINIMO_SHELL_PRINCIPAL = 960
 ALTO_MINIMO_SHELL_PRINCIPAL = 640
+ANCHO_SIDEBAR_EXPANDIDO = 220
+ANCHO_SIDEBAR_COLAPSADO = 72
+DURACION_COLAPSO_SIDEBAR_MS = 180
 ANCHO_RUPTURA_DASHBOARD_AMPLIO = 1320
 ANCHO_RUPTURA_DASHBOARD_MEDIO = 980
 ANCHO_RUPTURA_METRICAS_6_COLUMNAS = 1120
@@ -95,7 +101,7 @@ ANCHO_RUPTURA_METRICAS_4_COLUMNAS = 980
 ANCHO_RUPTURA_METRICAS_3_COLUMNAS = 820
 ANCHO_RUPTURA_METRICAS_2_COLUMNAS = 760
 COLOR_GRADIENTE_MARCA_INICIAL = "#75C7F0"
-COLOR_GRADIENTE_MARCA_FINAL = "#37D399"
+COLOR_GRADIENTE_MARCA_FINAL = "#2F9BFF"
 
 
 def _crear_color_qt(valor: object, fallback: str = "#C5DDEE") -> QColor:
@@ -1092,6 +1098,203 @@ class PanelPerfilUsuario(QFrame):
             self.cerrar_sesion_solicitada.emit()
 
 
+class BotonPerfilHeader(QPushButton):
+    """Identidad del usuario integrada al encabezado."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("botonPerfilHeader")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumSize(188, 52)
+        self.setMaximumHeight(52)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setToolTip("Perfil de usuario")
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 7, 8, 7)
+        layout.setSpacing(10)
+
+        self._avatar = QLabel("US")
+        self._avatar.setObjectName("avatarPerfilHeader")
+        self._avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._avatar.setFixedSize(40, 40)
+
+        self._nombre = QLabel("Usuario")
+        self._nombre.setObjectName("nombrePerfilHeader")
+        self._rol = QLabel("")
+        self._rol.setObjectName("rolPerfilHeader")
+        bloque_identidad = QVBoxLayout()
+        bloque_identidad.setContentsMargins(0, 0, 0, 0)
+        bloque_identidad.setSpacing(1)
+        bloque_identidad.addWidget(self._nombre)
+        bloque_identidad.addWidget(self._rol)
+
+        layout.addWidget(self._avatar)
+        layout.addLayout(bloque_identidad, 1)
+
+    def actualizar(self, nombre_completo: str, perfil: str) -> None:
+        self._avatar.setText(BotonPerfilUsuario._resolver_iniciales(nombre_completo))
+        self._nombre.setText(nombre_completo or "Usuario")
+        self._rol.setText(perfil.replace("_", " ").title())
+        self.setToolTip(f"{nombre_completo} · {perfil}")
+
+class DialogoPerfilUsuario(DialogoBaseSigqua):
+    """Modal informativo del usuario y su sesión activa."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setMinimumWidth(440)
+
+        titulo = QLabel("Perfil de usuario")
+        titulo.setObjectName("tituloDialogoSigqua")
+        descripcion = QLabel("Información de la sesión activa en este equipo.")
+        descripcion.setObjectName("descripcionDialogoSigqua")
+        self.layout_cabecera.addWidget(titulo)
+        self.layout_cabecera.addWidget(descripcion)
+
+        identidad = QFrame()
+        identidad.setObjectName("bloqueDialogoSigqua")
+        layout_identidad = QHBoxLayout(identidad)
+        layout_identidad.setContentsMargins(14, 14, 14, 14)
+        layout_identidad.setSpacing(12)
+
+        self._avatar = QLabel("US")
+        self._avatar.setObjectName("avatarPanelPerfil")
+        self._avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._avatar.setFixedSize(54, 54)
+        self._nombre = QLabel("")
+        self._nombre.setObjectName("nombrePanelPerfil")
+        self._rol = QLabel("")
+        self._rol.setObjectName("rolPanelPerfil")
+
+        bloque_nombre = QVBoxLayout()
+        bloque_nombre.setContentsMargins(0, 0, 0, 0)
+        bloque_nombre.setSpacing(2)
+        bloque_nombre.addWidget(self._nombre)
+        bloque_nombre.addWidget(self._rol)
+        layout_identidad.addWidget(self._avatar)
+        layout_identidad.addLayout(bloque_nombre, 1)
+
+        datos = QFrame()
+        datos.setObjectName("bloqueDialogoSigqua")
+        layout_datos = QVBoxLayout(datos)
+        layout_datos.setContentsMargins(14, 14, 14, 14)
+        layout_datos.setSpacing(10)
+        self._correo = self._crear_fila_dato("Correo electrónico", "mail.svg")
+        self._ultimo_acceso = self._crear_fila_dato("Último acceso", "clock.svg")
+        self._estado_sesion = self._crear_fila_dato("Estado de sesión", "circle-check.svg")
+        layout_datos.addWidget(self._correo["contenedor"])
+        layout_datos.addWidget(self._ultimo_acceso["contenedor"])
+        layout_datos.addWidget(self._estado_sesion["contenedor"])
+
+        self.layout_cuerpo.addWidget(identidad)
+        self.layout_cuerpo.addWidget(datos)
+
+        fila_acciones = QHBoxLayout()
+        fila_acciones.addStretch(1)
+        boton_cerrar = BotonAccionContextual(
+            "Cerrar",
+            variante="neutro",
+            centrado=True,
+            mostrar_icono=False,
+        )
+        boton_cerrar.setMinimumWidth(120)
+        boton_cerrar.clicked.connect(self.accept)
+        fila_acciones.addWidget(boton_cerrar)
+        self.layout_pie.addLayout(fila_acciones)
+        self._aplicar_estilos_perfil()
+
+    def actualizar(
+        self,
+        nombre_completo: str,
+        rol: str,
+        correo: str,
+        ultimo_acceso: str,
+        estado_sesion: str,
+    ) -> None:
+        self._avatar.setText(BotonPerfilUsuario._resolver_iniciales(nombre_completo))
+        self._nombre.setText(nombre_completo)
+        self._rol.setText(rol.replace("_", " ").title())
+        self._correo["valor"].setText(correo)
+        self._ultimo_acceso["valor"].setText(ultimo_acceso)
+        self._estado_sesion["valor"].setText(estado_sesion)
+
+    def aplicar_tema(self, nombre_tema: str) -> None:
+        super().aplicar_tema(nombre_tema)
+        self._aplicar_estilos_perfil()
+
+    def _aplicar_estilos_perfil(self) -> None:
+        paleta = self._paleta_tema
+        self.setStyleSheet(
+            self.styleSheet()
+            + f"""
+            QLabel#avatarPanelPerfil {{
+                background: {paleta["fondo_avatar"]};
+                border: 1px solid {paleta["borde_avatar"]};
+                border-radius: 27px;
+                color: {paleta["texto_principal"]};
+                font-size: 17px;
+                font-weight: 900;
+            }}
+            QLabel#nombrePanelPerfil {{
+                color: {paleta["texto_principal"]};
+                font-size: 16px;
+                font-weight: 900;
+            }}
+            QLabel#rolPanelPerfil,
+            QLabel#tituloDatoPerfil {{
+                color: {paleta["texto_secundario"]};
+                font-size: 11px;
+                font-weight: 700;
+            }}
+            QLabel#valorDatoPerfil {{
+                color: {paleta["texto_principal"]};
+                font-size: 12px;
+                font-weight: 800;
+            }}
+            QLabel#iconoDatoPerfil {{
+                background: {paleta["fondo_superficie_muy_suave"]};
+                border: 1px solid {paleta["borde_suave"]};
+                border-radius: 6px;
+            }}
+            """
+        )
+
+    def _crear_fila_dato(self, titulo: str, icono: str) -> dict[str, QWidget | QLabel]:
+        contenedor = QFrame()
+        contenedor.setObjectName("filaDatoPerfil")
+        layout = QHBoxLayout(contenedor)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        icono_label = QLabel("")
+        icono_label.setObjectName("iconoDatoPerfil")
+        icono_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icono_label.setFixedSize(32, 32)
+        icono_label.setPixmap(
+            obtener_icono_tabler_coloreado(
+                icono,
+                str(self._paleta_tema["modal_icono_campo"]),
+                tamano=16,
+            ).pixmap(16, 16)
+        )
+
+        bloque = QVBoxLayout()
+        bloque.setContentsMargins(0, 0, 0, 0)
+        bloque.setSpacing(1)
+        etiqueta = QLabel(titulo)
+        etiqueta.setObjectName("tituloDatoPerfil")
+        valor = QLabel("")
+        valor.setObjectName("valorDatoPerfil")
+        valor.setWordWrap(True)
+        bloque.addWidget(etiqueta)
+        bloque.addWidget(valor)
+
+        layout.addWidget(icono_label)
+        layout.addLayout(bloque, 1)
+        return {"contenedor": contenedor, "valor": valor}
+
+
 class DialogoPruebaModalBase(QDialog):
     """Base de laboratorio para comparar estrategias de modal."""
 
@@ -1335,6 +1538,8 @@ class VistaModuloPrincipal(QWidget):
         self._modulos_sidebar: dict[str, ModuloNavegacion] = {}
         self._botones_modulos: dict[str, QPushButton] = {}
         self._secciones_sidebar: dict[str, SeccionSidebarDesplegable] = {}
+        self._sidebar_colapsado = False
+        self._animacion_sidebar: QParallelAnimationGroup | None = None
         self._estado_secciones_sidebar: dict[str, bool] = {
             "Vista general": True,
             "Registro y control": True,
@@ -1356,10 +1561,7 @@ class VistaModuloPrincipal(QWidget):
         self._fondo_personalizado_modo = "SOLIDO"
         self._fondo_personalizado_color_primario = ""
         self._fondo_personalizado_color_secundario = ""
-        self._panel_perfil_usuario = PanelPerfilUsuario(self)
-        self._panel_perfil_usuario.cerrar_sesion_solicitada.connect(
-            self.cerrar_sesion_solicitada.emit
-        )
+        self._dialogo_perfil_usuario = DialogoPerfilUsuario(self)
         establecer_tema_actual(self._tema_actual)
         self._aplicar_estilos()
         self._construir_ui()
@@ -1444,7 +1646,7 @@ class VistaModuloPrincipal(QWidget):
         self._ultimo_estado_mostrado = estado
         self._modulos_sidebar = {modulo.codigo: modulo for modulo in estado.modulos}
         self._boton_perfil_header.actualizar(estado.nombre_completo, estado.perfil)
-        self._panel_perfil_usuario.actualizar(
+        self._dialogo_perfil_usuario.actualizar(
             nombre_completo=estado.nombre_completo,
             rol=estado.perfil,
             correo=self._correo_usuario_actual,
@@ -1454,7 +1656,7 @@ class VistaModuloPrincipal(QWidget):
         self._reconstruir_sidebar(estado.modulos)
         self.actualizar_dashboard(estado)
         self._boton_mantenimiento.setVisible(estado.puede_abrir_mantenimiento)
-        self._panel_acciones_sidebar.setVisible(estado.puede_abrir_mantenimiento)
+        self._boton_ajustes.setVisible("configuracion" in self._modulos_sidebar)
         self.mostrar_modulo("dashboard")
         self._actualizar_disposicion_dashboard()
         self._animar_aparicion_dashboard()
@@ -1534,7 +1736,7 @@ class VistaModuloPrincipal(QWidget):
             self._grafica_barrios.aplicar_tema(self._tema_actual)
         if hasattr(self, "_leyenda_distribucion"):
             self._leyenda_distribucion.aplicar_tema(self._tema_actual)
-        self._panel_perfil_usuario.aplicar_tema(self._tema_actual)
+        self._dialogo_perfil_usuario.aplicar_tema(self._tema_actual)
         for boton in self.findChildren(BotonAccionContextual):
             boton.aplicar_tema(self._tema_actual)
         for boton in self.findChildren(QPushButton):
@@ -1576,20 +1778,20 @@ class VistaModuloPrincipal(QWidget):
                 boton.setIcon(obtener_icono_tabler_coloreado(nombre_icono, color_icono, tamano=18))
         for titulo, seccion in self._secciones_sidebar.items():
             seccion.marcar_modulo_activo(codigo)
-            self._estado_secciones_sidebar[titulo] = seccion.esta_expandida()
 
     def _construir_ui(self) -> None:
         layout_raiz = QHBoxLayout(self)
-        layout_raiz.setContentsMargins(14, 14, 14, 14)
-        layout_raiz.setSpacing(12)
+        layout_raiz.setContentsMargins(0, 0, 0, 0)
+        layout_raiz.setSpacing(0)
 
         self._sidebar = QFrame()
         self._sidebar.setObjectName("sidebarPrincipal")
-        self._sidebar.setMinimumWidth(192)
-        self._sidebar.setMaximumWidth(198)
+        self._sidebar.setMinimumWidth(ANCHO_SIDEBAR_EXPANDIDO)
+        self._sidebar.setMaximumWidth(ANCHO_SIDEBAR_EXPANDIDO)
         self._sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         layout_sidebar = QVBoxLayout(self._sidebar)
-        layout_sidebar.setContentsMargins(12, 12, 12, 12)
+        self._layout_sidebar = layout_sidebar
+        layout_sidebar.setContentsMargins(12, 14, 12, 12)
         layout_sidebar.setSpacing(10)
 
         layout_sidebar.addWidget(self._crear_encabezado_sidebar())
@@ -1612,7 +1814,7 @@ class VistaModuloPrincipal(QWidget):
         self._panel_acciones_sidebar = QFrame()
         self._panel_acciones_sidebar.setObjectName("panelAccionesSidebar")
         layout_acciones_sidebar = QVBoxLayout(self._panel_acciones_sidebar)
-        layout_acciones_sidebar.setContentsMargins(0, 0, 0, 0)
+        layout_acciones_sidebar.setContentsMargins(0, 8, 0, 0)
         layout_acciones_sidebar.setSpacing(6)
 
         self._boton_mantenimiento = self._crear_boton_sidebar(
@@ -1621,20 +1823,44 @@ class VistaModuloPrincipal(QWidget):
         )
         self._boton_mantenimiento.clicked.connect(self.abrir_mantenimiento_solicitado.emit)
         self._boton_mantenimiento.setVisible(False)
+        self._boton_ajustes = self._crear_boton_sidebar(
+            ModuloNavegacion(
+                "configuracion",
+                "Ajustes",
+                "Parámetros operativos y configuración local.",
+                "settings-2.svg",
+            ),
+            tipo="accion",
+        )
+        self._boton_ajustes.clicked.connect(
+            lambda checked=False: self._solicitar_modulo("configuracion")
+        )
+        self._botones_modulos["configuracion"] = self._boton_ajustes
+        self._boton_cerrar_sesion = self._crear_boton_sidebar(
+            ModuloNavegacion(
+                "cerrar_sesion",
+                "Cerrar sesión",
+                "Cerrar la sesión actual y volver al acceso.",
+                "login-2.svg",
+            ),
+            tipo="salida",
+        )
+        self._boton_cerrar_sesion.clicked.connect(self.cerrar_sesion_solicitada.emit)
         layout_acciones_sidebar.addWidget(self._boton_mantenimiento)
-        self._panel_acciones_sidebar.setVisible(False)
+        layout_acciones_sidebar.addWidget(self._boton_ajustes)
+        layout_acciones_sidebar.addWidget(self._boton_cerrar_sesion)
         layout_sidebar.addWidget(self._panel_acciones_sidebar)
 
         panel = QWidget()
         panel.setObjectName("panelPrincipal")
         layout_panel = QVBoxLayout(panel)
-        layout_panel.setContentsMargins(0, 0, 0, 0)
-        layout_panel.setSpacing(12)
+        layout_panel.setContentsMargins(24, 18, 24, 18)
+        layout_panel.setSpacing(10)
 
         header = QFrame()
         header.setObjectName("headerPrincipal")
         layout_header = QHBoxLayout(header)
-        layout_header.setContentsMargins(16, 14, 16, 14)
+        layout_header.setContentsMargins(0, 0, 0, 8)
         layout_header.setSpacing(14)
 
         bloque_titulo = QVBoxLayout()
@@ -1647,11 +1873,9 @@ class VistaModuloPrincipal(QWidget):
         bloque_titulo.addWidget(self._label_bienvenida)
         bloque_titulo.addWidget(self._label_subresumen)
 
-        self._boton_perfil_header = BotonPerfilUsuario()
-        self._boton_perfil_header.clicked.connect(self._alternar_panel_perfil_usuario)
-
         layout_header.addLayout(bloque_titulo, 1)
-        layout_header.addStretch(1)
+        self._boton_perfil_header = BotonPerfilHeader()
+        self._boton_perfil_header.clicked.connect(self._abrir_dialogo_perfil_usuario)
         layout_header.addWidget(
             self._boton_perfil_header,
             alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight,
@@ -1952,6 +2176,9 @@ class VistaModuloPrincipal(QWidget):
 
         while self._grid_metricas.count():
             self._grid_metricas.takeAt(0)
+        for columna in range(6):
+            self._grid_metricas.setColumnStretch(columna, 0)
+            self._grid_metricas.setColumnMinimumWidth(columna, 0)
 
         ancho = self._ancho_disponible_dashboard()
         if ancho >= ANCHO_RUPTURA_METRICAS_6_COLUMNAS:
@@ -1978,6 +2205,9 @@ class VistaModuloPrincipal(QWidget):
     def _actualizar_disposicion_paneles_dashboard(self) -> None:
         while self._layout_paneles_dashboard.count():
             self._layout_paneles_dashboard.takeAt(0)
+        for columna in range(4):
+            self._layout_paneles_dashboard.setColumnStretch(columna, 0)
+            self._layout_paneles_dashboard.setColumnMinimumWidth(columna, 0)
 
         ancho = self._ancho_disponible_dashboard()
         limite_expandido = 16777215
@@ -2077,7 +2307,7 @@ class VistaModuloPrincipal(QWidget):
         }
 
         for modulo in modulos:
-            if modulo.codigo == "mantenimiento":
+            if modulo.codigo in {"mantenimiento", "configuracion"}:
                 continue
             secciones[self._resolver_categoria_sidebar(modulo.codigo)].append(modulo)
 
@@ -2095,31 +2325,105 @@ class VistaModuloPrincipal(QWidget):
                 widget_seccion.agregar_boton(modulo.codigo, boton)
                 self._botones_modulos[modulo.codigo] = boton
 
-            expandida = self._estado_secciones_sidebar.get(titulo_seccion, True)
-            widget_seccion.establecer_expandida(expandida, forzar=True)
+            widget_seccion.establecer_expandida(True, forzar=True)
             widget_seccion.marcar_modulo_activo(self._modulo_activo)
             self._contenedor_botones.addWidget(widget_seccion)
 
         self._contenedor_botones.addStretch(1)
+        self._botones_modulos["configuracion"] = self._boton_ajustes
+        self._aplicar_contenido_sidebar_colapsado(self._sidebar_colapsado)
 
     def _solicitar_modulo(self, codigo: str) -> None:
         self.modulo_solicitado.emit(codigo)
         self.mostrar_modulo(codigo)
 
-    def _registrar_estado_seccion_sidebar(self, titulo: str, expandida: bool) -> None:
-        self._estado_secciones_sidebar[titulo] = expandida
+    def _abrir_dialogo_perfil_usuario(self) -> None:
+        self._dialogo_perfil_usuario.exec()
 
-    def _alternar_panel_perfil_usuario(self) -> None:
-        if self._panel_perfil_usuario.isVisible():
-            self._panel_perfil_usuario.hide()
+    def alternar_sidebar(self) -> None:
+        if (
+            self._animacion_sidebar is not None
+            and self._animacion_sidebar.state() == QAbstractAnimation.State.Running
+        ):
             return
-        self._panel_perfil_usuario.mostrar_desde(self._boton_perfil_header)
+
+        colapsar = not self._sidebar_colapsado
+        ancho_inicio = self._sidebar.width()
+        ancho_fin = ANCHO_SIDEBAR_COLAPSADO if colapsar else ANCHO_SIDEBAR_EXPANDIDO
+        if colapsar:
+            self._aplicar_contenido_sidebar_colapsado(True)
+
+        grupo = QParallelAnimationGroup(self)
+        for propiedad in (b"minimumWidth", b"maximumWidth"):
+            animacion = QPropertyAnimation(self._sidebar, propiedad, grupo)
+            animacion.setDuration(DURACION_COLAPSO_SIDEBAR_MS)
+            animacion.setStartValue(ancho_inicio)
+            animacion.setEndValue(ancho_fin)
+            animacion.setEasingCurve(QEasingCurve.Type.InOutCubic)
+            grupo.addAnimation(animacion)
+
+        self._boton_colapsar_sidebar.setEnabled(False)
+
+        def finalizar() -> None:
+            self._sidebar_colapsado = colapsar
+            if not colapsar:
+                self._aplicar_contenido_sidebar_colapsado(False)
+            self._boton_colapsar_sidebar.setEnabled(True)
+            self._actualizar_iconos_sidebar()
+            self._animacion_sidebar = None
+            grupo.deleteLater()
+
+        grupo.finished.connect(finalizar)
+        self._animacion_sidebar = grupo
+        grupo.start()
+
+    def _aplicar_contenido_sidebar_colapsado(self, colapsado: bool) -> None:
+        margen_horizontal = 6 if colapsado else 12
+        self._layout_sidebar.setContentsMargins(
+            margen_horizontal,
+            14,
+            margen_horizontal,
+            12,
+        )
+        self._logo_sidebar.setVisible(not colapsado)
+        self._monograma_sidebar.setVisible(colapsado)
+        self._scroll_navegacion.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            if colapsado
+            else Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self._boton_colapsar_sidebar.setToolTip(
+            "Expandir menú" if colapsado else "Colapsar menú"
+        )
+        for seccion in self._secciones_sidebar.values():
+            seccion._etiqueta_titulo.setVisible(not colapsado)
+        for boton in (
+            *self._botones_modulos.values(),
+            self._boton_mantenimiento,
+            self._boton_ajustes,
+            self._boton_cerrar_sesion,
+        ):
+            texto = str(boton.property("textoSidebar") or boton.text())
+            boton.setText("" if colapsado else texto)
+            boton.setProperty("sidebarColapsado", colapsado)
+            boton.style().unpolish(boton)
+            boton.style().polish(boton)
+
+    def _actualizar_iconos_sidebar(self) -> None:
+        self._boton_colapsar_sidebar.setIcon(
+            obtener_icono_tabler_coloreado(
+                "arrow-left.svg",
+                str(self._paleta_tema["icono_menu_normal"]),
+                tamano=18,
+            )
+        )
 
     def _crear_boton_sidebar(self, modulo: ModuloNavegacion, tipo: str = "modulo") -> QPushButton:
         boton = crear_boton_operativo(modulo.titulo)
         boton.setObjectName("botonSidebar")
         boton.setProperty("tipoSidebar", tipo)
         boton.setProperty("iconoSidebar", modulo.icono)
+        boton.setProperty("textoSidebar", modulo.titulo)
         boton.setProperty("dashboardPendienteActualizacion", False)
         boton.setIcon(
             obtener_icono_tabler_coloreado(
@@ -2135,18 +2439,48 @@ class VistaModuloPrincipal(QWidget):
     def _crear_encabezado_sidebar(self) -> QWidget:
         encabezado = QWidget()
         encabezado.setObjectName("encabezadoSidebar")
-        layout = QVBoxLayout(encabezado)
-        layout.setContentsMargins(4, 2, 4, 8)
-        layout.setSpacing(0)
+        layout = QGridLayout(encabezado)
+        layout.setContentsMargins(2, 2, 2, 8)
+        layout.setSpacing(2)
 
-        logo_marca = self._crear_logo_marca_sidebar()
-        if logo_marca is not None:
-            layout.addWidget(logo_marca, 0, Qt.AlignmentFlag.AlignHCenter)
-        else:
-            titulo = EtiquetaMarcaGradiente("SIGQUA")
-            titulo.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
-            titulo.setContentsMargins(0, 0, 0, 0)
-            layout.addWidget(titulo)
+        self._logo_sidebar = self._crear_logo_marca_sidebar()
+        if self._logo_sidebar is None:
+            self._logo_sidebar = EtiquetaMarcaGradiente("SIGQUA")
+            self._logo_sidebar.setAlignment(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
+        self._logo_sidebar.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
+
+        self._monograma_sidebar = QLabel("S")
+        self._monograma_sidebar.setObjectName("monogramaSidebar")
+        self._monograma_sidebar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._monograma_sidebar.setFixedSize(26, 28)
+        self._monograma_sidebar.setVisible(False)
+
+        self._boton_colapsar_sidebar = QPushButton()
+        self._boton_colapsar_sidebar.setObjectName("botonColapsarSidebar")
+        self._boton_colapsar_sidebar.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._boton_colapsar_sidebar.setFixedSize(24, 28)
+        self._boton_colapsar_sidebar.setToolTip("Colapsar menú")
+        self._boton_colapsar_sidebar.setIcon(
+            obtener_icono_tabler_coloreado(
+                "arrow-left.svg",
+                str(self._paleta_tema["icono_menu_normal"]),
+                tamano=18,
+            )
+        )
+        self._boton_colapsar_sidebar.clicked.connect(self.alternar_sidebar)
+
+        separador_izquierdo = QWidget()
+        separador_izquierdo.setFixedWidth(24)
+        layout.addWidget(separador_izquierdo, 0, 0)
+        layout.addWidget(self._logo_sidebar, 0, 1, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._monograma_sidebar, 0, 1, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._boton_colapsar_sidebar, 0, 2)
+        layout.setColumnStretch(1, 1)
         return encabezado
 
     def _crear_logo_marca_sidebar(self) -> QLabel | None:
@@ -2156,7 +2490,7 @@ class VistaModuloPrincipal(QWidget):
 
         pixmap_logo = obtener_pixmap_marca(
             ruta_marca=ruta_logo,
-            ancho_logico=166,
+            ancho_logico=136,
             factor_escala=self.devicePixelRatioF(),
         )
         if pixmap_logo.isNull():
@@ -2453,14 +2787,15 @@ class VistaModuloPrincipal(QWidget):
                 border: none;
             }}
             QFrame#sidebarPrincipal {{
-                background: {fondo_header_destacado};
-                border: 1px solid {paleta["borde_suave"]};
-                border-radius: 22px;
+                background: {paleta["fondo_sidebar"]};
+                border: none;
+                border-right: 1px solid {paleta["borde_suave"]};
+                border-radius: 0;
             }}
             QFrame#headerPrincipal {{
-                background: {fondo_header_destacado};
-                border: 1px solid {paleta["borde_principal"]};
-                border-radius: 22px;
+                background: transparent;
+                border: none;
+                border-radius: 0;
             }}
             QFrame#tarjetaPanel {{
                 background: qlineargradient(
@@ -2510,17 +2845,33 @@ class VistaModuloPrincipal(QWidget):
                 background: transparent;
                 border: none;
             }}
+            QPushButton#botonColapsarSidebar {{
+                background: transparent;
+                border: 1px solid transparent;
+                border-radius: 6px;
+                padding: 0;
+            }}
+            QPushButton#botonColapsarSidebar:hover {{
+                background: {paleta["fondo_menu_hover"]};
+                border-color: {paleta["borde_suave"]};
+            }}
+            QLabel#monogramaSidebar {{
+                background: {paleta["acento_primario"]};
+                border: 1px solid {paleta["borde_info"]};
+                border-radius: 6px;
+                color: {paleta["boton_primario_texto"]};
+                font-size: 18px;
+                font-weight: 900;
+            }}
             QPushButton#botonPerfilHeader {{
-                min-width: 48px;
-                max-width: 48px;
-                min-height: 48px;
-                max-height: 48px;
-                background: {paleta["fondo_superficie_suave"]};
+                background: {paleta["fondo_superficie_muy_suave"]};
                 border: 1px solid {paleta["borde_suave"]};
-                border-radius: 24px;
+                border-radius: 6px;
+                text-align: left;
+                padding: 0;
             }}
             QPushButton#botonPerfilHeader:hover {{
-                background: {paleta["fondo_superficie"]};
+                background: {paleta["fondo_menu_hover"]};
                 border-color: {paleta["borde_principal"]};
             }}
             QLabel#avatarPerfilHeader {{
@@ -2528,8 +2879,18 @@ class VistaModuloPrincipal(QWidget):
                 border: 1px solid {paleta["borde_avatar"]};
                 border-radius: 20px;
                 color: {paleta["texto_principal"]};
-                font-size: 13px;
+                font-size: 12px;
                 font-weight: 900;
+            }}
+            QLabel#nombrePerfilHeader {{
+                color: {paleta["texto_principal"]};
+                font-size: 12px;
+                font-weight: 800;
+            }}
+            QLabel#rolPerfilHeader {{
+                color: {paleta["texto_muted"]};
+                font-size: 10px;
+                font-weight: 600;
             }}
             QWidget#contenedorItemsSidebar {{
                 background: transparent;
@@ -2595,22 +2956,30 @@ class VistaModuloPrincipal(QWidget):
                 letter-spacing: 0.06em;
             }}
             QPushButton#botonSidebar {{
-                min-height: 34px;
-                border: 1px solid {paleta["borde_suave"]};
-                border-radius: 12px;
+                min-height: 38px;
+                border: 1px solid transparent;
+                border-radius: 6px;
                 background: transparent;
                 color: {paleta["texto_menu_normal"]};
                 font-size: {paleta["tamano_fuente_base"] + 1}px;
                 font-weight: {paleta["peso_titulo"]};
                 text-align: left;
-                padding: 0 11px;
+                padding: 0 10px;
+            }}
+            QPushButton#botonSidebar[sidebarColapsado="true"] {{
+                padding: 0;
+                text-align: center;
             }}
             QPushButton#botonSidebar[tipoSidebar="modulo"] {{
                 margin-left: 0;
                 padding-left: 12px;
             }}
             QPushButton#botonSidebar[tipoSidebar="accion"] {{
-                background: {paleta["fondo_superficie_muy_suave"]};
+                background: transparent;
+            }}
+            QPushButton#botonSidebar[tipoSidebar="salida"] {{
+                color: {paleta["texto_error"]};
+                background: transparent;
             }}
             QPushButton#botonSidebar:hover {{
                 background: {paleta["fondo_menu_hover"]};
@@ -2618,7 +2987,7 @@ class VistaModuloPrincipal(QWidget):
             }}
             QPushButton#botonSidebar[activo="true"] {{
                 background: {paleta["fondo_menu_activo"]};
-                border-color: {paleta["borde_menu_activo"]};
+                border-color: transparent;
                 color: {paleta["texto_menu_activo"]};
                 font-weight: 900;
             }}

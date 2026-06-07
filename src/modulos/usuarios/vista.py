@@ -32,10 +32,12 @@ from PySide6.QtWidgets import (
 from comun.ui import (
     BotonAccionContextual,
     CampoDetalleSigqua,
+    ContenedorTarjetasResumenOperativo,
     DialogoBaseSigqua,
     DialogoConfirmacionSigqua,
     EncabezadoDetalleSigqua,
     SeccionDetalleSigqua,
+    TarjetaResumenOperativa,
     aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
     crear_badge_estado_detalle_sigqua,
@@ -65,49 +67,8 @@ from modulos.usuarios.servicio import (
 )
 
 
-class TarjetaResumenUsuario(QFrame):
-    """Tarjeta resumen del modulo."""
-
-    def __init__(self, icono: str, color_icono: str) -> None:
-        super().__init__()
-        self.setObjectName("tarjetaResumenUsuarios")
-        self.setMinimumHeight(108)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
-
-        self._icono = QLabel("")
-        self._icono.setObjectName("iconoTarjetaResumenUsuario")
-        self._icono.setFixedSize(40, 40)
-        self._icono.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._icono.setPixmap(
-            obtener_icono_tabler_coloreado(icono, color_icono, tamano=18).pixmap(18, 18)
-        )
-
-        bloque = QVBoxLayout()
-        bloque.setContentsMargins(0, 0, 0, 0)
-        bloque.setSpacing(3)
-        self._titulo = QLabel("")
-        self._titulo.setObjectName("tituloTarjetaResumenUsuario")
-        self._valor = QLabel("")
-        self._valor.setObjectName("valorTarjetaResumenUsuario")
-        self._detalle = QLabel("")
-        self._detalle.setObjectName("detalleTarjetaResumenUsuario")
-        self._detalle.setWordWrap(True)
-        bloque.addWidget(self._titulo)
-        bloque.addWidget(self._valor)
-        bloque.addWidget(self._detalle)
-        bloque.addStretch(1)
-
-        layout.addWidget(self._icono, alignment=Qt.AlignmentFlag.AlignTop)
-        layout.addLayout(bloque, 1)
-
-    def actualizar(self, titulo: str, valor: str, detalle: str) -> None:
-        self._titulo.setText(titulo)
-        self._valor.setText(valor)
-        self._detalle.setText(detalle)
+class TarjetaResumenUsuario(TarjetaResumenOperativa):
+    """Adaptador del resumen comun para mantener nombres del modulo."""
 
 
 class BotonIconoFilaUsuario(QToolButton):
@@ -1157,17 +1118,11 @@ class VistaUsuarios(QWidget):
 
     def _construir_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(14)
+        layout.setContentsMargins(6, 4, 6, 6)
+        layout.setSpacing(12)
 
         encabezado = QHBoxLayout()
         encabezado.setSpacing(12)
-        bloque_titulo = QVBoxLayout()
-        bloque_titulo.setSpacing(4)
-        descripcion = QLabel("Gestión de usuarios, roles fijos visibles y control de acceso operativo.")
-        descripcion.setObjectName("descripcionModulo")
-        descripcion.setWordWrap(True)
-        bloque_titulo.addWidget(descripcion)
 
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(8)
@@ -1179,7 +1134,7 @@ class VistaUsuarios(QWidget):
         fila_acciones.addWidget(self._boton_exportar)
         fila_acciones.addWidget(self._boton_nuevo)
 
-        encabezado.addLayout(bloque_titulo, 1)
+        encabezado.addStretch(1)
         encabezado.addLayout(fila_acciones)
 
         self._mensaje = QLabel("")
@@ -1195,19 +1150,16 @@ class VistaUsuarios(QWidget):
         pagina = QWidget()
         layout = QVBoxLayout(pagina)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(14)
+        layout.setSpacing(12)
 
-        tarjetas = QGridLayout()
-        tarjetas.setHorizontalSpacing(10)
-        tarjetas.setVerticalSpacing(10)
+        contenedor_tarjetas = ContenedorTarjetasResumenOperativo()
         self._tarjeta_total = TarjetaResumenUsuario("user.svg", "#75C7F0")
         self._tarjeta_activos = TarjetaResumenUsuario("circle-check.svg", "#37D399")
         self._tarjeta_admins = TarjetaResumenUsuario("key.svg", "#F5B84B")
         self._tarjeta_accesos = TarjetaResumenUsuario("clock.svg", "#92B6CC")
-        tarjetas.addWidget(self._tarjeta_total, 0, 0)
-        tarjetas.addWidget(self._tarjeta_activos, 0, 1)
-        tarjetas.addWidget(self._tarjeta_admins, 0, 2)
-        tarjetas.addWidget(self._tarjeta_accesos, 0, 3)
+        contenedor_tarjetas.establecer_tarjetas(
+            (self._tarjeta_total, self._tarjeta_activos, self._tarjeta_admins, self._tarjeta_accesos)
+        )
 
         panel_filtros = QFrame()
         panel_filtros.setObjectName("panelOperativoUsuarios")
@@ -1297,7 +1249,7 @@ class VistaUsuarios(QWidget):
         layout_tabla.addWidget(self._tabla)
         layout_tabla.addWidget(self._estado_vacio)
 
-        layout.addLayout(tarjetas)
+        layout.addWidget(contenedor_tarjetas)
         layout.addWidget(panel_filtros)
         layout.addWidget(panel_tabla, 1)
         return pagina

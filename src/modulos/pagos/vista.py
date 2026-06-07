@@ -296,6 +296,7 @@ class FlujoPagoPlan(QWidget):
 
         fila = QHBoxLayout()
         self._input_busqueda = QLineEdit()
+        self._input_busqueda.setObjectName("campoBusquedaPago")
         self._input_busqueda.setPlaceholderText("DNI, nombre, codigo de casa o barrio")
         self._input_busqueda.returnPressed.connect(self._emitir_busqueda)
         boton_buscar = crear_boton_operativo("Buscar")
@@ -906,7 +907,7 @@ class FlujoPagoPlan(QWidget):
             QLineEdit:focus,
             QComboBox:focus {{
                 background-color: {paleta["fondo_input_focus"]};
-                border-color: {paleta["borde_principal"]};
+                border-color: {paleta["borde_foco_input"]};
             }}
             QTableWidget#tablaCasasPagoPlan,
             QTableWidget#tablaCuotasPagoPlan {{
@@ -944,6 +945,10 @@ class FlujoPagoPlan(QWidget):
                 padding: 9px 12px;
                 border-bottom: 1px solid {paleta["borde_tabla"]};
                 background-color: {paleta["fondo_tabla_fila"]};
+            }}
+            QTableWidget#tablaCasasPagoPlan::item:alternate,
+            QTableWidget#tablaCuotasPagoPlan::item:alternate {{
+                background-color: {paleta["fondo_tabla_fila_alterna"]};
             }}
             QHeaderView::section {{
                 background-color: {paleta["fondo_tabla_header_destacado"]};
@@ -1188,6 +1193,7 @@ class FlujoPagoActivacion(QWidget):
         descripcion.setWordWrap(True)
 
         self._input_busqueda = QLineEdit()
+        self._input_busqueda.setObjectName("campoBusquedaPago")
         self._input_busqueda.setPlaceholderText("Busca por casa, abonado o DNI")
         self._input_busqueda.returnPressed.connect(self._emitir_busqueda)
         boton_buscar = crear_boton_operativo("Buscar")
@@ -1761,7 +1767,7 @@ class FlujoPagoActivacion(QWidget):
             QLineEdit:focus,
             QComboBox:focus {{
                 background-color: {paleta["fondo_input_focus"]};
-                border-color: {paleta["borde_principal"]};
+                border-color: {paleta["borde_foco_input"]};
             }}
             QTableWidget#tablaCasasPagoActivacion {{
                 background-color: {paleta["fondo_tabla_cuerpo"]};
@@ -1793,6 +1799,9 @@ class FlujoPagoActivacion(QWidget):
                 padding: 9px 12px;
                 border-bottom: 1px solid {paleta["borde_tabla"]};
                 background-color: {paleta["fondo_tabla_fila"]};
+            }}
+            QTableWidget#tablaCasasPagoActivacion::item:alternate {{
+                background-color: {paleta["fondo_tabla_fila_alterna"]};
             }}
             QHeaderView::section {{
                 background-color: {paleta["fondo_tabla_header_destacado"]};
@@ -1954,6 +1963,7 @@ class FlujoPagoMensual(QWidget):
 
         fila_busqueda = QHBoxLayout()
         self._input_busqueda = QLineEdit()
+        self._input_busqueda.setObjectName("campoBusquedaPago")
         self._input_busqueda.setPlaceholderText("DNI, nombre, código de casa o barrio")
         self._input_busqueda.returnPressed.connect(self._emitir_busqueda)
         boton_buscar = crear_boton_operativo("Buscar")
@@ -2678,7 +2688,7 @@ class FlujoPagoMensual(QWidget):
             QComboBox:focus,
             QSpinBox:focus {{
                 background-color: {paleta["fondo_input_focus"]};
-                border-color: {paleta["borde_principal"]};
+                border-color: {paleta["borde_foco_input"]};
             }}
             QTableWidget#tablaCasasPagoMensual,
             QTableWidget#tablaCargosPagoMensual {{
@@ -2712,6 +2722,10 @@ class FlujoPagoMensual(QWidget):
                 padding: 9px 12px;
                 border-bottom: 1px solid {paleta["borde_tabla"]};
                 background-color: {paleta["fondo_tabla_fila"]};
+            }}
+            QTableWidget#tablaCasasPagoMensual::item:alternate,
+            QTableWidget#tablaCargosPagoMensual::item:alternate {{
+                background-color: {paleta["fondo_tabla_fila_alterna"]};
             }}
             QTableWidget#tablaCasasPagoMensual QHeaderView::section:last,
             QTableWidget#tablaCargosPagoMensual QHeaderView::section:last {{
@@ -2800,7 +2814,7 @@ class VistaPagos(QWidget):
 
     def _construir_interfaz(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 14, 20, 18)
+        layout.setContentsMargins(6, 4, 6, 6)
         layout.setSpacing(12)
 
         self.label_mensaje = QLabel("")

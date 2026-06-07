@@ -22,6 +22,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from comun.ui.temas import obtener_paleta_tema  # noqa: E402
 import modulos.pagos.vista as vista_pagos_modulo  # noqa: E402
 from modulos.pagos.entidades import (  # noqa: E402
     FormularioPago,
@@ -619,6 +620,17 @@ class TestPagos(unittest.TestCase):
         self.assertEqual(vista._label_estado_apertura.text(), "ESC/POS")
         self.assertEqual(vista._label_estado_impresion.text(), "Pendientes")
         self.assertIsInstance(vista._tabs.widget(3), vista_pagos_modulo.FlujoPagoPlan)
+        self.assertEqual(vista._flujo_mensual._input_busqueda.objectName(), "campoBusquedaPago")
+        self.assertEqual(vista._flujo_conexion._input_busqueda.objectName(), "campoBusquedaPago")
+        self.assertEqual(vista._flujo_reconexion._input_busqueda.objectName(), "campoBusquedaPago")
+        self.assertIn(
+            "QTableWidget#tablaCasasPagoMensual::item:alternate",
+            vista._flujo_mensual.styleSheet(),
+        )
+        self.assertIn(
+            obtener_paleta_tema("tema_sigqua")["borde_foco_input"],
+            vista._flujo_mensual.styleSheet(),
+        )
         vista.aplicar_tema("tema_sigqua")
         self.assertEqual(vista._tema_actual, "tema_sigqua")
         self.assertEqual(vista._flujo_mensual._tema_actual, "tema_sigqua")

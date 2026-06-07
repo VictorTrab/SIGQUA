@@ -23,6 +23,7 @@ from PySide6.QtWidgets import QPushButton  # noqa: E402
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from comun.ui.temas import obtener_paleta_tema_actual  # noqa: E402
 from modulos.comprobantes import COPIA_AMBAS, COPIA_JUNTA, ResultadoComprobante  # noqa: E402
 from modulos.historial_pagos.controlador import ControladorHistorialPagos  # noqa: E402
 from modulos.historial_pagos.repositorio import RepositorioHistorialPagosSQLite  # noqa: E402
@@ -151,7 +152,10 @@ class TestHistorialPagos(unittest.TestCase):
         self.assertIn("QTableWidget#tablaDetalleHistorialPago", estilos)
         self.assertNotIn("rgba(74, 79, 154", estilos)
         self.assertNotIn("rgba(108, 113, 190", estilos)
-        self.assertIn("#0E2B46", estilos)
+        paleta = obtener_paleta_tema_actual()
+        self.assertIn(str(paleta["fondo_tabla_fila"]), estilos)
+        self.assertIn(str(paleta["fondo_tabla_fila_alterna"]), estilos)
+        self.assertIn(str(paleta["fondo_tabla_seleccion"]), estilos)
         dialogo.close()
 
     def test_reimpresion_reconstruye_ticket_desde_sqlite_sin_pdf(self) -> None:

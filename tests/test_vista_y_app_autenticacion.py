@@ -478,6 +478,32 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         finally:
             shutil.rmtree(raiz_temporal, ignore_errors=True)
 
+    def test_dashboard_recupera_ancho_de_paneles_al_expandir_sidebar(self) -> None:
+        vista_principal = VistaModuloPrincipal()
+        vista_principal.resize(1200, 900)
+        vista_principal.show()
+        self.aplicacion.processEvents()
+        paneles = (
+            vista_principal._panel_tendencia,
+            vista_principal._panel_estados,
+            vista_principal._panel_distribucion,
+            vista_principal._panel_ranking,
+            vista_principal._panel_insights,
+        )
+        anchos_iniciales = tuple(panel.width() for panel in paneles)
+
+        for _ in range(3):
+            vista_principal.alternar_sidebar()
+            QTest.qWait(240)
+            self.aplicacion.processEvents()
+            vista_principal.alternar_sidebar()
+            QTest.qWait(240)
+            self.aplicacion.processEvents()
+
+        self.assertEqual(vista_principal._modo_dashboard_actual, "compacto")
+        self.assertEqual(tuple(panel.width() for panel in paneles), anchos_iniciales)
+        vista_principal.close()
+
     def test_controlador_permite_abrir_restablecimiento_administrativo(self) -> None:
         raiz_temporal = self._crear_raiz_temporal_prueba("test_restablecimiento")
         try:
@@ -556,6 +582,9 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertIn(f"border-radius: {vista.RADIO_PANEL_TABLA}px;", vista.styleSheet())
         self.assertIn(f"padding: 0 0 {vista.RADIO_PANEL_TABLA}px 0;", vista.styleSheet())
         self.assertIn("QTableWidget#tablaBarrios QHeaderView::section", vista.styleSheet())
+        self.assertIn(vista._paleta_tema["fondo_input_focus"], vista.styleSheet())
+        self.assertIn(vista._paleta_tema["fondo_chip_activo"], vista.styleSheet())
+        self.assertNotIn("background: rgba(126, 167, 196, 0.48);", vista.styleSheet())
         self.assertEqual(vista._tabla.frameShape(), vista._tabla.Shape.NoFrame)
         self.assertFalse(vista._tabla.horizontalHeader().stretchLastSection())
 
@@ -605,6 +634,9 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertIn(f"border-radius: {vista.RADIO_PANEL_TABLA}px;", vista.styleSheet())
         self.assertIn(f"padding: 0 0 {vista.RADIO_PANEL_TABLA}px 0;", vista.styleSheet())
         self.assertIn("QTableWidget#tablaAbonados QHeaderView::section", vista.styleSheet())
+        self.assertIn(vista._paleta_tema["fondo_input_focus"], vista.styleSheet())
+        self.assertIn(vista._paleta_tema["fondo_chip_activo"], vista.styleSheet())
+        self.assertNotIn("background: rgba(126, 167, 196, 0.48);", vista.styleSheet())
         self.assertEqual(vista._tabla.frameShape(), vista._tabla.Shape.NoFrame)
         self.assertFalse(vista._tabla.horizontalHeader().stretchLastSection())
 
@@ -654,6 +686,9 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertIn(f"border-radius: {vista.RADIO_PANEL_TABLA}px;", vista.styleSheet())
         self.assertIn(f"padding: 0 0 {vista.RADIO_PANEL_TABLA}px 0;", vista.styleSheet())
         self.assertIn("QTableWidget#tablaCasas QHeaderView::section", vista.styleSheet())
+        self.assertIn(vista._paleta_tema["fondo_input_focus"], vista.styleSheet())
+        self.assertIn(vista._paleta_tema["fondo_chip_activo"], vista.styleSheet())
+        self.assertNotIn("background: rgba(126, 167, 196, 0.48);", vista.styleSheet())
         self.assertEqual(vista._tabla.frameShape(), vista._tabla.Shape.NoFrame)
         self.assertFalse(vista._tabla.horizontalHeader().stretchLastSection())
 
@@ -672,15 +707,34 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertNotIn("Aviso", [vista._tabla.horizontalHeaderItem(indice).text() for indice in range(vista._tabla.columnCount())])
         vista.close()
 
-    def test_shell_principal_reduce_ancho_sidebar_sin_expandir_menu(self) -> None:
+    def test_shell_principal_inicia_expandido_y_colapsa_manualmente(self) -> None:
         vista_principal = VistaModuloPrincipal()
         logo_sidebar = vista_principal.findChild(QLabel, "logoSidebar")
 
-        self.assertEqual(vista_principal._sidebar.minimumWidth(), 192)
-        self.assertEqual(vista_principal._sidebar.maximumWidth(), 198)
+        self.assertEqual(vista_principal._sidebar.minimumWidth(), 220)
+        self.assertEqual(vista_principal._sidebar.maximumWidth(), 220)
         self.assertIsNotNone(logo_sidebar)
         self.assertIsNotNone(logo_sidebar.pixmap())
         self.assertFalse(logo_sidebar.pixmap().isNull())
+
+        vista_principal.alternar_sidebar()
+        QTest.qWait(240)
+        self.aplicacion.processEvents()
+
+        self.assertTrue(vista_principal._sidebar_colapsado)
+        self.assertEqual(vista_principal._sidebar.minimumWidth(), 72)
+        self.assertEqual(vista_principal._sidebar.maximumWidth(), 72)
+        self.assertFalse(vista_principal._logo_sidebar.isVisible())
+        self.assertEqual(vista_principal._boton_ajustes.text(), "")
+        self.assertEqual(vista_principal._boton_ajustes.toolTip(), "Parámetros operativos y configuración local.")
+
+        vista_principal.alternar_sidebar()
+        QTest.qWait(240)
+        self.aplicacion.processEvents()
+
+        self.assertFalse(vista_principal._sidebar_colapsado)
+        self.assertEqual(vista_principal._sidebar.minimumWidth(), 220)
+        self.assertEqual(vista_principal._boton_ajustes.text(), "Ajustes")
         vista_principal.close()
 
     def test_shell_principal_resuelve_saludo_por_hora(self) -> None:
@@ -728,7 +782,9 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
         self.assertIn("Admin", vista_principal._label_bienvenida.text())
         self.assertIn("Monitorea ingresos", vista_principal._label_subresumen.text())
-        self.assertGreaterEqual(vista_principal._boton_perfil_header.minimumWidth(), 48)
+        self.assertGreaterEqual(vista_principal._boton_perfil_header.minimumWidth(), 188)
+        self.assertEqual(vista_principal._boton_perfil_header._nombre.text(), "Admin Usuario")
+        self.assertEqual(vista_principal._boton_perfil_header._rol.text(), "Administrador")
 
         vista_principal.mostrar_modulo("barrios")
         self.aplicacion.processEvents()
@@ -749,6 +805,70 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista_barrios.close()
         vista_historial.close()
         vista_principal.close()
+
+    def test_shell_ubica_perfil_en_header_y_ajustes_en_pie_sin_duplicados(self) -> None:
+        vista_principal = VistaModuloPrincipal()
+        estado = EstadoModuloPrincipal(
+            nombre_usuario="admin",
+            nombre_completo="Admin Usuario",
+            perfil="ADMINISTRADOR",
+            metricas=(),
+            analitica=AnaliticaDashboard((), (), (), (), ()),
+            modulos=(
+                ModuloNavegacion("dashboard", "Inicio", "Resumen operativo.", "home.svg"),
+                ModuloNavegacion("usuarios", "Usuarios", "Gestion de usuarios.", "users.svg"),
+                ModuloNavegacion(
+                    "configuracion",
+                    "Configuración",
+                    "Parámetros operativos.",
+                    "settings-2.svg",
+                ),
+            ),
+            puede_abrir_mantenimiento=False,
+        )
+        vista_configuracion = VistaConfiguracion()
+        vista_principal.registrar_modulo("configuracion", vista_configuracion)
+        vista_principal.mostrar_estado(estado)
+
+        self.assertEqual(vista_principal._boton_ajustes.text(), "Ajustes")
+        self.assertIsNotNone(vista_principal.findChild(QPushButton, "botonPerfilHeader"))
+        self.assertIsNone(vista_principal.findChild(QPushButton, "botonPerfilSidebar"))
+        self.assertNotIn(
+            "configuracion",
+            {
+                codigo
+                for seccion in vista_principal._secciones_sidebar.values()
+                for codigo in seccion._modulos
+            },
+        )
+        self.assertFalse(vista_principal._boton_mantenimiento.isVisible())
+        self.assertEqual(
+            vista_principal._dialogo_perfil_usuario._nombre.text(),
+            "Admin Usuario",
+        )
+        self.assertEqual(
+            vista_principal._dialogo_perfil_usuario._correo["valor"].text(),
+            "soporte@sigqua.local",
+        )
+
+        vista_principal._boton_ajustes.click()
+        self.assertIs(
+            vista_principal._stack_contenido.currentWidget(),
+            vista_configuracion,
+        )
+        vista_configuracion.close()
+        vista_principal.close()
+
+    def test_modulos_no_repiten_titulo_o_subtitulo_del_header_global(self) -> None:
+        vista_usuarios = VistaUsuarios()
+        vista_reportes = VistaReportes()
+
+        self.assertIsNone(vista_usuarios.findChild(QLabel, "descripcionModulo"))
+        self.assertIsNone(vista_reportes.findChild(QLabel, "tituloModuloReportes"))
+        self.assertIsNone(vista_reportes.findChild(QLabel, "descripcionModuloReportes"))
+
+        vista_usuarios.close()
+        vista_reportes.close()
 
     def test_notificacion_casas_desaparece_tras_temporizador(self) -> None:
         vista = VistaCasas()
@@ -999,7 +1119,8 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertEqual(vista_usuarios._tema_actual, "tema_sigqua")
         self.assertEqual(vista_configuracion._tema_actual, "tema_sigqua")
         self.assertNotIn("botonTemaHeader", vista_principal.styleSheet())
-        self.assertEqual(vista_principal._paleta_tema["fondo_principal"], "#071A2D")
+        self.assertEqual(vista_principal._paleta_tema["fondo_principal"], "#101214")
+        self.assertEqual(vista_principal._paleta_tema["acento_primario"], "#2F9BFF")
         self.assertIn('font-family: "Segoe UI"', vista_principal.styleSheet())
         vista_principal.aplicar_fondo_personalizado(
             activo=True,
@@ -1028,7 +1149,26 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista_configuracion.show()
         self.aplicacion.processEvents()
 
+        margen_planes = vista_planes.layout().contentsMargins()
+        margen_configuracion = vista_configuracion.layout().contentsMargins()
+        self.assertEqual(
+            (margen_planes.left(), margen_planes.top(), margen_planes.right(), margen_planes.bottom()),
+            (6, 4, 6, 6),
+        )
+        self.assertEqual(
+            (
+                margen_configuracion.left(),
+                margen_configuracion.top(),
+                margen_configuracion.right(),
+                margen_configuracion.bottom(),
+            ),
+            (6, 4, 6, 6),
+        )
+        self.assertIsNotNone(vista_planes.findChild(QWidget, "contenedorTarjetasResumenOperativo"))
+        self.assertIsNotNone(vista_configuracion.findChild(QWidget, "contenedorTarjetasResumenOperativo"))
         self.assertIn("QFrame#panelTablaPlanes", vista_planes.styleSheet())
+        self.assertIn("QLineEdit:focus", vista_planes.styleSheet())
+        self.assertIn(vista_planes._paleta_tema["borde_foco_input"], vista_planes.styleSheet())
         self.assertEqual(vista_planes._tabla.viewport().objectName(), "viewportTablaPlanes")
         self.assertEqual(vista_configuracion._tabs.count(), 7)
         self.assertEqual(vista_configuracion._tabs.tabText(0), "Organización")

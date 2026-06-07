@@ -33,6 +33,7 @@ from comun.ui.iconos import obtener_icono_tabler_coloreado
 from comun.ui.qt_mensajes import configurar_filtro_mensajes_qt
 from comun.ui.temas import (
     TEMA_SIGQUA_PREDETERMINADO,
+    obtener_fondo_header_destacado,
     obtener_paleta_tema,
     obtener_paleta_tema_actual,
     obtener_tema_actual,
@@ -86,6 +87,152 @@ class CampoMontoMonetario(QLineEdit):
                 self.clear()
             return
         self.setText(formatear_monto_desde_centavos(valor))
+
+
+class TarjetaResumenOperativa(QFrame):
+    """Tarjeta KPI compacta para resumenes de modulos operativos."""
+
+    ALTURA = 96
+
+    def __init__(
+        self,
+        icono: str,
+        color_icono: str,
+        nombre_tema: str | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._icono_nombre = icono
+        self._color_icono = color_icono
+        self._nombre_tema = resolver_nombre_tema(nombre_tema or obtener_tema_actual())
+        self.setObjectName("tarjetaResumenOperativa")
+        self.setMinimumHeight(self.ALTURA)
+        self.setMaximumHeight(self.ALTURA)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+
+        self._icono = QLabel()
+        self._icono.setObjectName("iconoTarjetaResumenOperativa")
+        self._icono.setFixedSize(38, 38)
+        self._icono.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        bloque = QVBoxLayout()
+        bloque.setContentsMargins(0, 0, 0, 0)
+        bloque.setSpacing(2)
+        self._titulo = QLabel("")
+        self._titulo.setObjectName("tituloTarjetaResumenOperativa")
+        self._valor = QLabel("0")
+        self._valor.setObjectName("valorTarjetaResumenOperativa")
+        self._detalle = QLabel("")
+        self._detalle.setObjectName("detalleTarjetaResumenOperativa")
+        self._detalle.setWordWrap(True)
+        bloque.addWidget(self._titulo)
+        bloque.addWidget(self._valor)
+        bloque.addWidget(self._detalle)
+
+        layout.addWidget(self._icono, alignment=Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(bloque, 1)
+        self.aplicar_tema(self._nombre_tema)
+
+    def actualizar(self, titulo: str, valor: str, detalle: str) -> None:
+        self._titulo.setText(titulo)
+        self._valor.setText(valor)
+        self._detalle.setText(detalle)
+
+    def aplicar_tema(self, nombre_tema: str | None = None) -> None:
+        self._nombre_tema = resolver_nombre_tema(nombre_tema or self._nombre_tema)
+        paleta = obtener_paleta_tema(self._nombre_tema)
+        fondo_icono = obtener_fondo_header_destacado(self._nombre_tema)
+        self._icono.setPixmap(
+            obtener_icono_tabler_coloreado(self._icono_nombre, self._color_icono, tamano=18).pixmap(18, 18)
+        )
+        self.setStyleSheet(
+            f"""
+            QFrame#tarjetaResumenOperativa {{
+                background: {paleta['fondo_superficie']};
+                border: 1px solid {paleta['borde_principal']};
+                border-radius: 8px;
+            }}
+            QLabel#iconoTarjetaResumenOperativa {{
+                background: {fondo_icono};
+                border: 1px solid {paleta['borde_principal']};
+                border-radius: 8px;
+            }}
+            QLabel#tituloTarjetaResumenOperativa {{
+                color: {paleta['texto_secundario']};
+                font-size: 11px;
+                font-weight: 700;
+            }}
+            QLabel#valorTarjetaResumenOperativa {{
+                color: {paleta['texto_principal']};
+                font-size: 19px;
+                font-weight: 800;
+            }}
+            QLabel#detalleTarjetaResumenOperativa {{
+                color: {paleta['texto_secundario']};
+                font-size: 11px;
+            }}
+            """
+        )
+
+
+class ContenedorTarjetasResumenOperativo(QWidget):
+    """Distribuye tarjetas resumen con columnas estables segun el ancho disponible."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("contenedorTarjetasResumenOperativo")
+        self._tarjetas: tuple[QWidget, ...] = ()
+        self._columnas_actuales = 0
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setHorizontalSpacing(10)
+        self._grid.setVerticalSpacing(10)
+
+    def establecer_tarjetas(self, tarjetas: tuple[QWidget, ...]) -> None:
+        self._tarjetas = tarjetas
+        self._columnas_actuales = 0
+        self._reconstruir()
+
+    def resizeEvent(self, evento: QEvent) -> None:  # noqa: N802 - firma Qt
+        super().resizeEvent(evento)
+        columnas = self._resolver_columnas()
+        if columnas != self._columnas_actuales:
+            self._reconstruir()
+
+    def _resolver_columnas(self) -> int:
+        cantidad = len(self._tarjetas)
+        if cantidad == 0:
+            return 0
+        ancho = max(self.width(), self.sizeHint().width())
+        if ancho >= 900:
+            return cantidad
+        if ancho >= 680:
+            return min(3, cantidad)
+        return min(2, cantidad)
+
+    def _reconstruir(self) -> None:
+        while self._grid.count():
+            self._grid.takeAt(0)
+        columnas = self._resolver_columnas()
+        self._columnas_actuales = columnas
+        if columnas == 0:
+            self.setMinimumHeight(0)
+            self.setMaximumHeight(0)
+            return
+        for indice, tarjeta in enumerate(self._tarjetas):
+            self._grid.addWidget(tarjeta, indice // columnas, indice % columnas)
+        for columna in range(max(columnas, self._grid.columnCount())):
+            self._grid.setColumnStretch(columna, 1 if columna < columnas else 0)
+            self._grid.setColumnMinimumWidth(columna, 0)
+        filas = (len(self._tarjetas) + columnas - 1) // columnas
+        alto = filas * TarjetaResumenOperativa.ALTURA + max(0, filas - 1) * self._grid.verticalSpacing()
+        self.setMinimumHeight(alto)
+        self.setMaximumHeight(alto)
 
 
 class CampoBusquedaSeleccionSigqua(QWidget):
@@ -746,7 +893,7 @@ def obtener_estilo_detalle_sigqua(nombre_tema: str | None = None) -> str:
     }}
     QLabel#badgeEstadoDetalleSigqua {{
         border-radius: 11px;
-        padding: 6px 10px;
+        padding: 0 10px;
         font-size: 11px;
         font-weight: 800;
         color: {paleta["texto_badge"]};
@@ -804,6 +951,8 @@ def crear_badge_estado_detalle_sigqua(
     """Crea un badge semantico comun para encabezados de detalle."""
     badge = QLabel(texto)
     badge.setObjectName("badgeEstadoDetalleSigqua")
+    badge.setFixedHeight(28)
+    badge.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
     badge.setProperty("tono", tono if tono in {"activo", "info", "advertencia", "error"} else "neutro")
     badge.style().unpolish(badge)
     badge.style().polish(badge)

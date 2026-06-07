@@ -29,13 +29,11 @@ from PySide6.QtWidgets import (
 
 from comun.ui import (
     BotonAccionContextual,
-    CampoDetalleSigqua,
+    ContenedorTarjetasResumenOperativo,
     DialogoBaseSigqua,
     DialogoMensajeSigqua,
-    EncabezadoDetalleSigqua,
-    SeccionDetalleSigqua,
+    TarjetaResumenOperativa,
     configurar_tabla_operativa,
-    crear_badge_estado_detalle_sigqua,
     crear_boton_operativo,
     crear_item_tabla,
     obtener_estilo_detalle_sigqua,
@@ -111,114 +109,6 @@ class DialogoAvisoCobro(DialogoBaseSigqua):
         descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
 
-        contenedor = QWidget()
-        contenedor.setObjectName("contenedorScrollDetalleMorosidad")
-        contenedor.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        layout_scroll = QVBoxLayout(contenedor)
-        layout_scroll.setContentsMargins(0, 0, 0, 0)
-        layout_scroll.setSpacing(12)
-
-        panel = QFrame()
-        panel.setObjectName("panelDetalleSigqua")
-        layout_panel = QVBoxLayout(panel)
-        layout_panel.setContentsMargins(18, 18, 18, 18)
-        layout_panel.setSpacing(12)
-
-        encabezado = EncabezadoDetalleSigqua(
-            self._detalle.abonado_dni,
-            self._detalle.abonado_nombre,
-            badges=(
-                crear_badge_estado_detalle_sigqua(
-                    f"{len(self._detalle.casas)} casa(s) con mora",
-                    "advertencia",
-                ),
-            ),
-        )
-
-        identificacion = QGridLayout()
-        identificacion.setHorizontalSpacing(14)
-        identificacion.setVerticalSpacing(12)
-        identificacion.addWidget(CampoDetalleSigqua("Abonado", self._detalle.abonado_nombre), 0, 0)
-        identificacion.addWidget(CampoDetalleSigqua("DNI", self._detalle.abonado_dni), 0, 1)
-        identificacion.addWidget(CampoDetalleSigqua("Casas con mora", str(len(self._detalle.casas))), 1, 0, 1, 2)
-
-        layout_panel.addWidget(encabezado)
-        layout_panel.addWidget(
-            SeccionDetalleSigqua(
-                "Identificacion del abonado",
-                "Resumen base del abonado con mora y sus casas vinculadas.",
-                identificacion,
-            )
-        )
-
-        for casa in self._detalle.casas:
-            detalle_casa = (
-                f"{casa.direccion_casa or 'Sin referencia'} | Estado {casa.estado_servicio} | "
-                f"Vencido desde {self._formateador_fecha(casa.vencimiento_mas_antiguo)} | "
-                f"{casa.dias_en_mora} dia(s) en mora | Prioridad {casa.prioridad}"
-            )
-            tabla = QTableWidget(0, 3)
-            tabla.setObjectName("tablaDetalleMorosidad")
-            configurar_tabla_operativa(tabla, ["Concepto", "Vencimiento", "Saldo"])
-            tabla.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-            tabla.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-            tabla.setAlternatingRowColors(True)
-            tabla.setFrameShape(QFrame.Shape.NoFrame)
-            tabla.setViewportMargins(0, 0, 0, 18)
-            tabla.viewport().setObjectName("viewportTablaDetalleMorosidad")
-            tabla.viewport().setAutoFillBackground(False)
-            tabla.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-            tabla.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-            tabla.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-            tabla.setRowCount(len(casa.lineas_detalle))
-            for fila, linea in enumerate(casa.lineas_detalle):
-                tabla.setItem(fila, 0, crear_item_tabla(linea.descripcion))
-                tabla.setItem(fila, 1, crear_item_tabla(self._formateador_fecha(linea.fecha_vencimiento)))
-                tabla.setItem(fila, 2, crear_item_tabla(self._formateador_moneda(linea.saldo_pendiente_centavos)))
-            tabla.resizeRowsToContents()
-
-            totales = QGridLayout()
-            totales.setHorizontalSpacing(14)
-            totales.setVerticalSpacing(12)
-            totales.addWidget(CampoDetalleSigqua("Meses vencidos", str(casa.meses_vencidos)), 0, 0)
-            totales.addWidget(CampoDetalleSigqua("Dias en mora", str(casa.dias_en_mora)), 0, 1)
-            totales.addWidget(CampoDetalleSigqua("Prioridad", casa.prioridad), 1, 0)
-            totales.addWidget(CampoDetalleSigqua("Deuda base", self._formateador_moneda(casa.deuda_base_centavos)), 1, 1)
-            totales.addWidget(CampoDetalleSigqua("Recargo mora", self._formateador_moneda(casa.recargo_mora_centavos)), 2, 0)
-            totales.addWidget(CampoDetalleSigqua("Total casa", self._formateador_moneda(casa.deuda_total_centavos)), 2, 1)
-
-            layout_panel.addWidget(
-                SeccionDetalleSigqua(
-                    f"{casa.casa_codigo} · {casa.barrio_nombre or 'Sin barrio'}",
-                    detalle_casa,
-                    [tabla],
-                )
-            )
-            layout_panel.addWidget(
-                SeccionDetalleSigqua(
-                    "Totales de la casa",
-                    "Resumen financiero operativo de la casa en mora.",
-                    totales,
-                )
-            )
-
-        fila_acciones = QHBoxLayout()
-        boton_cerrar = BotonAccionContextual("Cerrar", icono="x.svg", variante=resolver_variante_boton_modal("Cerrar", "neutro"), centrado=True, mostrar_icono=True)
-        boton_emitir = BotonAccionContextual("Emitir deuda", icono="receipt-2.svg", variante=resolver_variante_boton_modal("Emitir deuda", "informacion"), centrado=True, mostrar_icono=True)
-        boton_cerrar.clicked.connect(self.reject)
-        boton_emitir.clicked.connect(self._solicitar_documento)
-        fila_acciones.addWidget(boton_cerrar)
-        fila_acciones.addStretch(1)
-        fila_acciones.addWidget(boton_emitir)
-
-        layout_scroll.addWidget(panel)
-        layout_scroll.addStretch(1)
-        self.layout_cabecera.addWidget(titulo)
-        self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(self.crear_area_scroll_cuerpo(contenedor, "scrollDetalleMorosidad"))
-        self.layout_pie.addLayout(fila_acciones)
-        self._aplicar_estilos()
-        return
         self.layout_cabecera.addWidget(titulo)
         self.layout_cabecera.addWidget(descripcion)
         self.layout_cuerpo.addWidget(QLabel("Etapa de aviso"))
@@ -259,44 +149,8 @@ class DialogoAvisoCobro(DialogoBaseSigqua):
         self.accept()
 
 
-class TarjetaResumenMorosidad(QFrame):
-    """Tarjeta de resumen del modulo."""
-
-    def __init__(self, icono: str, color_icono: str) -> None:
-        super().__init__()
-        self.setObjectName("tarjetaResumenMorosidad")
-        self.setMinimumHeight(96)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(10)
-        self._icono = QLabel("")
-        self._icono.setObjectName("iconoTarjetaResumenMorosidad")
-        self._icono.setFixedSize(38, 38)
-        self._icono.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._icono.setPixmap(
-            obtener_icono_tabler_coloreado(icono, color_icono, tamano=18).pixmap(18, 18)
-        )
-        bloque = QVBoxLayout()
-        bloque.setSpacing(2)
-        self._titulo = QLabel("")
-        self._titulo.setObjectName("tituloTarjetaResumenMorosidad")
-        self._valor = QLabel("")
-        self._valor.setObjectName("valorTarjetaResumenMorosidad")
-        self._detalle = QLabel("")
-        self._detalle.setObjectName("detalleTarjetaResumenMorosidad")
-        self._detalle.setWordWrap(True)
-        bloque.addWidget(self._titulo)
-        bloque.addWidget(self._valor)
-        bloque.addWidget(self._detalle)
-        bloque.addStretch(1)
-        layout.addWidget(self._icono, alignment=Qt.AlignmentFlag.AlignTop)
-        layout.addLayout(bloque, 1)
-
-    def actualizar(self, titulo: str, valor: str, detalle: str) -> None:
-        self._titulo.setText(titulo)
-        self._valor.setText(valor)
-        self._detalle.setText(detalle)
+class TarjetaResumenMorosidad(TarjetaResumenOperativa):
+    """Adaptador del resumen comun para mantener nombres del modulo."""
 
 
 class BotonIconoFilaMorosidad(QToolButton):
@@ -539,6 +393,37 @@ class DialogoDetalleMorosidad(DialogoBaseSigqua):
                 background: transparent;
                 border: none;
             }}
+            QFrame#panelDetalleMorosidad {{
+                background: {paleta["fondo_dialogo"]};
+                border: 1px solid {paleta["borde_principal"]};
+                border-radius: 4px;
+            }}
+            QFrame#seccionDetalleMorosidad {{
+                background: {paleta["fondo_superficie"]};
+                border: 1px solid {paleta["borde_principal"]};
+                border-radius: 4px;
+            }}
+            QFrame#campoDetalleMorosidad {{
+                background: {paleta["fondo_superficie_suave"]};
+                border: 1px solid {paleta["borde_suave"]};
+                border-radius: 4px;
+            }}
+            QLabel#tituloSeccionMorosidad {{
+                color: {paleta["texto_principal"]};
+                font-size: 14px;
+                font-weight: 800;
+            }}
+            QLabel#descripcionSeccionMorosidad,
+            QLabel#etiquetaCampoMorosidad {{
+                color: {paleta["texto_suave"]};
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            QLabel#valorCampoMorosidad {{
+                color: {paleta["texto_principal"]};
+                font-size: 13px;
+                font-weight: 700;
+            }}
             """
             + obtener_estilo_detalle_sigqua(self._nombre_tema)
             + f"""
@@ -556,6 +441,16 @@ class DialogoDetalleMorosidad(DialogoBaseSigqua):
                 padding: 10px 12px;
                 font-size: 12px;
                 font-weight: 800;
+            }}
+            QTableWidget#tablaDetalleMorosidad::item {{
+                background: {paleta["fondo_tabla_fila"]};
+                border-bottom: 1px solid {paleta["borde_tabla"]};
+            }}
+            QTableWidget#tablaDetalleMorosidad::item:alternate {{
+                background: {paleta["fondo_tabla_fila_alterna"]};
+            }}
+            QTableWidget#tablaDetalleMorosidad::item:selected {{
+                background: {paleta["fondo_tabla_seleccion"]};
             }}
             QScrollBar:vertical {{
                 background: transparent;
@@ -787,7 +682,7 @@ class VistaMorosidad(QWidget):
     def _construir_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 4, 6, 6)
-        layout.setSpacing(16)
+        layout.setSpacing(12)
 
         self._mensaje = QLabel("")
         self._mensaje.setObjectName("mensajeMorosidad")
@@ -795,18 +690,15 @@ class VistaMorosidad(QWidget):
         self._mensaje.setWordWrap(True)
         layout.addWidget(self._mensaje)
 
-        tarjetas = QGridLayout()
-        tarjetas.setHorizontalSpacing(12)
-        tarjetas.setVerticalSpacing(12)
+        contenedor_tarjetas = ContenedorTarjetasResumenOperativo()
         self._tarjeta_total = TarjetaResumenMorosidad("home-2.svg", "#facc15")
         self._tarjeta_abonados = TarjetaResumenMorosidad("users.svg", "#7dd3fc")
         self._tarjeta_total_deuda = TarjetaResumenMorosidad("urgent.svg", "#fb923c")
         self._tarjeta_severos = TarjetaResumenMorosidad("alert-triangle.svg", "#f87171")
-        for indice, tarjeta in enumerate(
+        contenedor_tarjetas.establecer_tarjetas(
             (self._tarjeta_total, self._tarjeta_abonados, self._tarjeta_total_deuda, self._tarjeta_severos)
-        ):
-            tarjetas.addWidget(tarjeta, 0, indice)
-        layout.addLayout(tarjetas)
+        )
+        layout.addWidget(contenedor_tarjetas)
 
         panel_filtros = QFrame()
         panel_filtros.setObjectName("panelFiltrosMorosidad")
@@ -1053,6 +945,10 @@ class VistaMorosidad(QWidget):
                 padding: 8px;
                 background: {paleta["fondo_tabla_fila"]};
                 border-bottom: 1px solid {paleta["borde_tabla"]};
+            }}
+            QTableWidget#tablaMorosidad::item:alternate,
+            QTableWidget#tablaDetalleMorosidad::item:alternate {{
+                background: {paleta["fondo_tabla_fila_alterna"]};
             }}
             QTableWidget#tablaMorosidad::item:selected,
             QTableWidget#tablaDetalleMorosidad::item:selected {{

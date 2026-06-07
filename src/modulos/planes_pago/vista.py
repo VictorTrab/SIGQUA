@@ -33,11 +33,15 @@ from comun.ui import (
     BotonAccionContextual,
     CampoBusquedaSeleccionSigqua,
     CampoMontoMonetario,
+    ContenedorTarjetasResumenOperativo,
     DialogoBaseSigqua,
     DialogoConfirmacionSigqua,
     DialogoMensajeSigqua,
+    EncabezadoDetalleSigqua,
+    TarjetaResumenOperativa,
     aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
+    crear_badge_estado_detalle_sigqua,
     crear_boton_operativo,
     crear_item_tabla,
     obtener_estilo_detalle_sigqua,
@@ -68,38 +72,8 @@ from modulos.planes_pago.entidades import (
 from modulos.pagos.entidades import MetodoPago
 
 
-class TarjetaResumenPlanPago(QFrame):
-    def __init__(self, icono: str, color_icono: str) -> None:
-        super().__init__()
-        self.setObjectName("tarjetaResumenPlanes")
-        self.setMinimumHeight(96)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(10)
-        self._icono = QLabel("")
-        self._icono.setObjectName("iconoTarjetaResumen")
-        self._icono.setFixedSize(38, 38)
-        self._icono.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._icono.setPixmap(obtener_icono_tabler_coloreado(icono, color_icono, tamano=18).pixmap(18, 18))
-        bloque = QVBoxLayout()
-        bloque.setSpacing(2)
-        self._titulo = QLabel("")
-        self._titulo.setObjectName("tituloTarjetaResumen")
-        self._valor = QLabel("")
-        self._valor.setObjectName("valorTarjetaResumen")
-        self._detalle = QLabel("")
-        self._detalle.setObjectName("detalleTarjetaResumen")
-        self._detalle.setWordWrap(True)
-        bloque.addWidget(self._titulo)
-        bloque.addWidget(self._valor)
-        bloque.addWidget(self._detalle)
-        layout.addWidget(self._icono, alignment=Qt.AlignmentFlag.AlignTop)
-        layout.addLayout(bloque, 1)
-
-    def actualizar(self, titulo: str, valor: str, detalle: str) -> None:
-        self._titulo.setText(titulo)
-        self._valor.setText(valor)
-        self._detalle.setText(detalle)
+class TarjetaResumenPlanPago(TarjetaResumenOperativa):
+    """Adaptador del resumen comun para mantener nombres del modulo."""
 
 
 class BotonIconoFilaPlan(QToolButton):
@@ -690,21 +664,16 @@ class DialogoDetallePlanPago(DialogoBaseSigqua):
         layout_panel.setContentsMargins(18, 18, 18, 18)
         layout_panel.setSpacing(14)
 
-        fila_superior = QHBoxLayout()
-        bloque = QVBoxLayout()
-        codigo = QLabel(plan.codigo)
-        codigo.setObjectName("codigoPlanDetalle")
-        nombre = QLabel(plan.abonado_nombre)
-        nombre.setObjectName("nombrePlanDetalle")
-        bloque.addWidget(codigo)
-        bloque.addWidget(nombre)
-        badge = QLabel(plan.estado.title())
-        badge.setObjectName("badgeDetallePlan")
-        badge.setProperty("activo", plan.estado == "ACTIVO")
-        badge.style().unpolish(badge)
-        badge.style().polish(badge)
-        fila_superior.addLayout(bloque, 1)
-        fila_superior.addWidget(badge, alignment=Qt.AlignmentFlag.AlignTop)
+        encabezado = EncabezadoDetalleSigqua(
+            plan.codigo,
+            plan.abonado_nombre,
+            badges=(
+                crear_badge_estado_detalle_sigqua(
+                    plan.estado.title(),
+                    "activo" if plan.estado == "ACTIVO" else "info",
+                ),
+            ),
+        )
 
         datos = QGridLayout()
         datos.setHorizontalSpacing(12)
@@ -773,7 +742,7 @@ class DialogoDetallePlanPago(DialogoBaseSigqua):
         fila_acciones.addStretch(1)
         fila_acciones.addWidget(boton_editar)
 
-        layout_panel.addLayout(fila_superior)
+        layout_panel.addWidget(encabezado)
         layout_panel.addWidget(self._crear_seccion("Contexto del plan", "Resumen principal del acuerdo y su relacion con la casa.", [datos]))
         layout_panel.addWidget(self._crear_seccion("Estado financiero", "Cuotas pendientes, mora y saldo vivo del plan.", [fila_metricas]))
         layout_panel.addWidget(self._crear_seccion("Cuotas del plan", "Detalle de cada cuota actualmente registrada.", [tabla]))
@@ -850,9 +819,67 @@ class DialogoDetallePlanPago(DialogoBaseSigqua):
                 background: transparent;
                 border: none;
             }}
+            QFrame#panelContenidoDetallePlan {{
+                background: {paleta['fondo_dialogo']};
+                border: 1px solid {paleta['borde_principal']};
+                border-radius: 4px;
+            }}
+            QFrame#seccionDetallePlan {{
+                background: {paleta['fondo_superficie']};
+                border: 1px solid {paleta['borde_principal']};
+                border-radius: 4px;
+            }}
+            QFrame#campoDetallePlan,
+            QFrame#tarjetaMiniDetallePlan {{
+                background: {paleta['fondo_superficie_suave']};
+                border: 1px solid {paleta['borde_suave']};
+                border-radius: 4px;
+            }}
+            QLabel#codigoPlanDetalle {{
+                color: {paleta['icono_tarjeta_info']};
+                font-size: 12px;
+                font-weight: 800;
+            }}
+            QLabel#nombrePlanDetalle {{
+                color: {paleta['texto_principal']};
+                font-size: 19px;
+                font-weight: 900;
+            }}
+            QLabel#badgeDetallePlan {{
+                color: {paleta['texto_badge']};
+                background: {paleta['fondo_badge']};
+                border: 1px solid {paleta['borde_suave']};
+                border-radius: 11px;
+                padding: 6px 10px;
+                font-size: 11px;
+                font-weight: 800;
+            }}
+            QLabel#badgeDetallePlan[activo="true"] {{
+                color: {paleta['texto_badge_activo']};
+                background: {paleta['fondo_badge_activo']};
+                border-color: {paleta['borde_badge_activo']};
+            }}
+            QLabel#tituloSeccionDetallePlan {{
+                color: {paleta['texto_principal']};
+                font-size: 14px;
+                font-weight: 800;
+            }}
             QLabel#descripcionSeccionDetallePlan,
+            QLabel#etiquetaDetallePlan,
             QLabel#textoCargosPlan {{
-                color: {paleta['texto_secundario']};
+                color: {paleta['texto_suave']};
+                font-size: 11px;
+                font-weight: 600;
+            }}
+            QLabel#valorDetallePlan {{
+                color: {paleta['texto_principal']};
+                font-size: 13px;
+                font-weight: 700;
+            }}
+            QLabel#valorTarjetaMiniDetallePlan {{
+                color: {paleta['texto_principal']};
+                font-size: 15px;
+                font-weight: 800;
             }}
             """
             + obtener_estilo_detalle_sigqua(self._tema_actual)
@@ -1055,8 +1082,8 @@ class VistaPlanesPago(QWidget):
 
     def _construir_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(14)
+        layout.setContentsMargins(6, 4, 6, 6)
+        layout.setSpacing(12)
         encabezado = QHBoxLayout()
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(8)
@@ -1078,17 +1105,14 @@ class VistaPlanesPago(QWidget):
         self._mensaje.setVisible(False)
         self._mensaje.setWordWrap(True)
 
-        tarjetas = QGridLayout()
-        tarjetas.setHorizontalSpacing(10)
-        tarjetas.setVerticalSpacing(10)
+        contenedor_tarjetas = ContenedorTarjetasResumenOperativo()
         self._tarjeta_total = TarjetaResumenPlanPago("key.svg", "#75C7F0")
         self._tarjeta_activos = TarjetaResumenPlanPago("circle-check.svg", "#8de8c7")
         self._tarjeta_mora = TarjetaResumenPlanPago("clock.svg", "#f7cc7a")
         self._tarjeta_saldo = TarjetaResumenPlanPago("alert-triangle.svg", "#F5B84B")
-        tarjetas.addWidget(self._tarjeta_total, 0, 0)
-        tarjetas.addWidget(self._tarjeta_activos, 0, 1)
-        tarjetas.addWidget(self._tarjeta_mora, 0, 2)
-        tarjetas.addWidget(self._tarjeta_saldo, 0, 3)
+        contenedor_tarjetas.establecer_tarjetas(
+            (self._tarjeta_total, self._tarjeta_activos, self._tarjeta_mora, self._tarjeta_saldo)
+        )
 
         panel_filtros = QFrame()
         panel_filtros.setObjectName("panelOperativoPlanes")
@@ -1188,7 +1212,7 @@ class VistaPlanesPago(QWidget):
 
         layout.addLayout(encabezado)
         layout.addWidget(self._mensaje)
-        layout.addLayout(tarjetas)
+        layout.addWidget(contenedor_tarjetas)
         layout.addWidget(panel_filtros)
         layout.addWidget(panel_tabla, 1)
 
@@ -1346,6 +1370,10 @@ class VistaPlanesPago(QWidget):
                 color: {paleta['texto_input']};
                 padding: 0 10px;
                 font-size: 12px;
+            }}
+            QLineEdit:focus {{
+                border-color: {paleta['borde_foco_input']};
+                background: {paleta['fondo_input_focus']};
             }}
             QPushButton#chipFiltroPlan {{
                 min-height: 30px;

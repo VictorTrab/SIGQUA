@@ -20,11 +20,15 @@ if str(RUTA_SRC) not in sys.path:
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
-from PySide6.QtWidgets import QApplication, QScrollArea  # noqa: E402
+from PySide6.QtWidgets import QApplication, QLabel, QScrollArea  # noqa: E402
 from modulos.planes_pago.entidades import FILTRO_PLANES_CON_MORA, FILTRO_PLANES_TODOS, FormularioPlanPago  # noqa: E402
 from modulos.planes_pago.repositorio import RepositorioPlanesPagoSQLite  # noqa: E402
 from modulos.planes_pago.servicio import ServicioPlanesPago  # noqa: E402
-from modulos.planes_pago.vista import DialogoFormularioPlanPago, VistaPlanesPago  # noqa: E402
+from modulos.planes_pago.vista import (  # noqa: E402
+    DialogoDetallePlanPago,
+    DialogoFormularioPlanPago,
+    VistaPlanesPago,
+)
 
 
 class TestPlanesPago(unittest.TestCase):
@@ -65,6 +69,29 @@ class TestPlanesPago(unittest.TestCase):
         self.assertEqual(detalle.plan.cuotas_pendientes, 2)
         self.assertEqual(len(detalle.cuotas), 2)
         self.assertGreaterEqual(len(detalle.cargos_vinculados), 1)
+
+    def test_dialogo_detalle_plan_aplica_estilos_a_sus_componentes(self) -> None:
+        pagina = self.servicio.listar(filtro_rapido=FILTRO_PLANES_TODOS)
+        detalle = self.servicio.obtener_detalle(pagina.items[0].identificador or 0)
+        self.assertIsNotNone(detalle)
+        assert detalle is not None
+
+        dialogo = DialogoDetallePlanPago(
+            detalle,
+            lambda centavos: f"L {centavos / 100:,.2f}",
+            lambda fecha: fecha,
+        )
+
+        self.assertIn("QFrame#panelContenidoDetallePlan", dialogo.styleSheet())
+        self.assertIn("QFrame#seccionDetallePlan", dialogo.styleSheet())
+        self.assertIn("QFrame#campoDetallePlan", dialogo.styleSheet())
+        self.assertIn("QFrame#tarjetaMiniDetallePlan", dialogo.styleSheet())
+        badge = dialogo.findChild(QLabel, "badgeEstadoDetalleSigqua")
+        self.assertIsNotNone(badge)
+        assert badge is not None
+        self.assertEqual(badge.minimumHeight(), badge.maximumHeight())
+        self.assertGreaterEqual(badge.minimumHeight(), 28)
+        dialogo.close()
 
     def test_crear_plan_financia_deuda_y_activa_servicio_con_prima(self) -> None:
         casa_id = self._crear_casa_cortada(ha_tenido_servicio_activo=False)

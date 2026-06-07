@@ -18,7 +18,7 @@ RUTA_SRC = RAIZ_PROYECTO / "src"
 if str(RUTA_SRC) not in sys.path:
     sys.path.insert(0, str(RUTA_SRC))
 
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication, QPushButton  # noqa: E402
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
@@ -27,7 +27,11 @@ from modulos.morosidad.controlador import ControladorMorosidad  # noqa: E402
 from modulos.morosidad.entidades import FILTRO_MOROSIDAD_SEVERA  # noqa: E402
 from modulos.morosidad.repositorio import RepositorioMorosidadSQLite  # noqa: E402
 from modulos.morosidad.servicio import ServicioMorosidad  # noqa: E402
-from modulos.morosidad.vista import VistaMorosidad  # noqa: E402
+from modulos.morosidad.vista import (  # noqa: E402
+    DialogoAvisoCobro,
+    DialogoDetalleMorosidad,
+    VistaMorosidad,
+)
 from modulos.reportes.entidades import (  # noqa: E402
     REPORTE_DEUDA_ABONADOS_ESTADO,
     REPORTE_HISTORIAL_ABONADO_CASA,
@@ -209,6 +213,53 @@ class TestMorosidadReportes(unittest.TestCase):
         self.assertEqual(vista_reportes._tema_actual, "tema_sigqua")
         self.assertIn('font-family: "Segoe UI"', vista_morosidad.styleSheet())
         self.assertIn('font-family: "Segoe UI"', vista_reportes.styleSheet())
+        self.assertIn(
+            "QTableWidget#tablaMorosidad::item:alternate",
+            vista_morosidad.styleSheet(),
+        )
+        self.assertIn(
+            "QTableWidget#tablaOperativaOscura QHeaderView::section:first",
+            vista_reportes.styleSheet(),
+        )
+        self.assertIn(
+            "QTableWidget#tablaOperativaOscura QHeaderView::section:last",
+            vista_reportes.styleSheet(),
+        )
+
+    def test_dialogos_morosidad_instancian_y_aplican_estilos_de_detalle(self) -> None:
+        servicio = ServicioMorosidad(
+            RepositorioMorosidadSQLite(self.gestor_base_datos),
+            gestor_rutas=self.gestor_rutas,
+        )
+        item = servicio.obtener_estado().pagina.items[0]
+        detalle = servicio.obtener_detalle(item.abonado_id)
+        self.assertIsNotNone(detalle)
+        assert detalle is not None
+
+        dialogo_aviso = DialogoAvisoCobro(item)
+        dialogo_detalle = DialogoDetalleMorosidad(
+            detalle,
+            lambda centavos: f"L {centavos / 100:,.2f}",
+            lambda fecha: fecha,
+        )
+
+        self.assertEqual(dialogo_aviso._combo_estado.count(), 5)
+        self.assertIsNotNone(dialogo_aviso._observacion)
+        boton_registrar = next(
+            boton
+            for boton in dialogo_aviso.findChildren(QPushButton)
+            if boton.text() == "Registrar aviso"
+        )
+        self.assertFalse(boton_registrar.icon().isNull())
+        self.assertIn("QFrame#panelDetalleMorosidad", dialogo_detalle.styleSheet())
+        self.assertIn("QFrame#seccionDetalleMorosidad", dialogo_detalle.styleSheet())
+        self.assertIn("QFrame#campoDetalleMorosidad", dialogo_detalle.styleSheet())
+        self.assertIn(
+            "QTableWidget#tablaDetalleMorosidad::item:alternate",
+            dialogo_detalle.styleSheet(),
+        )
+        dialogo_aviso.close()
+        dialogo_detalle.close()
 
     def test_controlador_morosidad_aplica_politica_documental_al_emitir_pdf(self) -> None:
         _app = QApplication.instance() or QApplication([])

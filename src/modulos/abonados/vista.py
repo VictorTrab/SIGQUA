@@ -36,6 +36,8 @@ from comun.ui import (
     DialogoBaseSigqua,
     DialogoConfirmacionSigqua,
     SeccionDetalleSigqua,
+    ContenedorTarjetasResumenOperativo,
+    TarjetaResumenOperativa,
     TarjetaResumenDetalleSigqua,
     aplicar_estilo_boton_operativo,
     configurar_tabla_operativa,
@@ -67,51 +69,8 @@ from modulos.abonados.entidades import (
 )
 
 
-class TarjetaResumenAbonado(QFrame):
-    """Tarjeta de resumen para el encabezado del modulo."""
-
-    def __init__(self, icono: str, color_icono: str) -> None:
-        super().__init__()
-        self.setObjectName("tarjetaResumenAbonados")
-        self.setMinimumHeight(96)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(10)
-
-        self._icono = QLabel("")
-        self._icono.setObjectName("iconoTarjetaResumen")
-        self._icono.setFixedSize(38, 38)
-        self._icono.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._icono.setPixmap(
-            obtener_icono_tabler_coloreado(icono, color_icono, tamano=18).pixmap(18, 18)
-        )
-
-        bloque_texto = QVBoxLayout()
-        bloque_texto.setContentsMargins(0, 0, 0, 0)
-        bloque_texto.setSpacing(2)
-
-        self._titulo = QLabel("")
-        self._titulo.setObjectName("tituloTarjetaResumen")
-        self._valor = QLabel("")
-        self._valor.setObjectName("valorTarjetaResumen")
-        self._detalle = QLabel("")
-        self._detalle.setObjectName("detalleTarjetaResumen")
-        self._detalle.setWordWrap(True)
-
-        bloque_texto.addWidget(self._titulo)
-        bloque_texto.addWidget(self._valor)
-        bloque_texto.addWidget(self._detalle)
-        bloque_texto.addStretch(1)
-
-        layout.addWidget(self._icono, alignment=Qt.AlignmentFlag.AlignTop)
-        layout.addLayout(bloque_texto, 1)
-
-    def actualizar(self, titulo: str, valor: str, detalle: str) -> None:
-        self._titulo.setText(titulo)
-        self._valor.setText(valor)
-        self._detalle.setText(detalle)
+class TarjetaResumenAbonado(TarjetaResumenOperativa):
+    """Adaptador del resumen comun para mantener nombres del modulo."""
 
 
 class BotonIconoFilaAbonado(QToolButton):
@@ -792,17 +751,14 @@ class VistaAbonados(QWidget):
         self._mensaje.setVisible(False)
         self._mensaje.setWordWrap(True)
 
-        fila_tarjetas = QGridLayout()
-        fila_tarjetas.setHorizontalSpacing(10)
-        fila_tarjetas.setVerticalSpacing(10)
+        contenedor_tarjetas = ContenedorTarjetasResumenOperativo()
         self._tarjeta_total = TarjetaResumenAbonado("user.svg", "#75C7F0")
         self._tarjeta_activos = TarjetaResumenAbonado("circle-check.svg", "#8de8c7")
         self._tarjeta_con_deuda = TarjetaResumenAbonado("alert-triangle.svg", "#f7cc7a")
         self._tarjeta_morosos = TarjetaResumenAbonado("clock.svg", "#F5B84B")
-        fila_tarjetas.addWidget(self._tarjeta_total, 0, 0)
-        fila_tarjetas.addWidget(self._tarjeta_activos, 0, 1)
-        fila_tarjetas.addWidget(self._tarjeta_con_deuda, 0, 2)
-        fila_tarjetas.addWidget(self._tarjeta_morosos, 0, 3)
+        contenedor_tarjetas.establecer_tarjetas(
+            (self._tarjeta_total, self._tarjeta_activos, self._tarjeta_con_deuda, self._tarjeta_morosos)
+        )
 
         panel_filtros = QFrame()
         panel_filtros.setObjectName("panelOperativoAbonados")
@@ -912,7 +868,7 @@ class VistaAbonados(QWidget):
 
         layout.addLayout(encabezado)
         layout.addWidget(self._mensaje)
-        layout.addLayout(fila_tarjetas)
+        layout.addWidget(contenedor_tarjetas)
         layout.addWidget(panel_filtros)
         layout.addWidget(panel_tabla, 1)
 
@@ -1118,34 +1074,58 @@ class VistaAbonados(QWidget):
             }
             QLineEdit {
                 min-height: 36px;
-                border: 1px solid rgba(126, 167, 196, 0.55);
+                border: 1px solid """
+            + self._paleta_tema["borde_medio"]
+            + """;
                 border-radius: 12px;
-                background: rgba(8, 34, 56, 0.98);
-                color: #75C7F0;
+                background: """
+            + self._paleta_tema["fondo_input"]
+            + """;
+                color: """
+            + self._paleta_tema["texto_input"]
+            + """;
                 padding: 0 10px;
                 font-size: 12px;
             }
             QLineEdit:focus {
-                border-color: rgba(117, 199, 240, 0.55);
-                background: rgba(126, 167, 196, 0.48);
+                border-color: """
+            + self._paleta_tema["borde_foco_input"]
+            + """;
+                background: """
+            + self._paleta_tema["fondo_input_focus"]
+            + """;
             }
             QPushButton#chipFiltroAbonado {
                 min-height: 30px;
                 border-radius: 11px;
                 padding: 0 12px;
-                background: rgba(13, 42, 69, 0.88);
-                border: 1px solid rgba(126, 167, 196, 0.30);
-                color: #F4FAFF;
+                background: """
+            + self._paleta_tema["fondo_chip"]
+            + """;
+                border: 1px solid """
+            + self._paleta_tema["borde_suave"]
+            + """;
+                color: """
+            + self._paleta_tema["texto_chip"]
+            + """;
                 font-size: 11px;
                 font-weight: 700;
             }
             QPushButton#chipFiltroAbonado:hover {
-                background: rgba(126, 167, 196, 0.30);
+                background: """
+            + self._paleta_tema["fondo_chip_hover"]
+            + """;
             }
             QPushButton#chipFiltroAbonado:checked {
-                color: #75C7F0;
-                background: #49A9DC;
-                border-color: rgba(126, 167, 196, 0.55);
+                color: """
+            + self._paleta_tema["texto_chip_activo"]
+            + """;
+                background: """
+            + self._paleta_tema["fondo_chip_activo"]
+            + """;
+                border-color: """
+            + self._paleta_tema["borde_chip_activo"]
+            + """;
             }
             QLabel#badgeEstadoAbonado {
                 border-radius: 11px;
