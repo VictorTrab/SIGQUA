@@ -263,6 +263,31 @@ class TestMigracionesBaseDatos(unittest.TestCase):
         self.assertEqual(parametros, 0)
         self.assertIsNotNone(version)
 
+    def test_migracion_029_elimina_vista_historial_global_reportes(self) -> None:
+        ruta_migraciones_origen = RAIZ_PROYECTO / "database" / "migrations"
+        for ruta in ruta_migraciones_origen.glob("*.sql"):
+            destino = self.raiz_temporal / "database" / "migrations" / ruta.name
+            destino.write_text(ruta.read_text(encoding="utf-8"), encoding="utf-8")
+
+        gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
+        gestor = GestorBaseDatos(gestor_rutas)
+        ruta_db = gestor.inicializar_base_datos(incluir_datos_prueba=True)
+
+        with closing(sqlite3.connect(ruta_db)) as conexion:
+            vista = conexion.execute(
+                """
+                SELECT 1
+                FROM sqlite_master
+                WHERE type = 'view' AND name = 'vw_reportes_historial_pagos_admin';
+                """
+            ).fetchone()
+            version = conexion.execute(
+                "SELECT 1 FROM esquema_migraciones WHERE version = '029' LIMIT 1;"
+            ).fetchone()
+
+        self.assertIsNone(vista)
+        self.assertIsNotNone(version)
+
 
 if __name__ == "__main__":
     unittest.main()

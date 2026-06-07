@@ -34,7 +34,6 @@ from modulos.morosidad.vista import (  # noqa: E402
 )
 from modulos.reportes.entidades import (  # noqa: E402
     REPORTE_DEUDA_ABONADOS_ESTADO,
-    REPORTE_HISTORIAL_ABONADO_CASA,
     REPORTE_INGRESOS_MENSUALES_DIARIOS,
     REPORTE_SERVICIO_CASAS,
 )
@@ -181,7 +180,6 @@ class TestMorosidadReportes(unittest.TestCase):
                 REPORTE_DEUDA_ABONADOS_ESTADO,
                 REPORTE_SERVICIO_CASAS,
                 REPORTE_INGRESOS_MENSUALES_DIARIOS,
-                REPORTE_HISTORIAL_ABONADO_CASA,
             ),
         )
         self.assertIsNotNone(estado.tabla_actual)

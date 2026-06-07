@@ -247,13 +247,16 @@ class VistaReportes(QWidget):
                 widget.deleteLater()
         self._tarjetas.clear()
         color_icono = str(self._paleta["texto_principal"])
+        columnas = max(1, min(3, len(catalogo)))
         for indice, tarjeta in enumerate(catalogo):
             widget = TarjetaSeleccionReporte(tarjeta, color_icono)
             widget.clicked.connect(lambda checked=False, codigo=tarjeta.codigo: self.reporte_seleccionado.emit(codigo))
             widget.setChecked(tarjeta.codigo == self._reporte_actual_codigo)
             self._tarjetas[tarjeta.codigo] = widget
-            self._grilla_tarjetas.addWidget(widget, indice // 4, indice % 4)
-        filas = max(1, (len(catalogo) + 3) // 4)
+            self._grilla_tarjetas.addWidget(widget, indice // columnas, indice % columnas)
+        for columna in range(columnas):
+            self._grilla_tarjetas.setColumnStretch(columna, 1)
+        filas = max(1, (len(catalogo) + columnas - 1) // columnas)
         alto_tarjetas = (
             filas * TarjetaSeleccionReporte.ALTURA
             + max(0, filas - 1) * self._grilla_tarjetas.verticalSpacing()

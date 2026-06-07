@@ -478,7 +478,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         finally:
             shutil.rmtree(raiz_temporal, ignore_errors=True)
 
-    def test_dashboard_recupera_ancho_de_paneles_al_expandir_sidebar(self) -> None:
+    def test_dashboard_conserva_paneles_al_redimensionar_con_sidebar_fijo(self) -> None:
         vista_principal = VistaModuloPrincipal()
         vista_principal.resize(1200, 900)
         vista_principal.show()
@@ -493,14 +493,13 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         anchos_iniciales = tuple(panel.width() for panel in paneles)
 
         for _ in range(3):
-            vista_principal.alternar_sidebar()
-            QTest.qWait(240)
+            vista_principal.resize(1500, 900)
             self.aplicacion.processEvents()
-            vista_principal.alternar_sidebar()
-            QTest.qWait(240)
+            vista_principal.resize(1200, 900)
             self.aplicacion.processEvents()
 
         self.assertEqual(vista_principal._modo_dashboard_actual, "compacto")
+        self.assertEqual(vista_principal._sidebar.width(), 232)
         self.assertEqual(tuple(panel.width() for panel in paneles), anchos_iniciales)
         vista_principal.close()
 
@@ -707,34 +706,74 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertNotIn("Aviso", [vista._tabla.horizontalHeaderItem(indice).text() for indice in range(vista._tabla.columnCount())])
         vista.close()
 
-    def test_shell_principal_inicia_expandido_y_colapsa_manualmente(self) -> None:
+    def test_shell_principal_usa_sidebar_fijo_con_logo_centrado(self) -> None:
         vista_principal = VistaModuloPrincipal()
+        vista_principal.resize(1200, 900)
+        vista_principal.show()
+        self.aplicacion.processEvents()
         logo_sidebar = vista_principal.findChild(QLabel, "logoSidebar")
+        encabezado_sidebar = vista_principal.findChild(QWidget, "encabezadoSidebar")
 
-        self.assertEqual(vista_principal._sidebar.minimumWidth(), 220)
-        self.assertEqual(vista_principal._sidebar.maximumWidth(), 220)
+        self.assertEqual(vista_principal._sidebar.minimumWidth(), 232)
+        self.assertEqual(vista_principal._sidebar.maximumWidth(), 232)
+        self.assertIsNone(vista_principal.findChild(QPushButton, "botonColapsarSidebar"))
         self.assertIsNotNone(logo_sidebar)
         self.assertIsNotNone(logo_sidebar.pixmap())
         self.assertFalse(logo_sidebar.pixmap().isNull())
-
-        vista_principal.alternar_sidebar()
-        QTest.qWait(240)
-        self.aplicacion.processEvents()
-
-        self.assertTrue(vista_principal._sidebar_colapsado)
-        self.assertEqual(vista_principal._sidebar.minimumWidth(), 72)
-        self.assertEqual(vista_principal._sidebar.maximumWidth(), 72)
-        self.assertFalse(vista_principal._logo_sidebar.isVisible())
-        self.assertEqual(vista_principal._boton_ajustes.text(), "")
+        self.assertIsNotNone(encabezado_sidebar)
+        centro_logo = logo_sidebar.mapTo(
+            vista_principal._sidebar,
+            logo_sidebar.rect().center(),
+        ).x()
+        centro_sidebar = vista_principal._sidebar.rect().center().x()
+        self.assertLessEqual(abs(centro_logo - centro_sidebar), 1)
+        self.assertIn("QWidget#encabezadoSidebar", vista_principal.styleSheet())
+        self.assertIn("qlineargradient", vista_principal.styleSheet())
         self.assertEqual(vista_principal._boton_ajustes.toolTip(), "Parámetros operativos y configuración local.")
-
-        vista_principal.alternar_sidebar()
-        QTest.qWait(240)
-        self.aplicacion.processEvents()
-
-        self.assertFalse(vista_principal._sidebar_colapsado)
-        self.assertEqual(vista_principal._sidebar.minimumWidth(), 220)
         self.assertEqual(vista_principal._boton_ajustes.text(), "Ajustes")
+        vista_principal._reconstruir_sidebar(
+            (
+                ModuloNavegacion(
+                    "historial_pagos",
+                    "Historial de pagos",
+                    "Consulta de comprobantes.",
+                    "clock.svg",
+                ),
+                ModuloNavegacion(
+                    "planes_pago",
+                    "Planes de pago",
+                    "Gestión de acuerdos.",
+                    "calendar-stats.svg",
+                ),
+            )
+        )
+        self.aplicacion.processEvents()
+        for codigo, texto in (
+            ("historial_pagos", "Historial de pagos"),
+            ("planes_pago", "Planes de pago"),
+        ):
+            boton = vista_principal._botones_modulos[codigo]
+            self.assertEqual(boton.text(), texto)
+            ancho_contenido = (
+                boton.fontMetrics().horizontalAdvance(texto)
+                + boton.iconSize().width()
+                + 4
+                + 12
+            )
+            self.assertLessEqual(ancho_contenido, boton.width())
+        self.assertEqual(vista_principal._boton_cerrar_sesion.text(), "Cerrar sesión")
+        ancho_cerrar_sesion = (
+            vista_principal._boton_cerrar_sesion.fontMetrics().horizontalAdvance(
+                "Cerrar sesión"
+            )
+            + vista_principal._boton_cerrar_sesion.iconSize().width()
+            + 4
+            + 12
+        )
+        self.assertLessEqual(
+            ancho_cerrar_sesion,
+            vista_principal._boton_cerrar_sesion.width(),
+        )
         vista_principal.close()
 
     def test_shell_principal_resuelve_saludo_por_hora(self) -> None:

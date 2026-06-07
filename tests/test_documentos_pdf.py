@@ -188,13 +188,12 @@ class TestDocumentosPdf(unittest.TestCase):
         self.assertGreaterEqual(firma[0].height, 10 * mm)
         self.assertEqual(firma[-1].style.alignment, 1)
 
-    def test_los_cuatro_reportes_generan_pdf_con_nuevo_diseno(self) -> None:
+    def test_los_tres_reportes_generan_pdf_con_nuevo_diseno(self) -> None:
         servicio_reportes = ServicioReportes(RepositorioReportesSQLite(self.gestor_base_datos))
         codigos = (
             "deuda_abonados_estado",
             "servicio_casas",
             "ingresos_mensuales_diarios",
-            "historial_abonado_casa",
         )
         rutas: list[Path] = []
 
@@ -216,7 +215,7 @@ class TestDocumentosPdf(unittest.TestCase):
                             "yarumela@example.com",
                             "Yarumela, La Paz",
                         ),
-                        directorio_destino=str(self.raiz_temporal / "cuatro_reportes"),
+                        directorio_destino=str(self.raiz_temporal / "tres_reportes"),
                         generado_por="Administrador",
                         firma_habilitada=True,
                     )
@@ -225,7 +224,7 @@ class TestDocumentosPdf(unittest.TestCase):
                 self.assertTrue(ruta.exists())
                 self.assertTrue(ruta.read_bytes().startswith(b"%PDF"))
 
-        self.assertEqual(len(rutas), 4)
+        self.assertEqual(len(rutas), 3)
 
     def test_nombre_fechado_no_sobrescribe_colision(self) -> None:
         servicio_reportes = ServicioReportes(RepositorioReportesSQLite(self.gestor_base_datos))

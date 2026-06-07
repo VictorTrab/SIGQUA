@@ -14,7 +14,6 @@ from modulos.reportes.entidades import (
     ORIENTACION_VERTICAL,
     OpcionFiltroReporte,
     REPORTE_DEUDA_ABONADOS_ESTADO,
-    REPORTE_HISTORIAL_ABONADO_CASA,
     REPORTE_INGRESOS_MENSUALES_DIARIOS,
     REPORTE_SERVICIO_CASAS,
     TablaReporte,
@@ -119,7 +118,7 @@ class RepositorioReportesSQLite:
             IndicadorReporte("Pagos confirmados", str(total_pagos_mes), "Registros confirmados del mes actual"),
             IndicadorReporte("Deuda administrativa", self._moneda(deuda_admin), "Deuda base, mora y saldo vivo de plan"),
             IndicadorReporte("Casas con servicio", str(casas_con_servicio), "Viviendas con servicio activo"),
-            IndicadorReporte("Casas sin servicio", str(casas_sin_servicio), "Cortadas, suspendidas o inactivas"),
+            IndicadorReporte("Casas sin servicio", str(casas_sin_servicio), "Viviendas cortadas o inactivas"),
         )
 
     def _construir_filtros_visibles(
@@ -145,13 +144,6 @@ class RepositorioReportesSQLite:
                         opciones=self._opciones_barrios(),
                         valor=filtros.get("barrio", "TODOS"),
                     ),
-                    FiltroReporte(
-                        clave="estado_servicio",
-                        etiqueta="Estado del servicio",
-                        tipo="combo",
-                        opciones=self._opciones_estado_servicio(),
-                        valor=filtros.get("estado_servicio", "TODOS"),
-                    ),
                 )
             )
         if codigo_reporte == REPORTE_DEUDA_ABONADOS_ESTADO:
@@ -167,7 +159,33 @@ class RepositorioReportesSQLite:
                     valor=filtros.get("incluir_mora", "1"),
                 )
             )
-        if codigo_reporte in {REPORTE_INGRESOS_MENSUALES_DIARIOS, REPORTE_HISTORIAL_ABONADO_CASA}:
+        if codigo_reporte == REPORTE_SERVICIO_CASAS:
+            visibles.extend(
+                (
+                    FiltroReporte(
+                        clave="disponibilidad",
+                        etiqueta="Disponibilidad",
+                        tipo="combo",
+                        opciones=self._opciones_disponibilidad(),
+                        valor=filtros.get("disponibilidad", "TODOS"),
+                    ),
+                    FiltroReporte(
+                        clave="estado_servicio",
+                        etiqueta="Estado fisico",
+                        tipo="combo",
+                        opciones=self._opciones_estado_servicio(),
+                        valor=filtros.get("estado_servicio", "TODOS"),
+                    ),
+                    FiltroReporte(
+                        clave="estado_administrativo",
+                        etiqueta="Estado administrativo",
+                        tipo="combo",
+                        opciones=self._opciones_estado_administrativo(),
+                        valor=filtros.get("estado_administrativo", "TODOS"),
+                    ),
+                )
+            )
+        if codigo_reporte == REPORTE_INGRESOS_MENSUALES_DIARIOS:
             visibles.extend(
                 (
                     FiltroReporte(
@@ -184,25 +202,6 @@ class RepositorioReportesSQLite:
                     ),
                 )
             )
-        if codigo_reporte == REPORTE_HISTORIAL_ABONADO_CASA:
-            visibles.extend(
-                (
-                    FiltroReporte(
-                        clave="abonado_id",
-                        etiqueta="Abonado",
-                        tipo=TIPO_FILTRO_BUSQUEDA,
-                        opciones=self._opciones_abonados(),
-                        valor=filtros.get("abonado_id", "TODOS"),
-                    ),
-                    FiltroReporte(
-                        clave="casa_id",
-                        etiqueta="Casa",
-                        tipo=TIPO_FILTRO_BUSQUEDA,
-                        opciones=self._opciones_casas(),
-                        valor=filtros.get("casa_id", "TODOS"),
-                    ),
-                )
-            )
         return tuple(visibles)
 
     def _obtener_tabla(self, codigo_reporte: str, filtros: dict[str, str]) -> TablaReporte:
@@ -211,19 +210,14 @@ class RepositorioReportesSQLite:
                 return self._tabla_servicio_casas(conexion, filtros)
             if codigo_reporte == REPORTE_INGRESOS_MENSUALES_DIARIOS:
                 return self._tabla_ingresos_mensuales_diarios(conexion, filtros)
-            if codigo_reporte == REPORTE_HISTORIAL_ABONADO_CASA:
-                return self._tabla_historial_abonado_casa(conexion, filtros)
             return self._tabla_deuda_abonados_estado(conexion, filtros)
 
     def _tabla_deuda_abonados_estado(self, conexion: object, filtros: dict[str, str]) -> TablaReporte:
-        condiciones = ["1 = 1"]
+        condiciones = ["a.eliminado_en IS NULL"]
         parametros: list[object] = []
         if filtros.get("estado_abonado", "TODOS") != "TODOS":
-            condiciones.append("deuda.estado_abonado = ?")
+            condiciones.append("a.estado = ?")
             parametros.append(filtros["estado_abonado"])
-        if filtros.get("estado_servicio", "TODOS") != "TODOS":
-            condiciones.append("deuda.estado_servicio = ?")
-            parametros.append(filtros["estado_servicio"])
         if filtros.get("barrio", "TODOS") != "TODOS":
             condiciones.append(
                 "deuda.barrio_nombre = "
@@ -255,20 +249,21 @@ class RepositorioReportesSQLite:
                 GROUP BY cg.casa_id
             )
             SELECT
-                deuda.abonado_id,
-                deuda.abonado_dni,
-                deuda.abonado_nombre,
-                deuda.estado_abonado,
+                a.id AS abonado_id,
+                a.dni AS abonado_dni,
+                a.nombre_completo AS abonado_nombre,
+                a.estado AS estado_abonado,
                 GROUP_CONCAT(DISTINCT deuda.barrio_nombre) AS barrios,
                 COUNT(DISTINCT deuda.casa_id) AS total_casas,
                 COALESCE(SUM(meses_por_casa.meses_vencidos), 0) AS meses_vencidos,
                 COALESCE(SUM(deuda.deuda_base_centavos), 0) AS deuda_base_centavos,
                 COALESCE(SUM(deuda.mora_centavos), 0) AS mora_centavos,
                 COALESCE(SUM(deuda.saldo_plan_centavos), 0) AS saldo_plan_centavos
-            FROM vw_reportes_deuda_abonado_estado deuda
+            FROM abonados a
+            LEFT JOIN vw_reportes_deuda_abonado_estado deuda ON deuda.abonado_id = a.id
             LEFT JOIN meses_por_casa ON meses_por_casa.casa_id = deuda.casa_id
             WHERE {' AND '.join(condiciones)}
-            GROUP BY deuda.abonado_id, deuda.abonado_dni, deuda.abonado_nombre, deuda.estado_abonado
+            GROUP BY a.id, a.dni, a.nombre_completo, a.estado
             ORDER BY (deuda_base_centavos + mora_centavos + saldo_plan_centavos) DESC, abonado_nombre ASC;
         """
         filas = conexion.execute(consulta, tuple(parametros)).fetchall()
@@ -281,8 +276,8 @@ class RepositorioReportesSQLite:
         )
         return TablaReporte(
             codigo=REPORTE_DEUDA_ABONADOS_ESTADO,
-            titulo="Deuda total por abonados",
-            descripcion="Deuda administrativa global consolidada por abonado responsable actual.",
+            titulo="Deuda global por abonado",
+            descripcion="Consolidado administrativo global; no sustituye el documento individual de cobro.",
             columnas=("DNI", "Abonado", "Barrio", "Casas", "Meses vencidos", "Deuda total", "Estado"),
             filas=tuple(
                 (
@@ -316,6 +311,13 @@ class RepositorioReportesSQLite:
         if filtros.get("estado_servicio", "TODOS") != "TODOS":
             condiciones.append("c.estado_servicio = ?")
             parametros.append(filtros["estado_servicio"])
+        if filtros.get("estado_administrativo", "TODOS") != "TODOS":
+            condiciones.append("c.estado_administrativo = ?")
+            parametros.append(filtros["estado_administrativo"])
+        if filtros.get("disponibilidad", "TODOS") == "CON_SERVICIO":
+            condiciones.append("c.estado_servicio = 'ACTIVO'")
+        elif filtros.get("disponibilidad", "TODOS") == "SIN_SERVICIO":
+            condiciones.append("c.estado_servicio IN ('CORTADO', 'INACTIVO')")
         if filtros.get("barrio", "TODOS") != "TODOS":
             condiciones.append("b.id = ?")
             parametros.append(filtros["barrio"])
@@ -326,6 +328,7 @@ class RepositorioReportesSQLite:
                 a.dni AS abonado_dni,
                 COALESCE(b.nombre, '') AS barrio_nombre,
                 c.estado_servicio,
+                c.estado_administrativo,
                 a.estado AS estado_abonado,
                 COALESCE(c.actualizado_en, '') AS ultima_actualizacion
             FROM casas c
@@ -335,22 +338,45 @@ class RepositorioReportesSQLite:
             ORDER BY c.estado_servicio ASC, c.id ASC;
         """
         filas = conexion.execute(consulta, tuple(parametros)).fetchall()
-        conteos_estado: dict[str, int] = {}
+        conteos_fisicos = {"ACTIVO": 0, "CORTADO": 0, "INACTIVO": 0}
+        conteos_administrativos = {"OPERATIVA": 0, "SUSPENDIDA": 0}
+        conteos_abonados = {"ACTIVO": 0, "INACTIVO": 0}
         for fila in filas:
-            estado = str(fila["estado_servicio"] or "SIN ESTADO")
-            conteos_estado[estado] = conteos_estado.get(estado, 0) + 1
+            estado_fisico = str(fila["estado_servicio"] or "")
+            estado_administrativo = str(fila["estado_administrativo"] or "")
+            estado_abonado = str(fila["estado_abonado"] or "")
+            if estado_fisico in conteos_fisicos:
+                conteos_fisicos[estado_fisico] += 1
+            if estado_administrativo in conteos_administrativos:
+                conteos_administrativos[estado_administrativo] += 1
+            if estado_abonado in conteos_abonados:
+                conteos_abonados[estado_abonado] += 1
+        con_servicio = conteos_fisicos["ACTIVO"]
+        sin_servicio = conteos_fisicos["CORTADO"] + conteos_fisicos["INACTIVO"]
         return TablaReporte(
             codigo=REPORTE_SERVICIO_CASAS,
-            titulo="Servicio por casa",
-            descripcion="Estado fisico y administrativo de las viviendas.",
-            columnas=("Casa", "Abonado", "DNI", "Barrio", "Estado servicio", "Estado abonado", "Ultima actualizacion"),
+            titulo="Estado del servicio por casa",
+            descripcion="Disponibilidad y estados de las viviendas, sin informacion financiera.",
+            columnas=(
+                "Casa",
+                "Abonado",
+                "DNI",
+                "Barrio",
+                "Disponibilidad",
+                "Estado fisico",
+                "Estado administrativo",
+                "Estado abonado",
+                "Ultima actualizacion",
+            ),
             filas=tuple(
                 (
                     str(fila["casa_codigo"]),
                     str(fila["abonado_nombre"]),
                     str(fila["abonado_dni"] or ""),
                     str(fila["barrio_nombre"] or ""),
+                    self._disponibilidad_servicio(str(fila["estado_servicio"])),
                     str(fila["estado_servicio"]),
+                    str(fila["estado_administrativo"]),
                     str(fila["estado_abonado"]),
                     str(fila["ultima_actualizacion"] or ""),
                 )
@@ -358,10 +384,15 @@ class RepositorioReportesSQLite:
             ),
             resumen=(
                 ("Casas listadas", str(len(filas))),
-                *tuple(
-                    (estado.title(), str(total))
-                    for estado, total in sorted(conteos_estado.items())
-                ),
+                ("Con servicio", str(con_servicio)),
+                ("Sin servicio", str(sin_servicio)),
+                ("Activas", str(conteos_fisicos["ACTIVO"])),
+                ("Cortadas", str(conteos_fisicos["CORTADO"])),
+                ("Inactivas", str(conteos_fisicos["INACTIVO"])),
+                ("Operativas", str(conteos_administrativos["OPERATIVA"])),
+                ("Suspendidas", str(conteos_administrativos["SUSPENDIDA"])),
+                ("Abonados activos", str(conteos_abonados["ACTIVO"])),
+                ("Abonados inactivos", str(conteos_abonados["INACTIVO"])),
             ),
             orientacion=ORIENTACION_HORIZONTAL,
         )
@@ -402,77 +433,6 @@ class RepositorioReportesSQLite:
             orientacion=ORIENTACION_VERTICAL,
         )
 
-    def _tabla_historial_abonado_casa(self, conexion: object, filtros: dict[str, str]) -> TablaReporte:
-        condiciones = ["1 = 1"]
-        parametros: list[object] = []
-        fragmento, parametros_fechas = self._fragmento_rango("fecha_pago", filtros)
-        if fragmento:
-            condiciones.append(fragmento.replace("AND ", "", 1))
-            parametros.extend(parametros_fechas)
-        if filtros.get("abonado_id", "TODOS") != "TODOS":
-            condiciones.append("CAST(abonado_id AS TEXT) = ?")
-            parametros.append(filtros["abonado_id"])
-        if filtros.get("casa_id", "TODOS") != "TODOS":
-            condiciones.append("CAST(casa_id AS TEXT) = ?")
-            parametros.append(filtros["casa_id"])
-        consulta = f"""
-            SELECT numero_comprobante, abonado_nombre, casa_codigo, metodo_pago, usuario_registro,
-                   total_pagado_centavos, fecha_pago
-            FROM vw_reportes_historial_pagos_admin
-            WHERE {' AND '.join(condiciones)}
-            ORDER BY fecha_pago DESC, pago_id DESC;
-        """
-        filas = conexion.execute(consulta, tuple(parametros)).fetchall()
-        return TablaReporte(
-            codigo=REPORTE_HISTORIAL_ABONADO_CASA,
-            titulo="Historial por abonado/casa",
-            descripcion="Pagos y comprobantes filtrables por abonado o casa.",
-            columnas=("Recibo", "Abonado", "Casa", "Metodo", "Usuario", "Total", "Fecha"),
-            filas=tuple(
-                (
-                    str(fila["numero_comprobante"]),
-                    str(fila["abonado_nombre"]),
-                    str(fila["casa_codigo"]),
-                    str(fila["metodo_pago"]),
-                    str(fila["usuario_registro"]),
-                    self._moneda(int(fila["total_pagado_centavos"] or 0)),
-                    str(fila["fecha_pago"] or ""),
-                )
-                for fila in filas
-            ),
-            resumen=(
-                ("Movimientos", str(len(filas))),
-                ("Monto total", self._moneda(sum(int(fila["total_pagado_centavos"] or 0) for fila in filas))),
-            ),
-            orientacion=ORIENTACION_HORIZONTAL,
-        )
-
-    def _opciones_abonados(self) -> tuple[OpcionFiltroReporte, ...]:
-        consulta = """
-            SELECT DISTINCT abonado_id, abonado_nombre
-            FROM vw_reportes_historial_pagos_admin
-            ORDER BY abonado_nombre ASC;
-        """
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            filas = conexion.execute(consulta).fetchall()
-        return (OpcionFiltroReporte("TODOS", "Todos"),) + tuple(
-            OpcionFiltroReporte(str(fila["abonado_id"]), str(fila["abonado_nombre"]))
-            for fila in filas
-        )
-
-    def _opciones_casas(self) -> tuple[OpcionFiltroReporte, ...]:
-        consulta = """
-            SELECT DISTINCT casa_id, casa_codigo
-            FROM vw_reportes_historial_pagos_admin
-            ORDER BY casa_id ASC;
-        """
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            filas = conexion.execute(consulta).fetchall()
-        return (OpcionFiltroReporte("TODOS", "Todas"),) + tuple(
-            OpcionFiltroReporte(str(fila["casa_id"]), str(fila["casa_codigo"]))
-            for fila in filas
-        )
-
     def _opciones_barrios(self) -> tuple[OpcionFiltroReporte, ...]:
         consulta = """
             SELECT DISTINCT b.id AS barrio_id, b.nombre AS barrio_nombre
@@ -503,25 +463,28 @@ class RepositorioReportesSQLite:
             OpcionFiltroReporte("TODOS", "Todos"),
             OpcionFiltroReporte("ACTIVO", "Activos"),
             OpcionFiltroReporte("CORTADO", "Cortados"),
-            OpcionFiltroReporte("SUSPENDIDA", "Suspendidos"),
             OpcionFiltroReporte("INACTIVO", "Inactivos"),
         )
 
     @staticmethod
-    def _aplicar_filtros_estado(
-        condiciones: list[str],
-        parametros: list[object],
-        filtros: dict[str, str],
-    ) -> None:
-        if filtros.get("estado_abonado", "TODOS") != "TODOS":
-            condiciones.append("estado_abonado = ?")
-            parametros.append(filtros["estado_abonado"])
-        if filtros.get("estado_servicio", "TODOS") != "TODOS":
-            condiciones.append("estado_servicio = ?")
-            parametros.append(filtros["estado_servicio"])
-        if filtros.get("barrio", "TODOS") != "TODOS":
-            condiciones.append("barrio_nombre = ?")
-            parametros.append(filtros["barrio"])
+    def _opciones_estado_administrativo() -> tuple[OpcionFiltroReporte, ...]:
+        return (
+            OpcionFiltroReporte("TODOS", "Todos"),
+            OpcionFiltroReporte("OPERATIVA", "Operativas"),
+            OpcionFiltroReporte("SUSPENDIDA", "Suspendidas"),
+        )
+
+    @staticmethod
+    def _opciones_disponibilidad() -> tuple[OpcionFiltroReporte, ...]:
+        return (
+            OpcionFiltroReporte("TODOS", "Todas"),
+            OpcionFiltroReporte("CON_SERVICIO", "Con servicio"),
+            OpcionFiltroReporte("SIN_SERVICIO", "Sin servicio"),
+        )
+
+    @staticmethod
+    def _disponibilidad_servicio(estado_servicio: str) -> str:
+        return "CON SERVICIO" if estado_servicio == "ACTIVO" else "SIN SERVICIO"
 
     @staticmethod
     def _fragmento_rango(campo_fecha: str, filtros: dict[str, str]) -> tuple[str, list[object]]:
@@ -542,9 +505,9 @@ class RepositorioReportesSQLite:
         base = {
             "estado_abonado": "TODOS",
             "estado_servicio": "TODOS",
+            "estado_administrativo": "TODOS",
+            "disponibilidad": "TODOS",
             "barrio": "TODOS",
-            "abonado_id": "TODOS",
-            "casa_id": "TODOS",
             "fecha_desde": "",
             "fecha_hasta": "",
             "incluir_mora": "1",

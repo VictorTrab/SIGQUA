@@ -684,9 +684,8 @@ class GeneradorPdfReportLab:
     def _anchos_columnas_reporte(self, dto: DTOReporteTabular) -> list[float]:
         proporciones = {
             "deuda_abonados_estado": (0.14, 0.24, 0.19, 0.07, 0.11, 0.13, 0.12),
-            "servicio_casas": (0.09, 0.23, 0.14, 0.15, 0.13, 0.12, 0.14),
+            "servicio_casas": (0.07, 0.18, 0.11, 0.11, 0.11, 0.09, 0.12, 0.09, 0.12),
             "ingresos_mensuales_diarios": (0.20, 0.32, 0.16, 0.32),
-            "historial_abonado_casa": (0.14, 0.25, 0.09, 0.12, 0.14, 0.12, 0.14),
         }.get(dto.codigo_reporte)
         total_columnas = max(1, len(dto.columnas))
         if not proporciones or len(proporciones) != total_columnas:
@@ -701,7 +700,6 @@ class GeneradorPdfReportLab:
             "deuda_abonados_estado": {3, 4, 5},
             "servicio_casas": set(),
             "ingresos_mensuales_diarios": {2, 3},
-            "historial_abonado_casa": {5},
         }.get(codigo_reporte, set())
 
     @staticmethod

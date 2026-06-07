@@ -18,7 +18,6 @@ from modulos.reportes.entidades import (
     ConfiguracionSalidaReportePdf,
     EstadoReportes,
     REPORTE_DEUDA_ABONADOS_ESTADO,
-    REPORTE_HISTORIAL_ABONADO_CASA,
     REPORTE_INGRESOS_MENSUALES_DIARIOS,
     REPORTE_SERVICIO_CASAS,
     TarjetaReporte,
@@ -47,15 +46,15 @@ class ServicioReportes:
     CATALOGO_REPORTES = (
         TarjetaReporte(
             codigo=REPORTE_DEUDA_ABONADOS_ESTADO,
-            titulo="Deuda total por abonados",
-            descripcion="Deuda administrativa global consolidada por abonado responsable.",
+            titulo="Deuda global por abonado",
+            descripcion="Consolidado administrativo global; no sustituye el documento individual de cobro.",
             icono="receipt-2.svg",
             resumen="Consolidado global",
         ),
         TarjetaReporte(
             codigo=REPORTE_SERVICIO_CASAS,
-            titulo="Servicio por casa",
-            descripcion="Estado fisico y administrativo de las viviendas.",
+            titulo="Estado del servicio por casa",
+            descripcion="Disponibilidad y estados fisico, administrativo y del abonado, sin datos de deuda.",
             icono="home.svg",
             resumen="Viviendas",
         ),
@@ -65,13 +64,6 @@ class ServicioReportes:
             descripcion="Ingresos confirmados por mes con desglose por dia.",
             icono="calendar-plus.svg",
             resumen="Mes y dia",
-        ),
-        TarjetaReporte(
-            codigo=REPORTE_HISTORIAL_ABONADO_CASA,
-            titulo="Historial por abonado/casa",
-            descripcion="Pagos y comprobantes filtrables por abonado o casa.",
-            icono="user.svg",
-            resumen="Consulta historica",
         ),
     )
 
@@ -178,9 +170,9 @@ class ServicioReportes:
         base = {
             "estado_abonado": "TODOS",
             "estado_servicio": "TODOS",
+            "estado_administrativo": "TODOS",
+            "disponibilidad": "TODOS",
             "barrio": "TODOS",
-            "abonado_id": "TODOS",
-            "casa_id": "TODOS",
             "fecha_desde": "",
             "fecha_hasta": "",
             "incluir_mora": "1",

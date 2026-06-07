@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import os
 import shutil
+import sqlite3
 import sys
 import unittest
 import uuid
+from contextlib import closing
 from pathlib import Path
 
 
@@ -24,7 +26,6 @@ from modulos.reportes.entidades import (  # noqa: E402
     ORIENTACION_HORIZONTAL,
     ORIENTACION_VERTICAL,
     REPORTE_DEUDA_ABONADOS_ESTADO,
-    REPORTE_HISTORIAL_ABONADO_CASA,
     REPORTE_INGRESOS_MENSUALES_DIARIOS,
     REPORTE_SERVICIO_CASAS,
     TIPO_FILTRO_BUSQUEDA,
@@ -52,7 +53,7 @@ class TestReportes(unittest.TestCase):
     def tearDown(self) -> None:
         shutil.rmtree(self.raiz_temporal, ignore_errors=True)
 
-    def test_catalogo_final_expone_solo_cuatro_reportes(self) -> None:
+    def test_catalogo_final_expone_solo_tres_reportes(self) -> None:
         estado = self.servicio.obtener_estado()
 
         codigos = tuple(tarjeta.codigo for tarjeta in estado.catalogo)
@@ -63,7 +64,6 @@ class TestReportes(unittest.TestCase):
                 REPORTE_DEUDA_ABONADOS_ESTADO,
                 REPORTE_SERVICIO_CASAS,
                 REPORTE_INGRESOS_MENSUALES_DIARIOS,
-                REPORTE_HISTORIAL_ABONADO_CASA,
             ),
         )
         self.assertEqual(len(estado.indicadores), 5)
@@ -86,6 +86,7 @@ class TestReportes(unittest.TestCase):
             "REPORTE_CASAS_SUSPENDIDAS_INACTIVAS",
             "REPORTE_NUEVOS_ABONADOS",
             "REPORTE_PAGOS_POR_USUARIO",
+            "REPORTE_HISTORIAL_ABONADO_CASA",
         )
 
         for nombre in constantes_retiradas:
@@ -97,7 +98,6 @@ class TestReportes(unittest.TestCase):
             (REPORTE_DEUDA_ABONADOS_ESTADO, {"estado_abonado": "TODOS", "incluir_mora": "1"}),
             (REPORTE_SERVICIO_CASAS, {"estado_servicio": "TODOS"}),
             (REPORTE_INGRESOS_MENSUALES_DIARIOS, filtros_fecha),
-            (REPORTE_HISTORIAL_ABONADO_CASA, filtros_fecha),
         )
 
         for codigo, filtros in escenarios:
@@ -114,7 +114,6 @@ class TestReportes(unittest.TestCase):
         for codigo in (
             REPORTE_DEUDA_ABONADOS_ESTADO,
             REPORTE_SERVICIO_CASAS,
-            REPORTE_HISTORIAL_ABONADO_CASA,
         ):
             tabla = self.servicio.obtener_estado(codigo_reporte=codigo).tabla_actual
             assert tabla is not None
@@ -126,30 +125,42 @@ class TestReportes(unittest.TestCase):
         assert ingresos is not None
         self.assertEqual(ingresos.orientacion, ORIENTACION_VERTICAL)
 
-    def test_reportes_fusionados_tienen_columnas_esperadas(self) -> None:
+    def test_ingresos_y_servicio_tienen_columnas_esperadas(self) -> None:
         ingresos = self.servicio.obtener_estado(
             codigo_reporte=REPORTE_INGRESOS_MENSUALES_DIARIOS,
             filtros={"fecha_desde": "2026-01-01", "fecha_hasta": "2026-12-31"},
         )
-        historial = self.servicio.obtener_estado(
-            codigo_reporte=REPORTE_HISTORIAL_ABONADO_CASA,
-            filtros={"fecha_desde": "2026-01-01", "fecha_hasta": "2026-12-31"},
-        )
+        servicio = self.servicio.obtener_estado(codigo_reporte=REPORTE_SERVICIO_CASAS)
 
         assert ingresos.tabla_actual is not None
-        assert historial.tabla_actual is not None
+        assert servicio.tabla_actual is not None
         self.assertEqual(ingresos.tabla_actual.columnas, ("Mes", "Dia/Fecha", "Pagos", "Ingresos"))
         self.assertEqual(
-            historial.tabla_actual.columnas,
-            ("Recibo", "Abonado", "Casa", "Metodo", "Usuario", "Total", "Fecha"),
+            servicio.tabla_actual.columnas,
+            (
+                "Casa",
+                "Abonado",
+                "DNI",
+                "Barrio",
+                "Disponibilidad",
+                "Estado fisico",
+                "Estado administrativo",
+                "Estado abonado",
+                "Ultima actualizacion",
+            ),
         )
 
     def test_filtros_visibles_son_minimos_por_reporte(self) -> None:
         casos = {
-            REPORTE_DEUDA_ABONADOS_ESTADO: ("estado_abonado", "barrio", "estado_servicio", "incluir_mora"),
-            REPORTE_SERVICIO_CASAS: ("estado_abonado", "barrio", "estado_servicio"),
+            REPORTE_DEUDA_ABONADOS_ESTADO: ("estado_abonado", "barrio", "incluir_mora"),
+            REPORTE_SERVICIO_CASAS: (
+                "estado_abonado",
+                "barrio",
+                "disponibilidad",
+                "estado_servicio",
+                "estado_administrativo",
+            ),
             REPORTE_INGRESOS_MENSUALES_DIARIOS: ("fecha_desde", "fecha_hasta"),
-            REPORTE_HISTORIAL_ABONADO_CASA: ("fecha_desde", "fecha_hasta", "abonado_id", "casa_id"),
         }
 
         for codigo, claves_esperadas in casos.items():
@@ -163,15 +174,12 @@ class TestReportes(unittest.TestCase):
         deuda = self.servicio.obtener_estado(
             codigo_reporte=REPORTE_DEUDA_ABONADOS_ESTADO
         )
-        historial = self.servicio.obtener_estado(
-            codigo_reporte=REPORTE_HISTORIAL_ABONADO_CASA
-        )
         filtros = {
             filtro.clave: filtro
-            for filtro in (*deuda.filtros_visibles, *historial.filtros_visibles)
+            for filtro in deuda.filtros_visibles
         }
 
-        for clave in ("barrio", "abonado_id", "casa_id"):
+        for clave in ("barrio",):
             with self.subTest(clave=clave):
                 filtro = filtros[clave]
                 self.assertEqual(filtro.tipo, TIPO_FILTRO_BUSQUEDA)
@@ -199,30 +207,91 @@ class TestReportes(unittest.TestCase):
             all(fila[3] == opcion.etiqueta for fila in estado_filtrado.tabla_actual.filas)
         )
 
+    def test_deuda_filtra_estado_e_incluye_abonado_sin_casa(self) -> None:
+        with closing(sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())) as conexion:
+            barrio_id = conexion.execute(
+                "SELECT id FROM barrios ORDER BY id LIMIT 1;"
+            ).fetchone()[0]
+            conexion.execute(
+                """
+                INSERT INTO abonados(
+                    nombre_completo, dni, telefono, barrio_id, direccion_referencia, estado
+                )
+                VALUES ('Abonado Sin Casa', '0801199911111', '', ?, '', 'INACTIVO');
+                """,
+                (barrio_id,),
+            )
+            conexion.commit()
+
+        estado = self.servicio.obtener_estado(
+            codigo_reporte=REPORTE_DEUDA_ABONADOS_ESTADO,
+            filtros={"estado_abonado": "INACTIVO"},
+        )
+
+        assert estado.tabla_actual is not None
+        self.assertTrue(estado.tabla_actual.filas)
+        self.assertTrue(all(fila[6] == "INACTIVO" for fila in estado.tabla_actual.filas))
+        fila_sin_casa = next(
+            fila for fila in estado.tabla_actual.filas if fila[1] == "Abonado Sin Casa"
+        )
+        self.assertEqual(fila_sin_casa[3], "0")
+        self.assertEqual(fila_sin_casa[5], "L 0.00")
+
+    def test_servicio_resume_dimensiones_y_filtra_disponibilidad(self) -> None:
+        estado = self.servicio.obtener_estado(codigo_reporte=REPORTE_SERVICIO_CASAS)
+        assert estado.tabla_actual is not None
+        resumen = dict(estado.tabla_actual.resumen)
+
+        self.assertEqual(
+            tuple(resumen),
+            (
+                "Casas listadas",
+                "Con servicio",
+                "Sin servicio",
+                "Activas",
+                "Cortadas",
+                "Inactivas",
+                "Operativas",
+                "Suspendidas",
+                "Abonados activos",
+                "Abonados inactivos",
+            ),
+        )
+        self.assertEqual(
+            int(resumen["Con servicio"]) + int(resumen["Sin servicio"]),
+            int(resumen["Casas listadas"]),
+        )
+
+        sin_servicio = self.servicio.obtener_estado(
+            codigo_reporte=REPORTE_SERVICIO_CASAS,
+            filtros={"disponibilidad": "SIN_SERVICIO"},
+        )
+        assert sin_servicio.tabla_actual is not None
+        self.assertTrue(
+            all(fila[4] == "SIN SERVICIO" for fila in sin_servicio.tabla_actual.filas)
+        )
+
     def test_vista_captura_ids_de_busqueda_y_vacio_como_todos(self) -> None:
         _app = QApplication.instance() or QApplication([])
         estado = self.servicio.obtener_estado(
-            codigo_reporte=REPORTE_HISTORIAL_ABONADO_CASA
+            codigo_reporte=REPORTE_SERVICIO_CASAS
         )
         vista = VistaReportes()
         vista.mostrar_estado(estado)
 
-        campo_abonado = vista._filtros_widgets["abonado_id"]
-        campo_casa = vista._filtros_widgets["casa_id"]
-        self.assertIsInstance(campo_abonado, CampoBusquedaSeleccionSigqua)
-        self.assertIsInstance(campo_casa, CampoBusquedaSeleccionSigqua)
-        self.assertNotIsInstance(campo_abonado, QComboBox)
+        campo_barrio = vista._filtros_widgets["barrio"]
+        self.assertIsInstance(campo_barrio, CampoBusquedaSeleccionSigqua)
+        self.assertNotIsInstance(campo_barrio, QComboBox)
 
-        filtro_abonado = next(
-            filtro for filtro in estado.filtros_visibles if filtro.clave == "abonado_id"
+        filtro_barrio = next(
+            filtro for filtro in estado.filtros_visibles if filtro.clave == "barrio"
         )
-        opcion = filtro_abonado.opciones[1]
-        campo_abonado.seleccionar_por_id(int(opcion.valor), opcion.etiqueta)
+        opcion = filtro_barrio.opciones[1]
+        campo_barrio.seleccionar_por_id(int(opcion.valor), opcion.etiqueta)
 
         capturados = vista._capturar_filtros()
 
-        self.assertEqual(capturados["abonado_id"], opcion.valor)
-        self.assertEqual(capturados["casa_id"], "TODOS")
+        self.assertEqual(capturados["barrio"], opcion.valor)
         vista.close()
 
         vista_barrio = VistaReportes()

@@ -15,11 +15,9 @@ from PySide6.QtCharts import (
     QValueAxis,
 )
 from PySide6.QtCore import (
-    QAbstractAnimation,
     QEvent,
     QEasingCurve,
     QMargins,
-    QParallelAnimationGroup,
     QPauseAnimation,
     QPoint,
     QPropertyAnimation,
@@ -91,9 +89,7 @@ from modulos.principal.entidades import (
 COLOR_FONDO_PRINCIPAL = "#101214"
 ANCHO_MINIMO_SHELL_PRINCIPAL = 960
 ALTO_MINIMO_SHELL_PRINCIPAL = 640
-ANCHO_SIDEBAR_EXPANDIDO = 220
-ANCHO_SIDEBAR_COLAPSADO = 72
-DURACION_COLAPSO_SIDEBAR_MS = 180
+ANCHO_SIDEBAR = 232
 ANCHO_RUPTURA_DASHBOARD_AMPLIO = 1320
 ANCHO_RUPTURA_DASHBOARD_MEDIO = 980
 ANCHO_RUPTURA_METRICAS_6_COLUMNAS = 1120
@@ -1538,8 +1534,6 @@ class VistaModuloPrincipal(QWidget):
         self._modulos_sidebar: dict[str, ModuloNavegacion] = {}
         self._botones_modulos: dict[str, QPushButton] = {}
         self._secciones_sidebar: dict[str, SeccionSidebarDesplegable] = {}
-        self._sidebar_colapsado = False
-        self._animacion_sidebar: QParallelAnimationGroup | None = None
         self._estado_secciones_sidebar: dict[str, bool] = {
             "Vista general": True,
             "Registro y control": True,
@@ -1786,12 +1780,11 @@ class VistaModuloPrincipal(QWidget):
 
         self._sidebar = QFrame()
         self._sidebar.setObjectName("sidebarPrincipal")
-        self._sidebar.setMinimumWidth(ANCHO_SIDEBAR_EXPANDIDO)
-        self._sidebar.setMaximumWidth(ANCHO_SIDEBAR_EXPANDIDO)
+        self._sidebar.setFixedWidth(ANCHO_SIDEBAR)
         self._sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         layout_sidebar = QVBoxLayout(self._sidebar)
         self._layout_sidebar = layout_sidebar
-        layout_sidebar.setContentsMargins(12, 14, 12, 12)
+        layout_sidebar.setContentsMargins(8, 14, 8, 12)
         layout_sidebar.setSpacing(10)
 
         layout_sidebar.addWidget(self._crear_encabezado_sidebar())
@@ -2331,7 +2324,6 @@ class VistaModuloPrincipal(QWidget):
 
         self._contenedor_botones.addStretch(1)
         self._botones_modulos["configuracion"] = self._boton_ajustes
-        self._aplicar_contenido_sidebar_colapsado(self._sidebar_colapsado)
 
     def _solicitar_modulo(self, codigo: str) -> None:
         self.modulo_solicitado.emit(codigo)
@@ -2339,84 +2331,6 @@ class VistaModuloPrincipal(QWidget):
 
     def _abrir_dialogo_perfil_usuario(self) -> None:
         self._dialogo_perfil_usuario.exec()
-
-    def alternar_sidebar(self) -> None:
-        if (
-            self._animacion_sidebar is not None
-            and self._animacion_sidebar.state() == QAbstractAnimation.State.Running
-        ):
-            return
-
-        colapsar = not self._sidebar_colapsado
-        ancho_inicio = self._sidebar.width()
-        ancho_fin = ANCHO_SIDEBAR_COLAPSADO if colapsar else ANCHO_SIDEBAR_EXPANDIDO
-        if colapsar:
-            self._aplicar_contenido_sidebar_colapsado(True)
-
-        grupo = QParallelAnimationGroup(self)
-        for propiedad in (b"minimumWidth", b"maximumWidth"):
-            animacion = QPropertyAnimation(self._sidebar, propiedad, grupo)
-            animacion.setDuration(DURACION_COLAPSO_SIDEBAR_MS)
-            animacion.setStartValue(ancho_inicio)
-            animacion.setEndValue(ancho_fin)
-            animacion.setEasingCurve(QEasingCurve.Type.InOutCubic)
-            grupo.addAnimation(animacion)
-
-        self._boton_colapsar_sidebar.setEnabled(False)
-
-        def finalizar() -> None:
-            self._sidebar_colapsado = colapsar
-            if not colapsar:
-                self._aplicar_contenido_sidebar_colapsado(False)
-            self._boton_colapsar_sidebar.setEnabled(True)
-            self._actualizar_iconos_sidebar()
-            self._animacion_sidebar = None
-            grupo.deleteLater()
-
-        grupo.finished.connect(finalizar)
-        self._animacion_sidebar = grupo
-        grupo.start()
-
-    def _aplicar_contenido_sidebar_colapsado(self, colapsado: bool) -> None:
-        margen_horizontal = 6 if colapsado else 12
-        self._layout_sidebar.setContentsMargins(
-            margen_horizontal,
-            14,
-            margen_horizontal,
-            12,
-        )
-        self._logo_sidebar.setVisible(not colapsado)
-        self._monograma_sidebar.setVisible(colapsado)
-        self._scroll_navegacion.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-            if colapsado
-            else Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
-        self._boton_colapsar_sidebar.setToolTip(
-            "Expandir menú" if colapsado else "Colapsar menú"
-        )
-        for seccion in self._secciones_sidebar.values():
-            seccion._etiqueta_titulo.setVisible(not colapsado)
-        for boton in (
-            *self._botones_modulos.values(),
-            self._boton_mantenimiento,
-            self._boton_ajustes,
-            self._boton_cerrar_sesion,
-        ):
-            texto = str(boton.property("textoSidebar") or boton.text())
-            boton.setText("" if colapsado else texto)
-            boton.setProperty("sidebarColapsado", colapsado)
-            boton.style().unpolish(boton)
-            boton.style().polish(boton)
-
-    def _actualizar_iconos_sidebar(self) -> None:
-        self._boton_colapsar_sidebar.setIcon(
-            obtener_icono_tabler_coloreado(
-                "arrow-left.svg",
-                str(self._paleta_tema["icono_menu_normal"]),
-                tamano=18,
-            )
-        )
 
     def _crear_boton_sidebar(self, modulo: ModuloNavegacion, tipo: str = "modulo") -> QPushButton:
         boton = crear_boton_operativo(modulo.titulo)
@@ -2439,48 +2353,20 @@ class VistaModuloPrincipal(QWidget):
     def _crear_encabezado_sidebar(self) -> QWidget:
         encabezado = QWidget()
         encabezado.setObjectName("encabezadoSidebar")
-        layout = QGridLayout(encabezado)
-        layout.setContentsMargins(2, 2, 2, 8)
-        layout.setSpacing(2)
+        encabezado.setFixedHeight(82)
+        layout = QVBoxLayout(encabezado)
+        layout.setContentsMargins(8, 10, 8, 12)
+        layout.setSpacing(0)
 
         self._logo_sidebar = self._crear_logo_marca_sidebar()
         if self._logo_sidebar is None:
             self._logo_sidebar = EtiquetaMarcaGradiente("SIGQUA")
-            self._logo_sidebar.setAlignment(
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-            )
+            self._logo_sidebar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._logo_sidebar.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed,
         )
-
-        self._monograma_sidebar = QLabel("S")
-        self._monograma_sidebar.setObjectName("monogramaSidebar")
-        self._monograma_sidebar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._monograma_sidebar.setFixedSize(26, 28)
-        self._monograma_sidebar.setVisible(False)
-
-        self._boton_colapsar_sidebar = QPushButton()
-        self._boton_colapsar_sidebar.setObjectName("botonColapsarSidebar")
-        self._boton_colapsar_sidebar.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._boton_colapsar_sidebar.setFixedSize(24, 28)
-        self._boton_colapsar_sidebar.setToolTip("Colapsar menú")
-        self._boton_colapsar_sidebar.setIcon(
-            obtener_icono_tabler_coloreado(
-                "arrow-left.svg",
-                str(self._paleta_tema["icono_menu_normal"]),
-                tamano=18,
-            )
-        )
-        self._boton_colapsar_sidebar.clicked.connect(self.alternar_sidebar)
-
-        separador_izquierdo = QWidget()
-        separador_izquierdo.setFixedWidth(24)
-        layout.addWidget(separador_izquierdo, 0, 0)
-        layout.addWidget(self._logo_sidebar, 0, 1, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._monograma_sidebar, 0, 1, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._boton_colapsar_sidebar, 0, 2)
-        layout.setColumnStretch(1, 1)
+        layout.addWidget(self._logo_sidebar, alignment=Qt.AlignmentFlag.AlignCenter)
         return encabezado
 
     def _crear_logo_marca_sidebar(self) -> QLabel | None:
@@ -2829,11 +2715,20 @@ class VistaModuloPrincipal(QWidget):
             QLabel#textoEstadoDashboard[estado="error"] {{
                 color: #FCA5A5;
             }}
-            QWidget#encabezadoSidebar,
             QWidget#contenedorNavegacionSidebar,
             QScrollArea#scrollNavegacionSidebar {{
                 background: transparent;
                 border: none;
+            }}
+            QWidget#encabezadoSidebar {{
+                background: qlineargradient(
+                    x1: 0, y1: 0, x2: 0, y2: 1,
+                    stop: 0 rgba(47, 155, 255, 0.27),
+                    stop: 0.34 rgba(47, 155, 255, 0.12),
+                    stop: 1 rgba(47, 155, 255, 0)
+                );
+                border: none;
+                border-radius: 0;
             }}
             QFrame#contenedorMarcaSidebar {{
                 background: {paleta["fondo_superficie_muy_suave"]};
@@ -2844,24 +2739,6 @@ class VistaModuloPrincipal(QWidget):
             QFrame#panelAccionesSidebar {{
                 background: transparent;
                 border: none;
-            }}
-            QPushButton#botonColapsarSidebar {{
-                background: transparent;
-                border: 1px solid transparent;
-                border-radius: 6px;
-                padding: 0;
-            }}
-            QPushButton#botonColapsarSidebar:hover {{
-                background: {paleta["fondo_menu_hover"]};
-                border-color: {paleta["borde_suave"]};
-            }}
-            QLabel#monogramaSidebar {{
-                background: {paleta["acento_primario"]};
-                border: 1px solid {paleta["borde_info"]};
-                border-radius: 6px;
-                color: {paleta["boton_primario_texto"]};
-                font-size: 18px;
-                font-weight: 900;
             }}
             QPushButton#botonPerfilHeader {{
                 background: {paleta["fondo_superficie_muy_suave"]};
@@ -2961,18 +2838,14 @@ class VistaModuloPrincipal(QWidget):
                 border-radius: 6px;
                 background: transparent;
                 color: {paleta["texto_menu_normal"]};
-                font-size: {paleta["tamano_fuente_base"] + 1}px;
+                font-size: {paleta["tamano_fuente_base"]}px;
                 font-weight: {paleta["peso_titulo"]};
                 text-align: left;
-                padding: 0 10px;
-            }}
-            QPushButton#botonSidebar[sidebarColapsado="true"] {{
-                padding: 0;
-                text-align: center;
+                padding: 0 6px;
             }}
             QPushButton#botonSidebar[tipoSidebar="modulo"] {{
                 margin-left: 0;
-                padding-left: 12px;
+                padding-left: 8px;
             }}
             QPushButton#botonSidebar[tipoSidebar="accion"] {{
                 background: transparent;

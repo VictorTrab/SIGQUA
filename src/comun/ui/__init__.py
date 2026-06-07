@@ -1,5 +1,6 @@
 """Elementos reutilizables de interfaz."""
 
+from comun.ui.barra_titulo import BarraTituloVentana
 from comun.ui.contenedor_apilado import ContenedorApiladoAjustable
 from comun.ui.componentes import (
     BotonAccionContextual,
@@ -37,6 +38,7 @@ from comun.ui.iconos import (
 )
 
 __all__ = [
+    "BarraTituloVentana",
     "ContenedorApiladoAjustable",
     "BotonAccionContextual",
     "CampoDetalleSigqua",
