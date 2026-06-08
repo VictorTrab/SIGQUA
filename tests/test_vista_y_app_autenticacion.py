@@ -57,6 +57,17 @@ from modulos.casas.vista import (  # noqa: E402
     VistaCasas,
 )
 from modulos.configuracion.vista import VistaConfiguracion  # noqa: E402
+from modulos.configuracion.entidades import (  # noqa: E402
+    EstadoConfiguracion,
+    FacturaConfiguracion,
+    IdentidadEmpresa,
+    InformacionConfiguracion,
+    OperacionConfiguracion,
+    ParametrosCobro,
+    ReportesPdfConfiguracion,
+    RespaldoDisponible,
+    SeguridadConfiguracion,
+)
 from modulos.casas.entidades import (  # noqa: E402
     Casa,
     DetalleCasa,
@@ -88,6 +99,117 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 contenido_sql,
                 encoding="utf-8",
             )
+
+    @staticmethod
+    def _crear_estado_configuracion_ui() -> EstadoConfiguracion:
+        respaldos = (
+            RespaldoDisponible(
+                1,
+                "respaldo-1.zip",
+                "C:/respaldos/respaldo-1.zip",
+                100,
+                "hash-1",
+                "MANUAL",
+                "DISPONIBLE",
+                "01/06/2026",
+                "Administrador",
+            ),
+            RespaldoDisponible(
+                2,
+                "respaldo-2.zip",
+                "C:/respaldos/respaldo-2.zip",
+                120,
+                "hash-2",
+                "MANUAL",
+                "DISPONIBLE",
+                "02/06/2026",
+                "Administrador",
+            ),
+        )
+        return EstadoConfiguracion(
+            identidad_empresa=IdentidadEmpresa(
+                "Junta de Agua",
+                "9999-0000",
+                "junta@local.test",
+                "Yarumela",
+                "0801",
+                "",
+                "Atención administrativa",
+            ),
+            parametros_cobro=ParametrosCobro(
+                3000,
+                True,
+                False,
+                0,
+                False,
+                5,
+                False,
+                True,
+                12,
+                2,
+                5,
+            ),
+            factura=FacturaConfiguracion(
+                "RECIBO DE PAGO",
+                "Cobro institucional",
+                "",
+                "Conserve este comprobante",
+                "",
+                "ORIGINAL",
+                True,
+                True,
+                True,
+                True,
+                False,
+                "Firma autorizada",
+                "",
+                80,
+                True,
+                "cp850",
+                "",
+                0,
+                "REC-0001",
+                "REC-0002",
+                "REC-0001",
+                1,
+            ),
+            reportes_pdf=ReportesPdfConfiguracion(
+                "C:/reportes",
+                "C:/reportes",
+                True,
+                False,
+                "Firma autorizada",
+            ),
+            operacion=OperacionConfiguracion(
+                True,
+                "",
+                "SIN_REGISTROS",
+                2,
+                "",
+                0,
+                "",
+                "Sistema",
+                "C:/respaldos",
+                "",
+                False,
+                True,
+                True,
+                5,
+                "",
+                "C:/comprobantes",
+                "C:/reportes",
+            ),
+            respaldos_disponibles=respaldos,
+            seguridad=SeguridadConfiguracion(True, 5, 8.0, True, True),
+            informacion=InformacionConfiguracion(
+                "SIGQUA",
+                "2.2.0",
+                "C:/sigqua.db",
+                "Local",
+                "01/06/2026",
+                "Sistema",
+            ),
+        )
 
     @staticmethod
     def _crear_raiz_temporal_prueba(prefijo: str) -> Path:
@@ -1322,6 +1444,80 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertIsNone(vista_configuracion.findChild(QWidget, "previewLaboratorioFondo"))
 
         vista_planes.close()
+        vista_configuracion.close()
+
+    def test_configuracion_detecta_cambios_persistibles_y_excluye_selector_restauracion(self) -> None:
+        vista_configuracion = VistaConfiguracion()
+        estado = self._crear_estado_configuracion_ui()
+        vista_configuracion.mostrar_estado(estado, lambda centavos: f"L {centavos / 100:.2f}")
+        vista_configuracion.show()
+        self.aplicacion.processEvents()
+
+        self.assertFalse(vista_configuracion._hay_cambios_pendientes)
+        vista_configuracion._campo_junta_nombre.setText("Junta editada")
+        self.assertTrue(vista_configuracion._hay_cambios_pendientes)
+        vista_configuracion.mostrar_mensaje("No fue posible guardar.", es_error=True)
+        self.assertTrue(vista_configuracion._hay_cambios_pendientes)
+
+        vista_configuracion.mostrar_estado(estado, lambda centavos: f"L {centavos / 100:.2f}")
+        self.assertFalse(vista_configuracion._hay_cambios_pendientes)
+        vista_configuracion._combo_respaldos_restauracion.setCurrentIndex(1)
+        self.assertFalse(vista_configuracion._hay_cambios_pendientes)
+
+        vista_configuracion._combo_duracion_sesion.setCurrentIndex(1)
+        self.assertTrue(vista_configuracion._hay_cambios_pendientes)
+        vista_configuracion.close()
+
+    def test_configuracion_confirma_cambio_de_pestana_con_cambios_pendientes(self) -> None:
+        vista_configuracion = VistaConfiguracion()
+        estado = self._crear_estado_configuracion_ui()
+        vista_configuracion.mostrar_estado(estado, lambda centavos: f"L {centavos / 100:.2f}")
+        vista_configuracion.show()
+        self.aplicacion.processEvents()
+
+        vista_configuracion._tabs.setCurrentIndex(1)
+        self.assertEqual(vista_configuracion._indice_tab_anterior, 1)
+        vista_configuracion._tabs.setCurrentIndex(0)
+        self.assertEqual(vista_configuracion._indice_tab_anterior, 0)
+        self.assertFalse(vista_configuracion._hay_cambios_pendientes)
+
+        vista_configuracion._campo_junta_nombre.setText("Cambio temporal")
+
+        def cancelar() -> None:
+            dialogo = QApplication.activeModalWidget()
+            if dialogo is not None:
+                dialogo.reject()
+
+        QTimer.singleShot(0, cancelar)
+        vista_configuracion._tabs.setCurrentIndex(1)
+        self.assertEqual(vista_configuracion._tabs.currentIndex(), 0)
+        self.assertTrue(vista_configuracion._hay_cambios_pendientes)
+        self.assertEqual(vista_configuracion._campo_junta_nombre.text(), "Cambio temporal")
+
+        def confirmar() -> None:
+            dialogo = QApplication.activeModalWidget()
+            if dialogo is not None:
+                dialogo.accept()
+
+        QTimer.singleShot(0, confirmar)
+        vista_configuracion._tabs.setCurrentIndex(1)
+        self.assertEqual(vista_configuracion._tabs.currentIndex(), 1)
+        self.assertFalse(vista_configuracion._hay_cambios_pendientes)
+        self.assertEqual(vista_configuracion._campo_junta_nombre.text(), "Junta de Agua")
+        vista_configuracion.close()
+
+    def test_configuracion_estilos_refuerzan_contraste_y_bloques_internos(self) -> None:
+        vista_configuracion = VistaConfiguracion()
+        hoja = vista_configuracion.styleSheet()
+
+        self.assertIn("QWidget#bloqueCampoConfiguracion", hoja)
+        self.assertIn("QWidget#filaResumenConfiguracion", hoja)
+        self.assertIn("QFrame#tarjetaResumenConfiguracion:hover", hoja)
+        self.assertIn("QLineEdit:read-only", hoja)
+        self.assertIn("border: 2px solid", hoja)
+        self.assertNotIn("QScrollArea#scrollConfiguracion QWidget", hoja)
+        self.assertIsNotNone(vista_configuracion.findChild(QWidget, "bloqueCampoConfiguracion"))
+        self.assertIsNotNone(vista_configuracion.findChild(QWidget, "filaResumenConfiguracion"))
         vista_configuracion.close()
 
     def test_modulos_base_no_replican_titulo_en_contenido(self) -> None:

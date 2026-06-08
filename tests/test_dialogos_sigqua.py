@@ -89,6 +89,19 @@ class TestDialogosSigqua(unittest.TestCase):
             self._assert_botones_solo_texto(dialogo)
             dialogo.close()
 
+    def test_dialogo_confirmacion_permite_personalizar_texto_cancelar(self) -> None:
+        dialogo = DialogoConfirmacionSigqua(
+            "Cambios sin guardar",
+            "Hay cambios pendientes.",
+            texto_confirmar="Descartar cambios",
+            texto_cancelar="Seguir editando",
+        )
+        textos = {boton.text() for boton in dialogo.findChildren(QPushButton)}
+
+        self.assertIn("Descartar cambios", textos)
+        self.assertIn("Seguir editando", textos)
+        dialogo.close()
+
     def test_dialogos_compactos_eliminan_iconos_en_botones(self) -> None:
         dialogos = [
             DialogoMensajeSigqua("Aviso", "Mensaje breve para revisar acciones compactas."),

@@ -40,7 +40,6 @@ from comun.ui.comprobante_termico import (
 )
 from comun.ui.temas import (
     TEMA_SIGQUA_PREDETERMINADO,
-    obtener_fondo_header_destacado,
     obtener_paleta_tema,
     obtener_tema_actual,
     resolver_nombre_tema,
@@ -53,6 +52,7 @@ class TarjetaResumenConfiguracion(TarjetaResumenOperativa):
 
     def __init__(self, titulo: str, icono: str, color_icono: str) -> None:
         super().__init__(icono, color_icono)
+        self.setObjectName("tarjetaResumenConfiguracion")
         self._titulo_fijo = titulo
 
     def actualizar(self, valor: str, detalle: str) -> None:
@@ -111,13 +111,33 @@ class VistaConfiguracion(QWidget):
         self.setObjectName("vistaConfiguracion")
         self._tema_actual = obtener_tema_actual()
         self._paleta_tema = obtener_paleta_tema(self._tema_actual)
+        self._cargando_estado = False
+        self._hay_cambios_pendientes = False
+        self._indice_tab_anterior = 0
+        self._ultimo_estado_configuracion: EstadoConfiguracion | None = None
+        self._ultimo_formateador_moneda: Callable[[int], str] | None = None
         self._temporizador_mensaje = QTimer(self)
         self._temporizador_mensaje.setSingleShot(True)
         self._temporizador_mensaje.timeout.connect(self._ocultar_mensaje)
         self._construir_ui()
+        self._conectar_controles_cambios_pendientes()
         self._aplicar_estilos()
 
     def mostrar_estado(
+        self,
+        estado: EstadoConfiguracion,
+        formateador_moneda: Callable[[int], str],
+    ) -> None:
+        self._cargando_estado = True
+        try:
+            self._aplicar_estado_configuracion(estado, formateador_moneda)
+        finally:
+            self._cargando_estado = False
+        self._ultimo_estado_configuracion = estado
+        self._ultimo_formateador_moneda = formateador_moneda
+        self._hay_cambios_pendientes = False
+
+    def _aplicar_estado_configuracion(
         self,
         estado: EstadoConfiguracion,
         formateador_moneda: Callable[[int], str],
@@ -266,6 +286,113 @@ class VistaConfiguracion(QWidget):
 
         self._actualizar_estado_respaldos()
         self._actualizar_preview_comprobante(estado, formateador_moneda)
+
+    def _conectar_controles_cambios_pendientes(self) -> None:
+        campos_texto = (
+            self._campo_junta_nombre,
+            self._campo_junta_telefono,
+            self._campo_junta_correo,
+            self._campo_junta_identificador,
+            self._campo_junta_sitio_web,
+            self._campo_junta_direccion,
+            self._campo_junta_mensaje_contacto,
+            self._campo_titulo_documento,
+            self._campo_subtitulo_documento,
+            self._campo_texto_legal_superior,
+            self._campo_texto_pie,
+            self._campo_texto_legal_inferior,
+            self._campo_etiqueta_copia,
+            self._campo_codigo_pagina_termico,
+            self._campo_firma_texto_linea,
+            self._campo_precio_mensual,
+            self._campo_multa_automatica,
+            self._campo_meses_para_corte,
+            self._campo_meses_adelanto_maximo,
+            self._campo_mora_leve_hasta,
+            self._campo_mora_media_hasta,
+            self._campo_ruta_reportes_pdf,
+            self._campo_firma_reportes_pdf,
+            self._campo_ruta_respaldos_principal,
+            self._campo_ruta_respaldos_secundaria,
+        )
+        for campo in campos_texto:
+            campo.textChanged.connect(self._marcar_cambios_pendientes)
+
+        for combo in (
+            self._combo_impresora_comprobantes,
+            self._combo_impresora_reportes,
+            self._combo_ancho_termico,
+            self._combo_duracion_sesion,
+        ):
+            combo.currentIndexChanged.connect(self._marcar_cambios_pendientes)
+            combo.currentTextChanged.connect(self._marcar_cambios_pendientes)
+
+        for check in (
+            self._check_corte_termico,
+            self._check_mostrar_correo,
+            self._check_mostrar_telefono,
+            self._check_mostrar_direccion,
+            self._check_mostrar_identificador,
+            self._check_firma_habilitada,
+            self._check_multa_automatica,
+            self._check_corte_automatico,
+            self._check_prorrateo_activacion,
+            self._check_pago_adelantado,
+            self._check_abrir_reportes_pdf,
+            self._check_firma_reportes_pdf,
+            self._check_respaldo_secundario,
+            self._check_comprimir_zip,
+            self._check_organizar_periodo,
+        ):
+            check.toggled.connect(self._marcar_cambios_pendientes)
+
+        self._tabs.currentChanged.connect(self._confirmar_cambio_pestana)
+
+    def _marcar_cambios_pendientes(self, *args: object) -> None:
+        if self._cargando_estado:
+            return
+        self._hay_cambios_pendientes = True
+
+    def _confirmar_cambio_pestana(self, indice_nuevo: int) -> None:
+        if indice_nuevo == self._indice_tab_anterior:
+            return
+        if not self._hay_cambios_pendientes:
+            self._indice_tab_anterior = indice_nuevo
+            return
+        if (
+            self._ultimo_estado_configuracion is None
+            or self._ultimo_formateador_moneda is None
+        ):
+            self._indice_tab_anterior = indice_nuevo
+            return
+
+        self._cambiar_pestana_sin_confirmar(self._indice_tab_anterior)
+        if self._mostrar_confirmacion_descartar_cambios():
+            self.mostrar_estado(
+                self._ultimo_estado_configuracion,
+                self._ultimo_formateador_moneda,
+            )
+            self._cambiar_pestana_sin_confirmar(indice_nuevo)
+            self._indice_tab_anterior = indice_nuevo
+
+    def _cambiar_pestana_sin_confirmar(self, indice: int) -> None:
+        self._tabs.blockSignals(True)
+        self._tabs.setCurrentIndex(indice)
+        self._tabs.blockSignals(False)
+
+    def _mostrar_confirmacion_descartar_cambios(self) -> bool:
+        dialogo = DialogoConfirmacionSigqua(
+            titulo="Cambios sin guardar",
+            descripcion=(
+                "Hay cambios pendientes en esta pestaña. "
+                "¿Deseas descartarlos y cambiar de sección?"
+            ),
+            texto_confirmar="Descartar cambios",
+            texto_cancelar="Seguir editando",
+            variante_confirmar="peligro",
+            parent=self,
+        )
+        return bool(dialogo.exec())
 
     def mostrar_mensaje(self, mensaje: str, es_error: bool = False) -> None:
         self._mensaje.setText(mensaje)
@@ -1014,9 +1141,10 @@ class VistaConfiguracion(QWidget):
 
     def _crear_bloque_campo(self, etiqueta: str, campo: QWidget) -> QWidget:
         bloque = QWidget()
+        bloque.setObjectName("bloqueCampoConfiguracion")
         layout = QVBoxLayout(bloque)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        layout.setContentsMargins(0, 2, 0, 2)
+        layout.setSpacing(8)
         label = QLabel(etiqueta)
         label.setObjectName("etiquetaConfiguracion")
         layout.addWidget(label)
@@ -1053,9 +1181,10 @@ class VistaConfiguracion(QWidget):
         callback: Callable[[], None],
     ) -> QWidget:
         contenedor = QWidget()
+        contenedor.setObjectName("bloqueCampoConfiguracion")
         layout = QVBoxLayout(contenedor)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        layout.setContentsMargins(0, 2, 0, 2)
+        layout.setSpacing(8)
         label = QLabel(etiqueta)
         label.setObjectName("etiquetaConfiguracion")
         fila = QHBoxLayout()
@@ -1133,7 +1262,9 @@ class VistaConfiguracion(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.viewport().setObjectName("viewportScrollConfiguracion")
         contenedor = QWidget()
+        contenedor.setObjectName("contenidoScrollConfiguracion")
         layout = QVBoxLayout(contenedor)
         layout.setContentsMargins(4, 4, 8, 16)
         layout.setSpacing(12)
@@ -1154,9 +1285,10 @@ class VistaConfiguracion(QWidget):
 
     def _crear_fila_resumen(self, etiqueta: str, valor: QLabel) -> QWidget:
         fila = QWidget()
+        fila.setObjectName("filaResumenConfiguracion")
         layout = QHBoxLayout(fila)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(14)
         label = QLabel(etiqueta)
         label.setObjectName("etiquetaResumenConfiguracion")
         layout.addWidget(label, 1)
@@ -1354,13 +1486,17 @@ class VistaConfiguracion(QWidget):
 
     def _aplicar_estilos(self) -> None:
         paleta = self._paleta_tema
-        fondo_panel = obtener_fondo_header_destacado(self._tema_actual)
-        borde_panel = str(paleta["borde_principal"])
+        fondo_panel = str(paleta["fondo_superficie_suave"])
+        fondo_tarjeta = str(paleta["fondo_superficie"])
+        fondo_aviso = str(paleta["fondo_info"])
+        fondo_pane = str(paleta["fondo_superficie_muy_suave"])
+        fondo_bloque = str(paleta["fondo_superficie_destacada"])
+        borde_panel = str(paleta["borde_medio"])
         texto_principal = str(paleta["texto_principal"])
         texto_secundario = str(paleta["texto_secundario"])
         fondo_input = str(paleta["modal_fondo_campo"])
         fondo_input_focus = str(paleta["fondo_input_focus"])
-        borde_input = str(paleta["modal_borde"])
+        borde_input = str(paleta["borde_medio"])
         borde_input_focus = str(paleta["borde_foco_input"])
         fondo_tabs = str(paleta["fondo_chip"])
         fondo_tab_barra = str(paleta["fondo_superficie_muy_suave"])
@@ -1401,12 +1537,33 @@ class VistaConfiguracion(QWidget):
                 background-color: {paleta['fondo_error']};
                 border: 1px solid {paleta['borde_error']};
             }}
-            QFrame#tarjetaResumenConfiguracion,
-            QFrame#panelConfiguracion,
-            QFrame#avisoConfiguracion {{
+            QFrame#panelConfiguracion {{
                 background: {fondo_panel};
                 border: 1px solid {borde_panel};
-                border-radius: 18px;
+                border-radius: 12px;
+            }}
+            QFrame#tarjetaResumenConfiguracion {{
+                background: {fondo_tarjeta};
+                border: 1px solid {paleta["borde_principal"]};
+                border-radius: 10px;
+            }}
+            QFrame#tarjetaResumenConfiguracion:hover {{
+                background: {paleta["fondo_superficie_destacada"]};
+                border-color: {paleta["borde_foco_input"]};
+            }}
+            QFrame#avisoConfiguracion {{
+                background: {fondo_aviso};
+                border: 1px solid {paleta["borde_info"]};
+                border-radius: 9px;
+            }}
+            QWidget#bloqueCampoConfiguracion {{
+                background: transparent;
+                border: none;
+            }}
+            QWidget#filaResumenConfiguracion {{
+                background: {fondo_bloque};
+                border: 1px solid {paleta["borde_suave"]};
+                border-radius: 8px;
             }}
             QFrame#previewComprobanteConfiguracion {{
                 background: #75C7F0;
@@ -1420,12 +1577,12 @@ class VistaConfiguracion(QWidget):
                 padding: 0;
                 selection-background-color: #d9d9d9;
             }}
-            QLabel#tituloTarjetaResumenConfiguracion {{
+            QLabel#tituloTarjetaResumenOperativa {{
                 color: {texto_secundario};
                 font-size: 11px;
                 font-weight: 700;
             }}
-            QLabel#valorTarjetaResumenConfiguracion,
+            QLabel#valorTarjetaResumenOperativa,
             QLabel#tituloPreviewRecibo {{
                 color: {texto_principal};
                 font-size: 20px;
@@ -1470,11 +1627,18 @@ class VistaConfiguracion(QWidget):
                 min-height: 18px;
             }}
             QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{
-                border: 1px solid {borde_input_focus};
+                border: 2px solid {borde_input_focus};
                 background: {fondo_input_focus};
             }}
             QLineEdit:disabled, QPlainTextEdit:disabled, QComboBox:disabled {{
                 color: {texto_secundario};
+                background: {paleta["fondo_superficie_muy_suave"]};
+                border-color: {paleta["borde_suave"]};
+            }}
+            QLineEdit:read-only, QPlainTextEdit:read-only {{
+                color: {texto_secundario};
+                background: {paleta["fondo_superficie_muy_suave"]};
+                border-color: {paleta["borde_suave"]};
             }}
             QComboBox QAbstractItemView {{
                 background: {fondo_panel};
@@ -1494,8 +1658,8 @@ class VistaConfiguracion(QWidget):
             }}
             QTabWidget#tabsConfiguracion::pane {{
                 border: 1px solid {borde_panel};
-                border-radius: 18px;
-                background: {fondo_panel};
+                border-radius: 12px;
+                background: {fondo_pane};
                 margin-top: 14px;
                 padding: 10px 10px 12px 10px;
             }}
@@ -1535,8 +1699,10 @@ class VistaConfiguracion(QWidget):
                 background: transparent;
                 border: none;
             }}
-            QScrollArea#scrollConfiguracion QWidget {{
+            QWidget#viewportScrollConfiguracion,
+            QWidget#contenidoScrollConfiguracion {{
                 background: transparent;
+                border: none;
             }}
             QScrollBar:vertical {{
                 background: transparent;

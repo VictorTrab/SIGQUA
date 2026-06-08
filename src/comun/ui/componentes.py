@@ -1250,6 +1250,7 @@ class DialogoConfirmacionSigqua(DialogoBaseSigqua):
         variante_confirmar: str = "primario",
         color_fondo: str | None = None,
         parent: QWidget | None = None,
+        texto_cancelar: str = "Cancelar",
     ) -> None:
         super().__init__(parent)
         self.setMinimumWidth(520)
@@ -1294,10 +1295,10 @@ class DialogoConfirmacionSigqua(DialogoBaseSigqua):
         fila_acciones = QHBoxLayout()
         fila_acciones.setContentsMargins(0, 0, 0, 0)
         fila_acciones.setSpacing(10)
-        variante_cancelar = resolver_variante_boton_modal("Cancelar", "neutro")
+        variante_cancelar = resolver_variante_boton_modal(texto_cancelar, "neutro")
         variante_confirmacion = resolver_variante_boton_modal(texto_confirmar, variante_confirmar)
         boton_cancelar = BotonAccionContextual(
-            "Cancelar",
+            texto_cancelar,
             variante=variante_cancelar,
             centrado=True,
             mostrar_icono=False,
