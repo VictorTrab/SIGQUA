@@ -19,7 +19,7 @@ if str(RUTA_SRC) not in sys.path:
 
 from PySide6.QtCore import QTimer, Qt  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
-from PySide6.QtWidgets import QApplication, QFrame, QLabel, QPushButton, QScrollArea, QTableWidget, QTextEdit, QToolButton, QWidget  # noqa: E402
+from PySide6.QtWidgets import QApplication, QFrame, QLabel, QLineEdit, QPushButton, QScrollArea, QTableWidget, QTextEdit, QToolButton, QWidget  # noqa: E402
 
 from app import (  # noqa: E402
     ALTO_VENTANA_AUTENTICACION,
@@ -1512,12 +1512,64 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
         self.assertIn("QWidget#bloqueCampoConfiguracion", hoja)
         self.assertIn("QWidget#filaResumenConfiguracion", hoja)
+        self.assertIn("QFrame#filaRangoMorosidad", hoja)
         self.assertIn("QFrame#tarjetaResumenConfiguracion:hover", hoja)
         self.assertIn("QLineEdit:read-only", hoja)
         self.assertIn("border: 2px solid", hoja)
         self.assertNotIn("QScrollArea#scrollConfiguracion QWidget", hoja)
         self.assertIsNotNone(vista_configuracion.findChild(QWidget, "bloqueCampoConfiguracion"))
         self.assertIsNotNone(vista_configuracion.findChild(QWidget, "filaResumenConfiguracion"))
+        vista_configuracion.close()
+
+    def test_configuracion_compacta_organizacion_y_morosidad_fija(self) -> None:
+        vista_configuracion = VistaConfiguracion()
+        estado = self._crear_estado_configuracion_ui()
+        vista_configuracion.mostrar_estado(estado, lambda centavos: f"L {centavos / 100:.2f}")
+        vista_configuracion.show()
+        self.aplicacion.processEvents()
+
+        textos_organizacion = {
+            label.text()
+            for label in vista_configuracion._tabs.widget(0).findChildren(QLabel)
+        }
+        self.assertNotIn("Estado actual", textos_organizacion)
+        self.assertNotIn("Completa", textos_organizacion)
+
+        textos_cobros = {
+            label.text()
+            for label in vista_configuracion._tabs.widget(5).findChildren(QLabel)
+        }
+        self.assertIn("Recargo automatico", textos_cobros)
+
+        vista_configuracion._tabs.setCurrentIndex(6)
+        self.aplicacion.processEvents()
+        textos_morosidad = [
+            label.text()
+            for label in vista_configuracion._tabs.widget(6).findChildren(QLabel)
+        ]
+        self.assertIn("Prioridad baja", textos_morosidad)
+        self.assertIn("1-2 meses", textos_morosidad)
+        self.assertIn("Prioridad media", textos_morosidad)
+        self.assertIn("3-5 meses", textos_morosidad)
+        self.assertIn("Prioridad alta", textos_morosidad)
+        self.assertIn("6+ meses", textos_morosidad)
+        self.assertIn("Sugerencia de corte por deuda", textos_morosidad)
+        self.assertNotIn("Recargo automatico", textos_morosidad)
+        self.assertFalse(hasattr(vista_configuracion, "_campo_mora_leve_hasta"))
+        self.assertFalse(hasattr(vista_configuracion, "_campo_mora_media_hasta"))
+        self.assertFalse(
+            any(
+                campo.placeholderText().startswith("Hasta cuantos meses")
+                for campo in vista_configuracion._tabs.widget(6).findChildren(QLineEdit)
+            )
+        )
+
+        emisiones: list[tuple[int, int]] = []
+        vista_configuracion.guardar_parametros_cobro_solicitado.connect(
+            lambda *args: emisiones.append((args[-2], args[-1]))
+        )
+        vista_configuracion._emitir_guardado_parametros_cobro()
+        self.assertEqual(emisiones[-1], (2, 5))
         vista_configuracion.close()
 
     def test_modulos_base_no_replican_titulo_en_contenido(self) -> None:

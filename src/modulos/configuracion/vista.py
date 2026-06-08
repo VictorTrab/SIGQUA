@@ -53,6 +53,8 @@ class TarjetaResumenConfiguracion(TarjetaResumenOperativa):
     def __init__(self, titulo: str, icono: str, color_icono: str) -> None:
         super().__init__(icono, color_icono)
         self.setObjectName("tarjetaResumenConfiguracion")
+        self.setMinimumHeight(82)
+        self.setMaximumHeight(82)
         self._titulo_fijo = titulo
 
     def actualizar(self, valor: str, detalle: str) -> None:
@@ -98,6 +100,8 @@ class VistaConfiguracion(QWidget):
     guardar_reportes_pdf_solicitado = Signal(str, bool, bool, str)
 
     DURACION_MENSAJE_MS = 3200
+    MORA_BAJA_HASTA_VERSION = 2
+    MORA_MEDIA_HASTA_VERSION = 5
     OPCIONES_DURACION_SESION = (
         ("30 minutos", 0.5),
         ("1 hora", 1.0),
@@ -173,8 +177,6 @@ class VistaConfiguracion(QWidget):
         self._campo_junta_direccion.setPlainText(estado.identidad_empresa.direccion)
         self._campo_junta_identificador.setText(estado.identidad_empresa.identificador_fiscal)
         self._campo_junta_mensaje_contacto.setPlainText(estado.identidad_empresa.mensaje_contacto)
-        self._valor_estado_identidad.setText(self._resolver_estado_identidad(estado))
-
         self._campo_factura_nombre.setText(estado.identidad_empresa.nombre)
         self._campo_factura_datos.setText(self._componer_datos_recibo(estado))
         self._valor_correlativo_actual.setText(estado.factura.correlativo_actual)
@@ -223,18 +225,6 @@ class VistaConfiguracion(QWidget):
         self._check_pago_adelantado.blockSignals(False)
         self._campo_meses_adelanto_maximo.setText(
             str(estado.parametros_cobro.meses_adelanto_maximo)
-        )
-        self._campo_mora_leve_hasta.setText(str(estado.parametros_cobro.mora_leve_hasta_meses))
-        self._campo_mora_media_hasta.setText(str(estado.parametros_cobro.mora_media_hasta_meses))
-        self._valor_mora_regla.setText(
-            "La mora sigue visible como meses vencidos no pagados."
-            if estado.parametros_cobro.mora_visible
-            else "No aplica a esta version."
-        )
-        self._valor_rangos_mora.setText(
-            f"Prioridad baja: 1-{estado.parametros_cobro.mora_leve_hasta_meses} | "
-            f"Prioridad media: {estado.parametros_cobro.mora_leve_hasta_meses + 1}-{estado.parametros_cobro.mora_media_hasta_meses} | "
-            f"Prioridad alta: {estado.parametros_cobro.mora_media_hasta_meses + 1}+"
         )
         self._actualizar_estado_campos_cobro()
 
@@ -308,8 +298,6 @@ class VistaConfiguracion(QWidget):
             self._campo_multa_automatica,
             self._campo_meses_para_corte,
             self._campo_meses_adelanto_maximo,
-            self._campo_mora_leve_hasta,
-            self._campo_mora_media_hasta,
             self._campo_ruta_reportes_pdf,
             self._campo_firma_reportes_pdf,
             self._campo_ruta_respaldos_principal,
@@ -411,7 +399,7 @@ class VistaConfiguracion(QWidget):
     def _construir_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 4, 6, 6)
-        layout.setSpacing(12)
+        layout.setSpacing(8)
 
         encabezado = QHBoxLayout()
         encabezado.setSpacing(12)
@@ -462,15 +450,13 @@ class VistaConfiguracion(QWidget):
         self._campo_junta_identificador = QLineEdit()
         self._campo_junta_sitio_web = QLineEdit()
         self._campo_junta_direccion = QPlainTextEdit()
-        self._campo_junta_direccion.setFixedHeight(90)
+        self._campo_junta_direccion.setFixedHeight(72)
         self._campo_junta_mensaje_contacto = QPlainTextEdit()
-        self._campo_junta_mensaje_contacto.setFixedHeight(76)
-
-        self._valor_estado_identidad = self._crear_valor_seguridad()
+        self._campo_junta_mensaje_contacto.setFixedHeight(72)
 
         grilla_general = QGridLayout()
         grilla_general.setHorizontalSpacing(12)
-        grilla_general.setVerticalSpacing(16)
+        grilla_general.setVerticalSpacing(10)
         grilla_general.addWidget(
             self._crear_bloque_campo("Nombre legal o comercial", self._campo_junta_nombre),
             0,
@@ -483,7 +469,7 @@ class VistaConfiguracion(QWidget):
 
         grilla_contacto = QGridLayout()
         grilla_contacto.setHorizontalSpacing(12)
-        grilla_contacto.setVerticalSpacing(16)
+        grilla_contacto.setVerticalSpacing(10)
         grilla_contacto.addWidget(
             self._crear_bloque_campo("Telefono institucional", self._campo_junta_telefono),
             0,
@@ -500,7 +486,19 @@ class VistaConfiguracion(QWidget):
             0,
         )
 
-        subtitulo_ubicacion = self._crear_subtitulo_grupo("Ubicacion y contacto")
+        grilla_ubicacion = QGridLayout()
+        grilla_ubicacion.setHorizontalSpacing(12)
+        grilla_ubicacion.setVerticalSpacing(10)
+        grilla_ubicacion.addWidget(
+            self._crear_bloque_campo("Direccion fiscal u operativa", self._campo_junta_direccion),
+            0,
+            0,
+        )
+        grilla_ubicacion.addWidget(
+            self._crear_bloque_campo("Mensaje de contacto", self._campo_junta_mensaje_contacto),
+            0,
+            1,
+        )
 
         boton_guardar = crear_boton_operativo("Guardar identidad de la empresa", principal=True)
         boton_guardar.clicked.connect(
@@ -519,15 +517,12 @@ class VistaConfiguracion(QWidget):
         contenido.widget().layout().addWidget(
             self._crear_panel(
                 "Identidad de la empresa",
-                "Datos visibles en comprobantes, reportes PDF, documentos de deuda y cabeceras operativas.",
+                "Datos visibles en comprobantes, reportes y documentos.",
                 [
-                    self._crear_fila_resumen("Estado actual", self._valor_estado_identidad),
                     grilla_general,
                     subtitulo_contacto,
                     grilla_contacto,
-                    subtitulo_ubicacion,
-                    self._crear_bloque_campo("Direccion fiscal u operativa", self._campo_junta_direccion),
-                    self._crear_bloque_campo("Mensaje de contacto", self._campo_junta_mensaje_contacto),
+                    grilla_ubicacion,
                 ],
             )
         )
@@ -702,42 +697,26 @@ class VistaConfiguracion(QWidget):
         self._check_pago_adelantado.toggled.connect(self._actualizar_estado_campos_cobro)
         self._campo_meses_adelanto_maximo = QLineEdit()
         self._campo_meses_adelanto_maximo.setPlaceholderText("Maximo de meses adelantados")
-        self._valor_mora_regla = self._crear_valor_seguridad()
-        self._valor_rangos_mora = self._crear_valor_seguridad()
-        self._campo_mora_leve_hasta = QLineEdit()
-        self._campo_mora_leve_hasta.setPlaceholderText("Hasta cuantos meses mantiene prioridad baja")
-        self._campo_mora_media_hasta = QLineEdit()
-        self._campo_mora_media_hasta.setPlaceholderText("Hasta cuantos meses mantiene prioridad media")
 
         panel_precio = self._crear_panel(
             "Precio mensual del servicio",
-            "Segun la regla cerrada, el cambio de tarifa solo afecta cargos nuevos. Nunca recalcula deuda historica.",
+            "Afecta cargos nuevos. No recalcula deuda historica.",
             [self._crear_bloque_campo("Precio mensual", self._campo_precio_mensual)],
         )
-        self._panel_mora = self._crear_panel(
-            "Mora y recargo automatico",
-            "La mora sigue existiendo como meses vencidos no pagados. El recargo automatico queda como opcion avanzada.",
+        panel_recargo = self._crear_panel(
+            "Recargo automatico",
+            "Opcion avanzada por cada mes vencido.",
             [
-                self._crear_fila_resumen("Regla de mora", self._valor_mora_regla),
-                self._crear_fila_resumen("Rangos visuales vigentes", self._valor_rangos_mora),
-                self._crear_bloque_campo(
-                    "Prioridad baja hasta (meses)",
-                    self._campo_mora_leve_hasta,
-                ),
-                self._crear_bloque_campo(
-                    "Prioridad media hasta (meses)",
-                    self._campo_mora_media_hasta,
-                ),
                 self._check_multa_automatica,
                 self._crear_bloque_campo(
-                    "Recargo avanzado por mes vencido",
+                    "Monto por mes vencido",
                     self._campo_multa_automatica,
                 ),
             ],
         )
         self._panel_corte = self._crear_panel(
             "Sugerencia de corte por deuda",
-            "Control global de apoyo operativo. El corte real sigue siendo manual desde Casas.",
+            "Apoyo operativo. El corte real sigue siendo manual.",
             [
                 self._check_corte_automatico,
                 self._crear_bloque_campo("Meses vencidos para sugerencia", self._campo_meses_para_corte),
@@ -745,7 +724,7 @@ class VistaConfiguracion(QWidget):
         )
         panel_adelantos = self._crear_panel(
             "Pago adelantado",
-            "Permite controlar si pagos puede registrar meses futuros y hasta donde, sin anular las reglas de deuda vencida.",
+            "Controla pagos de meses futuros.",
             [
                 self._check_prorrateo_activacion,
                 self._check_pago_adelantado,
@@ -760,7 +739,8 @@ class VistaConfiguracion(QWidget):
         grilla_paneles.setHorizontalSpacing(12)
         grilla_paneles.setVerticalSpacing(12)
         grilla_paneles.addWidget(panel_precio, 0, 0)
-        grilla_paneles.addWidget(panel_adelantos, 0, 1)
+        grilla_paneles.addWidget(panel_recargo, 0, 1)
+        grilla_paneles.addWidget(panel_adelantos, 1, 0, 1, 2)
 
         contenido = self._crear_contenedor_scroll()
         contenido.widget().layout().addLayout(grilla_paneles)
@@ -774,20 +754,45 @@ class VistaConfiguracion(QWidget):
         return contenido
 
     def _crear_tab_morosidad(self) -> QWidget:
-        grilla_paneles = QGridLayout()
-        grilla_paneles.setHorizontalSpacing(12)
-        grilla_paneles.setVerticalSpacing(12)
-        grilla_paneles.addWidget(self._panel_mora, 0, 0)
-        grilla_paneles.addWidget(self._panel_corte, 0, 1)
+        panel_rangos = self._crear_panel(
+            "Rangos de prioridad",
+            "Rangos fijos para esta version.",
+            [
+                self._crear_fila_rango_morosidad(
+                    "Prioridad baja",
+                    "1-2 meses",
+                    "Seguimiento normal",
+                ),
+                self._crear_fila_rango_morosidad(
+                    "Prioridad media",
+                    "3-5 meses",
+                    "Priorizar gestion",
+                ),
+                self._crear_fila_rango_morosidad(
+                    "Prioridad alta",
+                    "6+ meses",
+                    "Atencion inmediata",
+                ),
+            ],
+        )
+        panel_rangos.setMaximumWidth(430)
+        self._panel_corte.setMaximumWidth(430)
+
+        fila_paneles = QHBoxLayout()
+        fila_paneles.setContentsMargins(0, 0, 0, 0)
+        fila_paneles.setSpacing(12)
+        fila_paneles.addWidget(panel_rangos)
+        fila_paneles.addWidget(self._panel_corte)
+        fila_paneles.addStretch(1)
 
         boton_guardar = crear_boton_operativo("Guardar morosidad", principal=True)
         boton_guardar.clicked.connect(self._emitir_guardado_parametros_cobro)
 
         contenido = self._crear_contenedor_scroll()
-        contenido.widget().layout().addLayout(grilla_paneles)
+        contenido.widget().layout().addLayout(fila_paneles)
         contenido.widget().layout().addWidget(
             self._crear_aviso(
-                "Morosidad define rangos y sugerencias. El corte de servicio se ejecuta manualmente desde Casas."
+                "Los rangos son fijos en esta version. El corte se ejecuta manualmente desde Casas."
             )
         )
         contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
@@ -1114,8 +1119,8 @@ class VistaConfiguracion(QWidget):
             self._check_prorrateo_activacion.isChecked(),
             self._check_pago_adelantado.isChecked(),
             self._leer_entero(self._campo_meses_adelanto_maximo.text()),
-            self._leer_entero(self._campo_mora_leve_hasta.text()),
-            self._leer_entero(self._campo_mora_media_hasta.text()),
+            self.MORA_BAJA_HASTA_VERSION,
+            self.MORA_MEDIA_HASTA_VERSION,
         )
 
     def _actualizar_estado_campos_cobro(self) -> None:
@@ -1143,8 +1148,8 @@ class VistaConfiguracion(QWidget):
         bloque = QWidget()
         bloque.setObjectName("bloqueCampoConfiguracion")
         layout = QVBoxLayout(bloque)
-        layout.setContentsMargins(0, 2, 0, 2)
-        layout.setSpacing(8)
+        layout.setContentsMargins(0, 1, 0, 1)
+        layout.setSpacing(6)
         label = QLabel(etiqueta)
         label.setObjectName("etiquetaConfiguracion")
         layout.addWidget(label)
@@ -1183,8 +1188,8 @@ class VistaConfiguracion(QWidget):
         contenedor = QWidget()
         contenedor.setObjectName("bloqueCampoConfiguracion")
         layout = QVBoxLayout(contenedor)
-        layout.setContentsMargins(0, 2, 0, 2)
-        layout.setSpacing(8)
+        layout.setContentsMargins(0, 1, 0, 1)
+        layout.setSpacing(6)
         label = QLabel(etiqueta)
         label.setObjectName("etiquetaConfiguracion")
         fila = QHBoxLayout()
@@ -1228,8 +1233,8 @@ class VistaConfiguracion(QWidget):
         panel = QFrame()
         panel.setObjectName("panelConfiguracion")
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(12)
+        layout.setContentsMargins(14, 13, 14, 13)
+        layout.setSpacing(8)
         label_titulo = QLabel(titulo)
         label_titulo.setObjectName("tituloPanelConfiguracion")
         label_descripcion = QLabel(descripcion)
@@ -1243,6 +1248,32 @@ class VistaConfiguracion(QWidget):
             elif isinstance(elemento, QWidget):
                 layout.addWidget(elemento)
         return panel
+
+    def _crear_fila_rango_morosidad(
+        self,
+        titulo: str,
+        rango: str,
+        detalle: str,
+    ) -> QFrame:
+        fila = QFrame()
+        fila.setObjectName("filaRangoMorosidad")
+        layout = QHBoxLayout(fila)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(10)
+
+        etiqueta = QLabel(titulo)
+        etiqueta.setObjectName("etiquetaRangoMorosidad")
+        valor = QLabel(rango)
+        valor.setObjectName("valorRangoMorosidad")
+        valor.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        descripcion = QLabel(detalle)
+        descripcion.setObjectName("detalleRangoMorosidad")
+        descripcion.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+        layout.addWidget(etiqueta, 2)
+        layout.addWidget(valor, 1)
+        layout.addWidget(descripcion, 2)
+        return fila
 
     def _crear_aviso(self, texto: str) -> QFrame:
         panel = QFrame()
@@ -1266,8 +1297,8 @@ class VistaConfiguracion(QWidget):
         contenedor = QWidget()
         contenedor.setObjectName("contenidoScrollConfiguracion")
         layout = QVBoxLayout(contenedor)
-        layout.setContentsMargins(4, 4, 8, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(2, 2, 6, 10)
+        layout.setSpacing(8)
         scroll.setWidget(contenedor)
         return scroll
 
@@ -1287,8 +1318,8 @@ class VistaConfiguracion(QWidget):
         fila = QWidget()
         fila.setObjectName("filaResumenConfiguracion")
         layout = QHBoxLayout(fila)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(14)
+        layout.setContentsMargins(9, 6, 9, 6)
+        layout.setSpacing(12)
         label = QLabel(etiqueta)
         label.setObjectName("etiquetaResumenConfiguracion")
         layout.addWidget(label, 1)
@@ -1564,6 +1595,30 @@ class VistaConfiguracion(QWidget):
                 background: {fondo_bloque};
                 border: 1px solid {paleta["borde_suave"]};
                 border-radius: 8px;
+            }}
+            QFrame#filaRangoMorosidad {{
+                background: {paleta["fondo_superficie_destacada"]};
+                border: 1px solid {paleta["borde_suave"]};
+                border-radius: 8px;
+            }}
+            QLabel#etiquetaRangoMorosidad {{
+                color: {texto_principal};
+                font-size: 12px;
+                font-weight: 800;
+            }}
+            QLabel#valorRangoMorosidad {{
+                color: {paleta["texto_destacado"]};
+                background: {paleta["fondo_input"]};
+                border: 1px solid {paleta["borde_principal"]};
+                border-radius: 7px;
+                padding: 5px 8px;
+                font-size: 12px;
+                font-weight: 900;
+            }}
+            QLabel#detalleRangoMorosidad {{
+                color: {texto_secundario};
+                font-size: 10px;
+                font-weight: 700;
             }}
             QFrame#previewComprobanteConfiguracion {{
                 background: #75C7F0;
