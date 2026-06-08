@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import ctypes
 from typing import Callable
 
 from dotenv import load_dotenv
@@ -16,7 +17,6 @@ from comun.respaldo import ServicioRespaldoLocal
 from comun.logs import obtener_logger_sigqua
 from comun.sesion import SesionAplicacion
 from comun.ui import (
-    BarraTituloVentana,
     ContenedorApiladoAjustable,
     DialogoConfirmacionSigqua,
     DialogoMensajeSigqua,
@@ -106,21 +106,28 @@ from modulos.usuarios import (
 logger = obtener_logger_sigqua("app")
 ANCHO_VENTANA_AUTENTICACION = 960
 ALTO_CONTENIDO_AUTENTICACION = 680
-ALTO_BARRA_TITULO = 34
-ALTO_VENTANA_AUTENTICACION = ALTO_CONTENIDO_AUTENTICACION + ALTO_BARRA_TITULO
+ALTO_VENTANA_AUTENTICACION = ALTO_CONTENIDO_AUTENTICACION
 ANCHO_VENTANA_PRINCIPAL = 1360
 ALTO_VENTANA_PRINCIPAL = 820
 MARGEN_VENTANA_PRINCIPAL = 72
 MAXIMO_TAMANO_VENTANA = 16777215
 RETARDO_FASE_ARRANQUE_MS = 18
+TITULO_VENTANA_OCULTO = "\u200b"
+_GWL_STYLE = -16
+_WS_MAXIMIZEBOX = 0x00010000
+_SWP_NOSIZE = 0x0001
+_SWP_NOMOVE = 0x0002
+_SWP_NOZORDER = 0x0004
+_SWP_FRAMECHANGED = 0x0020
 FLAGS_VENTANA_AUTENTICACION = (
     Qt.WindowType.Window
-    | Qt.WindowType.FramelessWindowHint
+    | Qt.WindowType.CustomizeWindowHint
+    | Qt.WindowType.WindowTitleHint
+    | Qt.WindowType.WindowSystemMenuHint
+    | Qt.WindowType.WindowMinimizeButtonHint
+    | Qt.WindowType.WindowCloseButtonHint
 )
-FLAGS_VENTANA_PRINCIPAL = (
-    Qt.WindowType.Window
-    | Qt.WindowType.FramelessWindowHint
-)
+FLAGS_VENTANA_PRINCIPAL = FLAGS_VENTANA_AUTENTICACION
 
 
 class VentanaPrincipalSigqua(QMainWindow):
@@ -130,12 +137,6 @@ class VentanaPrincipalSigqua(QMainWindow):
         super().__init__()
         self.setObjectName("ventanaPrincipalSigqua")
         self._callback_cierre_controlado: Callable[[], bool] | None = None
-        self.barra_titulo = BarraTituloVentana(self)
-        self.setMenuWidget(self.barra_titulo)
-        self.barra_titulo.minimizar_solicitado.connect(self.showMinimized)
-        self.barra_titulo.cerrar_solicitado.connect(self.close)
-        self.barra_titulo.mover_solicitado.connect(self._iniciar_movimiento_sistema)
-        self.windowTitleChanged.connect(self.barra_titulo.actualizar_titulo)
         self.setStyleSheet(
             """
             QMainWindow#ventanaPrincipalSigqua {
@@ -151,21 +152,10 @@ class VentanaPrincipalSigqua(QMainWindow):
     def configurar_callback_cierre_controlado(self, callback: Callable[[], bool]) -> None:
         self._callback_cierre_controlado = callback
 
-    def actualizar_icono_barra(self) -> None:
-        self.barra_titulo.actualizar_icono(self.windowIcon())
-
     def establecer_modo_autenticacion(self, activo: bool) -> None:
-        self.barra_titulo.establecer_movimiento_habilitado(activo)
         self.setProperty("modoAutenticacion", activo)
         self.style().unpolish(self)
         self.style().polish(self)
-
-    def _iniciar_movimiento_sistema(self) -> None:
-        if not self.barra_titulo.movimiento_habilitado() or self.isMaximized():
-            return
-        ventana = self.windowHandle()
-        if ventana is not None:
-            ventana.startSystemMove()
 
     def closeEvent(self, evento: QCloseEvent) -> None:  # noqa: N802
         if self._callback_cierre_controlado is None:
@@ -269,11 +259,10 @@ def crear_ventana_principal(
     contenedor_central.addWidget(vista_autenticacion)
 
     ventana_principal = VentanaPrincipalSigqua()
-    ventana_principal.setWindowTitle("SIGQUA | Autenticación")
+    ventana_principal.setWindowTitle(TITULO_VENTANA_OCULTO)
     ventana_principal.setCentralWidget(contenedor_central)
     if not icono.isNull():
         ventana_principal.setWindowIcon(icono)
-    ventana_principal.actualizar_icono_barra()
     _aplicar_modo_autenticacion(ventana_principal)
 
     controlador = ControladorAutenticacion(
@@ -402,7 +391,7 @@ def _manejar_autenticacion_exitosa(
     vista_modulo_principal = ventana_principal.vista_modulo_principal
     _refrescar_modulos_operativos(ventana_principal, sesion_iniciada.usuario)
     controlador_modulo_principal.mostrar_inicio(sesion_iniciada.usuario)
-    ventana_principal.setWindowTitle("SIGQUA | Módulo principal")
+    ventana_principal.setWindowTitle(TITULO_VENTANA_OCULTO)
     ventana_principal.contenedor_central.setCurrentWidget(vista_modulo_principal)
     _aplicar_modo_principal(ventana_principal)
 
@@ -525,7 +514,7 @@ def _manejar_error_arranque_post_login(
     )
     _limpiar_estado_arranque_post_login(ventana_principal)
     ventana_principal.sesion_activa = None
-    ventana_principal.setWindowTitle("SIGQUA | Autenticación")
+    ventana_principal.setWindowTitle(TITULO_VENTANA_OCULTO)
     ventana_principal.contenedor_central.setCurrentWidget(
         ventana_principal.vista_autenticacion
     )
@@ -601,7 +590,7 @@ def _finalizar_arranque_post_login(
     controlador_modulo_principal = ventana_principal.controlador_modulo_principal
     vista_modulo_principal = ventana_principal.vista_modulo_principal
     controlador_modulo_principal.mostrar_inicio(usuario)
-    ventana_principal.setWindowTitle("SIGQUA | Módulo principal")
+    ventana_principal.setWindowTitle(TITULO_VENTANA_OCULTO)
     ventana_principal.contenedor_central.setCurrentWidget(vista_modulo_principal)
     _aplicar_modo_principal(ventana_principal)
     ventana_principal.vista_autenticacion.restablecer_estado_login()
@@ -1035,7 +1024,7 @@ def _manejar_cierre_sesion(
 
     ventana_principal.sesion_activa = None
     vista_autenticacion = ventana_principal.vista_autenticacion
-    ventana_principal.setWindowTitle("SIGQUA | Autenticación")
+    ventana_principal.setWindowTitle(TITULO_VENTANA_OCULTO)
     ventana_principal.contenedor_central.setCurrentWidget(vista_autenticacion)
     vista_autenticacion.mostrar_login(
         mensaje="Sesion cerrada correctamente." if respaldo_ok else mensaje_respaldo,
@@ -1057,7 +1046,7 @@ def _manejar_apertura_mantenimiento(ventana_principal: QMainWindow) -> None:
         return
 
     ventana_principal.controlador_mantenimiento.mostrar_panel()
-    ventana_principal.setWindowTitle("SIGQUA | Mantenimiento técnico")
+    ventana_principal.setWindowTitle(TITULO_VENTANA_OCULTO)
     ventana_principal.contenedor_central.setCurrentWidget(ventana_principal.vista_mantenimiento)
     _aplicar_modo_principal(ventana_principal)
 
@@ -1065,7 +1054,7 @@ def _manejar_apertura_mantenimiento(ventana_principal: QMainWindow) -> None:
 def _manejar_retorno_desde_mantenimiento(ventana_principal: QMainWindow) -> None:
     """Regresa del mantenimiento tecnico al modulo principal."""
     if hasattr(ventana_principal, "vista_modulo_principal"):
-        ventana_principal.setWindowTitle("SIGQUA | Módulo principal")
+        ventana_principal.setWindowTitle(TITULO_VENTANA_OCULTO)
         ventana_principal.contenedor_central.setCurrentWidget(
             ventana_principal.vista_modulo_principal
         )
@@ -1127,7 +1116,49 @@ def _aplicar_modo_principal(ventana_principal: QMainWindow) -> None:
         ventana_principal.resize(ancho_objetivo, alto_objetivo)
     else:
         ventana_principal.resize(ANCHO_VENTANA_PRINCIPAL, ALTO_VENTANA_PRINCIPAL)
+    _maximizar_respetando_area_util(ventana_principal)
+
+
+def _maximizar_respetando_area_util(ventana_principal: QMainWindow) -> None:
+    """Maximiza con semantica nativa sin dejar visible el boton maximizar."""
+    if sys.platform != "win32":
+        ventana_principal.showMaximized()
+        return
+
+    hwnd = int(ventana_principal.winId())
+    user32 = ctypes.windll.user32
+    estilo = user32.GetWindowLongW(hwnd, _GWL_STYLE)
+    user32.SetWindowLongW(hwnd, _GWL_STYLE, estilo | _WS_MAXIMIZEBOX)
+    user32.SetWindowPos(
+        hwnd,
+        0,
+        0,
+        0,
+        0,
+        _SWP_NOSIZE | _SWP_NOMOVE | _SWP_NOZORDER | _SWP_FRAMECHANGED,
+    )
     ventana_principal.showMaximized()
+    QTimer.singleShot(
+        0,
+        lambda: _retirar_boton_maximizar_nativo(ventana_principal),
+    )
+
+
+def _retirar_boton_maximizar_nativo(ventana_principal: QMainWindow) -> None:
+    if sys.platform != "win32" or not ventana_principal.isVisible():
+        return
+    hwnd = int(ventana_principal.winId())
+    user32 = ctypes.windll.user32
+    estilo = user32.GetWindowLongW(hwnd, _GWL_STYLE)
+    user32.SetWindowLongW(hwnd, _GWL_STYLE, estilo & ~_WS_MAXIMIZEBOX)
+    user32.SetWindowPos(
+        hwnd,
+        0,
+        0,
+        0,
+        0,
+        _SWP_NOSIZE | _SWP_NOMOVE | _SWP_NOZORDER | _SWP_FRAMECHANGED,
+    )
 
 
 def _centrar_ventana_en_pantalla(ventana_principal: QMainWindow) -> None:

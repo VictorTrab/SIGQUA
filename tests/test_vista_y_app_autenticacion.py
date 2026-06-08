@@ -17,8 +17,7 @@ RUTA_SRC = RAIZ_PROYECTO / "src"
 if str(RUTA_SRC) not in sys.path:
     sys.path.insert(0, str(RUTA_SRC))
 
-from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtGui import QIcon  # noqa: E402
+from PySide6.QtCore import QTimer, Qt  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication, QFrame, QLabel, QPushButton, QScrollArea, QTableWidget, QTextEdit, QToolButton, QWidget  # noqa: E402
 
@@ -28,7 +27,6 @@ from app import (  # noqa: E402
     crear_ventana_principal,
 )
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
-from comun.ui import BarraTituloVentana  # noqa: E402
 from modulos.autenticacion.controlador import ControladorAutenticacion  # noqa: E402
 from modulos.autenticacion.entidades import SesionIniciada, UsuarioAutenticado  # noqa: E402
 from modulos.autenticacion.vista import (  # noqa: E402
@@ -307,75 +305,34 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
             self.assertIs(ventana_principal.centralWidget(), ventana_principal.contenedor_central)
             self.assertIs(ventana_principal.contenedor_central.currentWidget(), vista_autenticacion)
-            self.assertEqual(ventana_principal.windowTitle(), "SIGQUA | Autenticación")
+            self.assertFalse(ventana_principal.windowTitle().strip("\u200b"))
             self.assertEqual(ventana_principal.minimumWidth(), ANCHO_VENTANA_AUTENTICACION)
             self.assertEqual(ventana_principal.maximumWidth(), ANCHO_VENTANA_AUTENTICACION)
             self.assertEqual(ventana_principal.minimumHeight(), ALTO_VENTANA_AUTENTICACION)
             self.assertEqual(ventana_principal.maximumHeight(), ALTO_VENTANA_AUTENTICACION)
-            self.assertTrue(
+            self.assertFalse(
                 bool(ventana_principal.windowFlags() & Qt.WindowType.FramelessWindowHint)
             )
-            self.assertFalse(
+            self.assertTrue(
                 bool(ventana_principal.windowFlags() & Qt.WindowType.WindowMinimizeButtonHint)
             )
-            self.assertFalse(
+            self.assertTrue(
                 bool(ventana_principal.windowFlags() & Qt.WindowType.WindowCloseButtonHint)
             )
-            self.assertIsInstance(ventana_principal.menuWidget(), BarraTituloVentana)
-            self.assertEqual(ventana_principal.barra_titulo.height(), 34)
-            self.assertTrue(ventana_principal.barra_titulo.movimiento_habilitado())
-            self.assertEqual(
-                ventana_principal.barra_titulo._titulo.text(),
-                "SIGQUA | Autenticación",
+            self.assertFalse(
+                bool(ventana_principal.windowFlags() & Qt.WindowType.WindowMaximizeButtonHint)
             )
-            boton_minimizar = ventana_principal.findChild(
-                QToolButton,
-                "botonMinimizarVentana",
+            self.assertTrue(
+                bool(ventana_principal.windowFlags() & Qt.WindowType.WindowTitleHint)
             )
-            self.assertIsNotNone(boton_minimizar)
-            boton_minimizar.click()
+            self.assertIsNone(ventana_principal.menuWidget())
+            ventana_principal.showMinimized()
             self.aplicacion.processEvents()
             self.assertTrue(ventana_principal.isMinimized())
             ventana_principal.showNormal()
             ventana_principal.close()
         finally:
             shutil.rmtree(raiz_temporal, ignore_errors=True)
-
-    def test_barra_titulo_integrada_expone_controles_y_movimiento_configurable(self) -> None:
-        barra = BarraTituloVentana()
-        eventos: list[str] = []
-        barra.minimizar_solicitado.connect(lambda: eventos.append("minimizar"))
-        barra.cerrar_solicitado.connect(lambda: eventos.append("cerrar"))
-        barra.mover_solicitado.connect(lambda: eventos.append("mover"))
-        barra.actualizar_titulo("SIGQUA | Prueba")
-        barra.actualizar_icono(
-            QIcon(str(GestorRutas().obtener_ruta_icono_aplicacion()))
-        )
-        barra.show()
-        self.aplicacion.processEvents()
-
-        self.assertEqual(barra._titulo.text(), "SIGQUA | Prueba")
-        self.assertIsNotNone(barra._icono.pixmap())
-        self.assertFalse(barra._icono.pixmap().isNull())
-        self.assertFalse(barra.movimiento_habilitado())
-        QTest.mouseClick(
-            barra,
-            Qt.MouseButton.LeftButton,
-            pos=barra.rect().center(),
-        )
-        self.assertNotIn("mover", eventos)
-
-        barra.establecer_movimiento_habilitado(True)
-        QTest.mouseClick(
-            barra,
-            Qt.MouseButton.LeftButton,
-            pos=barra.rect().center(),
-        )
-        barra._boton_minimizar.click()
-        barra._boton_cerrar.click()
-
-        self.assertEqual(eventos, ["mover", "minimizar", "cerrar"])
-        barra.close()
 
     def test_post_login_abre_modulo_principal_provisional(self) -> None:
         raiz_temporal = self._crear_raiz_temporal_prueba("test_post_login")
@@ -411,7 +368,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 ventana_principal.contenedor_central.currentWidget(),
                 VistaModuloPrincipal,
             )
-            self.assertEqual(ventana_principal.windowTitle(), "SIGQUA | Módulo principal")
+            self.assertFalse(ventana_principal.windowTitle().strip("\u200b"))
             self.assertIsNotNone(ventana_principal.sesion_activa)
             self.assertEqual(ventana_principal.sesion_activa.token_sesion, "token-prueba-123")
             self.assertEqual(ventana_principal.contenedor_central.count(), 2)
@@ -420,7 +377,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertIsInstance(ventana_principal.vista_planes_pago, VistaPlanesPago)
             self.assertIsInstance(ventana_principal.vista_historial_pagos, VistaHistorialPagos)
             self.assertIsInstance(ventana_principal.vista_configuracion, VistaConfiguracion)
-            self.assertTrue(
+            self.assertFalse(
                 bool(ventana_principal.windowFlags() & Qt.WindowType.FramelessWindowHint)
             )
             self.assertFalse(
@@ -433,11 +390,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertTrue(
                 geometria_disponible.contains(ventana_principal.frameGeometry())
             )
-            self.assertFalse(ventana_principal.barra_titulo.movimiento_habilitado())
-            self.assertEqual(
-                ventana_principal.barra_titulo._titulo.text(),
-                "SIGQUA | Módulo principal",
-            )
+            self.assertIsNone(ventana_principal.menuWidget())
             ventana_principal.close()
         finally:
             shutil.rmtree(raiz_temporal, ignore_errors=True)
@@ -470,23 +423,23 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertIs(ventana_principal.centralWidget(), ventana_principal.contenedor_central)
             self.assertIs(ventana_principal.contenedor_central.currentWidget(), vista_autenticacion)
             self.assertIsNone(ventana_principal.sesion_activa)
-            self.assertEqual(ventana_principal.windowTitle(), "SIGQUA | Autenticación")
+            self.assertFalse(ventana_principal.windowTitle().strip("\u200b"))
             self.assertEqual(ventana_principal.contenedor_central.count(), 2)
             self.assertGreaterEqual(alto_minimo_principal, 0)
             self.assertEqual(ventana_principal.minimumWidth(), ANCHO_VENTANA_AUTENTICACION)
             self.assertEqual(ventana_principal.maximumWidth(), ANCHO_VENTANA_AUTENTICACION)
             self.assertEqual(ventana_principal.minimumHeight(), ALTO_VENTANA_AUTENTICACION)
             self.assertEqual(ventana_principal.maximumHeight(), ALTO_VENTANA_AUTENTICACION)
-            self.assertTrue(
+            self.assertFalse(
                 bool(ventana_principal.windowFlags() & Qt.WindowType.FramelessWindowHint)
             )
-            self.assertFalse(
+            self.assertTrue(
                 bool(ventana_principal.windowFlags() & Qt.WindowType.WindowMinimizeButtonHint)
             )
-            self.assertFalse(
+            self.assertTrue(
                 bool(ventana_principal.windowFlags() & Qt.WindowType.WindowCloseButtonHint)
             )
-            self.assertTrue(ventana_principal.barra_titulo.movimiento_habilitado())
+            self.assertIsNone(ventana_principal.menuWidget())
             self.assertIn(
                 "Sesion cerrada correctamente.",
                 vista_autenticacion._mensaje_login.text(),
@@ -566,7 +519,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.aplicacion.processEvents()
 
         self.assertEqual(vista_principal._modo_dashboard_actual, "compacto")
-        self.assertEqual(vista_principal._sidebar.width(), 216)
+        self.assertEqual(vista_principal._sidebar.width(), 184)
         self.assertEqual(tuple(panel.width() for panel in paneles), anchos_iniciales)
         vista_principal.close()
 
@@ -623,11 +576,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 VistaMantenimiento,
             )
             self.assertTrue(ventana_principal.isMaximized())
-            self.assertFalse(ventana_principal.barra_titulo.movimiento_habilitado())
-            self.assertEqual(
-                ventana_principal.barra_titulo._titulo.text(),
-                "SIGQUA | Mantenimiento técnico",
-            )
+            self.assertIsNone(ventana_principal.menuWidget())
             ventana_principal.vista_mantenimiento.volver_solicitado.emit()
             self.assertIsInstance(
                 ventana_principal.contenedor_central.currentWidget(),
@@ -779,29 +728,22 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertNotIn("Aviso", [vista._tabla.horizontalHeaderItem(indice).text() for indice in range(vista._tabla.columnCount())])
         vista.close()
 
-    def test_shell_principal_usa_sidebar_fijo_con_logo_centrado(self) -> None:
+    def test_shell_principal_usa_sidebar_fijo_con_perfil_compacto(self) -> None:
         vista_principal = VistaModuloPrincipal()
         vista_principal.resize(1200, 900)
         vista_principal.show()
         self.aplicacion.processEvents()
-        logo_sidebar = vista_principal.findChild(QLabel, "logoSidebar")
+        boton_perfil = vista_principal.findChild(QPushButton, "botonPerfilSidebar")
         encabezado_sidebar = vista_principal.findChild(QWidget, "encabezadoSidebar")
 
-        self.assertEqual(vista_principal._sidebar.minimumWidth(), 216)
-        self.assertEqual(vista_principal._sidebar.maximumWidth(), 216)
+        self.assertEqual(vista_principal._sidebar.minimumWidth(), 184)
+        self.assertEqual(vista_principal._sidebar.maximumWidth(), 184)
         self.assertIsNone(vista_principal.findChild(QPushButton, "botonColapsarSidebar"))
-        self.assertIsNotNone(logo_sidebar)
-        self.assertIsNotNone(logo_sidebar.pixmap())
-        self.assertFalse(logo_sidebar.pixmap().isNull())
+        self.assertIsNone(vista_principal.findChild(QLabel, "logoSidebar"))
+        self.assertIsNotNone(boton_perfil)
         self.assertIsNotNone(encabezado_sidebar)
-        centro_logo = logo_sidebar.mapTo(
-            vista_principal._sidebar,
-            logo_sidebar.rect().center(),
-        ).x()
-        centro_sidebar = vista_principal._sidebar.rect().center().x()
-        self.assertLessEqual(abs(centro_logo - centro_sidebar), 1)
         self.assertIn("QWidget#encabezadoSidebar", vista_principal.styleSheet())
-        self.assertIn("qlineargradient", vista_principal.styleSheet())
+        self.assertIn("QPushButton#botonPerfilSidebar", vista_principal.styleSheet())
         self.assertEqual(vista_principal._boton_ajustes.toolTip(), "Parámetros operativos y configuración local.")
         self.assertEqual(vista_principal._boton_ajustes.text(), "Ajustes")
         vista_principal._reconstruir_sidebar(
@@ -828,26 +770,25 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             boton = vista_principal._botones_modulos[codigo]
             self.assertEqual(boton.text(), texto)
             self.assertEqual(boton.iconSize().width(), 16)
-            ancho_contenido = (
-                boton.fontMetrics().horizontalAdvance(texto)
-                + boton.iconSize().width()
-                + 2
-                + 6
+            centro_icono = boton._icono.mapTo(
+                boton,
+                boton._icono.rect().center(),
             )
-            self.assertLessEqual(ancho_contenido, boton.width())
-        self.assertEqual(vista_principal._boton_cerrar_sesion.text(), "Cerrar sesión")
-        ancho_cerrar_sesion = (
-            vista_principal._boton_cerrar_sesion.fontMetrics().horizontalAdvance(
-                "Cerrar sesión"
+            centro_texto = boton._texto.mapTo(
+                boton,
+                boton._texto.rect().center(),
             )
-            + vista_principal._boton_cerrar_sesion.iconSize().width()
-            + 2
-            + 4
-        )
-        self.assertLessEqual(
-            ancho_cerrar_sesion,
-            vista_principal._boton_cerrar_sesion.width(),
-        )
+            centro_contenido = boton._contenido.mapTo(
+                boton,
+                boton._contenido.rect().center(),
+            )
+            self.assertLessEqual(abs(centro_icono.y() - centro_texto.y()), 1)
+            self.assertLessEqual(
+                abs(centro_contenido.x() - boton.rect().center().x()),
+                1,
+            )
+            self.assertEqual(boton._texto.text(), texto)
+        self.assertFalse(hasattr(vista_principal, "_boton_cerrar_sesion"))
         vista_principal.close()
 
     def test_shell_principal_resuelve_saludo_por_hora(self) -> None:
@@ -895,9 +836,9 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
         self.assertIn("Admin", vista_principal._label_bienvenida.text())
         self.assertIn("Monitorea ingresos", vista_principal._label_subresumen.text())
-        self.assertGreaterEqual(vista_principal._boton_perfil_header.minimumWidth(), 188)
-        self.assertEqual(vista_principal._boton_perfil_header._nombre.text(), "Admin Usuario")
-        self.assertEqual(vista_principal._boton_perfil_header._rol.text(), "Administrador")
+        self.assertIsNone(vista_principal.findChild(QPushButton, "botonPerfilHeader"))
+        self.assertEqual(vista_principal._boton_perfil_sidebar._nombre.text(), "Admin Usuario")
+        self.assertEqual(vista_principal._boton_perfil_sidebar._rol.text(), "Administrador")
 
         vista_principal.mostrar_modulo("barrios")
         self.aplicacion.processEvents()
@@ -919,7 +860,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista_historial.close()
         vista_principal.close()
 
-    def test_shell_ubica_perfil_en_header_y_ajustes_en_pie_sin_duplicados(self) -> None:
+    def test_shell_ubica_perfil_en_sidebar_y_ajustes_en_pie_sin_duplicados(self) -> None:
         vista_principal = VistaModuloPrincipal()
         estado = EstadoModuloPrincipal(
             nombre_usuario="admin",
@@ -944,8 +885,8 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista_principal.mostrar_estado(estado)
 
         self.assertEqual(vista_principal._boton_ajustes.text(), "Ajustes")
-        self.assertIsNotNone(vista_principal.findChild(QPushButton, "botonPerfilHeader"))
-        self.assertIsNone(vista_principal.findChild(QPushButton, "botonPerfilSidebar"))
+        self.assertIsNone(vista_principal.findChild(QPushButton, "botonPerfilHeader"))
+        self.assertIsNotNone(vista_principal.findChild(QPushButton, "botonPerfilSidebar"))
         self.assertNotIn(
             "configuracion",
             {
@@ -955,14 +896,19 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             },
         )
         self.assertFalse(vista_principal._boton_mantenimiento.isVisible())
+        self.assertIsNone(vista_principal._dialogo_perfil_usuario)
         self.assertEqual(
-            vista_principal._dialogo_perfil_usuario._nombre.text(),
+            vista_principal._panel_perfil_usuario._nombre.text(),
             "Admin Usuario",
         )
         self.assertEqual(
-            vista_principal._dialogo_perfil_usuario._correo["valor"].text(),
+            vista_principal._panel_perfil_usuario._correo["valor"].text(),
             "soporte@sigqua.local",
         )
+        self.assertEqual(vista_principal._boton_perfil_sidebar._avatar.text(), "AU")
+        self.assertEqual(vista_principal._boton_perfil_sidebar._nombre.text(), "Admin Usuario")
+        self.assertEqual(vista_principal._boton_perfil_sidebar._rol.text(), "Administrador")
+        self.assertIn("Admin Usuario", vista_principal._boton_perfil_sidebar.toolTip())
 
         vista_principal._boton_ajustes.click()
         self.assertIs(
@@ -970,6 +916,81 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             vista_configuracion,
         )
         vista_configuracion.close()
+        vista_principal.close()
+
+    def test_panel_perfil_abre_desde_sidebar_y_confirma_cierre_sesion(self) -> None:
+        vista_principal = VistaModuloPrincipal()
+        estado = EstadoModuloPrincipal(
+            nombre_usuario="ana",
+            nombre_completo="Ana Martínez López",
+            perfil="ADMINISTRADOR",
+            metricas=(),
+            analitica=AnaliticaDashboard((), (), (), (), ()),
+            modulos=(
+                ModuloNavegacion("dashboard", "Inicio", "Resumen operativo.", "home.svg"),
+                ModuloNavegacion(
+                    "configuracion",
+                    "Configuración",
+                    "Parámetros operativos.",
+                    "settings-2.svg",
+                ),
+            ),
+            puede_abrir_mantenimiento=False,
+        )
+        vista_principal.mostrar_estado(estado)
+        vista_principal.resize(1200, 900)
+        vista_principal.show()
+        self.aplicacion.processEvents()
+
+        textos_sidebar = {
+            boton.text()
+            for boton in vista_principal._sidebar.findChildren(QPushButton)
+        }
+        self.assertNotIn("Cerrar sesión", textos_sidebar)
+        self.assertEqual(vista_principal._boton_perfil_sidebar._nombre.text(), "Ana Martínez")
+        vista_principal._boton_perfil_sidebar.click()
+        self.aplicacion.processEvents()
+
+        panel = vista_principal._panel_perfil_usuario
+        self.assertTrue(panel.isVisible())
+        origen_disparador = vista_principal._boton_perfil_sidebar.mapToGlobal(
+            vista_principal._boton_perfil_sidebar.rect().topRight()
+        ).x()
+        self.assertGreaterEqual(panel.x(), origen_disparador - 8)
+        self.assertEqual(panel._boton_cerrar_sesion.text(), "Cerrar sesión")
+
+        cierres: list[bool] = []
+        descripciones: list[str] = []
+        vista_principal.cerrar_sesion_solicitada.connect(lambda: cierres.append(True))
+
+        def rechazar_confirmacion() -> None:
+            dialogo = QApplication.activeModalWidget()
+            if dialogo is not None:
+                dialogo.reject()
+
+        QTimer.singleShot(0, rechazar_confirmacion)
+        panel._boton_cerrar_sesion.click()
+        self.assertEqual(cierres, [])
+
+        vista_principal._boton_perfil_sidebar.click()
+        self.aplicacion.processEvents()
+
+        def aceptar_confirmacion() -> None:
+            dialogo = QApplication.activeModalWidget()
+            if dialogo is None:
+                return
+            descripciones.extend(
+                etiqueta.text()
+                for etiqueta in dialogo.findChildren(QLabel)
+                if etiqueta.text()
+            )
+            dialogo.accept()
+
+        QTimer.singleShot(0, aceptar_confirmacion)
+        panel._boton_cerrar_sesion.click()
+
+        self.assertEqual(cierres, [True])
+        self.assertIn("¿Deseas cerrar la sesión actual?", descripciones)
         vista_principal.close()
 
     def test_modulos_no_repiten_titulo_o_subtitulo_del_header_global(self) -> None:

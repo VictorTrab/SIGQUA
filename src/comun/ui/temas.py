@@ -24,7 +24,7 @@ _PALETA_TEMA_SIGQUA: dict[str, object] = {
 
     # Fondo general y superficies principales
     "fondo_principal": "#101214",
-    "fondo_sidebar": "#0B0D0F",
+    "fondo_sidebar": "#071823",
     "fondo_header": "#101214",
     "fondo_dialogo": "#171A1E",
     "fondo_superficie": "#171A1E",
