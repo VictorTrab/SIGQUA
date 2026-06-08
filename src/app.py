@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import ctypes
+import signal
 from typing import Callable
 
 from dotenv import load_dotenv
@@ -114,7 +115,15 @@ MAXIMO_TAMANO_VENTANA = 16777215
 RETARDO_FASE_ARRANQUE_MS = 18
 TITULO_VENTANA_OCULTO = "\u200b"
 _GWL_STYLE = -16
+_GWL_EXSTYLE = -20
+_GCLP_HICON = -14
+_GCLP_HICONSM = -34
 _WS_MAXIMIZEBOX = 0x00010000
+_WS_EX_DLGMODALFRAME = 0x00000001
+_WM_SETICON = 0x0080
+_ICON_SMALL = 0
+_ICON_BIG = 1
+_ICON_SMALL2 = 2
 _SWP_NOSIZE = 0x0001
 _SWP_NOMOVE = 0x0002
 _SWP_NOZORDER = 0x0004
@@ -308,7 +317,12 @@ def crear_ventana_principal(
 def iniciar_aplicacion() -> int:
     """Inicia la aplicacion mostrando el login en tamano fijo."""
     aplicacion, ventana_principal, _ = crear_ventana_principal()
+    signal.signal(signal.SIGINT, lambda *_: aplicacion.quit())
+    temporizador_senales = QTimer(aplicacion)
+    temporizador_senales.timeout.connect(lambda: None)
+    temporizador_senales.start(200)
     ventana_principal.show()
+    _programar_ocultamiento_icono_barra_titulo(ventana_principal)
     _centrar_ventana_en_pantalla(ventana_principal)
     logger.info("Aplicacion iniciada en modo autenticacion fija.")
     return aplicacion.exec()
@@ -1086,6 +1100,7 @@ def _aplicar_modo_autenticacion(ventana_principal: QMainWindow) -> None:
     if estaba_visible:
         ventana_principal.showNormal()
         ventana_principal.show()
+    _programar_ocultamiento_icono_barra_titulo(ventana_principal)
     _centrar_ventana_en_pantalla(ventana_principal)
 
 
@@ -1117,6 +1132,48 @@ def _aplicar_modo_principal(ventana_principal: QMainWindow) -> None:
     else:
         ventana_principal.resize(ANCHO_VENTANA_PRINCIPAL, ALTO_VENTANA_PRINCIPAL)
     _maximizar_respetando_area_util(ventana_principal)
+    _programar_ocultamiento_icono_barra_titulo(ventana_principal)
+
+
+def _programar_ocultamiento_icono_barra_titulo(
+    ventana_principal: QMainWindow,
+) -> None:
+    _ocultar_icono_barra_titulo_windows(ventana_principal)
+    QTimer.singleShot(
+        0,
+        lambda: _ocultar_icono_barra_titulo_windows(ventana_principal),
+    )
+    QTimer.singleShot(
+        80,
+        lambda: _ocultar_icono_barra_titulo_windows(ventana_principal),
+    )
+
+
+def _ocultar_icono_barra_titulo_windows(ventana_principal: QMainWindow) -> None:
+    """Oculta el icono del marco nativo sin quitarlo de la barra de tareas."""
+    if sys.platform != "win32":
+        return
+
+    hwnd = int(ventana_principal.winId())
+    user32 = ctypes.windll.user32
+    estilo_extendido = user32.GetWindowLongW(hwnd, _GWL_EXSTYLE)
+    user32.SetWindowLongW(
+        hwnd,
+        _GWL_EXSTYLE,
+        estilo_extendido | _WS_EX_DLGMODALFRAME,
+    )
+    for tipo_icono in (_ICON_SMALL, _ICON_BIG, _ICON_SMALL2):
+        user32.SendMessageW(hwnd, _WM_SETICON, tipo_icono, 0)
+    user32.SetClassLongPtrW(hwnd, _GCLP_HICON, 0)
+    user32.SetClassLongPtrW(hwnd, _GCLP_HICONSM, 0)
+    user32.SetWindowPos(
+        hwnd,
+        0,
+        0,
+        0,
+        0,
+        _SWP_NOSIZE | _SWP_NOMOVE | _SWP_NOZORDER | _SWP_FRAMECHANGED,
+    )
 
 
 def _maximizar_respetando_area_util(ventana_principal: QMainWindow) -> None:

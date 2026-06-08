@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QTabWidget,
     QTextEdit,
     QVBoxLayout,
@@ -513,26 +514,27 @@ class VistaConfiguracion(QWidget):
             )
         )
 
+        panel_identidad = self._crear_panel(
+            "Identidad de la empresa",
+            "Datos visibles en comprobantes, reportes y documentos.",
+            [
+                grilla_general,
+                subtitulo_contacto,
+                grilla_contacto,
+                grilla_ubicacion,
+            ],
+        )
+
         contenido = self._crear_contenedor_scroll()
-        contenido.widget().layout().addWidget(
-            self._crear_panel(
-                "Identidad de la empresa",
-                "Datos visibles en comprobantes, reportes y documentos.",
-                [
-                    grilla_general,
-                    subtitulo_contacto,
-                    grilla_contacto,
-                    grilla_ubicacion,
-                ],
-            )
-        )
-        contenido.widget().layout().addWidget(
-            self._crear_aviso(
+        contenido.widget().layout().addWidget(panel_identidad)
+        self._agregar_cierre_tab_compacto(
+            contenido,
+            (
                 "Impacta comprobantes, reportes PDF, documentos de deuda y vistas operativas. "
-                "No crea reglas nuevas: solo actualiza la identidad visible de la empresa."
-            )
+                "Solo actualiza la identidad visible de la empresa."
+            ),
+            boton_guardar,
         )
-        contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
         return contenido
 
     def _crear_tab_factura(self) -> QWidget:
@@ -656,30 +658,37 @@ class VistaConfiguracion(QWidget):
         boton_guardar = crear_boton_operativo("Guardar documentos y comprobantes", principal=True)
         boton_guardar.clicked.connect(self._emitir_guardado_parametros_factura)
 
+        grilla_secundaria = self._crear_grilla_paneles_compacta(
+            ((panel_firma, 2), (panel_resumen, 3))
+        )
+
         contenido = self._crear_contenedor_scroll()
         contenido.widget().layout().addWidget(panel_factura)
-        contenido.widget().layout().addWidget(panel_firma)
+        contenido.widget().layout().addLayout(grilla_secundaria)
         contenido.widget().layout().addWidget(panel_preview)
-        contenido.widget().layout().addWidget(panel_resumen)
-        contenido.widget().layout().addWidget(
-            self._crear_aviso(
-                "El correlativo no se edita aqui. La firma compartida impacta comprobantes y documentos de deuda."
-            )
+        self._agregar_cierre_tab_compacto(
+            contenido,
+            (
+                "El correlativo no se edita aqui. La firma compartida impacta "
+                "comprobantes y documentos de deuda."
+            ),
+            boton_guardar,
         )
-        contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
         return contenido
 
     def _crear_tab_impresoras(self) -> QWidget:
         contenido = self._crear_contenedor_scroll()
         contenido.widget().layout().addWidget(self._panel_impresoras)
-        contenido.widget().layout().addWidget(
-            self._crear_aviso(
-                "Si no hay impresora termica configurada, los pagos quedan registrados y el comprobante queda pendiente de impresion."
-            )
-        )
         boton_guardar = crear_boton_operativo("Guardar impresoras", principal=True)
         boton_guardar.clicked.connect(self._emitir_guardado_parametros_factura)
-        contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
+        self._agregar_cierre_tab_compacto(
+            contenido,
+            (
+                "Sin impresora termica, el pago queda registrado y el comprobante "
+                "permanece pendiente de impresion."
+            ),
+            boton_guardar,
+        )
         return contenido
 
     def _crear_tab_cobros(self) -> QWidget:
@@ -736,66 +745,109 @@ class VistaConfiguracion(QWidget):
         boton_guardar.clicked.connect(self._emitir_guardado_parametros_cobro)
 
         grilla_paneles = QGridLayout()
+        grilla_paneles.setContentsMargins(0, 0, 0, 0)
         grilla_paneles.setHorizontalSpacing(12)
-        grilla_paneles.setVerticalSpacing(12)
+        grilla_paneles.setVerticalSpacing(10)
         grilla_paneles.addWidget(panel_precio, 0, 0)
         grilla_paneles.addWidget(panel_recargo, 0, 1)
         grilla_paneles.addWidget(panel_adelantos, 1, 0, 1, 2)
+        grilla_paneles.setColumnStretch(0, 1)
+        grilla_paneles.setColumnStretch(1, 1)
 
         contenido = self._crear_contenedor_scroll()
         contenido.widget().layout().addLayout(grilla_paneles)
-        contenido.widget().layout().addWidget(
-            self._crear_aviso(
+        self._agregar_cierre_tab_compacto(
+            contenido,
+            (
                 "Impacta Pagos, Casas y Reportes. "
                 "La primera mensualidad de conexion y reconexion se controla aqui como politica global de prorrateo."
-            )
+            ),
+            boton_guardar,
         )
-        contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
         return contenido
 
     def _crear_tab_morosidad(self) -> QWidget:
+        grilla_rangos = QGridLayout()
+        grilla_rangos.setContentsMargins(0, 0, 0, 0)
+        grilla_rangos.setHorizontalSpacing(10)
+        grilla_rangos.setVerticalSpacing(10)
+        grilla_rangos.addWidget(
+            self._crear_fila_rango_morosidad(
+                "Prioridad baja",
+                "1-2 meses",
+                "Seguimiento normal.",
+            ),
+            0,
+            0,
+        )
+        grilla_rangos.addWidget(
+            self._crear_fila_rango_morosidad(
+                "Prioridad media",
+                "3-5 meses",
+                "Priorizar gestion.",
+            ),
+            0,
+            1,
+        )
+        grilla_rangos.addWidget(
+            self._crear_fila_rango_morosidad(
+                "Prioridad alta",
+                "6+ meses",
+                "Atencion inmediata.",
+            ),
+            0,
+            2,
+        )
+        grilla_rangos.setColumnStretch(0, 1)
+        grilla_rangos.setColumnStretch(1, 1)
+        grilla_rangos.setColumnStretch(2, 1)
+
         panel_rangos = self._crear_panel(
             "Rangos de prioridad",
-            "Rangos fijos para esta version.",
-            [
-                self._crear_fila_rango_morosidad(
-                    "Prioridad baja",
-                    "1-2 meses",
-                    "Seguimiento normal",
-                ),
-                self._crear_fila_rango_morosidad(
-                    "Prioridad media",
-                    "3-5 meses",
-                    "Priorizar gestion",
-                ),
-                self._crear_fila_rango_morosidad(
-                    "Prioridad alta",
-                    "6+ meses",
-                    "Atencion inmediata",
-                ),
-            ],
+            "Clasificacion fija segun meses vencidos.",
+            [grilla_rangos],
         )
-        panel_rangos.setMaximumWidth(430)
-        self._panel_corte.setMaximumWidth(430)
+        panel_rangos.setObjectName("panelMorosidadRangos")
+        self._panel_corte.setObjectName("panelMorosidadCorte")
+        panel_rangos.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Maximum,
+        )
+        self._panel_corte.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Maximum,
+        )
+        altura_paneles = max(
+            panel_rangos.sizeHint().height(),
+            self._panel_corte.sizeHint().height(),
+            164,
+        )
+        panel_rangos.setMinimumHeight(altura_paneles)
+        self._panel_corte.setMinimumHeight(altura_paneles)
 
-        fila_paneles = QHBoxLayout()
-        fila_paneles.setContentsMargins(0, 0, 0, 0)
-        fila_paneles.setSpacing(12)
-        fila_paneles.addWidget(panel_rangos)
-        fila_paneles.addWidget(self._panel_corte)
-        fila_paneles.addStretch(1)
+        grilla_paneles = QGridLayout()
+        grilla_paneles.setContentsMargins(0, 0, 0, 0)
+        grilla_paneles.setHorizontalSpacing(12)
+        grilla_paneles.setVerticalSpacing(10)
+        grilla_paneles.addWidget(panel_rangos, 0, 0)
+        grilla_paneles.addWidget(self._panel_corte, 0, 1)
+        grilla_paneles.setColumnStretch(0, 3)
+        grilla_paneles.setColumnStretch(1, 2)
 
         boton_guardar = crear_boton_operativo("Guardar morosidad", principal=True)
         boton_guardar.clicked.connect(self._emitir_guardado_parametros_cobro)
 
-        contenido = self._crear_contenedor_scroll()
-        contenido.widget().layout().addLayout(fila_paneles)
-        contenido.widget().layout().addWidget(
-            self._crear_aviso(
-                "Los rangos son fijos en esta version. El corte se ejecuta manualmente desde Casas."
-            )
+        aviso = self._crear_aviso_compacto(
+            "Los rangos son fijos en esta version. El corte se ejecuta manualmente desde Casas."
         )
+        aviso.setObjectName("avisoMorosidadCompacto")
+
+        contenido = self._crear_contenedor_scroll()
+        contenido.widget().layout().setSpacing(7)
+        contenido.widget().layout().addLayout(grilla_paneles)
+        contenido.widget().layout().addWidget(aviso)
         contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
+        contenido.widget().layout().addStretch(1)
         return contenido
 
     def _crear_tab_reportes_pdf(self) -> QWidget:
@@ -846,17 +898,19 @@ class VistaConfiguracion(QWidget):
         boton_guardar = crear_boton_operativo("Guardar reportes PDF", principal=True)
         boton_guardar.clicked.connect(self._emitir_guardado_reportes_pdf)
 
-        contenido = self._crear_contenedor_scroll()
-        contenido.widget().layout().addWidget(panel_salida)
-        contenido.widget().layout().addWidget(panel_firma)
-        contenido.widget().layout().addWidget(
-            self._crear_aviso(
-                "Los reportes se generan bajo demanda. No modifica comprobantes ESC/POS ni agrega reportes nuevos."
-            )
+        grilla_paneles = self._crear_grilla_paneles_compacta(
+            ((panel_salida, 3), (panel_firma, 2))
         )
-        contenido.widget().layout().addWidget(
+
+        contenido = self._crear_contenedor_scroll()
+        contenido.widget().layout().addLayout(grilla_paneles)
+        self._agregar_cierre_tab_compacto(
+            contenido,
+            (
+                "Los reportes se generan bajo demanda. No modifica comprobantes "
+                "ESC/POS ni agrega reportes nuevos."
+            ),
             boton_guardar,
-            alignment=Qt.AlignmentFlag.AlignRight,
         )
         self._actualizar_estado_firma_reportes_pdf()
         return contenido
@@ -948,22 +1002,36 @@ class VistaConfiguracion(QWidget):
         boton_guardar = crear_boton_operativo("Guardar control y respaldo", principal=True)
         boton_guardar.clicked.connect(self._emitir_guardado_respaldo)
 
-        grilla = QGridLayout()
-        grilla.setHorizontalSpacing(12)
-        grilla.setVerticalSpacing(12)
-        grilla.addWidget(panel_estado, 0, 0)
-        grilla.addWidget(panel_manual, 0, 1)
-        grilla.addWidget(panel_ubicacion, 1, 0, 1, 2)
-        grilla.addWidget(panel_restauracion, 2, 0, 1, 2)
+        columna_acciones = QVBoxLayout()
+        columna_acciones.setContentsMargins(0, 0, 0, 0)
+        columna_acciones.setSpacing(10)
+        columna_acciones.addWidget(panel_manual)
+        columna_acciones.addWidget(panel_restauracion)
+        columna_acciones.addStretch(1)
+
+        contenedor_acciones = QWidget()
+        contenedor_acciones.setObjectName("columnaPanelesConfiguracion")
+        contenedor_acciones.setLayout(columna_acciones)
+
+        grilla_superior = QGridLayout()
+        grilla_superior.setContentsMargins(0, 0, 0, 0)
+        grilla_superior.setHorizontalSpacing(12)
+        grilla_superior.addWidget(panel_estado, 0, 0)
+        grilla_superior.addWidget(contenedor_acciones, 0, 1)
+        grilla_superior.setColumnStretch(0, 3)
+        grilla_superior.setColumnStretch(1, 2)
 
         contenido = self._crear_contenedor_scroll()
-        contenido.widget().layout().addLayout(grilla)
-        contenido.widget().layout().addWidget(
-            self._crear_aviso(
-                "La restauracion reemplaza la base local. SIGQUA genera un respaldo previo y recomienda reiniciar despues de restaurar."
-            )
+        contenido.widget().layout().addLayout(grilla_superior)
+        contenido.widget().layout().addWidget(panel_ubicacion)
+        self._agregar_cierre_tab_compacto(
+            contenido,
+            (
+                "La restauracion reemplaza la base local. SIGQUA genera un respaldo "
+                "previo y recomienda reiniciar despues de restaurar."
+            ),
+            boton_guardar,
         )
-        contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
         return contenido
 
     def _crear_tab_informacion(self) -> QWidget:
@@ -1007,15 +1075,20 @@ class VistaConfiguracion(QWidget):
                 float(self._combo_duracion_sesion.currentData() or 8.0)
             )
         )
-        contenido = self._crear_contenedor_scroll()
-        contenido.widget().layout().addWidget(panel)
-        contenido.widget().layout().addWidget(panel_seguridad)
-        contenido.widget().layout().addWidget(
-            self._crear_aviso(
-                "Configuracion expone solo parametros reales de operacion, seguridad local y backend documental."
-            )
+        grilla_paneles = self._crear_grilla_paneles_compacta(
+            ((panel, 3), (panel_seguridad, 2))
         )
-        contenido.widget().layout().addWidget(boton_guardar, alignment=Qt.AlignmentFlag.AlignRight)
+
+        contenido = self._crear_contenedor_scroll()
+        contenido.widget().layout().addLayout(grilla_paneles)
+        self._agregar_cierre_tab_compacto(
+            contenido,
+            (
+                "Configuracion expone solo parametros reales de operacion, "
+                "seguridad local y backend documental."
+            ),
+            boton_guardar,
+        )
         return contenido
 
     def _crear_vista_previa_comprobante(self) -> QWidget:
@@ -1232,6 +1305,10 @@ class VistaConfiguracion(QWidget):
     def _crear_panel(self, titulo: str, descripcion: str, elementos: list[object]) -> QFrame:
         panel = QFrame()
         panel.setObjectName("panelConfiguracion")
+        panel.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Maximum,
+        )
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(14, 13, 14, 13)
         layout.setSpacing(8)
@@ -1256,23 +1333,23 @@ class VistaConfiguracion(QWidget):
         detalle: str,
     ) -> QFrame:
         fila = QFrame()
-        fila.setObjectName("filaRangoMorosidad")
-        layout = QHBoxLayout(fila)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(10)
+        fila.setObjectName("bloqueRangoMorosidad")
+        layout = QVBoxLayout(fila)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(6)
 
         etiqueta = QLabel(titulo)
         etiqueta.setObjectName("etiquetaRangoMorosidad")
         valor = QLabel(rango)
         valor.setObjectName("valorRangoMorosidad")
-        valor.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        valor.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         descripcion = QLabel(detalle)
         descripcion.setObjectName("detalleRangoMorosidad")
-        descripcion.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        descripcion.setWordWrap(True)
 
-        layout.addWidget(etiqueta, 2)
-        layout.addWidget(valor, 1)
-        layout.addWidget(descripcion, 2)
+        layout.addWidget(etiqueta)
+        layout.addWidget(valor)
+        layout.addWidget(descripcion)
         return fila
 
     def _crear_aviso(self, texto: str) -> QFrame:
@@ -1286,6 +1363,49 @@ class VistaConfiguracion(QWidget):
         etiqueta.setWordWrap(True)
         layout.addWidget(etiqueta)
         return panel
+
+    def _crear_aviso_compacto(self, texto: str) -> QFrame:
+        aviso = self._crear_aviso(texto)
+        aviso.setObjectName("avisoConfiguracionCompacto")
+        aviso.layout().setContentsMargins(10, 7, 10, 7)
+        aviso.layout().setSpacing(6)
+        aviso.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
+        return aviso
+
+    def _crear_grilla_paneles_compacta(
+        self,
+        paneles: tuple[tuple[QFrame, int], ...],
+    ) -> QGridLayout:
+        grilla = QGridLayout()
+        grilla.setContentsMargins(0, 0, 0, 0)
+        grilla.setHorizontalSpacing(12)
+        grilla.setVerticalSpacing(10)
+        for columna, (panel, proporcion) in enumerate(paneles):
+            panel.setSizePolicy(
+                QSizePolicy.Policy.Expanding,
+                QSizePolicy.Policy.Maximum,
+            )
+            grilla.addWidget(panel, 0, columna)
+            grilla.setColumnStretch(columna, proporcion)
+        return grilla
+
+    def _agregar_cierre_tab_compacto(
+        self,
+        contenido: QScrollArea,
+        texto_aviso: str,
+        boton_guardar: QPushButton,
+    ) -> None:
+        layout = contenido.widget().layout()
+        layout.setSpacing(7)
+        layout.addWidget(self._crear_aviso_compacto(texto_aviso))
+        layout.addWidget(
+            boton_guardar,
+            alignment=Qt.AlignmentFlag.AlignRight,
+        )
+        layout.addStretch(1)
 
     def _crear_contenedor_scroll(self) -> QScrollArea:
         scroll = QScrollArea()
@@ -1587,6 +1707,16 @@ class VistaConfiguracion(QWidget):
                 border: 1px solid {paleta["borde_info"]};
                 border-radius: 9px;
             }}
+            QFrame#avisoConfiguracionCompacto {{
+                background: {fondo_aviso};
+                border: 1px solid {paleta["borde_info"]};
+                border-radius: 7px;
+            }}
+            QFrame#avisoConfiguracionCompacto QLabel#textoAvisoConfiguracion {{
+                color: {texto_secundario};
+                font-size: 10px;
+                font-weight: 700;
+            }}
             QWidget#bloqueCampoConfiguracion {{
                 background: transparent;
                 border: none;
@@ -1596,10 +1726,21 @@ class VistaConfiguracion(QWidget):
                 border: 1px solid {paleta["borde_suave"]};
                 border-radius: 8px;
             }}
-            QFrame#filaRangoMorosidad {{
+            QFrame#panelMorosidadRangos,
+            QFrame#panelMorosidadCorte {{
+                background: {fondo_panel};
+                border: 1px solid {borde_panel};
+                border-radius: 12px;
+            }}
+            QFrame#filaRangoMorosidad,
+            QFrame#bloqueRangoMorosidad {{
                 background: {paleta["fondo_superficie_destacada"]};
                 border: 1px solid {paleta["borde_suave"]};
                 border-radius: 8px;
+            }}
+            QFrame#bloqueRangoMorosidad:hover {{
+                background: {fondo_tarjeta};
+                border-color: {paleta["borde_foco_input"]};
             }}
             QLabel#etiquetaRangoMorosidad {{
                 color: {texto_principal};
@@ -1608,14 +1749,23 @@ class VistaConfiguracion(QWidget):
             }}
             QLabel#valorRangoMorosidad {{
                 color: {paleta["texto_destacado"]};
-                background: {paleta["fondo_input"]};
-                border: 1px solid {paleta["borde_principal"]};
-                border-radius: 7px;
-                padding: 5px 8px;
-                font-size: 12px;
+                background: transparent;
+                border: none;
+                padding: 0;
+                font-size: 17px;
                 font-weight: 900;
             }}
             QLabel#detalleRangoMorosidad {{
+                color: {texto_secundario};
+                font-size: 11px;
+                font-weight: 700;
+            }}
+            QFrame#avisoMorosidadCompacto {{
+                background: {fondo_aviso};
+                border: 1px solid {paleta["borde_info"]};
+                border-radius: 7px;
+            }}
+            QFrame#avisoMorosidadCompacto QLabel#textoAvisoConfiguracion {{
                 color: {texto_secundario};
                 font-size: 10px;
                 font-weight: 700;

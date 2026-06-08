@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from functools import partial
+
 from PySide6.QtCore import (
     QEasingCurve,
     QParallelAnimationGroup,
@@ -13,6 +15,7 @@ from PySide6.QtCore import (
     Signal,
 )
 from PySide6.QtGui import (
+    QAction,
     QColor,
 )
 from PySide6.QtWidgets import (
@@ -856,15 +859,28 @@ class VistaAutenticacion(QWidget):
             accion_limpiar.setVisible(False)
             accion_limpiar.triggered.connect(campo.clear)
             campo.textChanged.connect(
-                lambda texto, accion=accion_limpiar, line_edit=campo: (
-                    accion.setVisible(bool(texto)),
-                    QTimer.singleShot(0, line_edit._ajustar_accion_derecha),
+                partial(
+                    self._actualizar_accion_limpiar_campo,
+                    accion_limpiar,
+                    campo,
                 )
             )
             campo.configurar_desplazamiento_accion_derecha(
                 14 if icono_a_la_derecha else DESPLAZAMIENTO_ACCION_DERECHA_INPUT
             )
         return campo
+
+    @staticmethod
+    def _actualizar_accion_limpiar_campo(
+        accion_limpiar: QAction,
+        campo: CampoAnimado,
+        texto: str,
+    ) -> None:
+        visible = bool(texto)
+        if accion_limpiar.isVisible() == visible:
+            return
+        accion_limpiar.setVisible(visible)
+        QTimer.singleShot(0, campo._ajustar_accion_derecha)
 
     def _crear_boton_primario(
         self,
