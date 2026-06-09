@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Callable
 
 from PySide6.QtCore import Qt, QTimer, Signal, QUrl
@@ -54,8 +55,8 @@ class TarjetaResumenConfiguracion(TarjetaResumenOperativa):
     def __init__(self, titulo: str, icono: str, color_icono: str) -> None:
         super().__init__(icono, color_icono)
         self.setObjectName("tarjetaResumenConfiguracion")
-        self.setMinimumHeight(82)
-        self.setMaximumHeight(82)
+        self.setMinimumHeight(92)
+        self.setMaximumHeight(92)
         self._titulo_fijo = titulo
 
     def actualizar(self, valor: str, detalle: str) -> None:
@@ -70,9 +71,6 @@ class VistaConfiguracion(QWidget):
         str,
         str,
         str,
-        str,
-        str,
-        str,
         bool,
         bool,
         bool,
@@ -83,7 +81,6 @@ class VistaConfiguracion(QWidget):
         int,
         bool,
         str,
-        str,
     )
     guardar_parametros_cobro_solicitado = Signal(int, bool, int, bool, int, bool, bool, int, int, int)
     probar_impresora_comprobantes_solicitado = Signal(str)
@@ -91,8 +88,6 @@ class VistaConfiguracion(QWidget):
     guardar_operacion_respaldo_solicitado = Signal(
         str,
         str,
-        bool,
-        bool,
         bool,
     )
     crear_respaldo_manual_solicitado = Signal()
@@ -149,18 +144,18 @@ class VistaConfiguracion(QWidget):
     ) -> None:
         self._tarjeta_precio.actualizar(
             formateador_moneda(estado.parametros_cobro.precio_mensual_centavos),
-            "Afecta cargos mensuales nuevos en pagos, morosidad y reportes.",
+            "Aplica a nuevos cargos.",
         )
         self._tarjeta_correlativo.actualizar(
-            estado.factura.correlativo_actual,
-            f"Proximo recibo: {estado.factura.proximo_correlativo}.",
+            estado.factura.proximo_correlativo,
+            "Siguiente numero disponible.",
         )
         self._tarjeta_adelantos.actualizar(
             "Activos" if estado.parametros_cobro.permitir_pago_adelantado else "Bloqueados",
             (
                 f"Hasta {estado.parametros_cobro.meses_adelanto_maximo} meses."
                 if estado.parametros_cobro.permitir_pago_adelantado
-                else "Pagos adelantados deshabilitados desde configuracion."
+                else "Deshabilitado."
             ),
         )
         self._tarjeta_respaldo.actualizar(
@@ -168,7 +163,7 @@ class VistaConfiguracion(QWidget):
             (
                 f"Al cerrar sesion. Ultimo: {estado.operacion.ultimo_respaldo_en}."
                 if estado.operacion.ultimo_respaldo_en
-                else "Al cerrar sesion. Sin respaldos registrados."
+                else "Al cerrar sesion."
             ),
         )
 
@@ -180,18 +175,13 @@ class VistaConfiguracion(QWidget):
         self._campo_junta_mensaje_contacto.setPlainText(estado.identidad_empresa.mensaje_contacto)
         self._campo_factura_nombre.setText(estado.identidad_empresa.nombre)
         self._campo_factura_datos.setText(self._componer_datos_recibo(estado))
-        self._valor_correlativo_actual.setText(estado.factura.correlativo_actual)
         self._valor_ultimo_comprobante.setText(estado.factura.ultimo_comprobante_emitido)
         self._campo_titulo_documento.setText(estado.factura.titulo_documento)
-        self._campo_subtitulo_documento.setText(estado.factura.subtitulo_documento)
-        self._campo_texto_legal_superior.setPlainText(estado.factura.texto_legal_superior)
         self._campo_texto_pie.setPlainText(estado.factura.texto_pie)
-        self._campo_texto_legal_inferior.setPlainText(estado.factura.texto_legal_inferior)
         self._campo_etiqueta_copia.setText(estado.factura.etiqueta_copia)
         self._seleccionar_impresora(self._combo_impresora_comprobantes, estado.factura.impresora_termica_nombre)
         self._combo_ancho_termico.setCurrentText(f"{estado.factura.impresora_termica_ancho_mm} mm")
         self._check_corte_termico.setChecked(estado.factura.impresora_termica_corte_automatico)
-        self._campo_codigo_pagina_termico.setText(estado.factura.impresora_termica_codigo_pagina)
         self._seleccionar_impresora(self._combo_impresora_reportes, estado.factura.impresora_reportes_nombre)
         self._check_mostrar_correo.setChecked(estado.factura.mostrar_correo)
         self._check_mostrar_telefono.setChecked(estado.factura.mostrar_telefono)
@@ -234,8 +224,6 @@ class VistaConfiguracion(QWidget):
         self._check_respaldo_secundario.blockSignals(True)
         self._check_respaldo_secundario.setChecked(estado.operacion.respaldo_secundario_activo)
         self._check_respaldo_secundario.blockSignals(False)
-        self._check_comprimir_zip.setChecked(estado.operacion.comprimir_zip)
-        self._check_organizar_periodo.setChecked(estado.operacion.organizar_por_periodo)
         self._seleccionar_duracion_sesion(estado.seguridad.duracion_sesion_horas)
         self._valor_ultimo_respaldo.setText(
             estado.operacion.ultimo_respaldo_en or "Sin registros"
@@ -249,8 +237,7 @@ class VistaConfiguracion(QWidget):
         self._valor_respaldo_automatico.setText("Activo al cerrar sesion")
         self._valor_respaldo_generado_por.setText(estado.operacion.ultimo_respaldo_generado_por)
         self._valor_ruta_respaldos.setText(estado.operacion.ruta_respaldos_principal)
-        self._valor_retencion.setText(f"{estado.operacion.retencion_maxima} respaldos recientes")
-        self._valor_ruta_comprobantes.setText(estado.operacion.ruta_exportaciones_comprobantes)
+        self._valor_retencion.setText("5 respaldos recientes")
         self._valor_ruta_reportes.setText(estado.operacion.ruta_exportaciones_reportes)
         self._campo_ruta_reportes_pdf.setText(estado.reportes_pdf.ruta_salida)
         self._ruta_reportes_predeterminada = estado.reportes_pdf.ruta_predeterminada
@@ -260,7 +247,6 @@ class VistaConfiguracion(QWidget):
         self._actualizar_estado_firma_reportes_pdf()
         self._actualizar_respaldos_disponibles(estado)
 
-        self._valor_autenticacion.setText("Local")
         self._valor_intentos.setText(str(estado.seguridad.maximo_intentos_fallidos))
         self._valor_sesion.setText(self._texto_duracion_sesion(estado.seguridad.duracion_sesion_horas))
         self._valor_restablecimiento.setText("Administrativo")
@@ -268,9 +254,6 @@ class VistaConfiguracion(QWidget):
 
         self._valor_nombre_sistema.setText(estado.informacion.nombre_sistema)
         self._valor_version_sistema.setText(estado.informacion.version_sistema or "Sin version")
-        self._valor_ruta_base.setText(estado.informacion.ruta_base_datos)
-        self._valor_ruta_respaldos_activa.setText(estado.operacion.ruta_respaldos_principal)
-        self._valor_modo_operacion.setText(estado.informacion.modo_operacion)
         self._valor_duracion_sesion_info.setText(self._texto_duracion_sesion(estado.seguridad.duracion_sesion_horas))
         self._valor_actualizacion.setText(estado.informacion.ultima_actualizacion or "Sin registro")
         self._valor_actualizado_por.setText(estado.informacion.actualizado_por)
@@ -284,16 +267,11 @@ class VistaConfiguracion(QWidget):
             self._campo_junta_telefono,
             self._campo_junta_correo,
             self._campo_junta_identificador,
-            self._campo_junta_sitio_web,
             self._campo_junta_direccion,
             self._campo_junta_mensaje_contacto,
             self._campo_titulo_documento,
-            self._campo_subtitulo_documento,
-            self._campo_texto_legal_superior,
             self._campo_texto_pie,
-            self._campo_texto_legal_inferior,
             self._campo_etiqueta_copia,
-            self._campo_codigo_pagina_termico,
             self._campo_firma_texto_linea,
             self._campo_precio_mensual,
             self._campo_multa_automatica,
@@ -330,10 +308,28 @@ class VistaConfiguracion(QWidget):
             self._check_abrir_reportes_pdf,
             self._check_firma_reportes_pdf,
             self._check_respaldo_secundario,
-            self._check_comprimir_zip,
-            self._check_organizar_periodo,
         ):
             check.toggled.connect(self._marcar_cambios_pendientes)
+
+        for control in (
+            self._campo_titulo_documento,
+            self._campo_texto_pie,
+            self._campo_etiqueta_copia,
+            self._campo_firma_texto_linea,
+        ):
+            control.textChanged.connect(self._actualizar_preview_desde_estado_actual)
+
+        for check in (
+            self._check_mostrar_correo,
+            self._check_mostrar_telefono,
+            self._check_mostrar_direccion,
+            self._check_mostrar_identificador,
+            self._check_firma_habilitada,
+        ):
+            check.toggled.connect(self._actualizar_preview_desde_estado_actual)
+        self._combo_ancho_termico.currentIndexChanged.connect(
+            self._actualizar_preview_desde_estado_actual
+        )
 
         self._tabs.currentChanged.connect(self._confirmar_cambio_pestana)
 
@@ -449,7 +445,6 @@ class VistaConfiguracion(QWidget):
         self._campo_junta_telefono = QLineEdit()
         self._campo_junta_correo = QLineEdit()
         self._campo_junta_identificador = QLineEdit()
-        self._campo_junta_sitio_web = QLineEdit()
         self._campo_junta_direccion = QPlainTextEdit()
         self._campo_junta_direccion.setFixedHeight(72)
         self._campo_junta_mensaje_contacto = QPlainTextEdit()
@@ -507,9 +502,9 @@ class VistaConfiguracion(QWidget):
                 self._campo_junta_nombre.text().strip(),
                 self._campo_junta_telefono.text().strip(),
                 self._campo_junta_correo.text().strip(),
+                self._campo_junta_direccion.toPlainText().strip(),
                 self._campo_junta_identificador.text().strip(),
                 "",
-                self._campo_junta_direccion.toPlainText().strip(),
                 self._campo_junta_mensaje_contacto.toPlainText().strip(),
             )
         )
@@ -542,24 +537,16 @@ class VistaConfiguracion(QWidget):
         self._campo_factura_nombre.setReadOnly(True)
         self._campo_factura_datos = QLineEdit()
         self._campo_factura_datos.setReadOnly(True)
-        self._valor_correlativo_actual = self._crear_valor_seguridad()
         self._valor_ultimo_comprobante = self._crear_valor_seguridad()
         self._campo_titulo_documento = QLineEdit()
-        self._campo_subtitulo_documento = QLineEdit()
-        self._campo_texto_legal_superior = QPlainTextEdit()
-        self._campo_texto_legal_superior.setFixedHeight(64)
         self._campo_texto_pie = QPlainTextEdit()
         self._campo_texto_pie.setFixedHeight(76)
-        self._campo_texto_legal_inferior = QPlainTextEdit()
-        self._campo_texto_legal_inferior.setFixedHeight(64)
         self._campo_etiqueta_copia = QLineEdit()
         self._combo_impresora_comprobantes = self._crear_combo_impresoras()
         self._combo_impresora_reportes = self._crear_combo_impresoras()
         self._combo_ancho_termico = QComboBox()
         self._combo_ancho_termico.addItems(["80 mm", "58 mm"])
         self._check_corte_termico = QCheckBox("Cortar papel automaticamente")
-        self._campo_codigo_pagina_termico = QLineEdit()
-        self._campo_codigo_pagina_termico.setPlaceholderText("cp850")
         self._check_mostrar_correo = QCheckBox("Mostrar correo institucional")
         self._check_mostrar_telefono = QCheckBox("Mostrar telefono institucional")
         self._check_mostrar_direccion = QCheckBox("Mostrar direccion institucional")
@@ -591,11 +578,10 @@ class VistaConfiguracion(QWidget):
 
         panel_factura = self._crear_panel(
             "Documentos y comprobantes",
-            "Configuracion operativa del backend documental usado por comprobantes, deuda y reportes PDF.",
+            "Datos de recibo usados al registrar pagos.",
             [
                 grilla_superior,
-                self._crear_fila_resumen("Correlativo actual", self._valor_correlativo_actual),
-                self._crear_fila_resumen("Ultimo comprobante emitido", self._valor_ultimo_comprobante),
+                self._crear_aviso_compacto("Estos datos se modifican en la pestana Organizacion."),
                 self._crear_bloque_campo("Titulo del documento", self._campo_titulo_documento),
                 self._crear_bloque_campo("Texto inferior", self._campo_texto_pie),
                 self._crear_bloque_campo("Etiqueta de copia", self._campo_etiqueta_copia),
@@ -619,7 +605,6 @@ class VistaConfiguracion(QWidget):
                 ),
                 self._crear_bloque_campo("Ancho de papel termico", self._combo_ancho_termico),
                 self._check_corte_termico,
-                self._crear_bloque_campo("Codigo de pagina ESC/POS", self._campo_codigo_pagina_termico),
                 self._crear_bloque_campo_con_accion(
                     "Impresora de reportes",
                     self._combo_impresora_reportes,
@@ -639,18 +624,21 @@ class VistaConfiguracion(QWidget):
             ],
         )
 
+        vista_previa = self._crear_vista_previa_comprobante()
         panel_preview = self._crear_panel(
             "Vista previa operativa",
             "Referencia visual del comprobante segun la configuracion documental vigente.",
-            [self._crear_vista_previa_comprobante()],
+            [vista_previa],
         )
+        panel_preview.layout().setAlignment(vista_previa, Qt.AlignmentFlag.AlignHCenter)
 
         panel_resumen = self._crear_panel(
             "Resumen de emision",
             "Datos reales de la base para pagos y reportes.",
             [
-                self._crear_fila_resumen("Total de comprobantes", self._valor_total_comprobantes),
+                self._crear_fila_resumen("Ultimo comprobante emitido", self._valor_ultimo_comprobante),
                 self._crear_fila_resumen("Proximo correlativo", self._valor_proximo_correlativo),
+                self._crear_fila_resumen("Total de comprobantes", self._valor_total_comprobantes),
                 self._crear_fila_resumen("Pendientes de impresion", self._valor_pendientes_impresion),
             ],
         )
@@ -669,8 +657,7 @@ class VistaConfiguracion(QWidget):
         self._agregar_cierre_tab_compacto(
             contenido,
             (
-                "El correlativo no se edita aqui. La firma compartida impacta "
-                "comprobantes y documentos de deuda."
+                "El numero del recibo se asigna automaticamente al registrar pagos."
             ),
             boton_guardar,
         )
@@ -723,6 +710,8 @@ class VistaConfiguracion(QWidget):
                 ),
             ],
         )
+        panel_precio.setMinimumHeight(154)
+        panel_recargo.setMinimumHeight(154)
         self._panel_corte = self._crear_panel(
             "Sugerencia de corte por deuda",
             "Apoyo operativo. El corte real sigue siendo manual.",
@@ -878,7 +867,7 @@ class VistaConfiguracion(QWidget):
 
         panel_salida = self._crear_panel(
             "Salida de reportes",
-            "Carpeta usada por Generar PDF. Guardar en permite elegir otra carpeta solo para una exportacion.",
+            "Define donde se guardan los reportes PDF y si deben abrirse automaticamente.",
             [
                 self._crear_bloque_campo("Ruta actual", self._envolver_layout(fila_ruta)),
                 self._check_abrir_reportes_pdf,
@@ -886,7 +875,7 @@ class VistaConfiguracion(QWidget):
         )
         panel_firma = self._crear_panel(
             "Firma de reportes",
-            "Configuracion independiente de comprobantes termicos y documentos de deuda.",
+            "La linea de firma se muestra al final de los reportes cuando esta activada.",
             [
                 self._check_firma_reportes_pdf,
                 self._crear_bloque_campo(
@@ -907,8 +896,7 @@ class VistaConfiguracion(QWidget):
         self._agregar_cierre_tab_compacto(
             contenido,
             (
-                "Los reportes se generan bajo demanda. No modifica comprobantes "
-                "ESC/POS ni agrega reportes nuevos."
+                "Los reportes se generan bajo demanda y usan la carpeta seleccionada aqui."
             ),
             boton_guardar,
         )
@@ -918,8 +906,6 @@ class VistaConfiguracion(QWidget):
     def _crear_tab_operacion_respaldo(self) -> QWidget:
         self._check_respaldo_secundario = QCheckBox("Guardar tambien una copia secundaria")
         self._check_respaldo_secundario.toggled.connect(self._actualizar_estado_respaldos)
-        self._check_comprimir_zip = QCheckBox("Generar ZIP comprimido")
-        self._check_organizar_periodo = QCheckBox("Organizar carpetas por ano y mes")
         self._campo_ruta_respaldos_principal = QLineEdit()
         self._campo_ruta_respaldos_secundaria = QLineEdit()
         self._combo_duracion_sesion = QComboBox()
@@ -935,9 +921,7 @@ class VistaConfiguracion(QWidget):
         self._valor_respaldo_generado_por = self._crear_valor_seguridad()
         self._valor_ruta_respaldos = self._crear_valor_seguridad()
         self._valor_retencion = self._crear_valor_seguridad()
-        self._valor_ruta_comprobantes = self._crear_valor_seguridad()
         self._valor_ruta_reportes = self._crear_valor_seguridad()
-        self._valor_autenticacion = self._crear_valor_seguridad()
         self._valor_intentos = self._crear_valor_seguridad()
         self._valor_sesion = self._crear_valor_seguridad()
         self._valor_restablecimiento = self._crear_valor_seguridad()
@@ -945,7 +929,7 @@ class VistaConfiguracion(QWidget):
 
         panel_estado = self._crear_panel(
             "Estado actual",
-            "Resumen de respaldo local ejecutado al cerrar sesion o salir del sistema.",
+            "Resumen del respaldo ejecutado al cerrar sesion o salir del sistema.",
             [
                 self._crear_fila_resumen("Respaldo automatico", self._valor_respaldo_automatico),
                 self._crear_fila_resumen("Ultimo respaldo", self._valor_ultimo_respaldo),
@@ -960,19 +944,15 @@ class VistaConfiguracion(QWidget):
         )
         panel_manual = self._crear_panel(
             "Respaldo manual",
-            "Genera una copia segura de SQLite con registro interno e historial operativo.",
+            "Genera una copia segura con registro interno e historial operativo.",
             [
-                self._crear_fila_resumen(
-                    "Ruta exportacion comprobantes",
-                    self._valor_ruta_comprobantes,
-                ),
                 self._crear_fila_resumen("Ruta exportacion reportes", self._valor_ruta_reportes),
                 self._crear_fila_botones_respaldo(),
             ],
         )
         panel_ubicacion = self._crear_panel(
             "Ubicacion y retencion",
-            "Define carpetas de respaldo. La retencion del prototipo conserva automaticamente los 5 respaldos mas recientes.",
+            "Define carpetas de respaldo. SIGQUA conserva los 5 respaldos mas recientes.",
             [
                 self._crear_bloque_campo_con_accion(
                     "Carpeta principal de respaldos",
@@ -987,13 +967,11 @@ class VistaConfiguracion(QWidget):
                     "Seleccionar",
                     self._seleccionar_carpeta_respaldo_secundaria,
                 ),
-                self._check_comprimir_zip,
-                self._check_organizar_periodo,
             ],
         )
         panel_restauracion = self._crear_panel(
             "Restauracion desde historial",
-            "Restaura un respaldo generado por SIGQUA despues de validar archivo, hash e integridad SQLite.",
+            "Restaura un respaldo generado por SIGQUA despues de validar el archivo.",
             [
                 self._crear_bloque_campo("Respaldo disponible", self._combo_respaldos_restauracion),
                 self._crear_fila_botones_restauracion(),
@@ -1027,8 +1005,8 @@ class VistaConfiguracion(QWidget):
         self._agregar_cierre_tab_compacto(
             contenido,
             (
-                "La restauracion reemplaza la base local. SIGQUA genera un respaldo "
-                "previo y recomienda reiniciar despues de restaurar."
+                "SIGQUA conserva automaticamente los 5 respaldos mas recientes. "
+                "Al crear uno nuevo, elimina el mas antiguo si ya existen 5."
             ),
             boton_guardar,
         )
@@ -1037,21 +1015,15 @@ class VistaConfiguracion(QWidget):
     def _crear_tab_informacion(self) -> QWidget:
         self._valor_nombre_sistema = self._crear_valor_seguridad()
         self._valor_version_sistema = self._crear_valor_seguridad()
-        self._valor_ruta_base = self._crear_valor_seguridad()
-        self._valor_ruta_respaldos_activa = self._crear_valor_seguridad()
-        self._valor_modo_operacion = self._crear_valor_seguridad()
         self._valor_duracion_sesion_info = self._crear_valor_seguridad()
         self._valor_actualizacion = self._crear_valor_seguridad()
         self._valor_actualizado_por = self._crear_valor_seguridad()
         panel = self._crear_panel(
             "Informacion del sistema",
-            "Resumen tecnico legible del entorno local, las rutas activas y la politica vigente.",
+            "Resumen general de la version y los cambios recientes.",
             [
                 self._crear_fila_resumen("Sistema", self._valor_nombre_sistema),
                 self._crear_fila_resumen("Version", self._valor_version_sistema),
-                self._crear_fila_resumen("Base de datos", self._valor_ruta_base),
-                self._crear_fila_resumen("Carpeta de respaldos", self._valor_ruta_respaldos_activa),
-                self._crear_fila_resumen("Modo de operacion", self._valor_modo_operacion),
                 self._crear_fila_resumen("Tiempo de sesion", self._valor_duracion_sesion_info),
                 self._crear_fila_resumen("Ultima actualizacion", self._valor_actualizacion),
                 self._crear_fila_resumen("Actualizado por", self._valor_actualizado_por),
@@ -1059,14 +1031,19 @@ class VistaConfiguracion(QWidget):
         )
         panel_seguridad = self._crear_panel(
             "Seguridad local",
-            "Reglas activas de autenticacion local y duracion de sesion operativa.",
+            "Controles simples para proteger el acceso administrativo.",
             [
-                self._crear_fila_resumen("Autenticacion", self._valor_autenticacion),
-                self._crear_fila_resumen("Intentos maximos", self._valor_intentos),
+                self._crear_fila_resumen("Intentos permitidos", self._valor_intentos),
                 self._crear_bloque_campo("Tiempo de cierre automatico de sesion", self._combo_duracion_sesion),
                 self._crear_fila_resumen("Duracion actual", self._valor_sesion),
-                self._crear_fila_resumen("Restablecimiento", self._valor_restablecimiento),
-                self._crear_fila_resumen("Cambio obligatorio de clave", self._valor_cambio_clave),
+                self._crear_fila_resumen(
+                    "Restablecimiento",
+                    self._valor_restablecimiento,
+                ),
+                self._crear_fila_resumen(
+                    "Clave temporal",
+                    self._valor_cambio_clave,
+                ),
             ],
         )
         boton_guardar = crear_boton_operativo("Guardar duracion de sesion", principal=True)
@@ -1084,8 +1061,8 @@ class VistaConfiguracion(QWidget):
         self._agregar_cierre_tab_compacto(
             contenido,
             (
-                "Configuracion expone solo parametros reales de operacion, "
-                "seguridad local y backend documental."
+                "La contrasena puede ser restablecida por un administrador. "
+                "Si se entrega una clave temporal, el usuario debera cambiarla al entrar."
             ),
             boton_guardar,
         )
@@ -1094,8 +1071,9 @@ class VistaConfiguracion(QWidget):
     def _crear_vista_previa_comprobante(self) -> QWidget:
         marco = QFrame()
         marco.setObjectName("previewComprobanteConfiguracion")
+        marco.setMaximumWidth(420)
         layout = QVBoxLayout(marco)
-        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(6)
 
         encabezado = QLabel("Vista previa del recibo termico")
@@ -1103,13 +1081,41 @@ class VistaConfiguracion(QWidget):
         self._preview_documento = QTextEdit()
         self._preview_documento.setObjectName("documentoPreviewComprobanteConfiguracion")
         self._preview_documento.setReadOnly(True)
-        self._preview_documento.setMinimumHeight(360)
+        self._preview_documento.setFixedWidth(300)
+        self._preview_documento.setMinimumHeight(300)
+        self._preview_documento.setMaximumHeight(380)
         self._preview_documento.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._preview_documento.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         layout.addWidget(encabezado)
-        layout.addWidget(self._preview_documento)
+        layout.addWidget(self._preview_documento, alignment=Qt.AlignmentFlag.AlignHCenter)
         return marco
+
+    def _actualizar_preview_desde_estado_actual(self, *args: object) -> None:
+        if self._cargando_estado or self._ultimo_estado_configuracion is None:
+            return
+        estado = self._ultimo_estado_configuracion
+        estado_preview = replace(
+            estado,
+            factura=replace(
+                estado.factura,
+                titulo_documento=self._campo_titulo_documento.text(),
+                texto_pie=self._campo_texto_pie.toPlainText(),
+                etiqueta_copia=self._campo_etiqueta_copia.text(),
+                mostrar_correo=self._check_mostrar_correo.isChecked(),
+                mostrar_telefono=self._check_mostrar_telefono.isChecked(),
+                mostrar_direccion=self._check_mostrar_direccion.isChecked(),
+                mostrar_identificador_fiscal=self._check_mostrar_identificador.isChecked(),
+                firma_habilitada=self._check_firma_habilitada.isChecked(),
+                firma_texto_linea=self._campo_firma_texto_linea.text(),
+                impresora_termica_ancho_mm=self._resolver_ancho_termico_actual(),
+            ),
+        )
+        self._preview_documento.setFixedWidth(
+            240 if estado_preview.factura.impresora_termica_ancho_mm == 58 else 300
+        )
+        formateador = self._ultimo_formateador_moneda or (lambda valor: f"L {valor / 100:,.2f}")
+        self._actualizar_preview_comprobante(estado_preview, formateador)
 
     def _actualizar_preview_comprobante(
         self,
@@ -1132,7 +1138,7 @@ class VistaConfiguracion(QWidget):
                 ),
                 bloque_comprobante=(
                     ("Proximo recibo", estado.factura.proximo_correlativo),
-                    ("Salida", "Ticket termico ESC/POS"),
+                    ("Salida", "Ticket termico"),
                     ("Tipo", "Mensualidad"),
                 ),
                 bloque_servicio=(
@@ -1206,8 +1212,10 @@ class VistaConfiguracion(QWidget):
         dialogo = DialogoMensajeSigqua(
             titulo="Ayuda de configuracion",
             mensaje=(
-                "Esta pantalla administra identidad institucional, documentos, cobro, respaldo local y seguridad operativa. "
-                "Los respaldos usan snapshot seguro de SQLite y la restauracion sigue fuera de este modulo."
+                "En esta pantalla puedes ajustar los datos de la Junta, los comprobantes de pago, "
+                "las impresoras, los cobros, los respaldos y los reportes PDF. Los cambios afectan "
+                "la forma en que el sistema registra pagos, genera documentos y protege la informacion. "
+                "Si no estas seguro de una opcion, consulta el manual de usuario antes de modificarla."
             ),
             parent=self,
         )
@@ -1455,10 +1463,7 @@ class VistaConfiguracion(QWidget):
     def _emitir_guardado_parametros_factura(self) -> None:
         self.guardar_parametros_factura_solicitado.emit(
             self._campo_titulo_documento.text(),
-            self._campo_subtitulo_documento.text(),
-            self._campo_texto_legal_superior.toPlainText(),
             self._campo_texto_pie.toPlainText(),
-            self._campo_texto_legal_inferior.toPlainText(),
             self._campo_etiqueta_copia.text(),
             self._check_mostrar_correo.isChecked(),
             self._check_mostrar_telefono.isChecked(),
@@ -1469,7 +1474,6 @@ class VistaConfiguracion(QWidget):
             self._combo_impresora_comprobantes.currentText(),
             self._resolver_ancho_termico_actual(),
             self._check_corte_termico.isChecked(),
-            self._campo_codigo_pagina_termico.text(),
             self._combo_impresora_reportes.currentText(),
         )
 
@@ -1478,8 +1482,6 @@ class VistaConfiguracion(QWidget):
             self._campo_ruta_respaldos_principal.text().strip(),
             self._campo_ruta_respaldos_secundaria.text().strip(),
             self._check_respaldo_secundario.isChecked(),
-            self._check_comprimir_zip.isChecked(),
-            self._check_organizar_periodo.isChecked(),
         )
 
     def _emitir_guardado_reportes_pdf(self) -> None:

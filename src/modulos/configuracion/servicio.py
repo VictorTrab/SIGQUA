@@ -200,9 +200,7 @@ class ServicioConfiguracion:
             impresora_termica_corte_automatico=self._a_booleano(
                 self._valor_parametro(parametros, "impresion_termica.corte_automatico", "1")
             ),
-            impresora_termica_codigo_pagina=self._valor_parametro(
-                parametros, "impresion_termica.codigo_pagina", "cp850"
-            ) or "cp850",
+            impresora_termica_codigo_pagina="cp850",
             impresora_reportes_nombre=self._valor_parametro(
                 parametros, "impresion_reportes.nombre_impresora", ""
             ),
@@ -262,7 +260,7 @@ class ServicioConfiguracion:
             organizar_por_periodo=configuracion_respaldo.organizar_por_periodo,
             retencion_maxima=configuracion_respaldo.retencion_maxima,
             proxima_ejecucion_programada="Activo al cerrar sesion",
-            ruta_exportaciones_comprobantes="No aplica: los comprobantes se imprimen por ESC/POS.",
+            ruta_exportaciones_comprobantes="No aplica: los comprobantes se imprimen desde pagos.",
             ruta_exportaciones_reportes=reportes_pdf.ruta_salida,
         )
         informacion = InformacionConfiguracion(
@@ -346,10 +344,7 @@ class ServicioConfiguracion:
     def guardar_parametros_factura(
         self,
         titulo_documento: str,
-        subtitulo_documento: str,
-        texto_legal_superior: str,
         texto_pie: str,
-        texto_legal_inferior: str,
         etiqueta_copia: str,
         mostrar_correo: bool,
         mostrar_telefono: bool,
@@ -360,19 +355,14 @@ class ServicioConfiguracion:
         impresora_termica_nombre: str = "",
         impresora_termica_ancho_mm: int = 80,
         impresora_termica_corte_automatico: bool = True,
-        impresora_termica_codigo_pagina: str = "cp850",
         impresora_reportes_nombre: str = "",
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
         titulo_documento = titulo_documento.strip()
-        subtitulo_documento = subtitulo_documento.strip()
-        texto_legal_superior = texto_legal_superior.strip()
         texto_pie = texto_pie.strip()
-        texto_legal_inferior = texto_legal_inferior.strip()
         etiqueta_copia = etiqueta_copia.strip()
         firma_texto_linea = firma_texto_linea.strip() or TEXTO_FIRMA_PREDETERMINADO
         impresora_termica_nombre = impresora_termica_nombre.strip()
-        impresora_termica_codigo_pagina = impresora_termica_codigo_pagina.strip() or "cp850"
         impresora_reportes_nombre = impresora_reportes_nombre.strip()
 
         if not titulo_documento:
@@ -387,10 +377,7 @@ class ServicioConfiguracion:
             self._repositorio_configuracion.actualizar_valores(
                 {
                     "factura.titulo_documento": titulo_documento,
-                    "factura.subtitulo_documento": subtitulo_documento,
-                    "factura.texto_legal_superior": texto_legal_superior,
                     "factura.texto_pie": texto_pie,
-                    "factura.texto_legal_inferior": texto_legal_inferior,
                     "factura.etiqueta_copia": etiqueta_copia,
                     "factura.mostrar_correo": "1" if mostrar_correo else "0",
                     "factura.mostrar_telefono": "1" if mostrar_telefono else "0",
@@ -401,7 +388,7 @@ class ServicioConfiguracion:
                     "impresion_termica.nombre_impresora": impresora_termica_nombre,
                     "impresion_termica.ancho_papel_mm": str(impresora_termica_ancho_mm),
                     "impresion_termica.corte_automatico": "1" if impresora_termica_corte_automatico else "0",
-                    "impresion_termica.codigo_pagina": impresora_termica_codigo_pagina,
+                    "impresion_termica.codigo_pagina": "cp850",
                     "impresion_reportes.nombre_impresora": impresora_reportes_nombre,
                 },
                 actor_id=actor_id,
@@ -508,8 +495,6 @@ class ServicioConfiguracion:
         ruta_principal: str,
         ruta_secundaria: str,
         secundaria_activa: bool,
-        comprimir_zip: bool,
-        organizar_por_periodo: bool,
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
         ruta_principal = ruta_principal.strip()
@@ -532,8 +517,8 @@ class ServicioConfiguracion:
                     "respaldo.ruta_principal": ruta_principal,
                     "respaldo.ruta_secundaria": ruta_secundaria,
                     "respaldo.secundaria_activa": "1" if secundaria_activa else "0",
-                    "respaldo.comprimir_zip": "1" if comprimir_zip else "0",
-                    "respaldo.organizar_por_periodo": "1" if organizar_por_periodo else "0",
+                    "respaldo.comprimir_zip": "1",
+                    "respaldo.organizar_por_periodo": "0",
                 },
                 actor_id=actor_id,
             )
@@ -570,7 +555,7 @@ class ServicioConfiguracion:
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
         if self._servicio_respaldo is None:
-            return ResultadoGestionConfiguracion(False, "El backend de respaldo no esta disponible.", "ERROR_CONFIG")
+            return ResultadoGestionConfiguracion(False, "El servicio de respaldo no esta disponible.", "ERROR_CONFIG")
         respaldo = self._obtener_respaldo_disponible(respaldo_id)
         if respaldo is None:
             return ResultadoGestionConfiguracion(False, "Selecciona un respaldo disponible para restaurar.", "VALIDACION")
@@ -656,7 +641,7 @@ class ServicioConfiguracion:
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
         if self._servicio_respaldo is None:
-            return ResultadoGestionConfiguracion(False, "El backend de respaldo no esta disponible.", "ERROR_CONFIG")
+            return ResultadoGestionConfiguracion(False, "El servicio de respaldo no esta disponible.", "ERROR_CONFIG")
         estado = self.obtener_estado()
         try:
             detalle = self._servicio_respaldo.crear_respaldo_manual(
@@ -840,10 +825,8 @@ class ServicioConfiguracion:
                 self._valor_parametro(parametros, "respaldo.ruta_secundaria", "")
             ),
             secundaria_activa=self._a_booleano(self._valor_parametro(parametros, "respaldo.secundaria_activa", "0")),
-            comprimir_zip=self._a_booleano(self._valor_parametro(parametros, "respaldo.comprimir_zip", "1")),
-            organizar_por_periodo=self._a_booleano(
-                self._valor_parametro(parametros, "respaldo.organizar_por_periodo", "1")
-            ),
+            comprimir_zip=True,
+            organizar_por_periodo=False,
             retencion_maxima=RETENCION_MAXIMA_RESPALDOS,
             version_sistema=self._valor_parametro(parametros, "sistema.version", ""),
         )

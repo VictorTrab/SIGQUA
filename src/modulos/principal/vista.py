@@ -1800,8 +1800,8 @@ class VistaModuloPrincipal(QWidget):
         self._boton_ajustes = self._crear_boton_sidebar(
             ModuloNavegacion(
                 "configuracion",
-                "Ajustes",
-                "Parámetros operativos y configuración local.",
+                "Configuración",
+                "Parámetros del sistema, comprobantes, respaldos y reportes.",
                 "settings-2.svg",
             ),
             tipo="accion",

@@ -86,10 +86,7 @@ class ControladorConfiguracion:
     def _guardar_parametros_factura(
         self,
         titulo_documento: str,
-        subtitulo_documento: str,
-        texto_legal_superior: str,
         texto_pie: str,
-        texto_legal_inferior: str,
         etiqueta_copia: str,
         mostrar_correo: bool,
         mostrar_telefono: bool,
@@ -100,15 +97,11 @@ class ControladorConfiguracion:
         impresora_termica_nombre: str,
         impresora_termica_ancho_mm: int,
         impresora_termica_corte_automatico: bool,
-        impresora_termica_codigo_pagina: str,
         impresora_reportes_nombre: str,
     ) -> None:
         resultado = self._servicio_configuracion.guardar_parametros_factura(
             titulo_documento=titulo_documento,
-            subtitulo_documento=subtitulo_documento,
-            texto_legal_superior=texto_legal_superior,
             texto_pie=texto_pie,
-            texto_legal_inferior=texto_legal_inferior,
             etiqueta_copia=etiqueta_copia,
             mostrar_correo=mostrar_correo,
             mostrar_telefono=mostrar_telefono,
@@ -119,7 +112,6 @@ class ControladorConfiguracion:
             impresora_termica_nombre=impresora_termica_nombre,
             impresora_termica_ancho_mm=impresora_termica_ancho_mm,
             impresora_termica_corte_automatico=impresora_termica_corte_automatico,
-            impresora_termica_codigo_pagina=impresora_termica_codigo_pagina,
             impresora_reportes_nombre=impresora_reportes_nombre,
             actor_id=None if self._actor is None else self._actor.identificador,
         )
@@ -203,15 +195,11 @@ class ControladorConfiguracion:
         ruta_principal: str,
         ruta_secundaria: str,
         secundaria_activa: bool,
-        comprimir_zip: bool,
-        organizar_por_periodo: bool,
     ) -> None:
         resultado = self._servicio_configuracion.guardar_operacion_respaldo(
             ruta_principal=ruta_principal,
             ruta_secundaria=ruta_secundaria,
             secundaria_activa=secundaria_activa,
-            comprimir_zip=comprimir_zip,
-            organizar_por_periodo=organizar_por_periodo,
             actor_id=None if self._actor is None else self._actor.identificador,
         )
         self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)

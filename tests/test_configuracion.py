@@ -83,6 +83,9 @@ class TestConfiguracion(unittest.TestCase):
         self.assertTrue(estado.factura.correlativo_actual.startswith("REC-"))
         self.assertEqual(estado.operacion.total_respaldos, 0)
         self.assertEqual(estado.operacion.ruta_respaldos_principal, str(self.gestor_rutas.obtener_ruta_respaldos()))
+        self.assertTrue(estado.operacion.comprimir_zip)
+        self.assertFalse(estado.operacion.organizar_por_periodo)
+        self.assertEqual(estado.operacion.retencion_maxima, 5)
         self.assertEqual(estado.seguridad.duracion_sesion_horas, 8.0)
         self.assertEqual(estado.informacion.version_sistema, "2.2.0")
         self.assertEqual(estado.seguridad.maximo_intentos_fallidos, 5)
@@ -139,12 +142,17 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.informacion.actualizado_por, "Administrador del Sistema")
 
     def test_guardado_factura_y_respaldo_actualiza_base(self) -> None:
+        self.repositorio.actualizar_valores(
+            {
+                "impresion_termica.codigo_pagina": "utf-8",
+                "respaldo.comprimir_zip": "0",
+                "respaldo.organizar_por_periodo": "1",
+            },
+            actor_id=1,
+        )
         resultado_factura = self.servicio.guardar_parametros_factura(
             titulo_documento="RECIBO OFICIAL DE PAGO",
-            subtitulo_documento="Cobro institucional",
-            texto_legal_superior="No es factura de deuda.",
             texto_pie="Conserve este comprobante.",
-            texto_legal_inferior="No se aceptan anulaciones desde caja.",
             etiqueta_copia="ORIGINAL",
             mostrar_correo=True,
             mostrar_telefono=True,
@@ -155,7 +163,6 @@ class TestConfiguracion(unittest.TestCase):
             impresora_termica_nombre="Ticketera Caja",
             impresora_termica_ancho_mm=58,
             impresora_termica_corte_automatico=False,
-            impresora_termica_codigo_pagina="cp850",
             impresora_reportes_nombre="Impresora Administrativa",
             actor_id=1,
         )
@@ -163,8 +170,6 @@ class TestConfiguracion(unittest.TestCase):
             ruta_principal=str(self.gestor_rutas.obtener_ruta_respaldos()),
             ruta_secundaria=str(self.raiz_temporal / "respaldos_secundarios"),
             secundaria_activa=True,
-            comprimir_zip=True,
-            organizar_por_periodo=True,
             actor_id=1,
         )
         resultado_sesion = self.servicio.guardar_duracion_sesion(4.0, actor_id=1)
@@ -182,9 +187,23 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.factura.impresora_termica_nombre, "Ticketera Caja")
         self.assertEqual(estado.factura.impresora_termica_ancho_mm, 58)
         self.assertFalse(estado.factura.impresora_termica_corte_automatico)
+        self.assertEqual(estado.factura.impresora_termica_codigo_pagina, "cp850")
         self.assertEqual(estado.factura.impresora_reportes_nombre, "Impresora Administrativa")
         self.assertTrue(estado.operacion.respaldo_automatico)
+        self.assertTrue(estado.operacion.comprimir_zip)
+        self.assertFalse(estado.operacion.organizar_por_periodo)
+        self.assertEqual(estado.operacion.retencion_maxima, 5)
         self.assertEqual(estado.seguridad.duracion_sesion_horas, 4.0)
+        parametros_fijos = self.repositorio.listar_por_claves(
+            (
+                "impresion_termica.codigo_pagina",
+                "respaldo.comprimir_zip",
+                "respaldo.organizar_por_periodo",
+            )
+        )
+        self.assertEqual(parametros_fijos["impresion_termica.codigo_pagina"].valor, "cp850")
+        self.assertEqual(parametros_fijos["respaldo.comprimir_zip"].valor, "1")
+        self.assertEqual(parametros_fijos["respaldo.organizar_por_periodo"].valor, "0")
 
     def test_guardado_reportes_pdf_actualiza_claves_independientes(self) -> None:
         ruta = self.raiz_temporal / "reportes_personalizados"
@@ -221,8 +240,6 @@ class TestConfiguracion(unittest.TestCase):
             ruta_principal=str(self.gestor_rutas.obtener_ruta_respaldos()),
             ruta_secundaria=str(self.raiz_temporal / "copias"),
             secundaria_activa=True,
-            comprimir_zip=True,
-            organizar_por_periodo=True,
             actor_id=1,
         )
 
@@ -278,8 +295,6 @@ class TestConfiguracion(unittest.TestCase):
             ruta_principal=str(self.gestor_rutas.obtener_ruta_respaldos()),
             ruta_secundaria="",
             secundaria_activa=False,
-            comprimir_zip=True,
-            organizar_por_periodo=False,
             actor_id=1,
         )
         resultado_respaldo = self.servicio.crear_respaldo_manual(actor_id=1)
@@ -361,12 +376,17 @@ class TestConfiguracion(unittest.TestCase):
         self.assertGreaterEqual(eventos, 4)
 
     def test_firma_visual_vacia_usa_texto_predeterminado(self) -> None:
+        self.repositorio.actualizar_valores(
+            {
+                "factura.subtitulo_documento": "Texto conservado",
+                "factura.texto_legal_superior": "Legal superior conservado",
+                "factura.texto_legal_inferior": "Legal inferior conservado",
+            },
+            actor_id=1,
+        )
         resultado = self.servicio.guardar_parametros_factura(
             titulo_documento="RECIBO",
-            subtitulo_documento="",
-            texto_legal_superior="",
             texto_pie="Pie",
-            texto_legal_inferior="",
             etiqueta_copia="ORIGINAL",
             mostrar_correo=True,
             mostrar_telefono=True,
@@ -378,7 +398,11 @@ class TestConfiguracion(unittest.TestCase):
         )
 
         self.assertTrue(resultado.exito)
-        self.assertEqual(self.servicio.obtener_estado().factura.firma_texto_linea, "Firma autorizada")
+        factura = self.servicio.obtener_estado().factura
+        self.assertEqual(factura.firma_texto_linea, "Firma autorizada")
+        self.assertEqual(factura.subtitulo_documento, "Texto conservado")
+        self.assertEqual(factura.texto_legal_superior, "Legal superior conservado")
+        self.assertEqual(factura.texto_legal_inferior, "Legal inferior conservado")
 
     def test_no_permite_meses_corte_invalido(self) -> None:
         resultado = self.servicio.guardar_parametros_cobro(

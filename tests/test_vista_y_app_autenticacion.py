@@ -866,8 +866,11 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertIsNotNone(encabezado_sidebar)
         self.assertIn("QWidget#encabezadoSidebar", vista_principal.styleSheet())
         self.assertIn("QPushButton#botonPerfilSidebar", vista_principal.styleSheet())
-        self.assertEqual(vista_principal._boton_ajustes.toolTip(), "Parámetros operativos y configuración local.")
-        self.assertEqual(vista_principal._boton_ajustes.text(), "Ajustes")
+        self.assertEqual(
+            vista_principal._boton_ajustes.toolTip(),
+            "Parámetros del sistema, comprobantes, respaldos y reportes.",
+        )
+        self.assertEqual(vista_principal._boton_ajustes.text(), "Configuración")
         vista_principal._reconstruir_sidebar(
             (
                 ModuloNavegacion(
@@ -1006,7 +1009,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista_principal.registrar_modulo("configuracion", vista_configuracion)
         vista_principal.mostrar_estado(estado)
 
-        self.assertEqual(vista_principal._boton_ajustes.text(), "Ajustes")
+        self.assertEqual(vista_principal._boton_ajustes.text(), "Configuración")
         self.assertIsNone(vista_principal.findChild(QPushButton, "botonPerfilHeader"))
         self.assertIsNotNone(vista_principal.findChild(QPushButton, "botonPerfilSidebar"))
         self.assertNotIn(
@@ -1571,6 +1574,76 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista_configuracion._emitir_guardado_parametros_cobro()
         self.assertEqual(emisiones[-1], (2, 5))
         vista_configuracion.close()
+
+    def test_configuracion_final_oculta_opciones_tecnicas_y_actualiza_preview(self) -> None:
+        vista = VistaConfiguracion()
+        estado = self._crear_estado_configuracion_ui()
+        vista.mostrar_estado(estado, lambda centavos: f"L {centavos / 100:.2f}")
+        vista.show()
+        self.aplicacion.processEvents()
+
+        self.assertFalse(hasattr(vista, "_check_comprimir_zip"))
+        self.assertFalse(hasattr(vista, "_check_organizar_periodo"))
+        self.assertFalse(hasattr(vista, "_campo_codigo_pagina_termico"))
+        self.assertFalse(hasattr(vista, "_valor_ruta_base"))
+        self.assertFalse(hasattr(vista, "_valor_modo_operacion"))
+        self.assertFalse(hasattr(vista, "_valor_autenticacion"))
+        self.assertFalse(hasattr(vista, "_valor_correlativo_actual"))
+        self.assertFalse(hasattr(vista, "_campo_junta_sitio_web"))
+        self.assertFalse(hasattr(vista, "_campo_subtitulo_documento"))
+        self.assertFalse(hasattr(vista, "_campo_texto_legal_superior"))
+        self.assertFalse(hasattr(vista, "_campo_texto_legal_inferior"))
+
+        textos_respaldos = {
+            label.text() for label in vista._tabs.widget(1).findChildren(QLabel)
+        }
+        self.assertNotIn("Generar ZIP comprimido", textos_respaldos)
+        self.assertNotIn("Organizar carpetas por ano y mes", textos_respaldos)
+        self.assertNotIn("Ruta exportacion comprobantes", textos_respaldos)
+        self.assertIn("Retencion", textos_respaldos)
+
+        textos_sistema = {
+            label.text() for label in vista._tabs.widget(2).findChildren(QLabel)
+        }
+        self.assertNotIn("Base de datos", textos_sistema)
+        self.assertNotIn("Modo de operacion", textos_sistema)
+        self.assertNotIn("Autenticacion", textos_sistema)
+        self.assertIn("Intentos permitidos", textos_sistema)
+
+        textos_comprobantes = [
+            label.text() for label in vista._tabs.widget(3).findChildren(QLabel)
+        ]
+        self.assertNotIn("Correlativo actual", textos_comprobantes)
+        self.assertEqual(textos_comprobantes.count("Ultimo comprobante emitido"), 1)
+        self.assertTrue(vista._campo_factura_nombre.isReadOnly())
+        self.assertTrue(vista._campo_factura_datos.isReadOnly())
+
+        textos_impresoras = {
+            label.text() for label in vista._tabs.widget(4).findChildren(QLabel)
+        }
+        self.assertNotIn("Codigo de pagina ESC/POS", textos_impresoras)
+
+        documento_anterior = vista._preview_documento.toPlainText()
+        vista._campo_titulo_documento.setText("RECIBO ACTUALIZADO")
+        self.aplicacion.processEvents()
+        self.assertNotEqual(vista._preview_documento.toPlainText(), documento_anterior)
+        self.assertIn("RECIBO ACTUALIZADO", vista._preview_documento.toPlainText())
+
+        datos_emitidos: list[tuple[str, ...]] = []
+        vista.guardar_datos_junta_solicitado.connect(
+            lambda *args: datos_emitidos.append(tuple(args))
+        )
+        vista._campo_junta_direccion.setPlainText("Direccion correcta")
+        vista._campo_junta_identificador.setText("ID-123")
+        boton_guardar_identidad = next(
+            boton
+            for boton in vista._tabs.widget(0).findChildren(QPushButton)
+            if boton.text() == "Guardar identidad de la empresa"
+        )
+        boton_guardar_identidad.click()
+        self.assertEqual(datos_emitidos[-1][3], "Direccion correcta")
+        self.assertEqual(datos_emitidos[-1][4], "ID-123")
+        vista.close()
 
     def test_modulos_base_no_replican_titulo_en_contenido(self) -> None:
         vistas = (

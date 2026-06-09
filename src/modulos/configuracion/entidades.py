@@ -69,6 +69,7 @@ class FacturaConfiguracion:
     impresora_termica_nombre: str
     impresora_termica_ancho_mm: int
     impresora_termica_corte_automatico: bool
+    # Compatibilidad interna: en esta version siempre se resuelve como cp850.
     impresora_termica_codigo_pagina: str
     impresora_reportes_nombre: str
     comprobantes_pendientes_impresion: int
@@ -104,6 +105,7 @@ class OperacionConfiguracion:
     ruta_respaldos_principal: str
     ruta_respaldos_secundaria: str
     respaldo_secundario_activo: bool
+    # Compatibilidad interna: siempre ZIP, sin carpetas por periodo.
     comprimir_zip: bool
     organizar_por_periodo: bool
     retencion_maxima: int
