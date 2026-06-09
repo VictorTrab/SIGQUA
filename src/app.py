@@ -8,7 +8,7 @@ import signal
 from typing import Callable
 
 from dotenv import load_dotenv
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QProcess, Qt, QTimer
 from PySide6.QtGui import QCloseEvent, QFont, QIcon
 from PySide6.QtWidgets import QApplication, QDialog, QMainWindow, QSizePolicy
 
@@ -289,6 +289,7 @@ def crear_ventana_principal(
     ventana_principal.sesion_activa = None
     ventana_principal.contenedor_central = contenedor_central
     ventana_principal.controlador_autenticacion = controlador
+    ventana_principal.gestor_rutas = gestor_rutas
     ventana_principal.gestor_base_datos = gestor_base_datos
     ventana_principal.servicio_autenticacion = servicio_autenticacion
     ventana_principal.servicio_usuarios = servicio_usuarios
@@ -742,6 +743,9 @@ def _registrar_modulo_operativo(
             servicio_configuracion=ventana_principal.servicio_configuracion,
             vista_configuracion=vista_configuracion,
         )
+        vista_configuracion.reinicio_aplicacion_solicitado.connect(
+            lambda: _reiniciar_aplicacion(ventana_principal)
+        )
         vista_modulo_principal.registrar_modulo("configuracion", vista_configuracion)
         ventana_principal.vista_configuracion = vista_configuracion
         ventana_principal.controlador_configuracion = controlador_configuracion
@@ -873,6 +877,9 @@ def _registrar_modulos_operativos(ventana_principal: QMainWindow) -> None:
         servicio_configuracion=ventana_principal.servicio_configuracion,
         vista_configuracion=vista_configuracion,
     )
+    vista_configuracion.reinicio_aplicacion_solicitado.connect(
+        lambda: _reiniciar_aplicacion(ventana_principal)
+    )
     vista_modulo_principal.registrar_modulo("configuracion", vista_configuracion)
 
     ventana_principal.vista_barrios = vista_barrios
@@ -976,11 +983,50 @@ def _ejecutar_respaldo_por_cierre_sesion(ventana_principal: QMainWindow) -> tupl
     return False, "No se pudo crear el respaldo automatico. Puedes continuar; revisa Respaldos luego."
 
 
+def _reiniciar_aplicacion(ventana_principal: QMainWindow) -> bool:
+    """Relanza SIGQUA y cierra la instancia restaurada solo si el inicio tuvo exito."""
+    gestor_rutas = getattr(ventana_principal, "gestor_rutas", None) or GestorRutas()
+    if getattr(sys, "frozen", False):
+        programa = sys.executable
+        argumentos = list(sys.argv[1:])
+    else:
+        programa = sys.executable
+        argumentos = [
+            str(gestor_rutas.raiz_proyecto / "src" / "main.py"),
+            *sys.argv[1:],
+        ]
+    resultado = QProcess.startDetached(
+        programa,
+        argumentos,
+        str(gestor_rutas.raiz_proyecto),
+    )
+    iniciado = resultado[0] if isinstance(resultado, tuple) else bool(resultado)
+    if not iniciado:
+        logger.error("No fue posible reiniciar SIGQUA despues de restaurar.")
+        DialogoMensajeSigqua(
+            titulo="Reinicio pendiente",
+            mensaje=(
+                "El respaldo fue restaurado, pero SIGQUA no pudo reiniciarse "
+                "automaticamente. Cierra y abre la aplicacion manualmente."
+            ),
+            variante="error",
+            parent=ventana_principal,
+        ).exec()
+        return False
+    ventana_principal.reinicio_en_curso = True
+    logger.info("Nueva instancia de SIGQUA iniciada despues de restaurar.")
+    ventana_principal.close()
+    QApplication.quit()
+    return True
+
+
 def _manejar_cierre_ventana_principal(
     ventana_principal: QMainWindow,
     servicio_autenticacion: ServicioAutenticacion,
 ) -> bool:
     """Controla el cierre con X y ejecuta respaldo si hay sesion activa."""
+    if getattr(ventana_principal, "reinicio_en_curso", False):
+        return True
     sesion_activa = getattr(ventana_principal, "sesion_activa", None)
     if sesion_activa is None:
         return True

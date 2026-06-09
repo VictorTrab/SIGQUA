@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import QTimer
+
 from comun.actualizaciones import bus_actualizaciones_modulos
 from modulos.autenticacion.entidades import UsuarioAutenticado
 from modulos.configuracion.servicio import ServicioConfiguracion
@@ -33,14 +35,11 @@ class ControladorConfiguracion:
         self._vista_configuracion.guardar_parametros_cobro_solicitado.connect(
             self._guardar_parametros_cobro
         )
-        self._vista_configuracion.guardar_operacion_respaldo_solicitado.connect(
-            self._guardar_operacion_respaldo
+        self._vista_configuracion.restaurar_respaldo_externo_solicitado.connect(
+            self._restaurar_respaldo_externo
         )
-        self._vista_configuracion.crear_respaldo_manual_solicitado.connect(
-            self._crear_respaldo_manual
-        )
-        self._vista_configuracion.restaurar_respaldo_solicitado.connect(
-            self._restaurar_respaldo
+        self._vista_configuracion.restaurar_respaldo_automatico_solicitado.connect(
+            self._restaurar_respaldo_automatico
         )
         self._vista_configuracion.guardar_duracion_sesion_solicitado.connect(
             self._guardar_duracion_sesion
@@ -190,37 +189,40 @@ class ControladorConfiguracion:
                 modulos_afectados=("reportes",),
             )
 
-    def _guardar_operacion_respaldo(
-        self,
-        ruta_principal: str,
-        ruta_secundaria: str,
-        secundaria_activa: bool,
-    ) -> None:
-        resultado = self._servicio_configuracion.guardar_operacion_respaldo(
-            ruta_principal=ruta_principal,
-            ruta_secundaria=ruta_secundaria,
-            secundaria_activa=secundaria_activa,
+    def _restaurar_respaldo_externo(self, ruta_archivo: str) -> None:
+        resultado = self._servicio_configuracion.restaurar_respaldo_externo(
+            ruta_archivo=ruta_archivo,
             actor_id=None if self._actor is None else self._actor.identificador,
         )
         self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
-            self._refrescar()
+            self._programar_reinicio()
 
-    def _crear_respaldo_manual(self) -> None:
-        resultado = self._servicio_configuracion.crear_respaldo_manual(
+    def _restaurar_respaldo_automatico(self) -> None:
+        busqueda = self._servicio_configuracion.buscar_respaldo_automatico_restaurable()
+        if not busqueda.exito or busqueda.respaldo is None:
+            self._vista_configuracion.mostrar_mensaje(busqueda.mensaje, es_error=True)
+            return
+        if not self._vista_configuracion.confirmar_restauracion_automatica(
+            busqueda.respaldo
+        ):
+            return
+        resultado = self._servicio_configuracion.restaurar_respaldo_automatico(
+            respaldo_id=busqueda.respaldo.identificador,
             actor_id=None if self._actor is None else self._actor.identificador,
         )
-        self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
+        self._vista_configuracion.mostrar_mensaje(
+            resultado.mensaje,
+            es_error=not resultado.exito,
+        )
         if resultado.exito:
-            self._refrescar()
+            self._programar_reinicio()
 
-    def _restaurar_respaldo(self, respaldo_id: int) -> None:
-        resultado = self._servicio_configuracion.restaurar_respaldo(
-            respaldo_id=respaldo_id,
-            actor_id=None if self._actor is None else self._actor.identificador,
+    def _programar_reinicio(self) -> None:
+        QTimer.singleShot(
+            600,
+            self._vista_configuracion.reinicio_aplicacion_solicitado.emit,
         )
-        self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
-        self._refrescar()
 
     def _guardar_duracion_sesion(self, duracion_sesion_horas: float) -> None:
         resultado = self._servicio_configuracion.guardar_duracion_sesion(

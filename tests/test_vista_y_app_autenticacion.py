@@ -7,6 +7,7 @@ import unittest
 import uuid
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import QApplication, QFrame, QLabel, QLineEdit, QPushButt
 from app import (  # noqa: E402
     ALTO_VENTANA_AUTENTICACION,
     ANCHO_VENTANA_AUTENTICACION,
+    _reiniciar_aplicacion,
     crear_ventana_principal,
 )
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
@@ -64,8 +66,8 @@ from modulos.configuracion.entidades import (  # noqa: E402
     InformacionConfiguracion,
     OperacionConfiguracion,
     ParametrosCobro,
+    RespaldoAutomaticoDisponible,
     ReportesPdfConfiguracion,
-    RespaldoDisponible,
     SeguridadConfiguracion,
 )
 from modulos.casas.entidades import (  # noqa: E402
@@ -102,30 +104,6 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
     @staticmethod
     def _crear_estado_configuracion_ui() -> EstadoConfiguracion:
-        respaldos = (
-            RespaldoDisponible(
-                1,
-                "respaldo-1.zip",
-                "C:/respaldos/respaldo-1.zip",
-                100,
-                "hash-1",
-                "MANUAL",
-                "DISPONIBLE",
-                "01/06/2026",
-                "Administrador",
-            ),
-            RespaldoDisponible(
-                2,
-                "respaldo-2.zip",
-                "C:/respaldos/respaldo-2.zip",
-                120,
-                "hash-2",
-                "MANUAL",
-                "DISPONIBLE",
-                "02/06/2026",
-                "Administrador",
-            ),
-        )
         return EstadoConfiguracion(
             identidad_empresa=IdentidadEmpresa(
                 "Junta de Agua",
@@ -187,19 +165,10 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 2,
                 "",
                 0,
-                "",
                 "Sistema",
                 "C:/respaldos",
-                "",
-                False,
-                True,
-                True,
                 5,
-                "",
-                "C:/comprobantes",
-                "C:/reportes",
             ),
-            respaldos_disponibles=respaldos,
             seguridad=SeguridadConfiguracion(True, 5, 8.0, True, True),
             informacion=InformacionConfiguracion(
                 "SIGQUA",
@@ -850,27 +819,28 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertNotIn("Aviso", [vista._tabla.horizontalHeaderItem(indice).text() for indice in range(vista._tabla.columnCount())])
         vista.close()
 
-    def test_shell_principal_usa_sidebar_fijo_con_perfil_compacto(self) -> None:
+    def test_shell_principal_usa_superficie_dashboard_y_logo_del_login(self) -> None:
         vista_principal = VistaModuloPrincipal()
         vista_principal.resize(1200, 900)
         vista_principal.show()
         self.aplicacion.processEvents()
-        boton_perfil = vista_principal.findChild(QPushButton, "botonPerfilSidebar")
+        boton_perfil = vista_principal.findChild(QPushButton, "botonPerfilHeader")
+        logo = vista_principal.findChild(QLabel, "logoSidebar")
         encabezado_sidebar = vista_principal.findChild(QWidget, "encabezadoSidebar")
 
         self.assertEqual(vista_principal._sidebar.minimumWidth(), 184)
         self.assertEqual(vista_principal._sidebar.maximumWidth(), 184)
         self.assertIsNone(vista_principal.findChild(QPushButton, "botonColapsarSidebar"))
-        self.assertIsNone(vista_principal.findChild(QLabel, "logoSidebar"))
+        self.assertIsNotNone(logo)
+        self.assertFalse(logo.pixmap().isNull())
+        self.assertEqual(logo.pixmap().width(), 128)
         self.assertIsNotNone(boton_perfil)
         self.assertIsNotNone(encabezado_sidebar)
         self.assertIn("QWidget#encabezadoSidebar", vista_principal.styleSheet())
-        self.assertIn("QPushButton#botonPerfilSidebar", vista_principal.styleSheet())
-        self.assertEqual(
-            vista_principal._boton_ajustes.toolTip(),
-            "Parámetros del sistema, comprobantes, respaldos y reportes.",
-        )
-        self.assertEqual(vista_principal._boton_ajustes.text(), "Configuración")
+        self.assertIn("QPushButton#botonPerfilHeader", vista_principal.styleSheet())
+        self.assertIn("stop: 0 #181C20", vista_principal.styleSheet())
+        self.assertIn("stop: 0.52 #1C2127", vista_principal.styleSheet())
+        self.assertIn("stop: 1 #171B20", vista_principal.styleSheet())
         vista_principal._reconstruir_sidebar(
             (
                 ModuloNavegacion(
@@ -961,9 +931,9 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
         self.assertIn("Admin", vista_principal._label_bienvenida.text())
         self.assertIn("Monitorea ingresos", vista_principal._label_subresumen.text())
-        self.assertIsNone(vista_principal.findChild(QPushButton, "botonPerfilHeader"))
-        self.assertEqual(vista_principal._boton_perfil_sidebar._nombre.text(), "Admin Usuario")
-        self.assertEqual(vista_principal._boton_perfil_sidebar._rol.text(), "Administrador")
+        self.assertIsNotNone(vista_principal.findChild(QPushButton, "botonPerfilHeader"))
+        self.assertEqual(vista_principal._boton_perfil_header._nombre.text(), "Admin Usuario")
+        self.assertEqual(vista_principal._boton_perfil_header._rol.text(), "Administrador")
 
         vista_principal.mostrar_modulo("barrios")
         self.aplicacion.processEvents()
@@ -985,7 +955,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista_historial.close()
         vista_principal.close()
 
-    def test_shell_ubica_perfil_en_sidebar_y_ajustes_en_pie_sin_duplicados(self) -> None:
+    def test_shell_ubica_perfil_en_header_y_configuracion_en_administracion(self) -> None:
         vista_principal = VistaModuloPrincipal()
         estado = EstadoModuloPrincipal(
             nombre_usuario="admin",
@@ -1009,10 +979,9 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista_principal.registrar_modulo("configuracion", vista_configuracion)
         vista_principal.mostrar_estado(estado)
 
-        self.assertEqual(vista_principal._boton_ajustes.text(), "Configuración")
-        self.assertIsNone(vista_principal.findChild(QPushButton, "botonPerfilHeader"))
-        self.assertIsNotNone(vista_principal.findChild(QPushButton, "botonPerfilSidebar"))
-        self.assertNotIn(
+        self.assertIsNotNone(vista_principal.findChild(QPushButton, "botonPerfilHeader"))
+        self.assertIsNone(vista_principal.findChild(QPushButton, "botonPerfilSidebar"))
+        self.assertIn(
             "configuracion",
             {
                 codigo
@@ -1030,12 +999,12 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             vista_principal._panel_perfil_usuario._correo["valor"].text(),
             "soporte@sigqua.local",
         )
-        self.assertEqual(vista_principal._boton_perfil_sidebar._avatar.text(), "AU")
-        self.assertEqual(vista_principal._boton_perfil_sidebar._nombre.text(), "Admin Usuario")
-        self.assertEqual(vista_principal._boton_perfil_sidebar._rol.text(), "Administrador")
-        self.assertIn("Admin Usuario", vista_principal._boton_perfil_sidebar.toolTip())
+        self.assertEqual(vista_principal._boton_perfil_header._avatar.text(), "AU")
+        self.assertEqual(vista_principal._boton_perfil_header._nombre.text(), "Admin Usuario")
+        self.assertEqual(vista_principal._boton_perfil_header._rol.text(), "Administrador")
+        self.assertIn("Admin Usuario", vista_principal._boton_perfil_header.toolTip())
 
-        vista_principal._boton_ajustes.click()
+        vista_principal._botones_modulos["configuracion"].click()
         self.assertIs(
             vista_principal._stack_contenido.currentWidget(),
             vista_configuracion,
@@ -1043,7 +1012,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista_configuracion.close()
         vista_principal.close()
 
-    def test_panel_perfil_abre_desde_sidebar_y_confirma_cierre_sesion(self) -> None:
+    def test_panel_perfil_abre_desde_header_y_confirma_cierre_sesion(self) -> None:
         vista_principal = VistaModuloPrincipal()
         estado = EstadoModuloPrincipal(
             nombre_usuario="ana",
@@ -1072,16 +1041,17 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             for boton in vista_principal._sidebar.findChildren(QPushButton)
         }
         self.assertNotIn("Cerrar sesión", textos_sidebar)
-        self.assertEqual(vista_principal._boton_perfil_sidebar._nombre.text(), "Ana Martínez")
-        vista_principal._boton_perfil_sidebar.click()
+        self.assertEqual(vista_principal._boton_perfil_header._nombre.text(), "Ana Martínez")
+        vista_principal._boton_perfil_header.click()
         self.aplicacion.processEvents()
 
         panel = vista_principal._panel_perfil_usuario
         self.assertTrue(panel.isVisible())
-        origen_disparador = vista_principal._boton_perfil_sidebar.mapToGlobal(
-            vista_principal._boton_perfil_sidebar.rect().topRight()
-        ).x()
-        self.assertGreaterEqual(panel.x(), origen_disparador - 8)
+        origen_disparador = vista_principal._boton_perfil_header.mapToGlobal(
+            vista_principal._boton_perfil_header.rect().bottomRight()
+        )
+        self.assertLessEqual(panel.x() + panel.width(), origen_disparador.x())
+        self.assertGreaterEqual(panel.y(), origen_disparador.y())
         self.assertEqual(panel._boton_cerrar_sesion.text(), "Cerrar sesión")
 
         cierres: list[bool] = []
@@ -1097,7 +1067,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         panel._boton_cerrar_sesion.click()
         self.assertEqual(cierres, [])
 
-        vista_principal._boton_perfil_sidebar.click()
+        vista_principal._boton_perfil_header.click()
         self.aplicacion.processEvents()
 
         def aceptar_confirmacion() -> None:
@@ -1449,7 +1419,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         vista_planes.close()
         vista_configuracion.close()
 
-    def test_configuracion_detecta_cambios_persistibles_y_excluye_selector_restauracion(self) -> None:
+    def test_configuracion_detecta_cambios_persistibles_y_excluye_respaldos_fijos(self) -> None:
         vista_configuracion = VistaConfiguracion()
         estado = self._crear_estado_configuracion_ui()
         vista_configuracion.mostrar_estado(estado, lambda centavos: f"L {centavos / 100:.2f}")
@@ -1464,12 +1434,98 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
         vista_configuracion.mostrar_estado(estado, lambda centavos: f"L {centavos / 100:.2f}")
         self.assertFalse(vista_configuracion._hay_cambios_pendientes)
-        vista_configuracion._combo_respaldos_restauracion.setCurrentIndex(1)
-        self.assertFalse(vista_configuracion._hay_cambios_pendientes)
+        self.assertFalse(hasattr(vista_configuracion, "_campo_ruta_respaldos_principal"))
+        self.assertFalse(hasattr(vista_configuracion, "_campo_ruta_respaldos_secundaria"))
+        self.assertFalse(hasattr(vista_configuracion, "_check_respaldo_secundario"))
 
         vista_configuracion._combo_duracion_sesion.setCurrentIndex(1)
         self.assertTrue(vista_configuracion._hay_cambios_pendientes)
         vista_configuracion.close()
+
+    def test_configuracion_confirma_restauracion_desde_zip_externo(self) -> None:
+        vista = VistaConfiguracion()
+        rutas_emitidas: list[str] = []
+        vista.restaurar_respaldo_externo_solicitado.connect(rutas_emitidas.append)
+
+        with patch(
+            "modulos.configuracion.vista.QFileDialog.getOpenFileName",
+            return_value=("", ""),
+        ):
+            vista._seleccionar_respaldo_externo()
+        self.assertEqual(rutas_emitidas, [])
+
+        def confirmar() -> None:
+            dialogo = QApplication.activeModalWidget()
+            if dialogo is not None:
+                dialogo.accept()
+
+        QTimer.singleShot(0, confirmar)
+        with patch(
+            "modulos.configuracion.vista.QFileDialog.getOpenFileName",
+            return_value=("C:/respaldos/respaldo.zip", "Respaldos SIGQUA (*.zip)"),
+        ):
+            vista._seleccionar_respaldo_externo()
+
+        self.assertEqual(rutas_emitidas, ["C:/respaldos/respaldo.zip"])
+        vista.close()
+
+    def test_configuracion_confirma_respaldo_automatico_con_archivo_y_fecha(self) -> None:
+        vista = VistaConfiguracion()
+        respaldo = RespaldoAutomaticoDisponible(
+            identificador=8,
+            nombre_archivo="SIGQUA_RESPALDO_20260608.zip",
+            ruta_archivo="C:/respaldos/SIGQUA_RESPALDO_20260608.zip",
+            generado_en="08/06/2026 08:30 PM",
+            tamano_bytes=1024,
+            hash_archivo="abc",
+        )
+        textos: list[str] = []
+
+        def confirmar() -> None:
+            dialogo = QApplication.activeModalWidget()
+            if dialogo is None:
+                return
+            textos.extend(
+                etiqueta.text()
+                for etiqueta in dialogo.findChildren(QLabel)
+                if etiqueta.text()
+            )
+            dialogo.accept()
+
+        QTimer.singleShot(0, confirmar)
+        self.assertTrue(vista.confirmar_restauracion_automatica(respaldo))
+        self.assertTrue(any(respaldo.nombre_archivo in texto for texto in textos))
+        self.assertTrue(any(respaldo.generado_en in texto for texto in textos))
+        vista.close()
+
+    def test_reinicio_solo_cierra_instancia_si_nuevo_proceso_inicia(self) -> None:
+        ventana = QWidget()
+        ventana.gestor_rutas = GestorRutas(raiz_proyecto=RAIZ_PROYECTO)
+        ventana.show()
+
+        with (
+            patch("app.QProcess.startDetached", return_value=(True, 1234)) as iniciar,
+            patch("app.QApplication.quit") as salir,
+        ):
+            self.assertTrue(_reiniciar_aplicacion(ventana))
+
+        self.assertTrue(ventana.reinicio_en_curso)
+        self.assertFalse(ventana.isVisible())
+        iniciar.assert_called_once()
+        salir.assert_called_once()
+
+        ventana_fallo = QWidget()
+        ventana_fallo.gestor_rutas = GestorRutas(raiz_proyecto=RAIZ_PROYECTO)
+        ventana_fallo.show()
+        with (
+            patch("app.QProcess.startDetached", return_value=(False, 0)),
+            patch("app.DialogoMensajeSigqua.exec", return_value=0),
+        ):
+            self.assertFalse(_reiniciar_aplicacion(ventana_fallo))
+
+        self.assertTrue(ventana_fallo.isVisible())
+        self.assertFalse(hasattr(ventana_fallo, "reinicio_en_curso"))
+        ventana_fallo.close()
 
     def test_configuracion_confirma_cambio_de_pestana_con_cambios_pendientes(self) -> None:
         vista_configuracion = VistaConfiguracion()
@@ -1600,7 +1656,16 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertNotIn("Generar ZIP comprimido", textos_respaldos)
         self.assertNotIn("Organizar carpetas por ano y mes", textos_respaldos)
         self.assertNotIn("Ruta exportacion comprobantes", textos_respaldos)
+        self.assertNotIn("Ruta exportacion reportes", textos_respaldos)
+        self.assertNotIn("Respaldo manual", textos_respaldos)
+        self.assertNotIn("Carpeta secundaria opcional", textos_respaldos)
+        self.assertIn("Carpeta automatica", textos_respaldos)
         self.assertIn("Retencion", textos_respaldos)
+        self.assertIsNotNone(
+            vista.findChild(QPushButton, "botonRestaurarRespaldoExterno")
+        )
+        self.assertFalse(hasattr(vista, "crear_respaldo_manual_solicitado"))
+        self.assertFalse(hasattr(vista, "guardar_operacion_respaldo_solicitado"))
 
         textos_sistema = {
             label.text() for label in vista._tabs.widget(2).findChildren(QLabel)

@@ -6,7 +6,10 @@ from contextlib import closing
 from typing import Protocol
 
 from comun.base_datos import GestorBaseDatos
-from modulos.configuracion.entidades import ParametroConfiguracion
+from modulos.configuracion.entidades import (
+    ParametroConfiguracion,
+    RespaldoAutomaticoDisponible,
+)
 
 
 class RepositorioConfiguracion(Protocol):
@@ -31,8 +34,17 @@ class RepositorioConfiguracion(Protocol):
     def obtener_detalle_ultimo_respaldo(self) -> dict[str, object]:
         """Retorna metadatos del ultimo respaldo registrado."""
 
-    def listar_respaldos_disponibles(self, limite: int = 5) -> tuple[dict[str, object], ...]:
-        """Retorna respaldos del historial para restauracion."""
+    def listar_respaldos_automaticos(
+        self,
+        limite: int = 5,
+    ) -> tuple[RespaldoAutomaticoDisponible, ...]:
+        """Retorna respaldos automaticos restaurables, del mas reciente al mas antiguo."""
+
+    def obtener_respaldo_automatico(
+        self,
+        respaldo_id: int,
+    ) -> RespaldoAutomaticoDisponible | None:
+        """Obtiene un respaldo automatico restaurable por identificador."""
 
     def registrar_respaldo(
         self,
@@ -208,44 +220,63 @@ class RepositorioConfiguracionSQLite:
             "generado_por_nombre": str(fila["generado_por_nombre"] or ""),
         }
 
-    def listar_respaldos_disponibles(self, limite: int = 5) -> tuple[dict[str, object], ...]:
+    def listar_respaldos_automaticos(
+        self,
+        limite: int = 5,
+    ) -> tuple[RespaldoAutomaticoDisponible, ...]:
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             filas = conexion.execute(
                 """
                 SELECT
-                    hr.id,
-                    COALESCE(hr.nombre_archivo, '') AS nombre_archivo,
-                    COALESCE(hr.ruta_archivo, '') AS ruta_archivo,
-                    COALESCE(hr.tamano_bytes, 0) AS tamano_bytes,
-                    COALESCE(hr.hash_archivo, '') AS hash_archivo,
-                    COALESCE(hr.tipo_respaldo, '') AS tipo_respaldo,
-                    COALESCE(hr.estado, '') AS estado,
-                    COALESCE(hr.observaciones, '') AS observaciones,
-                    COALESCE(hr.generado_en, '') AS generado_en,
-                    COALESCE(u.nombre_completo, u.nombre_usuario, '') AS generado_por_nombre
-                FROM historial_respaldos hr
-                LEFT JOIN usuarios u ON u.id = hr.generado_por
-                WHERE hr.estado IN ('GENERADO', 'VALIDADO')
-                  AND hr.tipo_respaldo IN ('MANUAL', 'AUTOMATICO', 'PRE_MANTENIMIENTO')
-                ORDER BY hr.generado_en DESC, hr.id DESC
+                    id,
+                    nombre_archivo,
+                    ruta_archivo,
+                    generado_en,
+                    COALESCE(tamano_bytes, 0) AS tamano_bytes,
+                    COALESCE(hash_archivo, '') AS hash_archivo
+                FROM historial_respaldos
+                WHERE tipo_respaldo = 'AUTOMATICO'
+                  AND estado IN ('GENERADO', 'VALIDADO')
+                ORDER BY generado_en DESC, id DESC
                 LIMIT ?;
                 """,
-                (max(int(limite), 1),),
+                (max(1, int(limite)),),
             ).fetchall()
-        return tuple(
-            {
-                "id": int(fila["id"]),
-                "nombre_archivo": str(fila["nombre_archivo"] or ""),
-                "ruta_archivo": str(fila["ruta_archivo"] or ""),
-                "tamano_bytes": int(fila["tamano_bytes"] or 0),
-                "hash_archivo": str(fila["hash_archivo"] or ""),
-                "tipo_respaldo": str(fila["tipo_respaldo"] or ""),
-                "estado": str(fila["estado"] or ""),
-                "observaciones": str(fila["observaciones"] or ""),
-                "generado_en": str(fila["generado_en"] or ""),
-                "generado_por_nombre": str(fila["generado_por_nombre"] or ""),
-            }
-            for fila in filas
+        return tuple(self._mapear_respaldo_automatico(fila) for fila in filas)
+
+    def obtener_respaldo_automatico(
+        self,
+        respaldo_id: int,
+    ) -> RespaldoAutomaticoDisponible | None:
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            fila = conexion.execute(
+                """
+                SELECT
+                    id,
+                    nombre_archivo,
+                    ruta_archivo,
+                    generado_en,
+                    COALESCE(tamano_bytes, 0) AS tamano_bytes,
+                    COALESCE(hash_archivo, '') AS hash_archivo
+                FROM historial_respaldos
+                WHERE id = ?
+                  AND tipo_respaldo = 'AUTOMATICO'
+                  AND estado IN ('GENERADO', 'VALIDADO')
+                LIMIT 1;
+                """,
+                (int(respaldo_id),),
+            ).fetchone()
+        return None if fila is None else self._mapear_respaldo_automatico(fila)
+
+    @staticmethod
+    def _mapear_respaldo_automatico(fila: object) -> RespaldoAutomaticoDisponible:
+        return RespaldoAutomaticoDisponible(
+            identificador=int(fila["id"]),  # type: ignore[index]
+            nombre_archivo=str(fila["nombre_archivo"] or ""),  # type: ignore[index]
+            ruta_archivo=str(fila["ruta_archivo"] or ""),  # type: ignore[index]
+            generado_en=str(fila["generado_en"] or ""),  # type: ignore[index]
+            tamano_bytes=int(fila["tamano_bytes"] or 0),  # type: ignore[index]
+            hash_archivo=str(fila["hash_archivo"] or ""),  # type: ignore[index]
         )
 
     def registrar_respaldo(

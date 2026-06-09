@@ -25,10 +25,6 @@ class ConfiguracionRespaldoLocal:
     """Configuracion operativa del flujo de respaldo local."""
 
     ruta_principal: str
-    ruta_secundaria: str
-    secundaria_activa: bool
-    comprimir_zip: bool
-    organizar_por_periodo: bool
     retencion_maxima: int
     version_sistema: str
 
@@ -45,7 +41,6 @@ class DetalleRespaldoLocal:
     estado: str
     generado_en: str
     observaciones: str = ""
-    ruta_archivo_secundaria: str = ""
 
 
 @dataclass(slots=True)
@@ -102,26 +97,16 @@ class ServicioRespaldoLocal:
             return False, "La carpeta seleccionada no esta disponible para escritura."
         return True, ""
 
-    def crear_respaldo_manual(
+    def crear_respaldo(
         self,
         configuracion: ConfiguracionRespaldoLocal,
         repositorio_historial: RepositorioHistorialRespaldos,
+        tipo_respaldo: str,
         generado_por: int | None = None,
-        tipo_respaldo: str = "MANUAL",
     ) -> DetalleRespaldoLocal:
-        ruta_principal = self._resolver_directorio_destino(
-            configuracion.ruta_principal,
-            configuracion.organizar_por_periodo,
-        )
-        ruta_secundaria = None
-        if configuracion.secundaria_activa and configuracion.ruta_secundaria.strip():
-            ruta_secundaria = self._resolver_directorio_destino(
-                configuracion.ruta_secundaria,
-                configuracion.organizar_por_periodo,
-            )
-        nombre_base = f"SIGQUA_RESPALDO_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        extension = ".zip" if configuracion.comprimir_zip else ".db"
-        nombre_archivo = f"{nombre_base}{extension}"
+        ruta_principal = self._resolver_directorio_destino(configuracion.ruta_principal)
+        nombre_base = f"SIGQUA_RESPALDO_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+        nombre_archivo = f"{nombre_base}.zip"
 
         with tempfile.TemporaryDirectory(prefix="sigqua_respaldo_") as directorio_temporal:
             ruta_temporal_db = Path(directorio_temporal) / "sigqua.db"
@@ -137,22 +122,18 @@ class ServicioRespaldoLocal:
                 "generado_por": generado_por,
             }
 
-            if configuracion.comprimir_zip:
-                ruta_temporal_final = Path(directorio_temporal) / nombre_archivo
-                with zipfile.ZipFile(
-                    ruta_temporal_final,
-                    mode="w",
-                    compression=zipfile.ZIP_DEFLATED,
-                    allowZip64=True,
-                ) as archivo_zip:
-                    archivo_zip.write(ruta_temporal_db, arcname="sigqua.db")
-                    archivo_zip.writestr(
-                        "manifiesto.json",
-                        json.dumps(manifiesto, ensure_ascii=True, indent=2),
-                    )
-            else:
-                ruta_temporal_final = Path(directorio_temporal) / nombre_archivo
-                shutil.copy2(ruta_temporal_db, ruta_temporal_final)
+            ruta_temporal_final = Path(directorio_temporal) / nombre_archivo
+            with zipfile.ZipFile(
+                ruta_temporal_final,
+                mode="w",
+                compression=zipfile.ZIP_DEFLATED,
+                allowZip64=True,
+            ) as archivo_zip:
+                archivo_zip.write(ruta_temporal_db, arcname="sigqua.db")
+                archivo_zip.writestr(
+                    "manifiesto.json",
+                    json.dumps(manifiesto, ensure_ascii=True, indent=2),
+                )
 
             tamano_bytes = ruta_temporal_final.stat().st_size
             hash_archivo = self._calcular_hash_archivo(ruta_temporal_final)
@@ -161,11 +142,6 @@ class ServicioRespaldoLocal:
 
             ruta_final_principal = ruta_principal / nombre_archivo
             shutil.move(str(ruta_temporal_final), ruta_final_principal)
-            ruta_final_secundaria = ""
-            if ruta_secundaria is not None:
-                ruta_secundaria_archivo = ruta_secundaria / nombre_archivo
-                shutil.copy2(ruta_final_principal, ruta_secundaria_archivo)
-                ruta_final_secundaria = str(ruta_secundaria_archivo)
 
         detalle = DetalleRespaldoLocal(
             nombre_archivo=nombre_archivo,
@@ -176,7 +152,6 @@ class ServicioRespaldoLocal:
             estado="GENERADO",
             generado_en=self._ahora_texto(),
             observaciones="Respaldo generado correctamente.",
-            ruta_archivo_secundaria=ruta_final_secundaria,
         )
         repositorio_historial.registrar_respaldo(
             nombre_archivo=detalle.nombre_archivo,
@@ -194,25 +169,20 @@ class ServicioRespaldoLocal:
     def aplicar_retencion(self, configuracion: ConfiguracionRespaldoLocal) -> None:
         if configuracion.retencion_maxima < 1:
             return
-        rutas = (
-            configuracion.ruta_principal,
-            configuracion.ruta_secundaria if configuracion.secundaria_activa else "",
+        directorio = Path(configuracion.ruta_principal).expanduser()
+        if not directorio.exists():
+            return
+        archivos = sorted(
+            (
+                archivo
+                for archivo in directorio.glob("SIGQUA_RESPALDO_*.zip")
+                if archivo.is_file()
+            ),
+            key=lambda archivo: archivo.stat().st_mtime,
+            reverse=True,
         )
-        for ruta_base in filter(None, rutas):
-            directorio = Path(ruta_base).expanduser()
-            if not directorio.exists():
-                continue
-            archivos = sorted(
-                (
-                    archivo
-                    for archivo in directorio.rglob("SIGQUA_RESPALDO_*")
-                    if archivo.is_file() and archivo.suffix.lower() in {".zip", ".db"}
-                ),
-                key=lambda archivo: archivo.stat().st_mtime,
-                reverse=True,
-            )
-            for archivo in archivos[configuracion.retencion_maxima :]:
-                archivo.unlink(missing_ok=True)
+        for archivo in archivos[configuracion.retencion_maxima :]:
+            archivo.unlink(missing_ok=True)
 
     def restaurar_respaldo(
         self,
@@ -235,7 +205,7 @@ class ServicioRespaldoLocal:
             self._extraer_base_respaldo(ruta_origen, ruta_temporal_db)
             self._validar_base_generada(ruta_temporal_db)
 
-            respaldo_seguridad = self.crear_respaldo_manual(
+            respaldo_seguridad = self.crear_respaldo(
                 configuracion=configuracion,
                 repositorio_historial=repositorio_historial,
                 generado_por=generado_por,
@@ -252,6 +222,28 @@ class ServicioRespaldoLocal:
             estado="RESTAURADO",
             observaciones="Base restaurada correctamente. Reinicia SIGQUA para recargar la sesion.",
         )
+
+    def validar_archivo_respaldo(
+        self,
+        ruta_respaldo: str,
+        hash_esperado: str = "",
+    ) -> tuple[bool, str]:
+        ruta_origen = Path(ruta_respaldo).expanduser()
+        if not ruta_origen.exists() or not ruta_origen.is_file():
+            return False, "El archivo de respaldo no existe."
+        if ruta_origen.suffix.lower() != ".zip":
+            return False, "El respaldo debe ser un archivo ZIP generado por SIGQUA."
+        try:
+            hash_actual = self._calcular_hash_archivo(ruta_origen)
+            if hash_esperado.strip() and hash_actual.lower() != hash_esperado.strip().lower():
+                return False, "El hash del respaldo no coincide con el historial."
+            with tempfile.TemporaryDirectory(prefix="sigqua_validacion_respaldo_") as directorio:
+                ruta_temporal = Path(directorio) / "sigqua_validada.db"
+                self._extraer_base_respaldo(ruta_origen, ruta_temporal)
+                self._validar_base_generada(ruta_temporal)
+        except Exception as error:
+            return False, str(error)
+        return True, ""
 
     @staticmethod
     def _extraer_base_respaldo(ruta_origen: Path, ruta_destino: Path) -> None:
@@ -321,11 +313,8 @@ class ServicioRespaldoLocal:
     def _ahora_texto() -> str:
         return datetime.now().strftime(FORMATO_FECHA_RESPALDO)
 
-    def _resolver_directorio_destino(self, ruta: str, organizar_por_periodo: bool) -> Path:
+    def _resolver_directorio_destino(self, ruta: str) -> Path:
         directorio = self._normalizar_directorio(Path(ruta).expanduser())
-        if organizar_por_periodo:
-            ahora = datetime.now()
-            directorio = directorio / f"{ahora:%Y}" / f"{ahora:%m}"
         directorio.mkdir(parents=True, exist_ok=True)
         return directorio
 

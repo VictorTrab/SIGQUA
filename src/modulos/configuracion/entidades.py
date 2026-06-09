@@ -100,34 +100,30 @@ class OperacionConfiguracion:
     total_respaldos: int
     ultimo_respaldo_archivo: str
     ultimo_respaldo_tamano_bytes: int
-    ultimo_respaldo_hash: str
     ultimo_respaldo_generado_por: str
     ruta_respaldos_principal: str
-    ruta_respaldos_secundaria: str
-    respaldo_secundario_activo: bool
-    # Compatibilidad interna: siempre ZIP, sin carpetas por periodo.
-    comprimir_zip: bool
-    organizar_por_periodo: bool
     retencion_maxima: int
-    proxima_ejecucion_programada: str
-    ruta_exportaciones_comprobantes: str
-    ruta_exportaciones_reportes: str
 
 
 @dataclass(slots=True)
-class RespaldoDisponible:
-    """Respaldo registrado en historial y candidato a restauracion."""
+class RespaldoAutomaticoDisponible:
+    """Respaldo automatico registrado y candidato a restauracion."""
 
     identificador: int
     nombre_archivo: str
     ruta_archivo: str
+    generado_en: str
     tamano_bytes: int
     hash_archivo: str
-    tipo_respaldo: str
-    estado: str
-    generado_en: str
-    generado_por: str
-    observaciones: str = ""
+
+
+@dataclass(slots=True)
+class ResultadoBusquedaRespaldoAutomatico:
+    """Resultado de localizar el respaldo automatico util mas reciente."""
+
+    exito: bool
+    mensaje: str
+    respaldo: RespaldoAutomaticoDisponible | None = None
 
 
 @dataclass(slots=True)
@@ -162,7 +158,6 @@ class EstadoConfiguracion:
     factura: FacturaConfiguracion
     reportes_pdf: ReportesPdfConfiguracion
     operacion: OperacionConfiguracion
-    respaldos_disponibles: tuple[RespaldoDisponible, ...]
     seguridad: SeguridadConfiguracion
     informacion: InformacionConfiguracion
 

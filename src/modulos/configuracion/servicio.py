@@ -26,7 +26,7 @@ from modulos.configuracion.entidades import (
     OperacionConfiguracion,
     ParametrosCobro,
     ReportesPdfConfiguracion,
-    RespaldoDisponible,
+    ResultadoBusquedaRespaldoAutomatico,
     ResultadoGestionConfiguracion,
     SeguridadConfiguracion,
 )
@@ -74,10 +74,6 @@ CLAVES_SISTEMA = (
     "sistema.respaldo_automatico",
     "seguridad.duracion_sesion_horas",
     "respaldo.ruta_principal",
-    "respaldo.ruta_secundaria",
-    "respaldo.secundaria_activa",
-    "respaldo.comprimir_zip",
-    "respaldo.organizar_por_periodo",
     "mantenimiento.ruta_respaldos",
 )
 CLAVES_REPORTES_PDF = (
@@ -248,20 +244,12 @@ class ServicioConfiguracion:
             total_respaldos=total_respaldos,
             ultimo_respaldo_archivo=str(detalle_respaldo.get("nombre_archivo", "")),
             ultimo_respaldo_tamano_bytes=int(detalle_respaldo.get("tamano_bytes", 0) or 0),
-            ultimo_respaldo_hash=str(detalle_respaldo.get("hash_archivo", "")),
             ultimo_respaldo_generado_por=self._resolver_autoria(
                 str(detalle_respaldo.get("generado_por_nombre", "")),
                 bool(detalle_respaldo.get("generado_en", "")),
             ),
             ruta_respaldos_principal=configuracion_respaldo.ruta_principal,
-            ruta_respaldos_secundaria=configuracion_respaldo.ruta_secundaria,
-            respaldo_secundario_activo=configuracion_respaldo.secundaria_activa,
-            comprimir_zip=configuracion_respaldo.comprimir_zip,
-            organizar_por_periodo=configuracion_respaldo.organizar_por_periodo,
             retencion_maxima=configuracion_respaldo.retencion_maxima,
-            proxima_ejecucion_programada="Activo al cerrar sesion",
-            ruta_exportaciones_comprobantes="No aplica: los comprobantes se imprimen desde pagos.",
-            ruta_exportaciones_reportes=reportes_pdf.ruta_salida,
         )
         informacion = InformacionConfiguracion(
             nombre_sistema=self._valor_parametro(parametros, "sistema.nombre", "SIGQUA"),
@@ -281,7 +269,6 @@ class ServicioConfiguracion:
             restablecimiento_administrativo=True,
             cambio_contrasena_obligatorio=True,
         )
-        respaldos_disponibles = self._listar_respaldos_disponibles()
         return EstadoConfiguracion(
             identidad_empresa=IdentidadEmpresa(
                 nombre=identidad.nombre,
@@ -296,7 +283,6 @@ class ServicioConfiguracion:
             factura=factura,
             reportes_pdf=reportes_pdf,
             operacion=operacion,
-            respaldos_disponibles=respaldos_disponibles,
             seguridad=seguridad,
             informacion=informacion,
         )
@@ -490,42 +476,6 @@ class ServicioConfiguracion:
             return ResultadoGestionConfiguracion(False, "No fue posible actualizar los parametros de cobro.", "ERROR_SQLITE")
         return ResultadoGestionConfiguracion(True, "Parametros de cobro actualizados.", "OK")
 
-    def guardar_operacion_respaldo(
-        self,
-        ruta_principal: str,
-        ruta_secundaria: str,
-        secundaria_activa: bool,
-        actor_id: int | None = None,
-    ) -> ResultadoGestionConfiguracion:
-        ruta_principal = ruta_principal.strip()
-        ruta_secundaria = ruta_secundaria.strip()
-
-        valido_principal, mensaje_principal = self._validar_directorio_respaldo(ruta_principal)
-        if not valido_principal:
-            return ResultadoGestionConfiguracion(False, mensaje_principal, "VALIDACION")
-        if secundaria_activa:
-            if Path(ruta_secundaria).expanduser().resolve() == Path(ruta_principal).expanduser().resolve():
-                return ResultadoGestionConfiguracion(False, "La carpeta secundaria debe ser distinta a la principal.", "VALIDACION")
-            valido_secundario, mensaje_secundario = self._validar_directorio_respaldo(ruta_secundaria)
-            if not valido_secundario:
-                return ResultadoGestionConfiguracion(False, mensaje_secundario, "VALIDACION")
-
-        try:
-            self._repositorio_configuracion.actualizar_valores(
-                {
-                    "sistema.respaldo_automatico": "1",
-                    "respaldo.ruta_principal": ruta_principal,
-                    "respaldo.ruta_secundaria": ruta_secundaria,
-                    "respaldo.secundaria_activa": "1" if secundaria_activa else "0",
-                    "respaldo.comprimir_zip": "1",
-                    "respaldo.organizar_por_periodo": "0",
-                },
-                actor_id=actor_id,
-            )
-        except Exception:
-            return ResultadoGestionConfiguracion(False, "No fue posible actualizar el control de respaldos.", "ERROR_SQLITE")
-        return ResultadoGestionConfiguracion(True, "Respaldos actualizados. El respaldo automatico se ejecutara al cerrar sesion.", "OK")
-
     def guardar_duracion_sesion(
         self,
         duracion_sesion_horas: float,
@@ -543,66 +493,79 @@ class ServicioConfiguracion:
             return ResultadoGestionConfiguracion(False, "No fue posible actualizar la duracion de sesion.", "ERROR_SQLITE")
         return ResultadoGestionConfiguracion(True, "Duracion de sesion actualizada.", "OK")
 
-    def crear_respaldo_manual(self, actor_id: int | None = None) -> ResultadoGestionConfiguracion:
-        return self._crear_respaldo("MANUAL", actor_id=actor_id)
-
     def crear_respaldo_automatico(self, actor_id: int | None = None) -> ResultadoGestionConfiguracion:
         return self._crear_respaldo("AUTOMATICO", actor_id=actor_id)
 
-    def restaurar_respaldo(
+    def restaurar_respaldo_externo(
         self,
-        respaldo_id: int,
+        ruta_archivo: str,
         actor_id: int | None = None,
     ) -> ResultadoGestionConfiguracion:
         if self._servicio_respaldo is None:
             return ResultadoGestionConfiguracion(False, "El servicio de respaldo no esta disponible.", "ERROR_CONFIG")
-        respaldo = self._obtener_respaldo_disponible(respaldo_id)
-        if respaldo is None:
-            return ResultadoGestionConfiguracion(False, "Selecciona un respaldo disponible para restaurar.", "VALIDACION")
-        estado = self.obtener_estado()
-        configuracion = ConfiguracionRespaldoLocal(
-            ruta_principal=estado.operacion.ruta_respaldos_principal,
-            ruta_secundaria=estado.operacion.ruta_respaldos_secundaria,
-            secundaria_activa=estado.operacion.respaldo_secundario_activo,
-            comprimir_zip=estado.operacion.comprimir_zip,
-            organizar_por_periodo=estado.operacion.organizar_por_periodo,
-            retencion_maxima=RETENCION_MAXIMA_RESPALDOS,
-            version_sistema=estado.informacion.version_sistema or "Sin version",
+        ruta_respaldo = Path(ruta_archivo).expanduser()
+        if not ruta_respaldo.exists() or not ruta_respaldo.is_file():
+            return ResultadoGestionConfiguracion(False, "El archivo de respaldo seleccionado no existe.", "VALIDACION")
+        if ruta_respaldo.suffix.lower() != ".zip":
+            return ResultadoGestionConfiguracion(False, "Selecciona un respaldo SIGQUA con extension .zip.", "VALIDACION")
+        return self._restaurar_ruta_respaldo(
+            ruta_respaldo=ruta_respaldo,
+            hash_esperado="",
+            actor_id=actor_id,
+            respaldo_id=None,
         )
-        try:
-            resultado = self._servicio_respaldo.restaurar_respaldo(
-                ruta_respaldo=respaldo.ruta_archivo,
-                hash_esperado=respaldo.hash_archivo,
-                configuracion=configuracion,
-                repositorio_historial=self._repositorio_configuracion,
-                generado_por=actor_id,
+
+    def buscar_respaldo_automatico_restaurable(
+        self,
+    ) -> ResultadoBusquedaRespaldoAutomatico:
+        if self._servicio_respaldo is None:
+            return ResultadoBusquedaRespaldoAutomatico(
+                False,
+                "El servicio de respaldo no esta disponible.",
             )
-            self._repositorio_configuracion.registrar_respaldo(
-                nombre_archivo=resultado.nombre_archivo,
-                ruta_archivo=resultado.ruta_archivo,
-                tamano_bytes=0,
-                hash_archivo=respaldo.hash_archivo,
-                tipo_respaldo=respaldo.tipo_respaldo or "MANUAL",
-                estado="RESTAURADO",
-                observaciones=resultado.observaciones,
-                generado_por=actor_id,
+        candidatos = self._repositorio_configuracion.listar_respaldos_automaticos(
+            RETENCION_MAXIMA_RESPALDOS
+        )
+        if not candidatos:
+            return ResultadoBusquedaRespaldoAutomatico(
+                False,
+                "No hay respaldos automaticos disponibles para restaurar.",
             )
-            self._repositorio_configuracion.registrar_evento_tecnico(
-                categoria="RESTAURACION",
-                severidad="ADVERTENCIA",
-                mensaje=f"Respaldo restaurado: {resultado.nombre_archivo}",
-                detalle=f"Respaldo de seguridad previo: {resultado.respaldo_seguridad}",
-                entidad="historial_respaldos",
-                entidad_id=respaldo.identificador,
-                registrado_por=actor_id,
+        errores: list[str] = []
+        for respaldo in candidatos:
+            valido, mensaje = self._servicio_respaldo.validar_archivo_respaldo(
+                respaldo.ruta_archivo,
+                respaldo.hash_archivo,
             )
-        except Exception as error:
-            self._registrar_fallo_restauracion(respaldo, str(error), actor_id)
-            return ResultadoGestionConfiguracion(False, f"No fue posible restaurar el respaldo: {error}", "ERROR_RESTAURACION")
-        return ResultadoGestionConfiguracion(
-            True,
-            "Respaldo restaurado correctamente. Reinicia SIGQUA para recargar la base restaurada.",
-            "OK",
+            if valido:
+                return ResultadoBusquedaRespaldoAutomatico(
+                    True,
+                    "Respaldo automatico disponible.",
+                    respaldo,
+                )
+            errores.append(f"{respaldo.nombre_archivo}: {mensaje}")
+        return ResultadoBusquedaRespaldoAutomatico(
+            False,
+            "Ningun respaldo automatico registrado es valido. " + " | ".join(errores),
+        )
+
+    def restaurar_respaldo_automatico(
+        self,
+        respaldo_id: int,
+        actor_id: int | None = None,
+    ) -> ResultadoGestionConfiguracion:
+        respaldo = self._repositorio_configuracion.obtener_respaldo_automatico(respaldo_id)
+        if respaldo is None:
+            return ResultadoGestionConfiguracion(
+                False,
+                "El respaldo automatico seleccionado ya no esta disponible.",
+                "VALIDACION",
+            )
+        return self._restaurar_ruta_respaldo(
+            ruta_respaldo=Path(respaldo.ruta_archivo).expanduser(),
+            hash_esperado=respaldo.hash_archivo,
+            actor_id=actor_id,
+            respaldo_id=respaldo.identificador,
         )
 
     def probar_impresora_comprobantes(self, nombre_impresora: str) -> ResultadoGestionConfiguracion:
@@ -644,16 +607,10 @@ class ServicioConfiguracion:
             return ResultadoGestionConfiguracion(False, "El servicio de respaldo no esta disponible.", "ERROR_CONFIG")
         estado = self.obtener_estado()
         try:
-            detalle = self._servicio_respaldo.crear_respaldo_manual(
-                configuracion=ConfiguracionRespaldoLocal(
-                    ruta_principal=estado.operacion.ruta_respaldos_principal,
-                    ruta_secundaria=estado.operacion.ruta_respaldos_secundaria,
-                    secundaria_activa=estado.operacion.respaldo_secundario_activo,
-                    comprimir_zip=estado.operacion.comprimir_zip,
-                    organizar_por_periodo=estado.operacion.organizar_por_periodo,
-                    retencion_maxima=RETENCION_MAXIMA_RESPALDOS,
-                    version_sistema=estado.informacion.version_sistema or "Sin version",
-                ),
+            configuracion = self._construir_configuracion_respaldo({})
+            configuracion.version_sistema = estado.informacion.version_sistema or "Sin version"
+            detalle = self._servicio_respaldo.crear_respaldo(
+                configuracion=configuracion,
                 repositorio_historial=self._repositorio_configuracion,
                 generado_por=actor_id,
                 tipo_respaldo=tipo_respaldo,
@@ -662,62 +619,70 @@ class ServicioConfiguracion:
             return ResultadoGestionConfiguracion(False, f"No fue posible generar el respaldo: {error}", "ERROR_RESPALDO")
         return ResultadoGestionConfiguracion(True, f"Respaldo generado: {detalle.nombre_archivo}", "OK")
 
-    def _listar_respaldos_disponibles(self) -> tuple[RespaldoDisponible, ...]:
-        return tuple(
-            RespaldoDisponible(
-                identificador=int(fila.get("id", 0)),
-                nombre_archivo=str(fila.get("nombre_archivo", "")),
-                ruta_archivo=str(fila.get("ruta_archivo", "")),
-                tamano_bytes=int(fila.get("tamano_bytes", 0) or 0),
-                hash_archivo=str(fila.get("hash_archivo", "")),
-                tipo_respaldo=str(fila.get("tipo_respaldo", "")),
-                estado=str(fila.get("estado", "")),
-                generado_en=str(fila.get("generado_en", "")),
-                generado_por=self._resolver_autoria(
-                    str(fila.get("generado_por_nombre", "")),
-                    bool(fila.get("generado_en", "")),
-                ),
-                observaciones=str(fila.get("observaciones", "")),
-            )
-            for fila in self._repositorio_configuracion.listar_respaldos_disponibles(
-                RETENCION_MAXIMA_RESPALDOS
-            )
-        )
-
-    def _obtener_respaldo_disponible(self, respaldo_id: int) -> RespaldoDisponible | None:
-        for respaldo in self._listar_respaldos_disponibles():
-            if respaldo.identificador == respaldo_id:
-                return respaldo
-        return None
-
-    def _registrar_fallo_restauracion(
+    def _registrar_fallo_restauracion_externa(
         self,
-        respaldo: RespaldoDisponible,
+        ruta_respaldo: Path,
         detalle: str,
         actor_id: int | None,
     ) -> None:
         try:
-            self._repositorio_configuracion.registrar_respaldo(
-                nombre_archivo=respaldo.nombre_archivo,
-                ruta_archivo=respaldo.ruta_archivo,
-                tamano_bytes=respaldo.tamano_bytes,
-                hash_archivo=respaldo.hash_archivo,
-                tipo_respaldo=respaldo.tipo_respaldo or "MANUAL",
-                estado="FALLIDO",
-                observaciones=detalle,
-                generado_por=actor_id,
-            )
             self._repositorio_configuracion.registrar_evento_tecnico(
                 categoria="RESTAURACION",
                 severidad="ERROR",
-                mensaje=f"Fallo la restauracion del respaldo: {respaldo.nombre_archivo}",
+                mensaje=f"Fallo la restauracion del respaldo: {ruta_respaldo.name}",
                 detalle=detalle,
                 entidad="historial_respaldos",
-                entidad_id=respaldo.identificador,
                 registrado_por=actor_id,
             )
         except Exception:
             pass
+
+    def _restaurar_ruta_respaldo(
+        self,
+        *,
+        ruta_respaldo: Path,
+        hash_esperado: str,
+        actor_id: int | None,
+        respaldo_id: int | None,
+    ) -> ResultadoGestionConfiguracion:
+        if self._servicio_respaldo is None:
+            return ResultadoGestionConfiguracion(
+                False,
+                "El servicio de respaldo no esta disponible.",
+                "ERROR_CONFIG",
+            )
+        estado = self.obtener_estado()
+        configuracion = self._construir_configuracion_respaldo({})
+        configuracion.version_sistema = estado.informacion.version_sistema or "Sin version"
+        try:
+            resultado = self._servicio_respaldo.restaurar_respaldo(
+                ruta_respaldo=str(ruta_respaldo),
+                hash_esperado=hash_esperado,
+                configuracion=configuracion,
+                repositorio_historial=self._repositorio_configuracion,
+                generado_por=actor_id,
+            )
+            self._repositorio_configuracion.registrar_evento_tecnico(
+                categoria="RESTAURACION",
+                severidad="ADVERTENCIA",
+                mensaje=f"Respaldo restaurado: {resultado.nombre_archivo}",
+                detalle=f"Respaldo de seguridad previo: {resultado.respaldo_seguridad}",
+                entidad="historial_respaldos",
+                entidad_id=respaldo_id,
+                registrado_por=actor_id,
+            )
+        except Exception as error:
+            self._registrar_fallo_restauracion_externa(ruta_respaldo, str(error), actor_id)
+            return ResultadoGestionConfiguracion(
+                False,
+                f"No fue posible restaurar el respaldo: {error}",
+                "ERROR_RESTAURACION",
+            )
+        return ResultadoGestionConfiguracion(
+            True,
+            "Respaldo restaurado correctamente. SIGQUA se reiniciara para aplicar los cambios.",
+            "OK",
+        )
 
     def opciones_duracion_sesion(self) -> tuple[tuple[str, float], ...]:
         return (
@@ -821,12 +786,6 @@ class ServicioConfiguracion:
         )
         return ConfiguracionRespaldoLocal(
             ruta_principal=self._normalizar_ruta_configurada(ruta_predeterminada),
-            ruta_secundaria=self._normalizar_ruta_configurada(
-                self._valor_parametro(parametros, "respaldo.ruta_secundaria", "")
-            ),
-            secundaria_activa=self._a_booleano(self._valor_parametro(parametros, "respaldo.secundaria_activa", "0")),
-            comprimir_zip=True,
-            organizar_por_periodo=False,
             retencion_maxima=RETENCION_MAXIMA_RESPALDOS,
             version_sistema=self._valor_parametro(parametros, "sistema.version", ""),
         )
@@ -844,13 +803,6 @@ class ServicioConfiguracion:
             return self._servicio_comprobantes.contar_pendientes_impresion()
         except Exception:
             return 0
-
-    def _validar_directorio_respaldo(self, ruta: str) -> tuple[bool, str]:
-        if self._servicio_respaldo is None:
-            if not ruta.strip():
-                return False, "Selecciona una carpeta principal para respaldos."
-            return True, ""
-        return self._servicio_respaldo.validar_directorio_respaldo(ruta)
 
     def _normalizar_ruta_configurada(self, ruta: str) -> str:
         ruta_limpia = ruta.strip()

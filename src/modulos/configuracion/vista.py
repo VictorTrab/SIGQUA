@@ -5,8 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Callable
 
-from PySide6.QtCore import Qt, QTimer, Signal, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtPrintSupport import QPrinterInfo
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -46,7 +45,10 @@ from comun.ui.temas import (
     obtener_tema_actual,
     resolver_nombre_tema,
 )
-from modulos.configuracion.entidades import EstadoConfiguracion
+from modulos.configuracion.entidades import (
+    EstadoConfiguracion,
+    RespaldoAutomaticoDisponible,
+)
 
 
 class TarjetaResumenConfiguracion(TarjetaResumenOperativa):
@@ -85,13 +87,9 @@ class VistaConfiguracion(QWidget):
     guardar_parametros_cobro_solicitado = Signal(int, bool, int, bool, int, bool, bool, int, int, int)
     probar_impresora_comprobantes_solicitado = Signal(str)
     probar_impresora_reportes_solicitado = Signal(str)
-    guardar_operacion_respaldo_solicitado = Signal(
-        str,
-        str,
-        bool,
-    )
-    crear_respaldo_manual_solicitado = Signal()
-    restaurar_respaldo_solicitado = Signal(int)
+    restaurar_respaldo_externo_solicitado = Signal(str)
+    restaurar_respaldo_automatico_solicitado = Signal()
+    reinicio_aplicacion_solicitado = Signal()
     guardar_duracion_sesion_solicitado = Signal(float)
     guardar_reportes_pdf_solicitado = Signal(str, bool, bool, str)
 
@@ -219,11 +217,6 @@ class VistaConfiguracion(QWidget):
         )
         self._actualizar_estado_campos_cobro()
 
-        self._campo_ruta_respaldos_principal.setText(estado.operacion.ruta_respaldos_principal)
-        self._campo_ruta_respaldos_secundaria.setText(estado.operacion.ruta_respaldos_secundaria)
-        self._check_respaldo_secundario.blockSignals(True)
-        self._check_respaldo_secundario.setChecked(estado.operacion.respaldo_secundario_activo)
-        self._check_respaldo_secundario.blockSignals(False)
         self._seleccionar_duracion_sesion(estado.seguridad.duracion_sesion_horas)
         self._valor_ultimo_respaldo.setText(
             estado.operacion.ultimo_respaldo_en or "Sin registros"
@@ -238,14 +231,12 @@ class VistaConfiguracion(QWidget):
         self._valor_respaldo_generado_por.setText(estado.operacion.ultimo_respaldo_generado_por)
         self._valor_ruta_respaldos.setText(estado.operacion.ruta_respaldos_principal)
         self._valor_retencion.setText("5 respaldos recientes")
-        self._valor_ruta_reportes.setText(estado.operacion.ruta_exportaciones_reportes)
         self._campo_ruta_reportes_pdf.setText(estado.reportes_pdf.ruta_salida)
         self._ruta_reportes_predeterminada = estado.reportes_pdf.ruta_predeterminada
         self._check_abrir_reportes_pdf.setChecked(estado.reportes_pdf.abrir_automaticamente)
         self._check_firma_reportes_pdf.setChecked(estado.reportes_pdf.firma_habilitada)
         self._campo_firma_reportes_pdf.setText(estado.reportes_pdf.firma_texto_linea)
         self._actualizar_estado_firma_reportes_pdf()
-        self._actualizar_respaldos_disponibles(estado)
 
         self._valor_intentos.setText(str(estado.seguridad.maximo_intentos_fallidos))
         self._valor_sesion.setText(self._texto_duracion_sesion(estado.seguridad.duracion_sesion_horas))
@@ -258,7 +249,6 @@ class VistaConfiguracion(QWidget):
         self._valor_actualizacion.setText(estado.informacion.ultima_actualizacion or "Sin registro")
         self._valor_actualizado_por.setText(estado.informacion.actualizado_por)
 
-        self._actualizar_estado_respaldos()
         self._actualizar_preview_comprobante(estado, formateador_moneda)
 
     def _conectar_controles_cambios_pendientes(self) -> None:
@@ -279,8 +269,6 @@ class VistaConfiguracion(QWidget):
             self._campo_meses_adelanto_maximo,
             self._campo_ruta_reportes_pdf,
             self._campo_firma_reportes_pdf,
-            self._campo_ruta_respaldos_principal,
-            self._campo_ruta_respaldos_secundaria,
         )
         for campo in campos_texto:
             campo.textChanged.connect(self._marcar_cambios_pendientes)
@@ -307,7 +295,6 @@ class VistaConfiguracion(QWidget):
             self._check_pago_adelantado,
             self._check_abrir_reportes_pdf,
             self._check_firma_reportes_pdf,
-            self._check_respaldo_secundario,
         ):
             check.toggled.connect(self._marcar_cambios_pendientes)
 
@@ -904,14 +891,9 @@ class VistaConfiguracion(QWidget):
         return contenido
 
     def _crear_tab_operacion_respaldo(self) -> QWidget:
-        self._check_respaldo_secundario = QCheckBox("Guardar tambien una copia secundaria")
-        self._check_respaldo_secundario.toggled.connect(self._actualizar_estado_respaldos)
-        self._campo_ruta_respaldos_principal = QLineEdit()
-        self._campo_ruta_respaldos_secundaria = QLineEdit()
         self._combo_duracion_sesion = QComboBox()
         for etiqueta, valor in self.OPCIONES_DURACION_SESION:
             self._combo_duracion_sesion.addItem(etiqueta, valor)
-        self._combo_respaldos_restauracion = QComboBox()
         self._valor_respaldo_automatico = self._crear_valor_seguridad()
         self._valor_ultimo_respaldo = self._crear_valor_seguridad()
         self._valor_estado_respaldo = self._crear_valor_seguridad()
@@ -921,7 +903,6 @@ class VistaConfiguracion(QWidget):
         self._valor_respaldo_generado_por = self._crear_valor_seguridad()
         self._valor_ruta_respaldos = self._crear_valor_seguridad()
         self._valor_retencion = self._crear_valor_seguridad()
-        self._valor_ruta_reportes = self._crear_valor_seguridad()
         self._valor_intentos = self._crear_valor_seguridad()
         self._valor_sesion = self._crear_valor_seguridad()
         self._valor_restablecimiento = self._crear_valor_seguridad()
@@ -938,78 +919,41 @@ class VistaConfiguracion(QWidget):
                 self._crear_fila_resumen("Archivo generado", self._valor_archivo_respaldo),
                 self._crear_fila_resumen("Tamano", self._valor_tamano_respaldo),
                 self._crear_fila_resumen("Generado por", self._valor_respaldo_generado_por),
-                self._crear_fila_resumen("Carpeta principal", self._valor_ruta_respaldos),
+                self._crear_fila_resumen("Carpeta automatica", self._valor_ruta_respaldos),
                 self._crear_fila_resumen("Retencion", self._valor_retencion),
             ],
         )
-        panel_manual = self._crear_panel(
-            "Respaldo manual",
-            "Genera una copia segura con registro interno e historial operativo.",
-            [
-                self._crear_fila_resumen("Ruta exportacion reportes", self._valor_ruta_reportes),
-                self._crear_fila_botones_respaldo(),
-            ],
-        )
-        panel_ubicacion = self._crear_panel(
-            "Ubicacion y retencion",
-            "Define carpetas de respaldo. SIGQUA conserva los 5 respaldos mas recientes.",
-            [
-                self._crear_bloque_campo_con_accion(
-                    "Carpeta principal de respaldos",
-                    self._campo_ruta_respaldos_principal,
-                    "Seleccionar",
-                    self._seleccionar_carpeta_respaldo_principal,
-                ),
-                self._check_respaldo_secundario,
-                self._crear_bloque_campo_con_accion(
-                    "Carpeta secundaria opcional",
-                    self._campo_ruta_respaldos_secundaria,
-                    "Seleccionar",
-                    self._seleccionar_carpeta_respaldo_secundaria,
-                ),
-            ],
-        )
         panel_restauracion = self._crear_panel(
-            "Restauracion desde historial",
-            "Restaura un respaldo generado por SIGQUA despues de validar el archivo.",
+            "Restaurar respaldo",
+            "Usa el ultimo respaldo automatico valido o selecciona un ZIP de SIGQUA.",
             [
-                self._crear_bloque_campo("Respaldo disponible", self._combo_respaldos_restauracion),
-                self._crear_fila_botones_restauracion(),
+                self._crear_botones_restauracion(),
             ],
         )
-        boton_guardar = crear_boton_operativo("Guardar control y respaldo", principal=True)
-        boton_guardar.clicked.connect(self._emitir_guardado_respaldo)
-
-        columna_acciones = QVBoxLayout()
-        columna_acciones.setContentsMargins(0, 0, 0, 0)
-        columna_acciones.setSpacing(10)
-        columna_acciones.addWidget(panel_manual)
-        columna_acciones.addWidget(panel_restauracion)
-        columna_acciones.addStretch(1)
-
-        contenedor_acciones = QWidget()
-        contenedor_acciones.setObjectName("columnaPanelesConfiguracion")
-        contenedor_acciones.setLayout(columna_acciones)
 
         grilla_superior = QGridLayout()
         grilla_superior.setContentsMargins(0, 0, 0, 0)
         grilla_superior.setHorizontalSpacing(12)
         grilla_superior.addWidget(panel_estado, 0, 0)
-        grilla_superior.addWidget(contenedor_acciones, 0, 1)
+        grilla_superior.addWidget(
+            panel_restauracion,
+            0,
+            1,
+            alignment=Qt.AlignmentFlag.AlignTop,
+        )
         grilla_superior.setColumnStretch(0, 3)
         grilla_superior.setColumnStretch(1, 2)
 
         contenido = self._crear_contenedor_scroll()
         contenido.widget().layout().addLayout(grilla_superior)
-        contenido.widget().layout().addWidget(panel_ubicacion)
-        self._agregar_cierre_tab_compacto(
-            contenido,
-            (
+        contenido.widget().layout().addWidget(
+            self._crear_aviso_compacto(
                 "SIGQUA conserva automaticamente los 5 respaldos mas recientes. "
-                "Al crear uno nuevo, elimina el mas antiguo si ya existen 5."
-            ),
-            boton_guardar,
+                "La restauracion reemplaza la informacion actual y crea un respaldo previo "
+                "de seguridad."
+            )
         )
+        contenido.widget().layout().addStretch(1)
         return contenido
 
     def _crear_tab_informacion(self) -> QWidget:
@@ -1285,28 +1229,21 @@ class VistaConfiguracion(QWidget):
         layout.addLayout(fila)
         return contenedor
 
-    def _crear_fila_botones_respaldo(self) -> QWidget:
+    def _crear_botones_restauracion(self) -> QWidget:
         contenedor = QWidget()
         layout = QHBoxLayout(contenedor)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
-        boton_crear = crear_boton_operativo("Crear respaldo ahora", principal=True)
-        boton_crear.clicked.connect(self.crear_respaldo_manual_solicitado.emit)
-        boton_abrir = crear_boton_operativo("Abrir carpeta de respaldos")
-        boton_abrir.clicked.connect(self._abrir_carpeta_respaldos)
-        layout.addWidget(boton_crear)
-        layout.addWidget(boton_abrir)
-        layout.addStretch(1)
-        return contenedor
-
-    def _crear_fila_botones_restauracion(self) -> QWidget:
-        contenedor = QWidget()
-        layout = QHBoxLayout(contenedor)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
-        boton_restaurar = crear_boton_operativo("Restaurar respaldo", principal=True)
-        boton_restaurar.clicked.connect(self._confirmar_restauracion_respaldo)
-        layout.addWidget(boton_restaurar)
+        boton_automatico = crear_boton_operativo("Restaurar ahora", principal=True)
+        boton_automatico.setObjectName("botonRestaurarRespaldoAutomatico")
+        boton_automatico.clicked.connect(
+            self.restaurar_respaldo_automatico_solicitado.emit
+        )
+        boton_archivo = crear_boton_operativo("Seleccionar y restaurar...")
+        boton_archivo.setObjectName("botonRestaurarRespaldoExterno")
+        boton_archivo.clicked.connect(self._seleccionar_respaldo_externo)
+        layout.addWidget(boton_automatico)
+        layout.addWidget(boton_archivo)
         layout.addStretch(1)
         return contenedor
 
@@ -1477,13 +1414,6 @@ class VistaConfiguracion(QWidget):
             self._combo_impresora_reportes.currentText(),
         )
 
-    def _emitir_guardado_respaldo(self) -> None:
-        self.guardar_operacion_respaldo_solicitado.emit(
-            self._campo_ruta_respaldos_principal.text().strip(),
-            self._campo_ruta_respaldos_secundaria.text().strip(),
-            self._check_respaldo_secundario.isChecked(),
-        )
-
     def _emitir_guardado_reportes_pdf(self) -> None:
         self.guardar_reportes_pdf_solicitado.emit(
             self._campo_ruta_reportes_pdf.text().strip(),
@@ -1509,63 +1439,49 @@ class VistaConfiguracion(QWidget):
             self._check_firma_reportes_pdf.isChecked()
         )
 
-    def _confirmar_restauracion_respaldo(self) -> None:
-        respaldo_id = int(self._combo_respaldos_restauracion.currentData() or 0)
-        if respaldo_id <= 0:
-            self.mostrar_mensaje("No hay respaldos disponibles para restaurar.", es_error=True)
+    def _seleccionar_respaldo_externo(self) -> None:
+        ruta_archivo, _ = QFileDialog.getOpenFileName(
+            self,
+            "Seleccionar respaldo de SIGQUA",
+            "",
+            "Respaldos SIGQUA (*.zip)",
+        )
+        if not ruta_archivo:
             return
         dialogo = DialogoConfirmacionSigqua(
             titulo="Restaurar respaldo",
             descripcion=(
-                "Esta accion reemplazara la base de datos local por el respaldo seleccionado. "
-                "SIGQUA creara un respaldo de seguridad antes de restaurar."
-            ),
-            detalles=(
-                ("Respaldo", self._combo_respaldos_restauracion.currentText()),
-                ("Reinicio", "Recomendado despues de restaurar"),
+                "La restauracion reemplazara la informacion actual. SIGQUA generara "
+                "un respaldo de seguridad antes de continuar."
             ),
             texto_confirmar="Restaurar",
+            texto_cancelar="Cancelar",
             variante_confirmar="peligro",
             parent=self,
         )
         if dialogo.exec():
-            self.restaurar_respaldo_solicitado.emit(respaldo_id)
+            self.restaurar_respaldo_externo_solicitado.emit(ruta_archivo)
 
-    def _actualizar_respaldos_disponibles(self, estado: EstadoConfiguracion) -> None:
-        self._combo_respaldos_restauracion.blockSignals(True)
-        self._combo_respaldos_restauracion.clear()
-        for respaldo in estado.respaldos_disponibles:
-            etiqueta = f"{respaldo.generado_en} - {respaldo.nombre_archivo}"
-            self._combo_respaldos_restauracion.addItem(etiqueta, respaldo.identificador)
-        if self._combo_respaldos_restauracion.count() == 0:
-            self._combo_respaldos_restauracion.addItem("Sin respaldos disponibles", 0)
-        self._combo_respaldos_restauracion.blockSignals(False)
-
-    def _seleccionar_carpeta_respaldo_principal(self) -> None:
-        ruta = QFileDialog.getExistingDirectory(
-            self,
-            "Seleccionar carpeta principal de respaldos",
-            self._campo_ruta_respaldos_principal.text().strip(),
+    def confirmar_restauracion_automatica(
+        self,
+        respaldo: RespaldoAutomaticoDisponible,
+    ) -> bool:
+        dialogo = DialogoConfirmacionSigqua(
+            titulo="Restaurar respaldo automatico",
+            descripcion=(
+                "La restauracion reemplazara la informacion actual. SIGQUA generara "
+                "un respaldo de seguridad antes de continuar."
+            ),
+            detalles=(
+                ("Archivo", respaldo.nombre_archivo),
+                ("Generado", respaldo.generado_en),
+            ),
+            texto_confirmar="Restaurar ahora",
+            texto_cancelar="Cancelar",
+            variante_confirmar="peligro",
+            parent=self,
         )
-        if ruta:
-            self._campo_ruta_respaldos_principal.setText(ruta)
-
-    def _seleccionar_carpeta_respaldo_secundaria(self) -> None:
-        ruta = QFileDialog.getExistingDirectory(
-            self,
-            "Seleccionar carpeta secundaria de respaldos",
-            self._campo_ruta_respaldos_secundaria.text().strip(),
-        )
-        if ruta:
-            self._campo_ruta_respaldos_secundaria.setText(ruta)
-
-    def _abrir_carpeta_respaldos(self) -> None:
-        ruta = self._campo_ruta_respaldos_principal.text().strip()
-        if ruta:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(ruta))
-
-    def _actualizar_estado_respaldos(self) -> None:
-        self._campo_ruta_respaldos_secundaria.setEnabled(self._check_respaldo_secundario.isChecked())
+        return bool(dialogo.exec())
 
     def _seleccionar_duracion_sesion(self, duracion_horas: float) -> None:
         for indice in range(self._combo_duracion_sesion.count()):
