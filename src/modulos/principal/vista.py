@@ -793,14 +793,14 @@ class BotonPerfilUsuario(QPushButton):
         self.setCheckable(False)
         self.setMinimumHeight(48)
         self.setMaximumHeight(50)
-        self.setMinimumWidth(190)
-        self.setMaximumWidth(240)
+        self.setMinimumWidth(154)
+        self.setMaximumWidth(190)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.setToolTip("Perfil de usuario")
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(9, 6, 9, 6)
-        layout.setSpacing(8)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(7)
 
         self._avatar = QLabel("US")
         self._avatar.setObjectName("avatarPerfilHeader")
@@ -818,14 +818,8 @@ class BotonPerfilUsuario(QPushButton):
         bloque.addWidget(self._nombre)
         bloque.addWidget(self._rol)
 
-        self._indicador = QLabel("›")
-        self._indicador.setObjectName("indicadorPerfilHeader")
-        self._indicador.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._indicador.setFixedWidth(10)
-
         layout.addWidget(self._avatar, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addLayout(bloque, 1)
-        layout.addWidget(self._indicador)
 
     def actualizar(self, nombre_completo: str, perfil: str) -> None:
         self._avatar.setText(self._resolver_iniciales(nombre_completo))
@@ -836,10 +830,10 @@ class BotonPerfilUsuario(QPushButton):
         self.adjustSize()
 
     def sizeHint(self) -> QSize:
-        return QSize(208, 50)
+        return QSize(174, 50)
 
     def minimumSizeHint(self) -> QSize:
-        return QSize(190, 48)
+        return QSize(154, 48)
 
     @staticmethod
     def _resolver_iniciales(nombre_completo: str) -> str:
@@ -1762,13 +1756,25 @@ class VistaModuloPrincipal(QWidget):
         layout_raiz.setContentsMargins(0, 0, 0, 0)
         layout_raiz.setSpacing(0)
 
+        self._contenedor_sidebar = QWidget()
+        self._contenedor_sidebar.setObjectName("contenedorSidebarFlotante")
+        self._contenedor_sidebar.setFixedWidth(ANCHO_SIDEBAR + 24)
+        layout_contenedor_sidebar = QVBoxLayout(self._contenedor_sidebar)
+        layout_contenedor_sidebar.setContentsMargins(14, 14, 10, 14)
+        layout_contenedor_sidebar.setSpacing(0)
+
         self._sidebar = QFrame()
         self._sidebar.setObjectName("sidebarPrincipal")
         self._sidebar.setFixedWidth(ANCHO_SIDEBAR)
         self._sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        sombra_sidebar = QGraphicsDropShadowEffect(self._sidebar)
+        sombra_sidebar.setBlurRadius(22)
+        sombra_sidebar.setOffset(0, 8)
+        sombra_sidebar.setColor(QColor(0, 0, 0, 76))
+        self._sidebar.setGraphicsEffect(sombra_sidebar)
         layout_sidebar = QVBoxLayout(self._sidebar)
         self._layout_sidebar = layout_sidebar
-        layout_sidebar.setContentsMargins(0, 14, 0, 12)
+        layout_sidebar.setContentsMargins(8, 14, 8, 12)
         layout_sidebar.setSpacing(10)
 
         layout_sidebar.addWidget(self._crear_encabezado_sidebar())
@@ -1811,8 +1817,13 @@ class VistaModuloPrincipal(QWidget):
 
         header = QFrame()
         header.setObjectName("headerPrincipal")
+        sombra_header = QGraphicsDropShadowEffect(header)
+        sombra_header.setBlurRadius(18)
+        sombra_header.setOffset(0, 6)
+        sombra_header.setColor(QColor(0, 0, 0, 58))
+        header.setGraphicsEffect(sombra_header)
         layout_header = QHBoxLayout(header)
-        layout_header.setContentsMargins(0, 0, 0, 8)
+        layout_header.setContentsMargins(18, 14, 10, 14)
         layout_header.setSpacing(14)
 
         bloque_titulo = QVBoxLayout()
@@ -1842,7 +1853,8 @@ class VistaModuloPrincipal(QWidget):
         layout_panel.addWidget(header)
         layout_panel.addWidget(self._stack_contenido, 1)
 
-        layout_raiz.addWidget(self._sidebar)
+        layout_contenedor_sidebar.addWidget(self._sidebar)
+        layout_raiz.addWidget(self._contenedor_sidebar)
         layout_raiz.addWidget(panel, 1)
 
     def _actualizar_encabezado_modulo(self, codigo: str) -> None:
@@ -2631,6 +2643,10 @@ class VistaModuloPrincipal(QWidget):
             QScrollArea#scrollDashboard {{
                 border: none;
             }}
+            QWidget#contenedorSidebarFlotante {{
+                background: transparent;
+                border: none;
+            }}
             QFrame#sidebarPrincipal {{
                 background: qlineargradient(
                     x1: 0, y1: 0, x2: 1, y2: 1,
@@ -2638,14 +2654,18 @@ class VistaModuloPrincipal(QWidget):
                     stop: 0.52 {paleta["tarjeta_panel_stop_2"]},
                     stop: 1 {paleta["tarjeta_panel_stop_3"]}
                 );
-                border: none;
-                border-right: 1px solid {paleta["borde_medio"]};
-                border-radius: 0;
+                border: 1px solid {paleta["borde_medio"]};
+                border-radius: 18px;
             }}
             QFrame#headerPrincipal {{
-                background: transparent;
-                border: none;
-                border-radius: 0;
+                background: qlineargradient(
+                    x1: 0, y1: 0, x2: 1, y2: 1,
+                    stop: 0 {paleta["tarjeta_panel_stop_1"]},
+                    stop: 0.52 {paleta["tarjeta_panel_stop_2"]},
+                    stop: 1 {paleta["tarjeta_panel_stop_3"]}
+                );
+                border: 1px solid {paleta["borde_medio"]};
+                border-radius: 18px;
             }}
             QFrame#tarjetaPanel {{
                 background: qlineargradient(
@@ -2731,11 +2751,6 @@ class VistaModuloPrincipal(QWidget):
                 color: {paleta["texto_secundario"]};
                 font-size: 9px;
                 font-weight: 700;
-            }}
-            QLabel#indicadorPerfilHeader {{
-                color: {paleta["texto_destacado"]};
-                font-size: 15px;
-                font-weight: 800;
             }}
             QWidget#contenedorItemsSidebar {{
                 background: transparent;
