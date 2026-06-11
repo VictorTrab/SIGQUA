@@ -20,6 +20,7 @@ if str(RUTA_SRC) not in sys.path:
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from tests.utilidades_base_datos import inicializar_base_datos_prueba  # noqa: E402
 from comun.ui import CampoBusquedaSeleccionSigqua  # noqa: E402
 import modulos.reportes.entidades as entidades_reportes  # noqa: E402
 from modulos.reportes.entidades import (  # noqa: E402
@@ -47,7 +48,7 @@ class TestReportes(unittest.TestCase):
             )
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
+        inicializar_base_datos_prueba(self.gestor_base_datos)
         self.servicio = ServicioReportes(RepositorioReportesSQLite(self.gestor_base_datos))
 
     def tearDown(self) -> None:

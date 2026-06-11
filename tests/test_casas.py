@@ -21,6 +21,7 @@ if str(RUTA_SRC) not in sys.path:
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from tests.utilidades_base_datos import inicializar_base_datos_prueba  # noqa: E402
 from modulos.autenticacion.entidades import UsuarioAutenticado  # noqa: E402
 from modulos.casas.controlador import ControladorCasas  # noqa: E402
 from modulos.casas.entidades import (  # noqa: E402
@@ -55,7 +56,7 @@ class TestCasas(unittest.TestCase):
 
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
+        inicializar_base_datos_prueba(self.gestor_base_datos)
         self.repositorio = RepositorioCasasSQLite(self.gestor_base_datos)
         self.servicio = ServicioCasas(self.repositorio)
 

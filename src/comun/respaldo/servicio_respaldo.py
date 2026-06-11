@@ -10,7 +10,6 @@ from pathlib import Path
 import shutil
 import sqlite3
 import tempfile
-from typing import Protocol
 import zipfile
 
 from comun.base_datos import GestorBaseDatos
@@ -54,23 +53,6 @@ class ResultadoRestauracionLocal:
     observaciones: str
 
 
-class RepositorioHistorialRespaldos(Protocol):
-    """Contrato minimo para registrar respaldos desde configuracion."""
-
-    def registrar_respaldo(
-        self,
-        nombre_archivo: str,
-        ruta_archivo: str,
-        tamano_bytes: int,
-        hash_archivo: str,
-        tipo_respaldo: str,
-        estado: str,
-        observaciones: str,
-        generado_por: int | None = None,
-    ) -> None:
-        """Guarda el respaldo generado en historial_respaldos."""
-
-
 class ServicioRespaldoLocal:
     """Genera respaldos seguros de SQLite."""
 
@@ -100,7 +82,6 @@ class ServicioRespaldoLocal:
     def crear_respaldo(
         self,
         configuracion: ConfiguracionRespaldoLocal,
-        repositorio_historial: RepositorioHistorialRespaldos,
         tipo_respaldo: str,
         generado_por: int | None = None,
     ) -> DetalleRespaldoLocal:
@@ -112,6 +93,7 @@ class ServicioRespaldoLocal:
             ruta_temporal_db = Path(directorio_temporal) / "sigqua.db"
             self._copiar_base_segura(ruta_temporal_db)
             self._validar_base_generada(ruta_temporal_db)
+            hash_base_datos = self._calcular_hash_archivo(ruta_temporal_db)
 
             manifiesto = {
                 "nombre_archivo": nombre_archivo,
@@ -120,6 +102,7 @@ class ServicioRespaldoLocal:
                 "version_sistema": configuracion.version_sistema,
                 "origen_base_datos": str(self._gestor_rutas.obtener_ruta_base_datos()),
                 "generado_por": generado_por,
+                "sha256_base_datos": hash_base_datos,
             }
 
             ruta_temporal_final = Path(directorio_temporal) / nombre_archivo
@@ -153,16 +136,6 @@ class ServicioRespaldoLocal:
             generado_en=self._ahora_texto(),
             observaciones="Respaldo generado correctamente.",
         )
-        repositorio_historial.registrar_respaldo(
-            nombre_archivo=detalle.nombre_archivo,
-            ruta_archivo=detalle.ruta_archivo,
-            tamano_bytes=detalle.tamano_bytes,
-            hash_archivo=detalle.hash_archivo,
-            tipo_respaldo=detalle.tipo_respaldo,
-            estado=detalle.estado,
-            observaciones=detalle.observaciones,
-            generado_por=generado_por,
-        )
         self.aplicar_retencion(configuracion)
         return detalle
 
@@ -187,27 +160,21 @@ class ServicioRespaldoLocal:
     def restaurar_respaldo(
         self,
         ruta_respaldo: str,
-        hash_esperado: str,
         configuracion: ConfiguracionRespaldoLocal,
-        repositorio_historial: RepositorioHistorialRespaldos,
         generado_por: int | None = None,
     ) -> ResultadoRestauracionLocal:
         ruta_origen = Path(ruta_respaldo).expanduser()
         if not ruta_origen.exists() or not ruta_origen.is_file():
             raise FileNotFoundError("El archivo de respaldo registrado no existe.")
 
-        hash_actual = self._calcular_hash_archivo(ruta_origen)
-        if hash_esperado.strip() and hash_actual.lower() != hash_esperado.strip().lower():
-            raise ValueError("El hash del respaldo no coincide con el historial.")
-
         with tempfile.TemporaryDirectory(prefix="sigqua_restauracion_") as directorio_temporal:
             ruta_temporal_db = Path(directorio_temporal) / "sigqua_restaurada.db"
             self._extraer_base_respaldo(ruta_origen, ruta_temporal_db)
             self._validar_base_generada(ruta_temporal_db)
+            self._validar_hash_manifiesto(ruta_origen, ruta_temporal_db)
 
             respaldo_seguridad = self.crear_respaldo(
                 configuracion=configuracion,
-                repositorio_historial=repositorio_historial,
                 generado_por=generado_por,
                 tipo_respaldo="PRE_MANTENIMIENTO",
             )
@@ -226,7 +193,6 @@ class ServicioRespaldoLocal:
     def validar_archivo_respaldo(
         self,
         ruta_respaldo: str,
-        hash_esperado: str = "",
     ) -> tuple[bool, str]:
         ruta_origen = Path(ruta_respaldo).expanduser()
         if not ruta_origen.exists() or not ruta_origen.is_file():
@@ -234,13 +200,11 @@ class ServicioRespaldoLocal:
         if ruta_origen.suffix.lower() != ".zip":
             return False, "El respaldo debe ser un archivo ZIP generado por SIGQUA."
         try:
-            hash_actual = self._calcular_hash_archivo(ruta_origen)
-            if hash_esperado.strip() and hash_actual.lower() != hash_esperado.strip().lower():
-                return False, "El hash del respaldo no coincide con el historial."
             with tempfile.TemporaryDirectory(prefix="sigqua_validacion_respaldo_") as directorio:
                 ruta_temporal = Path(directorio) / "sigqua_validada.db"
                 self._extraer_base_respaldo(ruta_origen, ruta_temporal)
                 self._validar_base_generada(ruta_temporal)
+                self._validar_hash_manifiesto(ruta_origen, ruta_temporal)
         except Exception as error:
             return False, str(error)
         return True, ""
@@ -300,6 +264,18 @@ class ServicioRespaldoLocal:
                 raise RuntimeError("La copia de respaldo no supero la validacion de integridad.")
         finally:
             conexion.close()
+
+    def _validar_hash_manifiesto(self, ruta_zip: Path, ruta_base_datos: Path) -> None:
+        with zipfile.ZipFile(ruta_zip, "r") as archivo_zip:
+            if "manifiesto.json" not in archivo_zip.namelist():
+                raise ValueError("El respaldo no contiene manifiesto.json.")
+            manifiesto = json.loads(archivo_zip.read("manifiesto.json").decode("utf-8"))
+        hash_esperado = str(manifiesto.get("sha256_base_datos", "")).strip().lower()
+        if not hash_esperado:
+            raise ValueError("El manifiesto no contiene el hash de la base de datos.")
+        hash_actual = self._calcular_hash_archivo(ruta_base_datos).lower()
+        if hash_actual != hash_esperado:
+            raise ValueError("El contenido del respaldo no coincide con su manifiesto.")
 
     @staticmethod
     def _calcular_hash_archivo(ruta_archivo: Path) -> str:

@@ -23,6 +23,7 @@ build/
 dist/
 *.egg-info/
 *.spec
+!sigqua.spec
 
 # Base de datos y estado local
 *.db
@@ -34,14 +35,13 @@ dist/
 database/*.db
 database/*.sqlite*
 database/*.db-*
+!database/sigqua_base.db
 
 # Archivos operativos generados por SIGQUA
 /logs/*
 !/logs/.gitkeep
 *.log
 *.log.*
-/respaldos/
-/exportaciones/
 /tmp/
 /.codex-temp/
 /.sicap-webengine/

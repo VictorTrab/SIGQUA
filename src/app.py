@@ -207,7 +207,6 @@ def crear_ventana_principal(
         repositorio_autenticacion=repositorio_autenticacion,
         repositorio_configuracion=repositorio_configuracion,
     )
-    servicio_autenticacion.asegurar_usuario_admin_desarrollo()
     repositorio_usuarios = RepositorioUsuariosSQLite(gestor_base_datos)
     servicio_usuarios = ServicioUsuarios(repositorio_usuarios)
     repositorio_barrios = RepositorioBarriosSQLite(gestor_base_datos)

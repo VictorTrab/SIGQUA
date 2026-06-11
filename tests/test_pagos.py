@@ -22,6 +22,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from tests.utilidades_base_datos import inicializar_base_datos_prueba  # noqa: E402
 from comun.ui.temas import obtener_paleta_tema  # noqa: E402
 import modulos.pagos.vista as vista_pagos_modulo  # noqa: E402
 from modulos.pagos.entidades import (  # noqa: E402
@@ -51,14 +52,14 @@ class TestPagos(unittest.TestCase):
             )
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.ruta_db = self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
+        self.ruta_db = inicializar_base_datos_prueba(self.gestor_base_datos)
         self.repositorio = RepositorioPagosSQLite(self.gestor_base_datos)
         self.servicio = ServicioPagos(self.repositorio, gestor_rutas=self.gestor_rutas)
 
     def tearDown(self) -> None:
         shutil.rmtree(self.raiz_temporal, ignore_errors=True)
 
-    def test_migraciones_agregan_catalogos_y_separan_comprobantes_termicos(self) -> None:
+    def test_plantilla_incluye_catalogos_y_separa_comprobantes_termicos(self) -> None:
         with closing(sqlite3.connect(self.ruta_db)) as conexion:
             columnas_pagos = {
                 fila[1] for fila in conexion.execute("PRAGMA table_info(pagos);").fetchall()
@@ -72,8 +73,8 @@ class TestPagos(unittest.TestCase):
             columnas_metodos = {
                 fila[1] for fila in conexion.execute("PRAGMA table_info(metodos_pago);").fetchall()
             }
-            version = conexion.execute(
-                "SELECT 1 FROM esquema_migraciones WHERE version = '001' LIMIT 1;"
+            tabla_migraciones = conexion.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'esquema_migraciones';"
             ).fetchone()
             columnas_procesos = {
                 fila[1] for fila in conexion.execute("PRAGMA table_info(procesos_servicio);").fetchall()
@@ -130,7 +131,7 @@ class TestPagos(unittest.TestCase):
         self.assertIn("es_reimpresion", columnas_impresiones)
         self.assertIn("estado", columnas_impresiones)
         self.assertIn("requiere_referencia", columnas_metodos)
-        self.assertIsNotNone(version)
+        self.assertIsNone(tabla_migraciones)
         self.assertNotIn("multa_corte_centavos", columnas_procesos)
         self.assertIsNotNone(deposito)
         self.assertEqual(deposito[0], 1)

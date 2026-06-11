@@ -388,6 +388,10 @@ class RepositorioPlanesPagoSQLite:
             LEFT JOIN ({SUBCONSULTA_PLANES_ACTIVOS_CASA}) pa ON pa.casa_id = c.id
             LEFT JOIN ({SUBCONSULTA_HISTORIAL_SERVICIO_CASA}) hs ON hs.casa_id = c.id
             WHERE c.eliminado_en IS NULL
+              AND (
+                    COALESCE(c.ha_tenido_servicio_activo, 0) = 1
+                    OR COALESCE(hs.total_activaciones, 0) > 0
+              )
             ORDER BY c.id ASC;
         """
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
@@ -883,8 +887,6 @@ class RepositorioPlanesPagoSQLite:
             SET estado_servicio = 'ACTIVO',
                 estado_administrativo = 'OPERATIVA',
                 motivo_estado_administrativo = 'NINGUNO',
-                estado_aviso_cobro = 'SIN_AVISO',
-                observacion_ultimo_aviso = '',
                 ha_tenido_servicio_activo = 1,
                 actualizado_en = datetime('now', 'localtime')
             WHERE id = ?;

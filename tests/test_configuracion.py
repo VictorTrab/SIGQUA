@@ -22,6 +22,7 @@ from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
 from comun.respaldo import ConfiguracionRespaldoLocal, ServicioRespaldoLocal  # noqa: E402
 from modulos.configuracion.repositorio import RepositorioConfiguracionSQLite  # noqa: E402
 from modulos.configuracion.servicio import ServicioConfiguracion  # noqa: E402
+from tests.utilidades_base_datos import inicializar_base_datos_prueba  # noqa: E402
 
 
 class TestConfiguracion(unittest.TestCase):
@@ -35,7 +36,7 @@ class TestConfiguracion(unittest.TestCase):
             )
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
+        inicializar_base_datos_prueba(self.gestor_base_datos)
         self.repositorio = RepositorioConfiguracionSQLite(self.gestor_base_datos)
         self.servicio_respaldo = ServicioRespaldoLocal(
             gestor_base_datos=self.gestor_base_datos,
@@ -84,7 +85,7 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.operacion.ruta_respaldos_principal, str(self.gestor_rutas.obtener_ruta_respaldos()))
         self.assertEqual(estado.operacion.retencion_maxima, 5)
         self.assertEqual(estado.seguridad.duracion_sesion_horas, 8.0)
-        self.assertEqual(estado.informacion.version_sistema, "2.2.0")
+        self.assertEqual(estado.informacion.version_sistema, "2.3.0")
         self.assertEqual(estado.seguridad.maximo_intentos_fallidos, 5)
         self.assertEqual(estado.informacion.actualizado_por, "Sistema")
         self.assertFalse(hasattr(estado, "laboratorio_visual"))
@@ -215,7 +216,7 @@ class TestConfiguracion(unittest.TestCase):
         )
         self.assertEqual(len(parametros), 4)
 
-    def test_crear_respaldo_automatico_genera_zip_y_registra_historial(self) -> None:
+    def test_crear_respaldo_automatico_genera_zip_con_hash(self) -> None:
         resultado = self.servicio.crear_respaldo_automatico(actor_id=1)
 
         self.assertTrue(resultado.exito)
@@ -229,57 +230,10 @@ class TestConfiguracion(unittest.TestCase):
             self.assertIn("manifiesto.json", nombres)
             manifiesto = json.loads(archivo_zip.read("manifiesto.json").decode("utf-8"))
         self.assertEqual(manifiesto["tipo_respaldo"], "AUTOMATICO")
+        self.assertTrue(manifiesto["sha256_base_datos"])
         self.assertTrue(estado.operacion.total_respaldos >= 1)
-        self.assertEqual(estado.operacion.ultimo_respaldo_generado_por, "Administrador del Sistema")
+        self.assertEqual(estado.operacion.ultimo_respaldo_generado_por, "Sistema local")
         self.assertEqual(estado.operacion.retencion_maxima, 5)
-
-    def test_buscar_respaldo_automatico_usa_el_mas_reciente_valido(self) -> None:
-        self.assertTrue(self.servicio.crear_respaldo_automatico(actor_id=1).exito)
-        self.assertTrue(self.servicio.crear_respaldo_automatico(actor_id=1).exito)
-        respaldos = self.repositorio.listar_respaldos_automaticos()
-        self.assertGreaterEqual(len(respaldos), 2)
-        Path(respaldos[0].ruta_archivo).write_bytes(b"zip corrupto")
-
-        resultado = self.servicio.buscar_respaldo_automatico_restaurable()
-
-        self.assertTrue(resultado.exito)
-        self.assertIsNotNone(resultado.respaldo)
-        self.assertEqual(resultado.respaldo.identificador, respaldos[1].identificador)
-
-    def test_buscar_respaldo_automatico_falla_si_no_hay_candidato_valido(self) -> None:
-        self.assertTrue(self.servicio.crear_respaldo_automatico(actor_id=1).exito)
-        respaldo = self.repositorio.listar_respaldos_automaticos()[0]
-        Path(respaldo.ruta_archivo).unlink()
-
-        resultado = self.servicio.buscar_respaldo_automatico_restaurable()
-
-        self.assertFalse(resultado.exito)
-        self.assertIsNone(resultado.respaldo)
-        self.assertIn("valido", resultado.mensaje)
-
-    def test_restaurar_respaldo_automatico_por_identificador_revalida_y_reemplaza(self) -> None:
-        self.assertTrue(self.servicio.crear_respaldo_automatico(actor_id=1).exito)
-        respaldo = self.servicio.buscar_respaldo_automatico_restaurable().respaldo
-        self.assertIsNotNone(respaldo)
-        with sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos()) as conexion:
-            conexion.execute("CREATE TABLE marcador_restauracion_automatica(id INTEGER PRIMARY KEY);")
-            conexion.commit()
-
-        resultado = self.servicio.restaurar_respaldo_automatico(
-            respaldo.identificador,
-            actor_id=1,
-        )
-
-        self.assertTrue(resultado.exito)
-        with sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos()) as conexion:
-            marcador = conexion.execute(
-                """
-                SELECT name
-                FROM sqlite_master
-                WHERE type = 'table' AND name = 'marcador_restauracion_automatica';
-                """
-            ).fetchone()
-        self.assertIsNone(marcador)
 
     def test_retencion_conserva_solo_cinco_respaldos_recientes(self) -> None:
         ruta_respaldos = self.gestor_rutas.obtener_ruta_respaldos()
@@ -305,7 +259,7 @@ class TestConfiguracion(unittest.TestCase):
             [f"SIGQUA_RESPALDO_PRUEBA_{indice}.zip" for indice in range(2, 7)],
         )
 
-    def test_restaurar_respaldo_externo_reemplaza_base_y_registra_evento(self) -> None:
+    def test_restaurar_respaldo_externo_reemplaza_base_sin_eventos_sqlite(self) -> None:
         resultado_respaldo = self.servicio.crear_respaldo_automatico(actor_id=1)
         self.assertTrue(resultado_respaldo.exito)
         ruta_generada = next(
@@ -325,15 +279,15 @@ class TestConfiguracion(unittest.TestCase):
             marcador = conexion.execute(
                 "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'marcador_post_respaldo';"
             ).fetchone()
-            eventos = conexion.execute(
-                "SELECT COUNT(*) FROM eventos_tecnicos WHERE categoria = 'RESTAURACION';"
-            ).fetchone()[0]
+            tabla_eventos = conexion.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'eventos_tecnicos';"
+            ).fetchone()
         self.assertIsNone(marcador)
         archivos_seguridad = list(
             self.gestor_rutas.obtener_ruta_respaldos().glob("SIGQUA_RESPALDO_*.zip")
         )
         self.assertGreaterEqual(len(archivos_seguridad), 2)
-        self.assertGreaterEqual(eventos, 1)
+        self.assertIsNone(tabla_eventos)
 
     def test_restaurar_respaldo_externo_rechaza_ruta_extension_y_zip_invalidos(self) -> None:
         ruta_respaldos = self.gestor_rutas.obtener_ruta_respaldos()
@@ -362,11 +316,10 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(zip_invalido.codigo, "ERROR_RESTAURACION")
 
         with sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos()) as conexion:
-            eventos = conexion.execute(
-                "SELECT COUNT(*) FROM eventos_tecnicos WHERE categoria = 'RESTAURACION' AND severidad = 'ERROR';"
-            ).fetchone()[0]
-
-        self.assertGreaterEqual(eventos, 1)
+            tabla_eventos = conexion.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'eventos_tecnicos';"
+            ).fetchone()
+        self.assertIsNone(tabla_eventos)
 
     def test_firma_visual_vacia_usa_texto_predeterminado(self) -> None:
         self.repositorio.actualizar_valores(

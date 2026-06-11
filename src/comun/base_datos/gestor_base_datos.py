@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+import shutil
+import tempfile
 
-from comun.configuracion.gestor_rutas import GestorRutas
+from comun.configuracion.gestor_rutas import GestorRutas, RAIZ_RECURSOS
 
 
 class GestorBaseDatos:
@@ -27,142 +29,66 @@ class GestorBaseDatos:
     def inicializar_base_datos(
         self,
         forzar_recreacion: bool = False,
-        incluir_datos_prueba: bool = False,
     ) -> Path:
-        """Crea la base y aplica migraciones versionadas pendientes."""
+        """Copia la plantilla limpia cuando no existe una base operativa."""
         self._gestor_rutas.asegurar_directorios_base()
 
         ruta_base_datos = self._gestor_rutas.obtener_ruta_base_datos()
-        ruta_esquema = self._gestor_rutas.obtener_ruta_esquema_inicial_base_datos()
-        ruta_migraciones = self._gestor_rutas.obtener_ruta_migraciones_base_datos()
+        ruta_plantilla = self._gestor_rutas.obtener_ruta_base_datos_plantilla()
+        if not ruta_plantilla.exists():
+            ruta_plantilla_empaquetada = RAIZ_RECURSOS / "database" / "sigqua_base.db"
+            if ruta_plantilla_empaquetada.exists():
+                ruta_plantilla = ruta_plantilla_empaquetada
 
-        if not ruta_esquema.exists():
+        if not ruta_plantilla.exists():
             raise FileNotFoundError(
-                f"No se encontro el esquema inicial de la base de datos: {ruta_esquema}"
+                f"No se encontro la base plantilla de SIGQUA: {ruta_plantilla}"
             )
 
         if forzar_recreacion and ruta_base_datos.exists():
             ruta_base_datos.unlink()
 
         if not ruta_base_datos.exists():
-            self._crear_base_desde_esquema_inicial(ruta_base_datos, ruta_esquema)
+            self._copiar_plantilla_atomicamente(ruta_plantilla, ruta_base_datos)
 
-        self._aplicar_migraciones_pendientes(
-            ruta_base_datos,
-            ruta_migraciones,
-        )
-        if incluir_datos_prueba:
-            self._aplicar_datos_prueba(ruta_base_datos)
+        self._validar_base_datos(ruta_base_datos)
         return ruta_base_datos
 
-    def _crear_base_desde_esquema_inicial(
+    def _copiar_plantilla_atomicamente(
         self,
+        ruta_plantilla: Path,
         ruta_base_datos: Path,
-        ruta_esquema: Path,
     ) -> None:
-        script_sql = ruta_esquema.read_text(encoding="utf-8")
-        conexion: sqlite3.Connection | None = None
+        """Copia la plantilla sin exponer una base operativa parcial."""
+        ruta_temporal: Path | None = None
         try:
-            conexion = sqlite3.connect(ruta_base_datos)
-            with conexion:
-                conexion.execute("PRAGMA foreign_keys = ON;")
-                conexion.executescript(script_sql)
-
-                resultado_integridad = conexion.execute("PRAGMA integrity_check;").fetchone()
-                if not resultado_integridad or resultado_integridad[0] != "ok":
-                    raise RuntimeError(
-                        "La validacion de integridad SQLite fallo despues de crear la base de datos."
-                    )
-
-                errores_claves_foraneas = conexion.execute(
-                    "PRAGMA foreign_key_check;"
-                ).fetchall()
-                if errores_claves_foraneas:
-                    raise RuntimeError(
-                        "Se detectaron errores de claves foraneas despues de crear la base de datos."
-                    )
+            with tempfile.NamedTemporaryFile(
+                prefix="sigqua_",
+                suffix=".db.tmp",
+                dir=ruta_base_datos.parent,
+                delete=False,
+            ) as archivo_temporal:
+                ruta_temporal = Path(archivo_temporal.name)
+            shutil.copy2(ruta_plantilla, ruta_temporal)
+            self._validar_base_datos(ruta_temporal)
+            ruta_temporal.replace(ruta_base_datos)
         except Exception:
+            if ruta_temporal is not None:
+                ruta_temporal.unlink(missing_ok=True)
             if ruta_base_datos.exists():
                 ruta_base_datos.unlink()
             raise
-        finally:
-            if conexion is not None:
-                conexion.close()
 
-    def _aplicar_migraciones_pendientes(
-        self,
-        ruta_base_datos: Path,
-        ruta_migraciones: Path,
-    ) -> None:
-        rutas_migracion = sorted(ruta_migraciones.glob("[0-9][0-9][0-9]_*.sql"))
-        if not rutas_migracion:
-            return
-
+    @staticmethod
+    def _validar_base_datos(ruta_base_datos: Path) -> None:
         conexion = sqlite3.connect(ruta_base_datos)
         try:
-            conexion.row_factory = sqlite3.Row
             conexion.execute("PRAGMA foreign_keys = ON;")
-            versiones_aplicadas = {
-                str(fila["version"])
-                for fila in conexion.execute(
-                    "SELECT version FROM esquema_migraciones;"
-                ).fetchall()
-            }
-            for ruta_migracion in rutas_migracion:
-                version = ruta_migracion.stem.split("_", maxsplit=1)[0]
-                if version in versiones_aplicadas:
-                    continue
-
-                script_sql = ruta_migracion.read_text(encoding="utf-8")
-                with conexion:
-                    conexion.executescript(script_sql)
-
-                resultado_integridad = conexion.execute("PRAGMA integrity_check;").fetchone()
-                if not resultado_integridad or resultado_integridad[0] != "ok":
-                    raise RuntimeError(
-                        f"La validacion de integridad SQLite fallo tras aplicar {ruta_migracion.name}."
-                    )
-
-                errores_claves_foraneas = conexion.execute(
-                    "PRAGMA foreign_key_check;"
-                ).fetchall()
-                if errores_claves_foraneas:
-                    raise RuntimeError(
-                        f"Se detectaron errores de claves foraneas tras aplicar {ruta_migracion.name}."
-                    )
-        finally:
-            conexion.close()
-
-    def _aplicar_datos_prueba(self, ruta_base_datos: Path) -> None:
-        """Carga fixtures locales sin convertirlos en una migracion productiva."""
-        ruta_semilla = Path(__file__).with_name("datos_prueba.sql")
-        if not ruta_semilla.exists():
-            raise FileNotFoundError(
-                f"No se encontro la semilla de datos de prueba: {ruta_semilla}"
-            )
-
-        conexion = sqlite3.connect(ruta_base_datos)
-        try:
-            ya_aplicada = conexion.execute(
-                """
-                SELECT 1
-                FROM usuarios
-                WHERE lower(nombre_usuario) = 'cajero_demo'
-                LIMIT 1;
-                """
-            ).fetchone()
-            if ya_aplicada:
-                return
-
-            with conexion:
-                conexion.executescript(ruta_semilla.read_text(encoding="utf-8"))
-
-            errores_claves_foraneas = conexion.execute(
-                "PRAGMA foreign_key_check;"
-            ).fetchall()
-            if errores_claves_foraneas:
-                raise RuntimeError(
-                    "La semilla de pruebas genero errores de claves foraneas."
-                )
+            resultado = conexion.execute("PRAGMA integrity_check;").fetchone()
+            if not resultado or str(resultado[0]).lower() != "ok":
+                raise RuntimeError("La base de datos no supero la validacion de integridad.")
+            errores = conexion.execute("PRAGMA foreign_key_check;").fetchall()
+            if errores:
+                raise RuntimeError("La base de datos contiene claves foraneas invalidas.")
         finally:
             conexion.close()

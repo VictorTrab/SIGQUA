@@ -36,7 +36,6 @@ class RepositorioUsuarios(Protocol):
         formulario: FormularioUsuario,
         nuevo_hash: str,
         momento: str,
-        contrasena_temporal_expira_en: str,
     ) -> None:
         """Crea un usuario operativo y asigna su rol principal."""
 
@@ -63,7 +62,6 @@ class RepositorioUsuarios(Protocol):
         objetivo_id: int,
         nuevo_hash: str,
         momento: str,
-        contrasena_temporal_expira_en: str,
     ) -> None:
         """Aplica un restablecimiento administrativo de contrasena."""
 
@@ -74,19 +72,6 @@ class RepositorioUsuarios(Protocol):
         momento: str,
     ) -> None:
         """Desbloquea un usuario operativo."""
-
-    def registrar_auditoria(
-        self,
-        usuario_id: int | None,
-        accion: str,
-        entidad: str,
-        entidad_id: int | None,
-        resumen: str,
-        datos_antes_json: str | None = None,
-        datos_despues_json: str | None = None,
-    ) -> None:
-        """Registra un evento de auditoria sensible."""
-
 
 class RepositorioUsuariosSQLite:
     """Implementacion SQLite del modulo de usuarios."""
@@ -116,7 +101,6 @@ class RepositorioUsuariosSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
-                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
@@ -148,7 +132,6 @@ class RepositorioUsuariosSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
-                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
@@ -172,7 +155,6 @@ class RepositorioUsuariosSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
-                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
@@ -203,7 +185,6 @@ class RepositorioUsuariosSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
-                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
@@ -286,7 +267,6 @@ class RepositorioUsuariosSQLite:
         formulario: FormularioUsuario,
         nuevo_hash: str,
         momento: str,
-        contrasena_temporal_expira_en: str,
     ) -> None:
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             with conexion:
@@ -300,13 +280,12 @@ class RepositorioUsuariosSQLite:
                         estado,
                         observaciones,
                         requiere_cambio_contrasena,
-                        contrasena_temporal_expira_en,
                         creado_en,
                         actualizado_en,
                         creado_por,
                         actualizado_por
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?);
+                    VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?);
                     """,
                     (
                         formulario.nombre_usuario,
@@ -315,7 +294,6 @@ class RepositorioUsuariosSQLite:
                         nuevo_hash,
                         formulario.estado,
                         formulario.observaciones,
-                        contrasena_temporal_expira_en,
                         momento,
                         momento,
                         actor_id,
@@ -404,14 +382,12 @@ class RepositorioUsuariosSQLite:
         objetivo_id: int,
         nuevo_hash: str,
         momento: str,
-        contrasena_temporal_expira_en: str,
     ) -> None:
         consulta = """
             UPDATE usuarios
             SET contrasena_hash = ?,
                 ultimo_cambio_contrasena_en = ?,
-                requiere_cambio_contrasena = 1,
-                contrasena_temporal_expira_en = ?,
+                requiere_cambio_contrasena = 0,
                 intentos_fallidos = 0,
                 bloqueado_hasta = NULL,
                 estado = 'ACTIVO',
@@ -428,7 +404,6 @@ class RepositorioUsuariosSQLite:
                     (
                         nuevo_hash,
                         momento,
-                        contrasena_temporal_expira_en,
                         momento,
                         actor_id,
                         momento,
@@ -456,44 +431,6 @@ class RepositorioUsuariosSQLite:
             with conexion:
                 conexion.execute(consulta, (momento, actor_id, objetivo_id))
 
-    def registrar_auditoria(
-        self,
-        usuario_id: int | None,
-        accion: str,
-        entidad: str,
-        entidad_id: int | None,
-        resumen: str,
-        datos_antes_json: str | None = None,
-        datos_despues_json: str | None = None,
-    ) -> None:
-        consulta = """
-            INSERT INTO auditoria(
-                usuario_id,
-                accion,
-                entidad,
-                entidad_id,
-                resumen,
-                datos_antes_json,
-                datos_despues_json,
-                fecha_evento
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'));
-        """
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            with conexion:
-                conexion.execute(
-                    consulta,
-                    (
-                        usuario_id,
-                        accion,
-                        entidad,
-                        entidad_id,
-                        resumen,
-                        datos_antes_json,
-                        datos_despues_json,
-                    ),
-                )
-
     def _ejecutar_consulta_usuarios(self, consulta: str) -> list[UsuarioSistema]:
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             filas = conexion.execute(consulta).fetchall()
@@ -511,7 +448,6 @@ class RepositorioUsuariosSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
-                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
@@ -542,7 +478,6 @@ class RepositorioUsuariosSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
-                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta,
                 u.ultimo_acceso_en,
@@ -578,11 +513,6 @@ class RepositorioUsuariosSQLite:
             es_tecnico=bool(fila["es_tecnico"]),
             es_oculto=bool(fila["es_oculto"]),
             requiere_cambio_contrasena=bool(fila["requiere_cambio_contrasena"]),
-            contrasena_temporal_expira_en=(
-                str(fila["contrasena_temporal_expira_en"])
-                if fila["contrasena_temporal_expira_en"]
-                else None
-            ),
             intentos_fallidos=int(fila["intentos_fallidos"] or 0),
             bloqueado_hasta=fila["bloqueado_hasta"],
             roles=roles,

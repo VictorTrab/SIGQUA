@@ -15,6 +15,7 @@ if str(RUTA_SRC) not in sys.path:
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from tests.utilidades_base_datos import inicializar_base_datos_prueba  # noqa: E402
 from modulos.autenticacion.entidades import UsuarioAutenticado  # noqa: E402
 from modulos.usuarios.entidades import FormularioUsuario  # noqa: E402
 from modulos.usuarios.repositorio import RepositorioUsuariosSQLite  # noqa: E402
@@ -29,7 +30,7 @@ class TestUsuariosSeguridad(unittest.TestCase):
 
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
+        inicializar_base_datos_prueba(self.gestor_base_datos)
         self.repositorio = RepositorioUsuariosSQLite(self.gestor_base_datos)
         self.servicio = ServicioUsuarios(self.repositorio)
 
@@ -64,39 +65,30 @@ class TestUsuariosSeguridad(unittest.TestCase):
         roles = self.servicio.listar_roles_asignables(self.admin)
         self.assertEqual([rol.nombre for rol in roles], ["ADMINISTRADOR", "CAJERO", "CONSULTA"])
 
-    def test_admin_restablece_usuario_operativo_y_se_registra_auditoria(self) -> None:
+    def test_admin_restablece_usuario_con_contrasena_definida(self) -> None:
         resultado = self.servicio.restablecer_contrasena_administrativa(
             actor=self.admin,
             nombre_usuario_objetivo="cajero1",
+            nueva_contrasena="NuevaClaveCajero1!",
+            confirmacion_contrasena="NuevaClaveCajero1!",
         )
         self.assertTrue(resultado.exito)
-        self.assertTrue(resultado.contrasena_temporal_generada)
-        self.assertIsNotNone(resultado.contrasena_temporal_expira_en)
 
         conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
         try:
-            requiere_cambio, restablecida_por, expira_en = conexion.execute(
+            requiere_cambio, restablecida_por, contrasena_hash = conexion.execute(
                 """
-                SELECT requiere_cambio_contrasena, restablecida_por_usuario_id, contrasena_temporal_expira_en
+                SELECT requiere_cambio_contrasena, restablecida_por_usuario_id, contrasena_hash
                 FROM usuarios
                 WHERE nombre_usuario = 'cajero1';
                 """
             ).fetchone()
-            total_auditoria = conexion.execute(
-                """
-                SELECT COUNT(*)
-                FROM auditoria
-                WHERE accion = 'RESTABLECER_CONTRASENA'
-                  AND entidad = 'usuarios';
-                """
-            ).fetchone()[0]
         finally:
             conexion.close()
 
-        self.assertEqual(requiere_cambio, 1)
+        self.assertEqual(requiere_cambio, 0)
         self.assertEqual(restablecida_por, self.admin.identificador)
-        self.assertIsNotNone(expira_en)
-        self.assertGreaterEqual(total_auditoria, 1)
+        self.assertNotEqual(contrasena_hash, "NuevaClaveCajero1!")
 
     def test_admin_puede_desbloquear_usuario_operativo(self) -> None:
         conexion = self.gestor_base_datos.obtener_conexion()
@@ -133,7 +125,7 @@ class TestUsuariosSeguridad(unittest.TestCase):
         self.assertEqual(estado, "ACTIVO")
         self.assertEqual(intentos, 0)
 
-    def test_admin_puede_crear_usuario_operativo_y_generar_credencial_temporal(self) -> None:
+    def test_admin_puede_crear_usuario_con_contrasena_definida(self) -> None:
         formulario = FormularioUsuario(
             identificador=None,
             nombre_usuario="recepcion1",
@@ -142,20 +134,18 @@ class TestUsuariosSeguridad(unittest.TestCase):
             estado="ACTIVO",
             rol_id=self._obtener_id_rol("CAJERO"),
             observaciones="Usuario creado en prueba",
+            contrasena="ClaveRecepcion1!",
+            confirmacion_contrasena="ClaveRecepcion1!",
         )
 
         resultado = self.servicio.crear_usuario_operativo(self.admin, formulario)
 
         self.assertTrue(resultado.exito)
-        self.assertTrue(resultado.requiere_mostrar_credencial_temporal)
-        self.assertTrue(resultado.contrasena_temporal_generada)
-        self.assertIsNotNone(resultado.contrasena_temporal_expira_en)
 
         usuario = self.repositorio.obtener_por_nombre_usuario("recepcion1")
         self.assertIsNotNone(usuario)
         self.assertEqual(usuario.rol_principal, "CAJERO")
-        self.assertTrue(usuario.requiere_cambio_contrasena)
-        self.assertIsNotNone(usuario.contrasena_temporal_expira_en)
+        self.assertFalse(usuario.requiere_cambio_contrasena)
         self.assertEqual(usuario.creado_por_nombre, "Administrador del Sistema")
         self.assertEqual(usuario.actualizado_por_nombre, "Administrador del Sistema")
 

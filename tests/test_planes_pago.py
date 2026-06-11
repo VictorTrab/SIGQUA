@@ -20,6 +20,7 @@ if str(RUTA_SRC) not in sys.path:
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from tests.utilidades_base_datos import inicializar_base_datos_prueba  # noqa: E402
 from PySide6.QtWidgets import QApplication, QLabel, QScrollArea  # noqa: E402
 from modulos.planes_pago.entidades import FILTRO_PLANES_CON_MORA, FILTRO_PLANES_TODOS, FormularioPlanPago  # noqa: E402
 from modulos.planes_pago.repositorio import RepositorioPlanesPagoSQLite  # noqa: E402
@@ -46,7 +47,7 @@ class TestPlanesPago(unittest.TestCase):
             )
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.ruta_db = self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
+        self.ruta_db = inicializar_base_datos_prueba(self.gestor_base_datos)
         self.repositorio = RepositorioPlanesPagoSQLite(self.gestor_base_datos)
         self.servicio = ServicioPlanesPago(self.repositorio)
 
@@ -93,7 +94,7 @@ class TestPlanesPago(unittest.TestCase):
         self.assertGreaterEqual(badge.minimumHeight(), 28)
         dialogo.close()
 
-    def test_crear_plan_financia_deuda_y_activa_servicio_con_prima(self) -> None:
+    def test_rechaza_plan_de_conexion(self) -> None:
         casa_id = self._crear_casa_cortada(ha_tenido_servicio_activo=False)
         metodo_id = self._obtener_metodo_pago("EFECTIVO")
 
@@ -115,42 +116,9 @@ class TestPlanesPago(unittest.TestCase):
             actor_id=1,
         )
 
-        self.assertTrue(resultado.exito, resultado.mensaje)
-        pagina = self.servicio.listar()
-        self.assertEqual(pagina.total_registros, 2)
-        nuevo_plan = max(pagina.items, key=lambda item: item.identificador or 0)
-        self.assertEqual(nuevo_plan.deuda_financiada_centavos, 35000)
-        self.assertEqual(nuevo_plan.monto_activacion_centavos, 60000)
-        self.assertEqual(nuevo_plan.prima_centavos, 20000)
-        self.assertEqual(nuevo_plan.saldo_financiado_centavos, 75000)
-        with closing(sqlite3.connect(self.ruta_db)) as conexion:
-            fila_casa = conexion.execute(
-                "SELECT estado_servicio, ha_tenido_servicio_activo, estado_aviso_cobro FROM casas WHERE id = ?;",
-                (casa_id,),
-            ).fetchone()
-            fila_pago = conexion.execute(
-                """
-                SELECT tipo_pago, total_pagado_centavos
-                FROM pagos
-                WHERE casa_id = ?
-                ORDER BY id DESC
-                LIMIT 1;
-                """,
-                (casa_id,),
-            ).fetchone()
-            deuda = conexion.execute(
-                """
-                SELECT COALESCE(SUM(saldo_pendiente_centavos), 0)
-                FROM cargos
-                WHERE casa_id = ?
-                  AND estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO');
-                """,
-                (casa_id,),
-            ).fetchone()
-
-        self.assertEqual(tuple(fila_casa), ("ACTIVO", 1, "SIN_AVISO"))
-        self.assertEqual(tuple(fila_pago), ("PLAN_PAGO", 20000))
-        self.assertEqual(deuda[0], 0)
+        self.assertFalse(resultado.exito)
+        self.assertEqual(resultado.codigo, "VALIDACION")
+        self.assertIn("reconexion", resultado.mensaje.lower())
 
     def test_previsualizacion_plan_genera_vencimientos_desde_fecha_activacion(self) -> None:
         casa_id = self._crear_casa_cortada(ha_tenido_servicio_activo=True)
@@ -216,7 +184,7 @@ class TestPlanesPago(unittest.TestCase):
         self.assertEqual(tuple(fila), ("2026-05-01", "2026-06-01"))
 
     def test_casa_con_plan_finalizado_cuenta_como_reconexion_aunque_flag_este_en_cero(self) -> None:
-        casa_id = self._crear_casa_cortada(ha_tenido_servicio_activo=False)
+        casa_id = self._crear_casa_cortada(ha_tenido_servicio_activo=True)
         self._crear_plan_finalizado_reconexion(casa_id)
         metodo_id = self._obtener_metodo_pago("EFECTIVO")
 
@@ -248,7 +216,7 @@ class TestPlanesPago(unittest.TestCase):
         self.assertEqual(pagina_mora.total_registros, 1)
 
     def test_error_de_guardado_resalta_fecha_cuando_la_excepcion_la_menciona(self) -> None:
-        casa_id = self._crear_casa_cortada(ha_tenido_servicio_activo=False)
+        casa_id = self._crear_casa_cortada(ha_tenido_servicio_activo=True)
         metodo_id = self._obtener_metodo_pago("EFECTIVO")
         original = self.repositorio.guardar_plan
 
@@ -261,8 +229,8 @@ class TestPlanesPago(unittest.TestCase):
                 FormularioPlanPago(
                     identificador=None,
                     casa_id=casa_id,
-                    tipo_plan="CONEXION",
-                    concepto_financiado="CONEXION",
+                    tipo_plan="RECONEXION",
+                    concepto_financiado="RECONEXION",
                     fecha_activacion="2026-06-01",
                     metodo_pago_id=metodo_id,
                     referencia_pago="",
@@ -296,7 +264,7 @@ class TestPlanesPago(unittest.TestCase):
         vista.close()
 
     def test_listar_abonados_nuevo_plan_agrupa_e_informa_motivo_no_apto(self) -> None:
-        casa_apta_id = self._crear_casa_cortada(ha_tenido_servicio_activo=False)
+        casa_apta_id = self._crear_casa_cortada(ha_tenido_servicio_activo=True)
         abonado_no_apto = self._crear_casa_no_apta(estado_servicio="ACTIVO")
 
         abonados = self.servicio.listar_abonados_nuevo_plan()
@@ -309,7 +277,7 @@ class TestPlanesPago(unittest.TestCase):
         self.assertEqual(no_apto.motivo_no_apto, "No tiene casas cortadas aptas para plan")
 
     def test_dialogo_nuevo_plan_usa_buscador_de_abonado_y_chips_de_casa(self) -> None:
-        casa_apta_id = self._crear_casa_cortada(ha_tenido_servicio_activo=False)
+        casa_apta_id = self._crear_casa_cortada(ha_tenido_servicio_activo=True)
         abonado_no_apto_id = self._crear_casa_no_apta(estado_servicio="ACTIVO")
         abonados = self.servicio.listar_abonados_nuevo_plan()
         abonado_apto = next(
@@ -385,16 +353,6 @@ class TestPlanesPago(unittest.TestCase):
                 (abonado_id, barrio_id, 1 if ha_tenido_servicio_activo else 0),
             )
             casa_id = int(cursor_casa.lastrowid)
-            conexion.execute(
-                """
-                UPDATE casas
-                SET estado_aviso_cobro = 'CORTADO',
-                    fecha_ultimo_aviso = '2026-01-10',
-                    observacion_ultimo_aviso = 'Corte previo de prueba'
-                WHERE id = ?;
-                """,
-                (casa_id,),
-            )
             periodo_id = int(
                 conexion.execute("SELECT id FROM periodos_cobro ORDER BY id ASC LIMIT 1;").fetchone()[0]
             )

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from contextlib import closing
 from typing import Protocol
 
@@ -12,7 +11,6 @@ from modulos.morosidad.entidades import (
     CasaDetalleMorosidad,
     DetalleMorosidad,
     FILTRO_MOROSIDAD_TODOS,
-    FILTRO_MOROSIDAD_LISTO_CORTE,
     FilaMorosidad,
     FiltroMorosidad,
     LineaDetalleMorosidad,
@@ -33,16 +31,6 @@ class RepositorioMorosidad(Protocol):
         claves: tuple[str, ...],
     ) -> dict[str, ParametroConfiguracion]:
         """Obtiene parametros de configuracion relevantes para la vista."""
-
-    def registrar_aviso_cobro(
-        self,
-        casa_id: int,
-        estado_aviso: str,
-        observacion: str,
-        actor_id: int | None,
-    ) -> None:
-        """Registra una etapa manual de aviso de cobro para una casa."""
-
 
 class RepositorioMorosidadSQLite:
     """Consultas SQLite para morosidad operativa."""
@@ -74,15 +62,6 @@ class RepositorioMorosidadSQLite:
                 """
             )
             parametros.extend([patron, patron, patron, patron, patron])
-        if filtros.estado_aviso != FILTRO_MOROSIDAD_TODOS:
-            if filtros.estado_aviso == FILTRO_MOROSIDAD_LISTO_CORTE:
-                condiciones.append(
-                    "ca.estado_aviso_cobro IN ('LISTO_PARA_CORTE', 'CORTADO')"
-                )
-            else:
-                condiciones.append("ca.estado_aviso_cobro = ?")
-                parametros.append(filtros.estado_aviso)
-
         consulta = f"""
             SELECT
                 a.id AS abonado_id,
@@ -93,10 +72,10 @@ class RepositorioMorosidadSQLite:
                 COALESCE(b.nombre, '') AS barrio_nombre,
                 COALESCE(ca.direccion_referencia, '') AS direccion_casa,
                 ca.estado_servicio,
-                COALESCE(ca.estado_aviso_cobro, 'SIN_AVISO') AS estado_aviso_cobro,
-                COALESCE(ca.fecha_ultimo_aviso, '') AS fecha_ultimo_aviso,
-                COALESCE(u_aviso.nombre_completo, COALESCE(u_aviso.nombre_usuario, '')) AS usuario_ultimo_aviso,
-                COALESCE(ca.observacion_ultimo_aviso, '') AS observacion_ultimo_aviso,
+                'SIN_AVISO' AS estado_aviso_cobro,
+                '' AS fecha_ultimo_aviso,
+                '' AS usuario_ultimo_aviso,
+                '' AS observacion_ultimo_aviso,
                 COUNT(
                     DISTINCT CASE
                         WHEN cc.codigo = 'SERVICIO_MENSUAL'
@@ -129,7 +108,6 @@ class RepositorioMorosidadSQLite:
             INNER JOIN casas ca ON ca.id = c.casa_id
             INNER JOIN abonados a ON a.id = ca.abonado_id
             LEFT JOIN barrios b ON b.id = ca.barrio_id
-            LEFT JOIN usuarios u_aviso ON u_aviso.id = ca.usuario_ultimo_aviso_id
             INNER JOIN conceptos_cobro cc ON cc.id = c.concepto_id
             WHERE {' AND '.join(condiciones)}
             GROUP BY a.id, ca.id, b.id
@@ -171,10 +149,10 @@ class RepositorioMorosidadSQLite:
                 COALESCE(b.nombre, '') AS barrio_nombre,
                 COALESCE(ca.direccion_referencia, '') AS direccion_casa,
                 ca.estado_servicio,
-                COALESCE(ca.estado_aviso_cobro, 'SIN_AVISO') AS estado_aviso_cobro,
-                COALESCE(ca.fecha_ultimo_aviso, '') AS fecha_ultimo_aviso,
-                COALESCE(u_aviso.nombre_completo, COALESCE(u_aviso.nombre_usuario, '')) AS usuario_ultimo_aviso,
-                COALESCE(ca.observacion_ultimo_aviso, '') AS observacion_ultimo_aviso,
+                'SIN_AVISO' AS estado_aviso_cobro,
+                '' AS fecha_ultimo_aviso,
+                '' AS usuario_ultimo_aviso,
+                '' AS observacion_ultimo_aviso,
                 COUNT(
                     DISTINCT CASE
                         WHEN cc.codigo = 'SERVICIO_MENSUAL'
@@ -207,7 +185,6 @@ class RepositorioMorosidadSQLite:
             INNER JOIN casas ca ON ca.id = c.casa_id
             INNER JOIN abonados a ON a.id = ca.abonado_id
             LEFT JOIN barrios b ON b.id = ca.barrio_id
-            LEFT JOIN usuarios u_aviso ON u_aviso.id = ca.usuario_ultimo_aviso_id
             INNER JOIN conceptos_cobro cc ON cc.id = c.concepto_id
             WHERE a.id = ?
               AND ca.eliminado_en IS NULL
@@ -275,63 +252,6 @@ class RepositorioMorosidadSQLite:
             abonado_dni=dni,
             casas=tuple(casas),
         )
-
-    def registrar_aviso_cobro(
-        self,
-        casa_id: int,
-        estado_aviso: str,
-        observacion: str,
-        actor_id: int | None,
-    ) -> None:
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            with conexion:
-                fila_actual = conexion.execute(
-                    """
-                    SELECT estado_aviso_cobro, fecha_ultimo_aviso, observacion_ultimo_aviso
-                    FROM casas
-                    WHERE id = ? AND eliminado_en IS NULL
-                    LIMIT 1;
-                    """,
-                    (casa_id,),
-                ).fetchone()
-                if fila_actual is None:
-                    raise ValueError("La casa indicada no existe.")
-                conexion.execute(
-                    """
-                    UPDATE casas
-                    SET estado_aviso_cobro = ?,
-                        fecha_ultimo_aviso = datetime('now', 'localtime'),
-                        usuario_ultimo_aviso_id = ?,
-                        observacion_ultimo_aviso = ?,
-                        actualizado_en = datetime('now', 'localtime')
-                    WHERE id = ? AND eliminado_en IS NULL;
-                    """,
-                    (estado_aviso, actor_id, observacion, casa_id),
-                )
-                conexion.execute(
-                    """
-                    INSERT INTO auditoria(
-                        usuario_id,
-                        accion,
-                        entidad,
-                        entidad_id,
-                        resumen,
-                        datos_antes_json,
-                        datos_despues_json
-                    )
-                    VALUES (?, 'REGISTRAR_AVISO_COBRO', 'casas', ?, ?, ?, ?);
-                    """,
-                    (
-                        actor_id,
-                        casa_id,
-                        f"Aviso de cobro {estado_aviso} registrado para casa {casa_id}",
-                        json.dumps(dict(fila_actual), ensure_ascii=True),
-                        json.dumps(
-                            {"estado_aviso_cobro": estado_aviso, "observacion": observacion},
-                            ensure_ascii=True,
-                        ),
-                    ),
-                )
 
     def listar_parametros_configuracion(
         self,

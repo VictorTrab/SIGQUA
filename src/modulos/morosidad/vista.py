@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
-    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -48,11 +47,6 @@ from comun.ui.temas import (
 )
 from modulos.morosidad.entidades import (
     DetalleMorosidad,
-    ESTADO_AVISO_LISTO_PARA_CORTE,
-    ESTADO_AVISO_PRIMER_AVISO,
-    ESTADO_AVISO_SEGUNDO_AVISO,
-    ESTADO_AVISO_SIN_AVISO,
-    ESTADO_AVISO_TERCER_AVISO,
     FILTRO_MOROSIDAD_LEVE,
     FILTRO_MOROSIDAD_LISTO_CORTE,
     FILTRO_MOROSIDAD_MEDIA,
@@ -62,91 +56,6 @@ from modulos.morosidad.entidades import (
     PaginaMorosidad,
     ResumenMorosidad,
 )
-
-
-OPCIONES_AVISO_COBRO = (
-    (ESTADO_AVISO_SIN_AVISO, "Sin aviso"),
-    (ESTADO_AVISO_PRIMER_AVISO, "Primer aviso"),
-    (ESTADO_AVISO_SEGUNDO_AVISO, "Segundo aviso"),
-    (ESTADO_AVISO_TERCER_AVISO, "Tercer aviso"),
-    (ESTADO_AVISO_LISTO_PARA_CORTE, "Listo para corte"),
-)
-
-
-class DialogoAvisoCobro(DialogoBaseSigqua):
-    """Captura la etapa manual de aviso de cobro."""
-
-    def __init__(self, item: FilaMorosidad, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._item = item
-        self.setMinimumWidth(560)
-        self._combo_estado = QComboBox()
-        for codigo, etiqueta in OPCIONES_AVISO_COBRO:
-            self._combo_estado.addItem(etiqueta, codigo)
-        indice = self._combo_estado.findData(item.estado_aviso_cobro)
-        if indice >= 0:
-            self._combo_estado.setCurrentIndex(indice)
-        self._observacion = QPlainTextEdit()
-        self._observacion.setPlaceholderText("Describe como se entrego o registro el aviso.")
-        self._observacion.setPlainText(item.observacion_ultimo_aviso)
-        self._observacion.setFixedHeight(90)
-        self._construir_ui()
-
-    @property
-    def estado_aviso(self) -> str:
-        return str(self._combo_estado.currentData() or ESTADO_AVISO_SIN_AVISO)
-
-    @property
-    def observacion(self) -> str:
-        return self._observacion.toPlainText().strip()
-
-    def _construir_ui(self) -> None:
-        titulo = QLabel("Registrar aviso de cobro")
-        titulo.setObjectName("tituloDialogoSigqua")
-        descripcion = QLabel(
-            f"{self._item.casa_codigo} | {self._item.abonado_nombre} | {self._item.barrio_nombre or 'Sin barrio'}"
-        )
-        descripcion.setObjectName("descripcionDialogoSigqua")
-        descripcion.setWordWrap(True)
-
-        self.layout_cabecera.addWidget(titulo)
-        self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(QLabel("Etapa de aviso"))
-        self.layout_cuerpo.addWidget(self._combo_estado)
-        self.layout_cuerpo.addWidget(QLabel("Observacion"))
-        self.layout_cuerpo.addWidget(self._observacion)
-
-        boton_cancelar = BotonAccionContextual(
-            "Cancelar",
-            variante=resolver_variante_boton_modal("Cancelar", "neutro"),
-            centrado=True,
-            mostrar_icono=False,
-        )
-        boton_guardar = BotonAccionContextual(
-            "Registrar aviso",
-            icono="bell.svg",
-            variante=resolver_variante_boton_modal("Registrar aviso", "informacion"),
-            centrado=True,
-            mostrar_icono=True,
-        )
-        boton_cancelar.clicked.connect(self.reject)
-        boton_guardar.clicked.connect(self._validar)
-        fila = QHBoxLayout()
-        fila.addWidget(boton_cancelar)
-        fila.addStretch(1)
-        fila.addWidget(boton_guardar)
-        self.layout_pie.addLayout(fila)
-
-    def _validar(self) -> None:
-        if not self.observacion:
-            DialogoMensajeSigqua(
-                titulo="Observacion requerida",
-                mensaje="Describe la observacion del aviso antes de continuar.",
-                texto_boton="Entendido",
-                parent=self,
-            ).exec()
-            return
-        self.accept()
 
 
 class TarjetaResumenMorosidad(TarjetaResumenOperativa):
@@ -573,7 +482,6 @@ class VistaMorosidad(QWidget):
     pagina_cambiada = Signal(int)
     detalle_solicitado = Signal(int)
     emitir_documento_solicitado = Signal(int)
-    aviso_cobro_solicitado = Signal(int, str, str)
 
     DURACION_MENSAJE_MS = 3200
 
@@ -628,7 +536,6 @@ class VistaMorosidad(QWidget):
                 item.meses_vencidos,
                 item.dias_en_mora,
                 item.prioridad,
-                self._etiqueta_aviso(item.estado_aviso_cobro),
                 formatear_moneda(item.deuda_total_centavos),
                 formatear_fecha(item.vencimiento_mas_antiguo),
             )
@@ -636,7 +543,7 @@ class VistaMorosidad(QWidget):
                 tabla_item = crear_item_tabla(valor)
                 tabla_item.setData(Qt.ItemDataRole.UserRole, item.abonado_id)
                 self._tabla.setItem(fila, columna, tabla_item)
-            self._tabla.setCellWidget(fila, 9, self._crear_acciones_fila(item))
+            self._tabla.setCellWidget(fila, 8, self._crear_acciones_fila(item))
         self._tabla.resizeRowsToContents()
         self._label_paginacion.setText(
             f"Mostrando {pagina.indice_inicio}-{pagina.indice_fin} de {pagina.total_registros} registros"
@@ -725,7 +632,7 @@ class VistaMorosidad(QWidget):
             (FILTRO_MOROSIDAD_LEVE, "Baja"),
             (FILTRO_MOROSIDAD_MEDIA, "Media"),
             (FILTRO_MOROSIDAD_SEVERA, "Alta"),
-            (FILTRO_MOROSIDAD_LISTO_CORTE, "Listo corte"),
+            (FILTRO_MOROSIDAD_LISTO_CORTE, "Critica"),
         ):
             boton = QPushButton(etiqueta)
             boton.setCheckable(True)
@@ -749,7 +656,7 @@ class VistaMorosidad(QWidget):
         self._tabla = QTableWidget()
         configurar_tabla_operativa(
             self._tabla,
-            ["Casa", "Abonado", "Barrio", "Meses", "Dias", "Prioridad", "Aviso", "Total", "Mas antiguo", "Acciones"],
+            ["Casa", "Abonado", "Barrio", "Meses", "Dias", "Prioridad", "Total", "Mas antiguo", "Acciones"],
         )
         self._tabla.setObjectName("tablaMorosidad")
         self._tabla.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -761,7 +668,7 @@ class VistaMorosidad(QWidget):
         self._tabla.viewport().setObjectName("viewportTablaMorosidad")
         self._tabla.viewport().setAutoFillBackground(False)
         self._tabla.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self._tabla.horizontalHeader().setSectionResizeMode(9, QHeaderView.ResizeMode.ResizeToContents)
+        self._tabla.horizontalHeader().setSectionResizeMode(8, QHeaderView.ResizeMode.ResizeToContents)
         layout_tabla.addWidget(self._tabla)
 
         fila_pie = QHBoxLayout()
@@ -788,35 +695,12 @@ class VistaMorosidad(QWidget):
         layout.setSpacing(4)
         boton_detalle = BotonIconoFilaMorosidad("eye.svg", "#8be9fd", "Ver detalle")
         boton_emitir = BotonIconoFilaMorosidad("receipt-2.svg", "#facc15", "Emitir deuda")
-        boton_aviso = BotonIconoFilaMorosidad("bell.svg", "#a7f3d0", "Registrar aviso")
         boton_detalle.clicked.connect(lambda: self.detalle_solicitado.emit(item.abonado_id))
         boton_emitir.clicked.connect(lambda: self.emitir_documento_solicitado.emit(item.abonado_id))
-        boton_aviso.clicked.connect(lambda: self._solicitar_aviso(item.casa_id))
         layout.addWidget(boton_detalle)
         layout.addWidget(boton_emitir)
-        layout.addWidget(boton_aviso)
         layout.addStretch(1)
         return contenedor
-
-    def _solicitar_aviso(self, casa_id: int) -> None:
-        item = self._item_por_casa.get(casa_id)
-        if item is None:
-            return
-        dialogo = DialogoAvisoCobro(item=item, parent=self)
-        if dialogo.exec() != int(QDialog.DialogCode.Accepted):
-            return
-        self.aviso_cobro_solicitado.emit(casa_id, dialogo.estado_aviso, dialogo.observacion)
-
-    @staticmethod
-    def _etiqueta_aviso(valor: str) -> str:
-        etiquetas = {
-            ESTADO_AVISO_SIN_AVISO: "Sin aviso",
-            ESTADO_AVISO_PRIMER_AVISO: "Primer aviso",
-            ESTADO_AVISO_SEGUNDO_AVISO: "Segundo aviso",
-            ESTADO_AVISO_TERCER_AVISO: "Tercer aviso",
-            ESTADO_AVISO_LISTO_PARA_CORTE: "Listo para corte",
-        }
-        return etiquetas.get(valor, valor.replace("_", " ").title())
 
     def _emitir_filtro_texto(self) -> None:
         self.filtro_texto_cambiado.emit(self._input_busqueda.text().strip())

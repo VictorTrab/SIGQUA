@@ -106,27 +106,6 @@ class OperacionConfiguracion:
 
 
 @dataclass(slots=True)
-class RespaldoAutomaticoDisponible:
-    """Respaldo automatico registrado y candidato a restauracion."""
-
-    identificador: int
-    nombre_archivo: str
-    ruta_archivo: str
-    generado_en: str
-    tamano_bytes: int
-    hash_archivo: str
-
-
-@dataclass(slots=True)
-class ResultadoBusquedaRespaldoAutomatico:
-    """Resultado de localizar el respaldo automatico util mas reciente."""
-
-    exito: bool
-    mensaje: str
-    respaldo: RespaldoAutomaticoDisponible | None = None
-
-
-@dataclass(slots=True)
 class SeguridadConfiguracion:
     """Resumen de reglas de seguridad vigentes."""
 

@@ -47,7 +47,6 @@ from comun.ui.temas import (
 )
 from modulos.configuracion.entidades import (
     EstadoConfiguracion,
-    RespaldoAutomaticoDisponible,
 )
 
 
@@ -88,7 +87,6 @@ class VistaConfiguracion(QWidget):
     probar_impresora_comprobantes_solicitado = Signal(str)
     probar_impresora_reportes_solicitado = Signal(str)
     restaurar_respaldo_externo_solicitado = Signal(str)
-    restaurar_respaldo_automatico_solicitado = Signal()
     reinicio_aplicacion_solicitado = Signal()
     guardar_duracion_sesion_solicitado = Signal(float)
     guardar_reportes_pdf_solicitado = Signal(str, bool, bool, str)
@@ -985,7 +983,7 @@ class VistaConfiguracion(QWidget):
                     self._valor_restablecimiento,
                 ),
                 self._crear_fila_resumen(
-                    "Clave temporal",
+                    "Cambio inicial",
                     self._valor_cambio_clave,
                 ),
             ],
@@ -1005,8 +1003,8 @@ class VistaConfiguracion(QWidget):
         self._agregar_cierre_tab_compacto(
             contenido,
             (
-                "La contrasena puede ser restablecida por un administrador. "
-                "Si se entrega una clave temporal, el usuario debera cambiarla al entrar."
+                "La contrasena puede ser definida o restablecida por un administrador. "
+                "Solo la cuenta inicial de activacion exige cambio antes de entrar."
             ),
             boton_guardar,
         )
@@ -1234,15 +1232,9 @@ class VistaConfiguracion(QWidget):
         layout = QHBoxLayout(contenedor)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
-        boton_automatico = crear_boton_operativo("Restaurar ahora", principal=True)
-        boton_automatico.setObjectName("botonRestaurarRespaldoAutomatico")
-        boton_automatico.clicked.connect(
-            self.restaurar_respaldo_automatico_solicitado.emit
-        )
-        boton_archivo = crear_boton_operativo("Seleccionar y restaurar...")
+        boton_archivo = crear_boton_operativo("Seleccionar y restaurar...", principal=True)
         boton_archivo.setObjectName("botonRestaurarRespaldoExterno")
         boton_archivo.clicked.connect(self._seleccionar_respaldo_externo)
-        layout.addWidget(boton_automatico)
         layout.addWidget(boton_archivo)
         layout.addStretch(1)
         return contenedor
@@ -1461,27 +1453,6 @@ class VistaConfiguracion(QWidget):
         )
         if dialogo.exec():
             self.restaurar_respaldo_externo_solicitado.emit(ruta_archivo)
-
-    def confirmar_restauracion_automatica(
-        self,
-        respaldo: RespaldoAutomaticoDisponible,
-    ) -> bool:
-        dialogo = DialogoConfirmacionSigqua(
-            titulo="Restaurar respaldo automatico",
-            descripcion=(
-                "La restauracion reemplazara la informacion actual. SIGQUA generara "
-                "un respaldo de seguridad antes de continuar."
-            ),
-            detalles=(
-                ("Archivo", respaldo.nombre_archivo),
-                ("Generado", respaldo.generado_en),
-            ),
-            texto_confirmar="Restaurar ahora",
-            texto_cancelar="Cancelar",
-            variante_confirmar="peligro",
-            parent=self,
-        )
-        return bool(dialogo.exec())
 
     def _seleccionar_duracion_sesion(self, duracion_horas: float) -> None:
         for indice in range(self._combo_duracion_sesion.count()):

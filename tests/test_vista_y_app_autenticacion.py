@@ -65,7 +65,6 @@ from modulos.configuracion.entidades import (  # noqa: E402
     InformacionConfiguracion,
     OperacionConfiguracion,
     ParametrosCobro,
-    RespaldoAutomaticoDisponible,
     ReportesPdfConfiguracion,
     SeguridadConfiguracion,
 )
@@ -171,7 +170,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             seguridad=SeguridadConfiguracion(True, 5, 8.0, True, True),
             informacion=InformacionConfiguracion(
                 "SIGQUA",
-                "2.2.0",
+                "2.3.0",
                 "C:/sigqua.db",
                 "Local",
                 "01/06/2026",
@@ -261,7 +260,7 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertIsNone(logo_login)
         self.assertIsNone(lema_login)
         self.assertIsNone(titulo_repetido)
-        self.assertIn("Versión 2.2.0", vista._label_pie_login.text())
+        self.assertIn("Versión 2.3.0", vista._label_pie_login.text())
         self.assertNotIn("SIGQUA", vista._label_pie_login.text())
         self.assertFalse(vista._campo_usuario.property("icono_usuario_a_la_derecha"))
         accion_limpiar_usuario = next(
@@ -1430,35 +1429,6 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             vista._seleccionar_respaldo_externo()
 
         self.assertEqual(rutas_emitidas, ["C:/respaldos/respaldo.zip"])
-        vista.close()
-
-    def test_configuracion_confirma_respaldo_automatico_con_archivo_y_fecha(self) -> None:
-        vista = VistaConfiguracion()
-        respaldo = RespaldoAutomaticoDisponible(
-            identificador=8,
-            nombre_archivo="SIGQUA_RESPALDO_20260608.zip",
-            ruta_archivo="C:/respaldos/SIGQUA_RESPALDO_20260608.zip",
-            generado_en="08/06/2026 08:30 PM",
-            tamano_bytes=1024,
-            hash_archivo="abc",
-        )
-        textos: list[str] = []
-
-        def confirmar() -> None:
-            dialogo = QApplication.activeModalWidget()
-            if dialogo is None:
-                return
-            textos.extend(
-                etiqueta.text()
-                for etiqueta in dialogo.findChildren(QLabel)
-                if etiqueta.text()
-            )
-            dialogo.accept()
-
-        QTimer.singleShot(0, confirmar)
-        self.assertTrue(vista.confirmar_restauracion_automatica(respaldo))
-        self.assertTrue(any(respaldo.nombre_archivo in texto for texto in textos))
-        self.assertTrue(any(respaldo.generado_en in texto for texto in textos))
         vista.close()
 
     def test_reinicio_solo_cierra_instancia_si_nuevo_proceso_inicia(self) -> None:

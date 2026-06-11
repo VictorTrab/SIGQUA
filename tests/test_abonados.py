@@ -16,6 +16,7 @@ if str(RUTA_SRC) not in sys.path:
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from tests.utilidades_base_datos import inicializar_base_datos_prueba  # noqa: E402
 from modulos.abonados.entidades import (  # noqa: E402
     FILTRO_ABONADOS_CON_MORA,
     FILTRO_ABONADOS_CON_PLAN,
@@ -39,7 +40,7 @@ class TestAbonados(unittest.TestCase):
 
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
+        inicializar_base_datos_prueba(self.gestor_base_datos)
         self.repositorio_casas = RepositorioCasasSQLite(self.gestor_base_datos)
         self.repositorio = RepositorioAbonadosSQLite(self.gestor_base_datos)
         self.servicio = ServicioAbonados(self.repositorio, self.repositorio_casas)

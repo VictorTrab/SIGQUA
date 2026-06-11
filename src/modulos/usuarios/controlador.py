@@ -66,13 +66,6 @@ class ControladorUsuarios:
         resultado = self._servicio_usuarios.crear_usuario_operativo(self._actor, formulario)
         self._vista_usuarios.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
-            if resultado.requiere_mostrar_credencial_temporal:
-                self._vista_usuarios.mostrar_credencial_temporal(
-                    usuario=formulario.nombre_usuario,
-                    contrasena_temporal=resultado.contrasena_temporal_generada,
-                    expira_en=resultado.contrasena_temporal_expira_en,
-                    formateador_fecha=self._servicio_usuarios.formatear_fecha_hora,
-                )
             self._refrescar()
 
     def _mostrar_detalle(self, identificador: int) -> None:
@@ -170,9 +163,10 @@ class ControladorUsuarios:
             )
             return
 
-        accion = self._vista_usuarios.solicitar_gestion_acceso(usuario)
-        if accion is None:
+        gestion = self._vista_usuarios.solicitar_gestion_acceso(usuario)
+        if gestion is None:
             return
+        accion, nueva_contrasena, confirmacion_contrasena = gestion
 
         if accion == "desbloquear":
             resultado = self._servicio_usuarios.desbloquear_usuario_operativo(
@@ -187,16 +181,11 @@ class ControladorUsuarios:
         resultado = self._servicio_usuarios.restablecer_contrasena_administrativa(
             actor=self._actor,
             nombre_usuario_objetivo=usuario.nombre_usuario,
+            nueva_contrasena=nueva_contrasena,
+            confirmacion_contrasena=confirmacion_contrasena,
         )
         self._vista_usuarios.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
         if resultado.exito:
-            if resultado.requiere_mostrar_credencial_temporal:
-                self._vista_usuarios.mostrar_credencial_temporal(
-                    usuario=usuario.nombre_usuario,
-                    contrasena_temporal=resultado.contrasena_temporal_generada,
-                    expira_en=resultado.contrasena_temporal_expira_en,
-                    formateador_fecha=self._servicio_usuarios.formatear_fecha_hora,
-                )
             self._refrescar()
 
     def _exportar(self) -> None:

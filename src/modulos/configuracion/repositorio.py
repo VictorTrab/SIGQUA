@@ -1,4 +1,4 @@
-﻿"""Persistencia SQLite del modulo de configuracion."""
+"""Persistencia SQLite de la configuracion operativa."""
 
 from __future__ import annotations
 
@@ -6,80 +6,39 @@ from contextlib import closing
 from typing import Protocol
 
 from comun.base_datos import GestorBaseDatos
-from modulos.configuracion.entidades import (
-    ParametroConfiguracion,
-    RespaldoAutomaticoDisponible,
-)
+from modulos.configuracion.entidades import ParametroConfiguracion
 
 
 class RepositorioConfiguracion(Protocol):
-    """Contrato minimo de persistencia para configuracion."""
+    """Contrato minimo de configuracion persistida."""
 
-    def listar_por_claves(self, claves: tuple[str, ...]) -> dict[str, ParametroConfiguracion]:
-        """Obtiene varios parametros indexados por clave."""
+    def listar_por_claves(
+        self,
+        claves: tuple[str, ...],
+    ) -> dict[str, ParametroConfiguracion]:
+        """Obtiene parametros indexados por clave."""
 
     def actualizar_valores(
         self,
         valores: dict[str, str],
         actor_id: int | None = None,
     ) -> None:
-        """Actualiza varios parametros editables en una sola transaccion."""
+        """Actualiza parametros editables."""
 
     def obtener_resumen_comprobantes(self) -> tuple[int, str, int]:
         """Retorna correlativo global, ultimo comprobante y total emitido."""
 
-    def obtener_resumen_respaldos(self) -> tuple[str, str, int]:
-        """Retorna ultima fecha, ultimo estado y total de respaldos."""
-
-    def obtener_detalle_ultimo_respaldo(self) -> dict[str, object]:
-        """Retorna metadatos del ultimo respaldo registrado."""
-
-    def listar_respaldos_automaticos(
-        self,
-        limite: int = 5,
-    ) -> tuple[RespaldoAutomaticoDisponible, ...]:
-        """Retorna respaldos automaticos restaurables, del mas reciente al mas antiguo."""
-
-    def obtener_respaldo_automatico(
-        self,
-        respaldo_id: int,
-    ) -> RespaldoAutomaticoDisponible | None:
-        """Obtiene un respaldo automatico restaurable por identificador."""
-
-    def registrar_respaldo(
-        self,
-        nombre_archivo: str,
-        ruta_archivo: str,
-        tamano_bytes: int,
-        hash_archivo: str,
-        tipo_respaldo: str,
-        estado: str,
-        observaciones: str,
-        generado_por: int | None = None,
-    ) -> None:
-        """Registra un respaldo generado desde la capa operativa."""
-
-    def registrar_evento_tecnico(
-        self,
-        categoria: str,
-        severidad: str,
-        mensaje: str,
-        detalle: str = "",
-        origen: str = "configuracion",
-        entidad: str = "",
-        entidad_id: int | None = None,
-        registrado_por: int | None = None,
-    ) -> None:
-        """Registra un evento tecnico auditable."""
-
 
 class RepositorioConfiguracionSQLite:
-    """Implementacion SQLite del acceso a configuracion_sistema."""
+    """Implementacion SQLite para configuracion_sistema."""
 
     def __init__(self, gestor_base_datos: GestorBaseDatos) -> None:
         self._gestor_base_datos = gestor_base_datos
 
-    def listar_por_claves(self, claves: tuple[str, ...]) -> dict[str, ParametroConfiguracion]:
+    def listar_por_claves(
+        self,
+        claves: tuple[str, ...],
+    ) -> dict[str, ParametroConfiguracion]:
         if not claves:
             return {}
         marcadores = ", ".join("?" for _ in claves)
@@ -110,7 +69,9 @@ class RepositorioConfiguracionSQLite:
                 editable=bool(fila["editable"]),
                 actualizado_en=str(fila["actualizado_en"] or ""),
                 actualizado_por=(
-                    int(fila["actualizado_por"]) if fila["actualizado_por"] is not None else None
+                    int(fila["actualizado_por"])
+                    if fila["actualizado_por"] is not None
+                    else None
                 ),
                 actualizado_por_nombre=str(fila["actualizado_por_nombre"] or ""),
             )
@@ -143,7 +104,7 @@ class RepositorioConfiguracionSQLite:
         with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
             fila_correlativo = conexion.execute(
                 """
-                SELECT ultimo_numero, COALESCE(actualizado_en, '') AS actualizado_en
+                SELECT ultimo_numero
                 FROM correlativos_comprobantes
                 WHERE clave = 'RECIBO_GLOBAL';
                 """
@@ -164,196 +125,3 @@ class RepositorioConfiguracionSQLite:
             str(fila_ultimo["numero_comprobante"] or "") if fila_ultimo else "",
             int(fila_total["total"] or 0) if fila_total else 0,
         )
-
-    def obtener_resumen_respaldos(self) -> tuple[str, str, int]:
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            fila_ultimo = conexion.execute(
-                """
-                SELECT
-                    COALESCE(generado_en, '') AS generado_en,
-                    COALESCE(estado, '') AS estado
-                FROM historial_respaldos
-                ORDER BY generado_en DESC, id DESC
-                LIMIT 1;
-                """
-            ).fetchone()
-            fila_total = conexion.execute(
-                "SELECT COUNT(*) AS total FROM historial_respaldos;"
-            ).fetchone()
-        return (
-            str(fila_ultimo["generado_en"] or "") if fila_ultimo else "",
-            str(fila_ultimo["estado"] or "") if fila_ultimo else "",
-            int(fila_total["total"] or 0) if fila_total else 0,
-        )
-
-    def obtener_detalle_ultimo_respaldo(self) -> dict[str, object]:
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            fila = conexion.execute(
-                """
-                SELECT
-                    COALESCE(hr.nombre_archivo, '') AS nombre_archivo,
-                    COALESCE(hr.ruta_archivo, '') AS ruta_archivo,
-                    COALESCE(hr.tamano_bytes, 0) AS tamano_bytes,
-                    COALESCE(hr.hash_archivo, '') AS hash_archivo,
-                    COALESCE(hr.tipo_respaldo, '') AS tipo_respaldo,
-                    COALESCE(hr.estado, '') AS estado,
-                    COALESCE(hr.observaciones, '') AS observaciones,
-                    COALESCE(hr.generado_en, '') AS generado_en,
-                    COALESCE(u.nombre_completo, u.nombre_usuario, '') AS generado_por_nombre
-                FROM historial_respaldos hr
-                LEFT JOIN usuarios u ON u.id = hr.generado_por
-                ORDER BY hr.generado_en DESC, hr.id DESC
-                LIMIT 1;
-                """
-            ).fetchone()
-        if fila is None:
-            return {}
-        return {
-            "nombre_archivo": str(fila["nombre_archivo"] or ""),
-            "ruta_archivo": str(fila["ruta_archivo"] or ""),
-            "tamano_bytes": int(fila["tamano_bytes"] or 0),
-            "hash_archivo": str(fila["hash_archivo"] or ""),
-            "tipo_respaldo": str(fila["tipo_respaldo"] or ""),
-            "estado": str(fila["estado"] or ""),
-            "observaciones": str(fila["observaciones"] or ""),
-            "generado_en": str(fila["generado_en"] or ""),
-            "generado_por_nombre": str(fila["generado_por_nombre"] or ""),
-        }
-
-    def listar_respaldos_automaticos(
-        self,
-        limite: int = 5,
-    ) -> tuple[RespaldoAutomaticoDisponible, ...]:
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            filas = conexion.execute(
-                """
-                SELECT
-                    id,
-                    nombre_archivo,
-                    ruta_archivo,
-                    generado_en,
-                    COALESCE(tamano_bytes, 0) AS tamano_bytes,
-                    COALESCE(hash_archivo, '') AS hash_archivo
-                FROM historial_respaldos
-                WHERE tipo_respaldo = 'AUTOMATICO'
-                  AND estado IN ('GENERADO', 'VALIDADO')
-                ORDER BY generado_en DESC, id DESC
-                LIMIT ?;
-                """,
-                (max(1, int(limite)),),
-            ).fetchall()
-        return tuple(self._mapear_respaldo_automatico(fila) for fila in filas)
-
-    def obtener_respaldo_automatico(
-        self,
-        respaldo_id: int,
-    ) -> RespaldoAutomaticoDisponible | None:
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            fila = conexion.execute(
-                """
-                SELECT
-                    id,
-                    nombre_archivo,
-                    ruta_archivo,
-                    generado_en,
-                    COALESCE(tamano_bytes, 0) AS tamano_bytes,
-                    COALESCE(hash_archivo, '') AS hash_archivo
-                FROM historial_respaldos
-                WHERE id = ?
-                  AND tipo_respaldo = 'AUTOMATICO'
-                  AND estado IN ('GENERADO', 'VALIDADO')
-                LIMIT 1;
-                """,
-                (int(respaldo_id),),
-            ).fetchone()
-        return None if fila is None else self._mapear_respaldo_automatico(fila)
-
-    @staticmethod
-    def _mapear_respaldo_automatico(fila: object) -> RespaldoAutomaticoDisponible:
-        return RespaldoAutomaticoDisponible(
-            identificador=int(fila["id"]),  # type: ignore[index]
-            nombre_archivo=str(fila["nombre_archivo"] or ""),  # type: ignore[index]
-            ruta_archivo=str(fila["ruta_archivo"] or ""),  # type: ignore[index]
-            generado_en=str(fila["generado_en"] or ""),  # type: ignore[index]
-            tamano_bytes=int(fila["tamano_bytes"] or 0),  # type: ignore[index]
-            hash_archivo=str(fila["hash_archivo"] or ""),  # type: ignore[index]
-        )
-
-    def registrar_respaldo(
-        self,
-        nombre_archivo: str,
-        ruta_archivo: str,
-        tamano_bytes: int,
-        hash_archivo: str,
-        tipo_respaldo: str,
-        estado: str,
-        observaciones: str,
-        generado_por: int | None = None,
-    ) -> None:
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            with conexion:
-                conexion.execute(
-                    """
-                    INSERT INTO historial_respaldos(
-                        tipo_respaldo,
-                        nombre_archivo,
-                        ruta_archivo,
-                        tamano_bytes,
-                        hash_archivo,
-                        estado,
-                        observaciones,
-                        generado_por
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-                    """,
-                    (
-                        tipo_respaldo,
-                        nombre_archivo,
-                        ruta_archivo,
-                        tamano_bytes,
-                        hash_archivo,
-                        estado,
-                        observaciones,
-                        generado_por,
-                    ),
-                )
-
-    def registrar_evento_tecnico(
-        self,
-        categoria: str,
-        severidad: str,
-        mensaje: str,
-        detalle: str = "",
-        origen: str = "configuracion",
-        entidad: str = "",
-        entidad_id: int | None = None,
-        registrado_por: int | None = None,
-    ) -> None:
-        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
-            with conexion:
-                conexion.execute(
-                    """
-                    INSERT INTO eventos_tecnicos(
-                        categoria,
-                        severidad,
-                        mensaje,
-                        detalle,
-                        origen,
-                        entidad,
-                        entidad_id,
-                        registrado_por
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-                    """,
-                    (
-                        categoria,
-                        severidad,
-                        mensaje,
-                        detalle,
-                        origen,
-                        entidad,
-                        entidad_id,
-                        registrado_por,
-                    ),
-                )
-

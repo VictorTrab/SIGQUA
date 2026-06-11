@@ -40,7 +40,6 @@ class UsuarioSistema:
     es_tecnico: bool = False
     es_oculto: bool = False
     requiere_cambio_contrasena: bool = False
-    contrasena_temporal_expira_en: str | None = None
     intentos_fallidos: int = 0
     bloqueado_hasta: str | None = None
     roles: tuple[str, ...] = ()
@@ -82,6 +81,8 @@ class FormularioUsuario:
     estado: str
     rol_id: int
     observaciones: str
+    contrasena: str = ""
+    confirmacion_contrasena: str = ""
 
 
 @dataclass(slots=True)
@@ -91,6 +92,3 @@ class ResultadoGestionUsuarios:
     exito: bool
     mensaje: str
     codigo: str = ""
-    contrasena_temporal_generada: str = ""
-    contrasena_temporal_expira_en: str | None = None
-    requiere_mostrar_credencial_temporal: bool = False

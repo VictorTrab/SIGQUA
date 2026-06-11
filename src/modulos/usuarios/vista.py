@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Callable, Iterable
 
 from PySide6.QtCore import QElapsedTimer, QEvent, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
@@ -146,6 +145,8 @@ class DialogoFormularioUsuario(DialogoBaseSigqua):
             estado=self._combo_estado.currentData() or self._combo_estado.currentText(),
             rol_id=int(self._combo_rol.currentData() or 0),
             observaciones=self._campo_observaciones.toPlainText().strip(),
+            contrasena=self._campo_contrasena.text(),
+            confirmacion_contrasena=self._campo_confirmacion.text(),
         )
 
     def accept(self) -> None:
@@ -161,6 +162,12 @@ class DialogoFormularioUsuario(DialogoBaseSigqua):
             return
         if formulario.rol_id <= 0:
             self._mostrar_error("Selecciona un rol visible para continuar.")
+            return
+        if self._usuario is None and not formulario.contrasena:
+            self._mostrar_error("Define la contrasena inicial del usuario.")
+            return
+        if self._usuario is None and formulario.contrasena != formulario.confirmacion_contrasena:
+            self._mostrar_error("Las contrasenas no coinciden.")
             return
         self._mensaje.setVisible(False)
         super().accept()
@@ -197,7 +204,7 @@ class DialogoFormularioUsuario(DialogoBaseSigqua):
 
         panel_seguridad = self._crear_panel(
             "Rol y seguridad",
-            "Asigna un unico rol visible. El acceso temporal se genera automaticamente al guardar.",
+            "Asigna un unico rol visible y define la contrasena inicial.",
         )
         grid_seguridad = QGridLayout()
         grid_seguridad.setHorizontalSpacing(12)
@@ -211,11 +218,28 @@ class DialogoFormularioUsuario(DialogoBaseSigqua):
         self._combo_rol.blockSignals(False)
 
         grid_seguridad.addWidget(self._crear_bloque("Rol", self._combo_rol), 0, 0, 1, 2)
+        self._campo_contrasena = QLineEdit()
+        self._campo_contrasena.setEchoMode(QLineEdit.EchoMode.Password)
+        self._campo_contrasena.setPlaceholderText("Minimo 8 caracteres")
+        self._campo_confirmacion = QLineEdit()
+        self._campo_confirmacion.setEchoMode(QLineEdit.EchoMode.Password)
+        self._campo_confirmacion.setPlaceholderText("Repite la contrasena")
+        if self._usuario is None:
+            grid_seguridad.addWidget(
+                self._crear_bloque("Contrasena inicial", self._campo_contrasena),
+                1,
+                0,
+            )
+            grid_seguridad.addWidget(
+                self._crear_bloque("Confirmar contrasena", self._campo_confirmacion),
+                1,
+                1,
+            )
         panel_seguridad.layout().addLayout(grid_seguridad)
         ayuda = QLabel(
-            "El sistema generara una contrasena temporal de un solo uso con vigencia corta."
+            "La contrasena se almacena protegida mediante scrypt."
             if self._usuario is None
-            else "Para cambiar la contrasena usa la accion de acceso temporal desde la tabla del modulo."
+            else "Para cambiar la contrasena usa la accion de gestion de acceso."
         )
         ayuda.setObjectName("descripcionDialogoSigqua")
         ayuda.setWordWrap(True)
@@ -725,7 +749,7 @@ class DialogoDetalleUsuario(DialogoBaseSigqua):
 
 
 class DialogoGestionAccesoUsuario(DialogoBaseSigqua):
-    """Modal para generar acceso temporal o desbloquear una cuenta."""
+    """Modal para restablecer la contrasena o desbloquear una cuenta."""
 
     def __init__(self, usuario: UsuarioSistema, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -735,14 +759,20 @@ class DialogoGestionAccesoUsuario(DialogoBaseSigqua):
         self._construir_ui()
         self.resize(500, 280)
 
-    def obtener_resultado(self) -> str | None:
-        return self._resultado
+    def obtener_resultado(self) -> tuple[str, str, str] | None:
+        if self._resultado is None:
+            return None
+        return (
+            self._resultado,
+            self._campo_contrasena.text(),
+            self._campo_confirmacion.text(),
+        )
 
     def _construir_ui(self) -> None:
         titulo = QLabel("Gestión de acceso")
         titulo.setObjectName("tituloDialogoSigqua")
         descripcion = QLabel(
-            "Genera una contrasena temporal de 10 minutos o desbloquea la cuenta si quedo bloqueada."
+            "Define una nueva contrasena o desbloquea la cuenta si quedo bloqueada."
         )
         descripcion.setObjectName("descripcionDialogoSigqua")
         descripcion.setWordWrap(True)
@@ -768,12 +798,22 @@ class DialogoGestionAccesoUsuario(DialogoBaseSigqua):
                 f"Intentos fallidos actuales: {self._usuario.intentos_fallidos}. Puedes desbloquear la cuenta."
             )
         else:
-            contexto.append("La cuenta no esta bloqueada, pero puedes generar un nuevo acceso temporal.")
+            contexto.append("La cuenta no esta bloqueada. Puedes restablecer su contrasena.")
 
         nota = QLabel(" ".join(contexto))
         nota.setObjectName("descripcionDialogoSigqua")
         nota.setWordWrap(True)
         layout_panel.addWidget(nota)
+        self._campo_contrasena = QLineEdit()
+        self._campo_contrasena.setEchoMode(QLineEdit.EchoMode.Password)
+        self._campo_contrasena.setPlaceholderText("Minimo 8 caracteres")
+        self._campo_confirmacion = QLineEdit()
+        self._campo_confirmacion.setEchoMode(QLineEdit.EchoMode.Password)
+        self._campo_confirmacion.setPlaceholderText("Repite la contrasena")
+        layout_panel.addWidget(self._crear_bloque("Nueva contrasena", self._campo_contrasena))
+        layout_panel.addWidget(
+            self._crear_bloque("Confirmar contrasena", self._campo_confirmacion)
+        )
 
         self._mensaje = QLabel("")
         self._mensaje.setObjectName("mensajeErrorDialogoSigqua")
@@ -788,7 +828,7 @@ class DialogoGestionAccesoUsuario(DialogoBaseSigqua):
             mostrar_icono=False,
         )
         boton_restablecer = BotonAccionContextual(
-            "Generar acceso temporal",
+            "Restablecer contrasena",
             variante="primario",
             centrado=True,
             mostrar_icono=False,
@@ -829,6 +869,12 @@ class DialogoGestionAccesoUsuario(DialogoBaseSigqua):
         return bloque
 
     def _confirmar_restablecimiento(self) -> None:
+        if len(self._campo_contrasena.text()) < 8:
+            self._mostrar_error("La contrasena debe tener al menos 8 caracteres.")
+            return
+        if self._campo_contrasena.text() != self._campo_confirmacion.text():
+            self._mostrar_error("Las contrasenas no coinciden.")
+            return
         self._resultado = "restablecer"
         self.accept()
 
@@ -839,121 +885,6 @@ class DialogoGestionAccesoUsuario(DialogoBaseSigqua):
     def _mostrar_error(self, mensaje: str) -> None:
         self._mensaje.setText(mensaje)
         self._mensaje.setVisible(True)
-
-
-class DialogoCredencialTemporal(DialogoBaseSigqua):
-    """Muestra una credencial temporal generada automaticamente."""
-
-    def __init__(
-        self,
-        usuario: str,
-        contrasena_temporal: str,
-        expira_en: str | None,
-        formateador_fecha: Callable[[str | None], str],
-        parent: QWidget | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self._usuario = usuario
-        self._contrasena_temporal = contrasena_temporal
-        self._expira_en = expira_en
-        self._formateador_fecha = formateador_fecha
-        self.setMinimumWidth(500)
-        self._construir_ui()
-        self.resize(500, 320)
-
-    def _construir_ui(self) -> None:
-        titulo = QLabel("Acceso temporal generado")
-        titulo.setObjectName("tituloDialogoSigqua")
-        descripcion = QLabel(
-            "Comparte esta credencial solo con el usuario. Se muestra una sola vez y obliga cambio inmediato."
-        )
-        descripcion.setObjectName("descripcionDialogoSigqua")
-        descripcion.setWordWrap(True)
-
-        panel = QFrame()
-        panel.setObjectName("bloqueDialogoSigqua")
-        layout_panel = QVBoxLayout(panel)
-        layout_panel.setContentsMargins(16, 16, 16, 16)
-        layout_panel.setSpacing(10)
-
-        usuario_label = QLabel(f"<b>{self._usuario}</b>")
-        usuario_label.setObjectName("descripcionDialogoSigqua")
-        layout_panel.addWidget(usuario_label)
-
-        bloque_contrasena = QFrame()
-        bloque_contrasena.setObjectName("bloqueCredencialTemporal")
-        layout_contrasena = QVBoxLayout(bloque_contrasena)
-        layout_contrasena.setContentsMargins(14, 14, 14, 14)
-        layout_contrasena.setSpacing(6)
-        etiqueta = QLabel("Contrasena temporal")
-        etiqueta.setObjectName("etiquetaDatoDialogoSigqua")
-        valor = QLabel(self._contrasena_temporal)
-        valor.setObjectName("valorCredencialTemporal")
-        layout_contrasena.addWidget(etiqueta)
-        layout_contrasena.addWidget(valor)
-        layout_panel.addWidget(bloque_contrasena)
-
-        info = QLabel(
-            f"Expira: {self._formateador_fecha(self._expira_en)}"
-            if self._expira_en
-            else "Expiracion: Sin registro"
-        )
-        info.setObjectName("descripcionDialogoSigqua")
-        info.setWordWrap(True)
-        layout_panel.addWidget(info)
-
-        advertencia = QLabel("Guardala ahora. Despues de cerrar esta ventana ya no se volvera a mostrar.")
-        advertencia.setObjectName("descripcionDialogoSigqua")
-        advertencia.setWordWrap(True)
-        layout_panel.addWidget(advertencia)
-
-        fila_acciones = QHBoxLayout()
-        fila_acciones.setSpacing(10)
-        boton_cerrar = BotonAccionContextual(
-            "Cerrar",
-            icono="x.svg",
-            variante="neutro",
-            centrado=True,
-            mostrar_icono=True,
-        )
-        boton_copiar = BotonAccionContextual(
-            "Copiar",
-            variante="primario",
-            centrado=True,
-            mostrar_icono=False,
-        )
-        boton_cerrar.clicked.connect(self.accept)
-        boton_copiar.clicked.connect(self._copiar_contrasena)
-        fila_acciones.addWidget(boton_cerrar)
-        fila_acciones.addStretch(1)
-        fila_acciones.addWidget(boton_copiar)
-
-        self.layout_cabecera.addWidget(titulo)
-        self.layout_cabecera.addWidget(descripcion)
-        self.layout_cuerpo.addWidget(panel)
-        self.layout_pie.addLayout(fila_acciones)
-        self._aplicar_estilos()
-
-    def _copiar_contrasena(self) -> None:
-        QGuiApplication.clipboard().setText(self._contrasena_temporal)
-
-    def _aplicar_estilos(self) -> None:
-        self.setStyleSheet(
-            self.styleSheet()
-            + """
-            QFrame#bloqueCredencialTemporal {
-                background: rgba(36, 63, 90, 0.84);
-                border: 1px solid rgba(126, 167, 196, 0.48);
-                border-radius: 16px;
-            }
-            QLabel#valorCredencialTemporal {
-                color: #75C7F0;
-                font-size: 24px;
-                font-weight: 900;
-                letter-spacing: 0px;
-            }
-            """
-        )
 
 
 class VistaUsuarios(QWidget):
@@ -1068,26 +999,14 @@ class VistaUsuarios(QWidget):
         dialogo.exec()
         return dialogo.accion_resultado
 
-    def solicitar_gestion_acceso(self, usuario: UsuarioSistema) -> str | None:
+    def solicitar_gestion_acceso(
+        self,
+        usuario: UsuarioSistema,
+    ) -> tuple[str, str, str] | None:
         dialogo = DialogoGestionAccesoUsuario(usuario=usuario, parent=self)
         if dialogo.exec() != QDialog.DialogCode.Accepted:
             return None
         return dialogo.obtener_resultado()
-
-    def mostrar_credencial_temporal(
-        self,
-        usuario: str,
-        contrasena_temporal: str,
-        expira_en: str | None,
-        formateador_fecha: Callable[[str | None], str],
-    ) -> None:
-        DialogoCredencialTemporal(
-            usuario=usuario,
-            contrasena_temporal=contrasena_temporal,
-            expira_en=expira_en,
-            formateador_fecha=formateador_fecha,
-            parent=self,
-        ).exec()
 
     def confirmar_cambio_estado_usuario(self, usuario: UsuarioSistema) -> bool:
         accion = "desactivar" if usuario.estado == "ACTIVO" else "activar"

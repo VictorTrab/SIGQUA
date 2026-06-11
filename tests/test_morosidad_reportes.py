@@ -18,20 +18,17 @@ RUTA_SRC = RAIZ_PROYECTO / "src"
 if str(RUTA_SRC) not in sys.path:
     sys.path.insert(0, str(RUTA_SRC))
 
-from PySide6.QtWidgets import QApplication, QPushButton  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from tests.utilidades_base_datos import inicializar_base_datos_prueba  # noqa: E402
 import modulos.morosidad.controlador as controlador_morosidad_modulo  # noqa: E402
 from modulos.morosidad.controlador import ControladorMorosidad  # noqa: E402
 from modulos.morosidad.entidades import FILTRO_MOROSIDAD_SEVERA  # noqa: E402
 from modulos.morosidad.repositorio import RepositorioMorosidadSQLite  # noqa: E402
 from modulos.morosidad.servicio import ServicioMorosidad  # noqa: E402
-from modulos.morosidad.vista import (  # noqa: E402
-    DialogoAvisoCobro,
-    DialogoDetalleMorosidad,
-    VistaMorosidad,
-)
+from modulos.morosidad.vista import DialogoDetalleMorosidad, VistaMorosidad  # noqa: E402
 from modulos.reportes.entidades import (  # noqa: E402
     REPORTE_DEUDA_ABONADOS_ESTADO,
     REPORTE_INGRESOS_MENSUALES_DIARIOS,
@@ -55,7 +52,7 @@ class TestMorosidadReportes(unittest.TestCase):
             )
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
+        inicializar_base_datos_prueba(self.gestor_base_datos)
 
     def tearDown(self) -> None:
         shutil.rmtree(self.raiz_temporal, ignore_errors=True)
@@ -225,7 +222,7 @@ class TestMorosidadReportes(unittest.TestCase):
             vista_reportes.styleSheet(),
         )
 
-    def test_dialogos_morosidad_instancian_y_aplican_estilos_de_detalle(self) -> None:
+    def test_dialogo_morosidad_instancia_y_aplica_estilos_de_detalle(self) -> None:
         servicio = ServicioMorosidad(
             RepositorioMorosidadSQLite(self.gestor_base_datos),
             gestor_rutas=self.gestor_rutas,
@@ -235,21 +232,12 @@ class TestMorosidadReportes(unittest.TestCase):
         self.assertIsNotNone(detalle)
         assert detalle is not None
 
-        dialogo_aviso = DialogoAvisoCobro(item)
         dialogo_detalle = DialogoDetalleMorosidad(
             detalle,
             lambda centavos: f"L {centavos / 100:,.2f}",
             lambda fecha: fecha,
         )
 
-        self.assertEqual(dialogo_aviso._combo_estado.count(), 5)
-        self.assertIsNotNone(dialogo_aviso._observacion)
-        boton_registrar = next(
-            boton
-            for boton in dialogo_aviso.findChildren(QPushButton)
-            if boton.text() == "Registrar aviso"
-        )
-        self.assertFalse(boton_registrar.icon().isNull())
         self.assertIn("QFrame#panelDetalleMorosidad", dialogo_detalle.styleSheet())
         self.assertIn("QFrame#seccionDetalleMorosidad", dialogo_detalle.styleSheet())
         self.assertIn("QFrame#campoDetalleMorosidad", dialogo_detalle.styleSheet())
@@ -257,7 +245,6 @@ class TestMorosidadReportes(unittest.TestCase):
             "QTableWidget#tablaDetalleMorosidad::item:alternate",
             dialogo_detalle.styleSheet(),
         )
-        dialogo_aviso.close()
         dialogo_detalle.close()
 
     def test_controlador_morosidad_aplica_politica_documental_al_emitir_pdf(self) -> None:

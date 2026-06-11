@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from contextlib import closing
 from typing import Protocol
 
@@ -12,7 +11,6 @@ from modulos.casas.entidades import (
     DetalleCasa,
     ESTADO_ADMINISTRATIVO_OPERATIVA,
     ESTADO_ADMINISTRATIVO_SUSPENDIDA,
-    ESTADO_AVISO_CORTADO,
     ESTADO_SERVICIO_ACTIVO,
     ESTADO_SERVICIO_CORTADO,
     FILTRO_CASAS_ACTIVAS,
@@ -215,10 +213,10 @@ class RepositorioCasasSQLite:
                 COALESCE(dd.meses_pendientes, 0) AS meses_pendientes,
                 COALESCE(dd.meses_en_mora, 0) AS meses_en_mora,
                 COALESCE(pp.total_planes_activos, 0) AS total_planes_activos,
-                COALESCE(c.estado_aviso_cobro, 'SIN_AVISO') AS estado_aviso_cobro,
-                COALESCE(c.fecha_ultimo_aviso, '') AS fecha_ultimo_aviso,
-                COALESCE(u_aviso.nombre_completo, COALESCE(u_aviso.nombre_usuario, '')) AS usuario_ultimo_aviso_nombre,
-                COALESCE(c.observacion_ultimo_aviso, '') AS observacion_ultimo_aviso,
+                'SIN_AVISO' AS estado_aviso_cobro,
+                '' AS fecha_ultimo_aviso,
+                '' AS usuario_ultimo_aviso_nombre,
+                '' AS observacion_ultimo_aviso,
                 COALESCE(c.creado_en, '') AS creado_en,
                 COALESCE(c.fecha_alta, '') AS fecha_alta,
                 COALESCE(c.actualizado_en, '') AS actualizado_en
@@ -228,7 +226,6 @@ class RepositorioCasasSQLite:
             LEFT JOIN ({SUBCONSULTA_DEUDA}) dd ON dd.casa_id = c.id
             LEFT JOIN ({SUBCONSULTA_PLANES}) pp ON pp.casa_id = c.id
             LEFT JOIN ({SUBCONSULTA_TRAZABILIDAD_ACTIVACION}) ta ON ta.casa_id = c.id
-            LEFT JOIN usuarios u_aviso ON u_aviso.id = c.usuario_ultimo_aviso_id
             WHERE {' AND '.join(condiciones)}
             ORDER BY c.id ASC
             {clausula_paginacion};
@@ -298,10 +295,10 @@ class RepositorioCasasSQLite:
                 COALESCE(dd.meses_pendientes, 0) AS meses_pendientes,
                 COALESCE(dd.meses_en_mora, 0) AS meses_en_mora,
                 COALESCE(pp.total_planes_activos, 0) AS total_planes_activos,
-                COALESCE(c.estado_aviso_cobro, 'SIN_AVISO') AS estado_aviso_cobro,
-                COALESCE(c.fecha_ultimo_aviso, '') AS fecha_ultimo_aviso,
-                COALESCE(u_aviso.nombre_completo, COALESCE(u_aviso.nombre_usuario, '')) AS usuario_ultimo_aviso_nombre,
-                COALESCE(c.observacion_ultimo_aviso, '') AS observacion_ultimo_aviso,
+                'SIN_AVISO' AS estado_aviso_cobro,
+                '' AS fecha_ultimo_aviso,
+                '' AS usuario_ultimo_aviso_nombre,
+                '' AS observacion_ultimo_aviso,
                 COALESCE(c.creado_en, '') AS creado_en,
                 COALESCE(c.fecha_alta, '') AS fecha_alta,
                 COALESCE(c.actualizado_en, '') AS actualizado_en
@@ -311,7 +308,6 @@ class RepositorioCasasSQLite:
             LEFT JOIN ({SUBCONSULTA_DEUDA}) dd ON dd.casa_id = c.id
             LEFT JOIN ({SUBCONSULTA_PLANES}) pp ON pp.casa_id = c.id
             LEFT JOIN ({SUBCONSULTA_TRAZABILIDAD_ACTIVACION}) ta ON ta.casa_id = c.id
-            LEFT JOIN usuarios u_aviso ON u_aviso.id = c.usuario_ultimo_aviso_id
             WHERE c.id = ? AND c.eliminado_en IS NULL
             LIMIT 1;
         """
@@ -511,65 +507,10 @@ class RepositorioCasasSQLite:
                     """
                     UPDATE casas
                     SET estado_servicio = ?,
-                        estado_aviso_cobro = ?,
-                        fecha_ultimo_aviso = datetime('now', 'localtime'),
-                        usuario_ultimo_aviso_id = ?,
-                        observacion_ultimo_aviso = ?,
                         actualizado_en = datetime('now', 'localtime')
                     WHERE id = ? AND eliminado_en IS NULL;
                     """,
-                    (ESTADO_SERVICIO_CORTADO, ESTADO_AVISO_CORTADO, actor_id, observaciones, casa_id),
-                )
-                conexion.execute(
-                    """
-                    INSERT INTO auditoria(
-                        usuario_id,
-                        accion,
-                        entidad,
-                        entidad_id,
-                        resumen,
-                        datos_antes_json,
-                        datos_despues_json
-                    )
-                    VALUES (?, 'CORTE_SERVICIO_CASA', 'casas', ?, ?, ?, ?);
-                    """,
-                    (
-                        actor_id,
-                        casa_id,
-                        f"Corte fisico manual de servicio para casa {casa_id}",
-                        json.dumps(
-                            {
-                                "estado_servicio": str(
-                                    fila_actual["estado_servicio"] or ESTADO_SERVICIO_ACTIVO
-                                ),
-                                "estado_administrativo": str(
-                                    fila_actual["estado_administrativo"]
-                                    or ESTADO_ADMINISTRATIVO_OPERATIVA
-                                ),
-                                "motivo_estado_administrativo": str(
-                                    fila_actual["motivo_estado_administrativo"]
-                                    or MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO
-                                ),
-                            },
-                            ensure_ascii=True,
-                        ),
-                        json.dumps(
-                            {
-                                "estado_servicio": ESTADO_SERVICIO_CORTADO,
-                                "estado_administrativo": str(
-                                    fila_actual["estado_administrativo"]
-                                    or ESTADO_ADMINISTRATIVO_OPERATIVA
-                                ),
-                                "motivo_estado_administrativo": str(
-                                    fila_actual["motivo_estado_administrativo"]
-                                    or MOTIVO_ESTADO_ADMINISTRATIVO_NINGUNO
-                                ),
-                                "motivo": self.MOTIVO_CORTE_MANUAL,
-                                "observaciones": observaciones,
-                            },
-                            ensure_ascii=True,
-                        ),
-                    ),
+                    (ESTADO_SERVICIO_CORTADO, casa_id),
                 )
 
     def cambiar_dueno(
@@ -678,48 +619,6 @@ class RepositorioCasasSQLite:
                     """,
                     (casa_id, abonado_anterior_id, nuevo_abonado_id, motivo, observacion, actor_id),
                 )
-                conexion.execute(
-                    """
-                    INSERT INTO auditoria(
-                        usuario_id,
-                        accion,
-                        entidad,
-                        entidad_id,
-                        resumen,
-                        datos_antes_json,
-                        datos_despues_json
-                    )
-                    VALUES (?, ?, 'casas', ?, ?, ?, ?);
-                    """,
-                    (
-                        actor_id,
-                        "CAMBIO_DUENO_CASA",
-                        casa_id,
-                        f"Cambio de propietario para casa {casa_id}",
-                        json.dumps(
-                            {
-                                "abonado_id": abonado_anterior_id,
-                                "abonado_nombre": str(fila_actual["abonado_actual"] or ""),
-                                "abonado_dni": str(fila_actual["dni_actual"] or ""),
-                                "estado_servicio": str(fila_actual["estado_servicio"] or ""),
-                                "estado_administrativo": str(fila_actual["estado_administrativo"] or ""),
-                                "motivo_estado_administrativo": str(fila_actual["motivo_estado_administrativo"] or ""),
-                            },
-                            ensure_ascii=True,
-                        ),
-                        json.dumps(
-                            {
-                                "abonado_id": int(fila_nuevo_abonado["id"]),
-                                "abonado_nombre": str(fila_nuevo_abonado["nombre_completo"] or ""),
-                                "abonado_dni": str(fila_nuevo_abonado["dni"] or ""),
-                                "estado_abonado": str(fila_nuevo_abonado["estado"] or ""),
-                                "motivo": motivo,
-                                "observacion": observacion,
-                            },
-                            ensure_ascii=True,
-                        ),
-                    ),
-                )
 
     def listar_historial_propietarios(self, casa_id: int) -> list[HistorialPropietarioCasa]:
         consulta = """
@@ -820,43 +719,6 @@ class RepositorioCasasSQLite:
                     """,
                     (abonado_id,),
                 )
-                for fila in filas_afectadas:
-                    conexion.execute(
-                        """
-                        INSERT INTO auditoria(
-                            usuario_id,
-                            accion,
-                            entidad,
-                            entidad_id,
-                            resumen,
-                            datos_antes_json,
-                            datos_despues_json
-                        )
-                        VALUES (?, 'SUSPENDER_CASA_POR_ABONADO_INACTIVO', 'casas', ?, ?, ?, ?);
-                        """,
-                        (
-                            actor_id,
-                            int(fila["id"]),
-                            f"Suspension automatica de casa {int(fila['id'])} por inactivacion del abonado",
-                            json.dumps(
-                                {
-                                    "estado_servicio": str(fila["estado_servicio"] or ""),
-                                    "estado_administrativo": str(fila["estado_administrativo"] or ""),
-                                    "motivo_estado_administrativo": str(
-                                        fila["motivo_estado_administrativo"] or ""
-                                    ),
-                                },
-                                ensure_ascii=True,
-                            ),
-                            json.dumps(
-                                {
-                                    "estado_administrativo": "SUSPENDIDA",
-                                    "motivo_estado_administrativo": "ABONADO_INACTIVO",
-                                },
-                                ensure_ascii=True,
-                            ),
-                        ),
-                    )
                 return len(filas_afectadas)
 
     def reactivar_casas_por_abonado_activado(
@@ -893,43 +755,6 @@ class RepositorioCasasSQLite:
                     """,
                     (abonado_id,),
                 )
-                for fila in filas_afectadas:
-                    conexion.execute(
-                        """
-                        INSERT INTO auditoria(
-                            usuario_id,
-                            accion,
-                            entidad,
-                            entidad_id,
-                            resumen,
-                            datos_antes_json,
-                            datos_despues_json
-                        )
-                        VALUES (?, 'REACTIVAR_CASA_POR_ABONADO_ACTIVO', 'casas', ?, ?, ?, ?);
-                        """,
-                        (
-                            actor_id,
-                            int(fila["id"]),
-                            f"Reactivacion administrativa de casa {int(fila['id'])} por restauracion del abonado",
-                            json.dumps(
-                                {
-                                    "estado_servicio": str(fila["estado_servicio"] or ""),
-                                    "estado_administrativo": str(fila["estado_administrativo"] or ""),
-                                    "motivo_estado_administrativo": str(
-                                        fila["motivo_estado_administrativo"] or ""
-                                    ),
-                                },
-                                ensure_ascii=True,
-                            ),
-                            json.dumps(
-                                {
-                                    "estado_administrativo": "OPERATIVA",
-                                    "motivo_estado_administrativo": "NINGUNO",
-                                },
-                                ensure_ascii=True,
-                            ),
-                        ),
-                    )
                 return len(filas_afectadas)
 
     def _construir_filtros(

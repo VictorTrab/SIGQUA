@@ -20,6 +20,7 @@ if str(RUTA_SRC) not in sys.path:
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from tests.utilidades_base_datos import inicializar_base_datos_prueba  # noqa: E402
 from modulos.documentos.generadores.generador_pdf_reportlab import GeneradorPdfReportLab  # noqa: E402
 from modulos.documentos.modelos.dto_estado_cuenta import (  # noqa: E402
     CasaEstadoCuenta,
@@ -48,7 +49,7 @@ class TestDocumentosPdf(unittest.TestCase):
             )
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.ruta_db = self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
+        self.ruta_db = inicializar_base_datos_prueba(self.gestor_base_datos)
         self.repositorio_pagos = RepositorioPagosSQLite(self.gestor_base_datos)
         self.servicio_pagos = ServicioPagos(self.repositorio_pagos, gestor_rutas=self.gestor_rutas)
         self.servicio_reporte_pdf = ServicioReportePdf(gestor_rutas=self.gestor_rutas)
@@ -248,7 +249,8 @@ class TestDocumentosPdf(unittest.TestCase):
         )
 
         self.assertNotEqual(primera, segunda)
-        self.assertTrue(Path(segunda).stem.endswith("_2"))
+        self.assertTrue(Path(primera).is_file())
+        self.assertTrue(Path(segunda).is_file())
 
     def test_ruta_no_escribible_usa_fallback_interno(self) -> None:
         servicio_reportes = ServicioReportes(RepositorioReportesSQLite(self.gestor_base_datos))

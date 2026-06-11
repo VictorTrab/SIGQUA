@@ -38,9 +38,6 @@ class ControladorConfiguracion:
         self._vista_configuracion.restaurar_respaldo_externo_solicitado.connect(
             self._restaurar_respaldo_externo
         )
-        self._vista_configuracion.restaurar_respaldo_automatico_solicitado.connect(
-            self._restaurar_respaldo_automatico
-        )
         self._vista_configuracion.guardar_duracion_sesion_solicitado.connect(
             self._guardar_duracion_sesion
         )
@@ -195,26 +192,6 @@ class ControladorConfiguracion:
             actor_id=None if self._actor is None else self._actor.identificador,
         )
         self._vista_configuracion.mostrar_mensaje(resultado.mensaje, es_error=not resultado.exito)
-        if resultado.exito:
-            self._programar_reinicio()
-
-    def _restaurar_respaldo_automatico(self) -> None:
-        busqueda = self._servicio_configuracion.buscar_respaldo_automatico_restaurable()
-        if not busqueda.exito or busqueda.respaldo is None:
-            self._vista_configuracion.mostrar_mensaje(busqueda.mensaje, es_error=True)
-            return
-        if not self._vista_configuracion.confirmar_restauracion_automatica(
-            busqueda.respaldo
-        ):
-            return
-        resultado = self._servicio_configuracion.restaurar_respaldo_automatico(
-            respaldo_id=busqueda.respaldo.identificador,
-            actor_id=None if self._actor is None else self._actor.identificador,
-        )
-        self._vista_configuracion.mostrar_mensaje(
-            resultado.mensaje,
-            es_error=not resultado.exito,
-        )
         if resultado.exito:
             self._programar_reinicio()
 

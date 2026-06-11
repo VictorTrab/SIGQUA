@@ -555,9 +555,7 @@ class DialogoFormularioPlanPago(DialogoBaseSigqua):
         return self._casas_por_id.get(self._casa_seleccionada_id)
 
     def _resolver_tipo_plan(self, casa: OpcionCasaPlanPago | None) -> str:
-        if casa is None:
-            return "RECONEXION"
-        return "RECONEXION" if casa.ha_tenido_servicio_activo else "CONEXION"
+        return "RECONEXION"
 
     def _valor_centavos_seguro(self, campo: CampoMontoMonetario) -> int:
         return max(campo.obtener_centavos(), 0)

@@ -8,7 +8,7 @@ from logging import Logger
 from secrets import token_urlsafe
 
 from comun.logs import obtener_logger_sigqua
-from comun.seguridad import es_hash_scrypt_valido, generar_hash_contrasena, verificar_contrasena
+from comun.seguridad import generar_hash_contrasena, verificar_contrasena
 from modulos.configuracion.repositorio import RepositorioConfiguracionSQLite
 from modulos.autenticacion.entidades import (
     CredencialesUsuario,
@@ -38,39 +38,6 @@ class ServicioAutenticacion:
         self.duracion_sesion_horas = duracion_sesion_horas
         self._repositorio_configuracion = repositorio_configuracion
         self._logger: Logger = obtener_logger_sigqua("autenticacion.servicio")
-
-    def asegurar_usuario_admin_desarrollo(self) -> None:
-        """Repara instalaciones locales que aun conservan hashes placeholder."""
-        usuarios_desarrollo = (
-            ("admin", "Admin123!"),
-            ("superadmin", "SuperAdmin123!"),
-        )
-        for nombre_usuario, contrasena_defecto in usuarios_desarrollo:
-            usuario = self.repositorio_autenticacion.obtener_usuario_por_nombre_usuario(
-                nombre_usuario
-            )
-            if usuario is None:
-                continue
-
-            if es_hash_scrypt_valido(usuario.contrasena_hash):
-                continue
-
-            if usuario.contrasena_hash != "CAMBIAR_HASH_EN_DESARROLLO":
-                continue
-
-            marca_tiempo = self._formatear_fecha(self._ahora())
-            nuevo_hash = generar_hash_contrasena(contrasena_defecto)
-            self.repositorio_autenticacion.actualizar_contrasena_usuario(
-                usuario_id=usuario.identificador,
-                nuevo_hash=nuevo_hash,
-                momento=marca_tiempo,
-                requiere_cambio_contrasena=usuario.requiere_cambio_contrasena,
-                contrasena_temporal_expira_en=usuario.contrasena_temporal_expira_en,
-            )
-            self._logger.warning(
-                "Se reemplazo el hash placeholder del usuario %s en entorno local.",
-                nombre_usuario,
-            )
 
     def iniciar_sesion(
         self,
@@ -182,27 +149,6 @@ class ServicioAutenticacion:
             usuario.identificador,
             self._formatear_fecha(momento_actual),
         )
-
-        if usuario.requiere_cambio_contrasena and self._contrasena_temporal_expirada(
-            usuario.contrasena_temporal_expira_en,
-            momento_actual,
-        ):
-            self.repositorio_autenticacion.registrar_intento_login(
-                identificador=nombre_usuario,
-                resultado="FALLIDO",
-                usuario_id=usuario.identificador,
-                motivo="CONTRASENA_TEMPORAL_EXPIRADA",
-                equipo=ip_origen,
-            )
-            self._logger.warning(
-                "Acceso temporal expirado para usuario '%s'.",
-                nombre_usuario,
-            )
-            return ResultadoLogin(
-                exito=False,
-                mensaje="La contrasena temporal expiro. Solicita un nuevo acceso temporal al administrador.",
-                codigo="CONTRASENA_TEMPORAL_EXPIRADA",
-            )
 
         self.repositorio_autenticacion.registrar_intento_login(
             identificador=nombre_usuario,
@@ -316,7 +262,6 @@ class ServicioAutenticacion:
             nuevo_hash=nuevo_hash,
             momento=marca_tiempo,
             requiere_cambio_contrasena=False,
-            contrasena_temporal_expira_en=None,
             restablecida_por_usuario_id=None,
             fecha_restablecimiento=None,
         )
@@ -365,16 +310,6 @@ class ServicioAutenticacion:
             return datetime.strptime(fecha_texto, FORMATO_FECHA_BD)
         except ValueError:
             return None
-
-    def _contrasena_temporal_expirada(
-        self,
-        expira_en: str | None,
-        momento_actual: datetime,
-    ) -> bool:
-        fecha_expiracion = self._parsear_fecha(expira_en)
-        if fecha_expiracion is None:
-            return False
-        return momento_actual > fecha_expiracion
 
     @staticmethod
     def _generar_hash_token(token_sesion: str) -> str:

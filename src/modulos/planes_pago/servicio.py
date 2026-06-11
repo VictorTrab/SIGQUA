@@ -308,7 +308,7 @@ class ServicioPlanesPago:
 
     @staticmethod
     def _resolver_tipo_plan(casa: OpcionCasaPlanPago) -> str:
-        return "RECONEXION" if casa.ha_tenido_servicio_activo else "CONEXION"
+        return "RECONEXION"
 
     def _es_casa_elegible_nuevo_plan(self, casa: OpcionCasaPlanPago) -> bool:
         return (
@@ -316,6 +316,7 @@ class ServicioPlanesPago:
             and casa.abonado_estado == "ACTIVO"
             and casa.estado_administrativo == "OPERATIVA"
             and casa.estado_servicio == "CORTADO"
+            and casa.ha_tenido_servicio_activo
             and not casa.tiene_plan_activo
         )
 
@@ -336,6 +337,15 @@ class ServicioPlanesPago:
     ) -> _EvaluacionPlanPago | ResultadoGestionPlanesPago:
         if formulario.casa_id is None or formulario.casa_id <= 0:
             return ResultadoGestionPlanesPago(False, "Selecciona la casa asociada al plan.", "VALIDACION")
+        if (
+            formulario.tipo_plan != "RECONEXION"
+            or formulario.concepto_financiado != "RECONEXION"
+        ):
+            return ResultadoGestionPlanesPago(
+                False,
+                "El prototipo solo permite planes de pago para reconexion.",
+                "VALIDACION",
+            )
         if formulario.prima_centavos <= 0:
             return ResultadoGestionPlanesPago(False, "La prima inicial del plan debe ser mayor a cero.", "VALIDACION")
         if formulario.cantidad_cuotas <= 0:
@@ -365,7 +375,7 @@ class ServicioPlanesPago:
         if formulario.tipo_plan not in TIPOS_PLAN_VALIDOS or formulario.tipo_plan != tipo_plan:
             return ResultadoGestionPlanesPago(
                 False,
-                f"La casa seleccionada debe registrarse como {tipo_plan.lower()} segun su antecedente de servicio.",
+                "La casa seleccionada debe registrarse como reconexion.",
                 "VALIDACION",
             )
         if formulario.concepto_financiado not in TIPOS_PLAN_VALIDOS or formulario.concepto_financiado != tipo_plan:

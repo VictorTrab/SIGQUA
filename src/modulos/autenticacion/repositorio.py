@@ -69,7 +69,6 @@ class RepositorioAutenticacion(Protocol):
         nuevo_hash: str,
         momento: str,
         requiere_cambio_contrasena: bool = False,
-        contrasena_temporal_expira_en: str | None = None,
         restablecida_por_usuario_id: int | None = None,
         fecha_restablecimiento: str | None = None,
     ) -> None:
@@ -97,7 +96,6 @@ class RepositorioAutenticacionSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
-                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta,
                 GROUP_CONCAT(DISTINCT r.nombre) AS roles_csv,
@@ -119,7 +117,6 @@ class RepositorioAutenticacionSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
-                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta
             LIMIT 1;
@@ -143,7 +140,6 @@ class RepositorioAutenticacionSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
-                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta,
                 GROUP_CONCAT(DISTINCT r.nombre) AS roles_csv,
@@ -165,7 +161,6 @@ class RepositorioAutenticacionSQLite:
                 u.es_tecnico,
                 u.es_oculto,
                 u.requiere_cambio_contrasena,
-                u.contrasena_temporal_expira_en,
                 u.intentos_fallidos,
                 u.bloqueado_hasta
             LIMIT 1;
@@ -285,7 +280,6 @@ class RepositorioAutenticacionSQLite:
         nuevo_hash: str,
         momento: str,
         requiere_cambio_contrasena: bool = False,
-        contrasena_temporal_expira_en: str | None = None,
         restablecida_por_usuario_id: int | None = None,
         fecha_restablecimiento: str | None = None,
     ) -> None:
@@ -294,7 +288,6 @@ class RepositorioAutenticacionSQLite:
             SET contrasena_hash = ?,
                 ultimo_cambio_contrasena_en = ?,
                 requiere_cambio_contrasena = ?,
-                contrasena_temporal_expira_en = ?,
                 restablecida_por_usuario_id = ?,
                 fecha_restablecimiento_contrasena = ?,
                 intentos_fallidos = 0,
@@ -310,7 +303,6 @@ class RepositorioAutenticacionSQLite:
                         nuevo_hash,
                         momento,
                         int(requiere_cambio_contrasena),
-                        contrasena_temporal_expira_en,
                         restablecida_por_usuario_id,
                         fecha_restablecimiento,
                         momento,
@@ -342,11 +334,6 @@ class RepositorioAutenticacionSQLite:
             es_tecnico=bool(fila["es_tecnico"]),
             es_oculto=bool(fila["es_oculto"]),
             requiere_cambio_contrasena=bool(fila["requiere_cambio_contrasena"]),
-            contrasena_temporal_expira_en=(
-                str(fila["contrasena_temporal_expira_en"])
-                if fila["contrasena_temporal_expira_en"]
-                else None
-            ),
             intentos_fallidos=int(fila["intentos_fallidos"] or 0),
             bloqueado_hasta=fila["bloqueado_hasta"],
             roles=roles,

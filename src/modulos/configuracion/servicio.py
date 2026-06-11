@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 import os
 import sys
@@ -17,6 +18,7 @@ from comun.respaldo import (
     ConfiguracionRespaldoLocal,
     ServicioRespaldoLocal,
 )
+from comun.logs import obtener_logger_sigqua
 from comun.impresion_termica import TransporteWindowsRawEscpos
 from modulos.configuracion.entidades import (
     EstadoConfiguracion,
@@ -26,7 +28,6 @@ from modulos.configuracion.entidades import (
     OperacionConfiguracion,
     ParametrosCobro,
     ReportesPdfConfiguracion,
-    ResultadoBusquedaRespaldoAutomatico,
     ResultadoGestionConfiguracion,
     SeguridadConfiguracion,
 )
@@ -85,6 +86,7 @@ TEXTO_FIRMA_PREDETERMINADO = "Firma autorizada"
 DURACIONES_SESION_HORAS_VALIDAS = (0.5, 1.0, 2.0, 4.0, 8.0, 12.0)
 MAXIMO_INTENTOS_FALLIDOS_OPERATIVO = 5
 RETENCION_MAXIMA_RESPALDOS = 5
+logger = obtener_logger_sigqua("configuracion.servicio")
 
 
 class ServicioConfiguracion:
@@ -116,10 +118,7 @@ class ServicioConfiguracion:
         correlativo_actual, ultimo_comprobante, total_comprobantes = (
             self._repositorio_configuracion.obtener_resumen_comprobantes()
         )
-        ultimo_respaldo_en, ultimo_respaldo_estado, total_respaldos = (
-            self._repositorio_configuracion.obtener_resumen_respaldos()
-        )
-        detalle_respaldo = self._repositorio_configuracion.obtener_detalle_ultimo_respaldo()
+        detalle_respaldo = self._obtener_resumen_respaldos_archivo()
         identidad = construir_identidad_empresa(parametros, nombre_predeterminado="SIGQUA")
         ultimo_parametro_actualizado = max(
             (
@@ -238,15 +237,14 @@ class ServicioConfiguracion:
         configuracion_respaldo = self._construir_configuracion_respaldo(parametros)
         operacion = OperacionConfiguracion(
             respaldo_automatico=True,
-            ultimo_respaldo_en=ultimo_respaldo_en,
-            ultimo_respaldo_estado=ultimo_respaldo_estado or "SIN_REGISTRO",
-            total_respaldos=total_respaldos,
+            ultimo_respaldo_en=str(detalle_respaldo.get("generado_en", "")),
+            ultimo_respaldo_estado=(
+                "DISPONIBLE" if detalle_respaldo else "SIN_REGISTRO"
+            ),
+            total_respaldos=int(detalle_respaldo.get("total", 0) or 0),
             ultimo_respaldo_archivo=str(detalle_respaldo.get("nombre_archivo", "")),
             ultimo_respaldo_tamano_bytes=int(detalle_respaldo.get("tamano_bytes", 0) or 0),
-            ultimo_respaldo_generado_por=self._resolver_autoria(
-                str(detalle_respaldo.get("generado_por_nombre", "")),
-                bool(detalle_respaldo.get("generado_en", "")),
-            ),
+            ultimo_respaldo_generado_por="Sistema local" if detalle_respaldo else "Sin registro",
             ruta_respaldos_principal=configuracion_respaldo.ruta_principal,
             retencion_maxima=configuracion_respaldo.retencion_maxima,
         )
@@ -509,62 +507,7 @@ class ServicioConfiguracion:
             return ResultadoGestionConfiguracion(False, "Selecciona un respaldo SIGQUA con extension .zip.", "VALIDACION")
         return self._restaurar_ruta_respaldo(
             ruta_respaldo=ruta_respaldo,
-            hash_esperado="",
             actor_id=actor_id,
-            respaldo_id=None,
-        )
-
-    def buscar_respaldo_automatico_restaurable(
-        self,
-    ) -> ResultadoBusquedaRespaldoAutomatico:
-        if self._servicio_respaldo is None:
-            return ResultadoBusquedaRespaldoAutomatico(
-                False,
-                "El servicio de respaldo no esta disponible.",
-            )
-        candidatos = self._repositorio_configuracion.listar_respaldos_automaticos(
-            RETENCION_MAXIMA_RESPALDOS
-        )
-        if not candidatos:
-            return ResultadoBusquedaRespaldoAutomatico(
-                False,
-                "No hay respaldos automaticos disponibles para restaurar.",
-            )
-        errores: list[str] = []
-        for respaldo in candidatos:
-            valido, mensaje = self._servicio_respaldo.validar_archivo_respaldo(
-                respaldo.ruta_archivo,
-                respaldo.hash_archivo,
-            )
-            if valido:
-                return ResultadoBusquedaRespaldoAutomatico(
-                    True,
-                    "Respaldo automatico disponible.",
-                    respaldo,
-                )
-            errores.append(f"{respaldo.nombre_archivo}: {mensaje}")
-        return ResultadoBusquedaRespaldoAutomatico(
-            False,
-            "Ningun respaldo automatico registrado es valido. " + " | ".join(errores),
-        )
-
-    def restaurar_respaldo_automatico(
-        self,
-        respaldo_id: int,
-        actor_id: int | None = None,
-    ) -> ResultadoGestionConfiguracion:
-        respaldo = self._repositorio_configuracion.obtener_respaldo_automatico(respaldo_id)
-        if respaldo is None:
-            return ResultadoGestionConfiguracion(
-                False,
-                "El respaldo automatico seleccionado ya no esta disponible.",
-                "VALIDACION",
-            )
-        return self._restaurar_ruta_respaldo(
-            ruta_respaldo=Path(respaldo.ruta_archivo).expanduser(),
-            hash_esperado=respaldo.hash_archivo,
-            actor_id=actor_id,
-            respaldo_id=respaldo.identificador,
         )
 
     def probar_impresora_comprobantes(self, nombre_impresora: str) -> ResultadoGestionConfiguracion:
@@ -610,39 +553,19 @@ class ServicioConfiguracion:
             configuracion.version_sistema = estado.informacion.version_sistema or "Sin version"
             detalle = self._servicio_respaldo.crear_respaldo(
                 configuracion=configuracion,
-                repositorio_historial=self._repositorio_configuracion,
                 generado_por=actor_id,
                 tipo_respaldo=tipo_respaldo,
             )
         except Exception as error:
+            logger.exception("No fue posible generar el respaldo automatico.")
             return ResultadoGestionConfiguracion(False, f"No fue posible generar el respaldo: {error}", "ERROR_RESPALDO")
         return ResultadoGestionConfiguracion(True, f"Respaldo generado: {detalle.nombre_archivo}", "OK")
-
-    def _registrar_fallo_restauracion_externa(
-        self,
-        ruta_respaldo: Path,
-        detalle: str,
-        actor_id: int | None,
-    ) -> None:
-        try:
-            self._repositorio_configuracion.registrar_evento_tecnico(
-                categoria="RESTAURACION",
-                severidad="ERROR",
-                mensaje=f"Fallo la restauracion del respaldo: {ruta_respaldo.name}",
-                detalle=detalle,
-                entidad="historial_respaldos",
-                registrado_por=actor_id,
-            )
-        except Exception:
-            pass
 
     def _restaurar_ruta_respaldo(
         self,
         *,
         ruta_respaldo: Path,
-        hash_esperado: str,
         actor_id: int | None,
-        respaldo_id: int | None,
     ) -> ResultadoGestionConfiguracion:
         if self._servicio_respaldo is None:
             return ResultadoGestionConfiguracion(
@@ -656,22 +579,11 @@ class ServicioConfiguracion:
         try:
             resultado = self._servicio_respaldo.restaurar_respaldo(
                 ruta_respaldo=str(ruta_respaldo),
-                hash_esperado=hash_esperado,
                 configuracion=configuracion,
-                repositorio_historial=self._repositorio_configuracion,
                 generado_por=actor_id,
             )
-            self._repositorio_configuracion.registrar_evento_tecnico(
-                categoria="RESTAURACION",
-                severidad="ADVERTENCIA",
-                mensaje=f"Respaldo restaurado: {resultado.nombre_archivo}",
-                detalle=f"Respaldo de seguridad previo: {resultado.respaldo_seguridad}",
-                entidad="historial_respaldos",
-                entidad_id=respaldo_id,
-                registrado_por=actor_id,
-            )
         except Exception as error:
-            self._registrar_fallo_restauracion_externa(ruta_respaldo, str(error), actor_id)
+            logger.exception("Fallo la restauracion del respaldo %s.", ruta_respaldo.name)
             return ResultadoGestionConfiguracion(
                 False,
                 f"No fue posible restaurar el respaldo: {error}",
@@ -682,6 +594,29 @@ class ServicioConfiguracion:
             "Respaldo restaurado correctamente. SIGQUA se reiniciara para aplicar los cambios.",
             "OK",
         )
+
+    def _obtener_resumen_respaldos_archivo(self) -> dict[str, object]:
+        ruta_respaldos = self._gestor_rutas.obtener_ruta_respaldos()
+        ruta_respaldos.mkdir(parents=True, exist_ok=True)
+        archivos = sorted(
+            (
+                ruta
+                for ruta in ruta_respaldos.glob("SIGQUA_RESPALDO_*.zip")
+                if ruta.is_file()
+            ),
+            key=lambda ruta: ruta.stat().st_mtime,
+            reverse=True,
+        )
+        if not archivos:
+            return {}
+        ultimo = archivos[0]
+        fecha = datetime.fromtimestamp(ultimo.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+        return {
+            "nombre_archivo": ultimo.name,
+            "tamano_bytes": ultimo.stat().st_size,
+            "generado_en": fecha,
+            "total": len(archivos),
+        }
 
     def opciones_duracion_sesion(self) -> tuple[tuple[str, float], ...]:
         return (
@@ -774,16 +709,8 @@ class ServicioConfiguracion:
         self,
         parametros: dict[str, object],
     ) -> ConfiguracionRespaldoLocal:
-        ruta_predeterminada = self._valor_parametro(
-            parametros,
-            "respaldo.ruta_principal",
-            self._valor_parametro(
-                parametros,
-                str(self._gestor_rutas.obtener_ruta_respaldos()),
-            ),
-        )
         return ConfiguracionRespaldoLocal(
-            ruta_principal=self._normalizar_ruta_configurada(ruta_predeterminada),
+            ruta_principal=str(self._gestor_rutas.obtener_ruta_respaldos()),
             retencion_maxima=RETENCION_MAXIMA_RESPALDOS,
             version_sistema=self._valor_parametro(parametros, "sistema.version", ""),
         )

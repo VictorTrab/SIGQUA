@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import csv
-import json
 import sqlite3
-from datetime import datetime, timedelta
-from secrets import choice
-from string import ascii_letters, digits
+from datetime import datetime
 
 from comun.seguridad import generar_hash_contrasena
 from modulos.autenticacion.entidades import UsuarioAutenticado
@@ -22,8 +19,6 @@ FILTRO_USUARIOS_ACTIVOS = "activos"
 FILTRO_USUARIOS_INACTIVOS = "inactivos"
 FILTRO_USUARIOS_ADMINISTRADORES = "administradores"
 PERMISO_MODULO_USUARIOS = "modulo.usuarios"
-MINUTOS_CONTRASENA_TEMPORAL = 10
-LONGITUD_CONTRASENA_TEMPORAL = 12
 ROLES_VISIBLES = ("ADMINISTRADOR", "CAJERO", "CONSULTA")
 
 
@@ -114,22 +109,24 @@ class ServicioUsuarios:
         validacion = self._validar_formulario(formulario)
         if validacion is not None:
             return validacion
+        validacion = self._validar_contrasena(
+            formulario.contrasena,
+            formulario.confirmacion_contrasena,
+        )
+        if validacion is not None:
+            return validacion
 
         rol = self._resolver_rol_asignable(formulario.rol_id, actor)
         if rol is None:
             return ResultadoGestionUsuarios(False, "Selecciona un rol visible valido.", "VALIDACION")
 
-        momento_actual = datetime.now()
-        momento = self._formatear_fecha(momento_actual)
-        contrasena_temporal = self._generar_contrasena_temporal()
-        expira_en = self._formatear_fecha(momento_actual + timedelta(minutes=MINUTOS_CONTRASENA_TEMPORAL))
+        momento = self._formatear_fecha(datetime.now())
         try:
             self.repositorio_usuarios.crear_usuario_operativo(
                 actor_id=actor.identificador,
                 formulario=formulario,
-                nuevo_hash=generar_hash_contrasena(contrasena_temporal),
+                nuevo_hash=generar_hash_contrasena(formulario.contrasena),
                 momento=momento,
-                contrasena_temporal_expira_en=expira_en,
             )
         except sqlite3.IntegrityError:
             return ResultadoGestionUsuarios(
@@ -139,11 +136,8 @@ class ServicioUsuarios:
             )
         return ResultadoGestionUsuarios(
             True,
-            "Usuario creado. Comparte la contrasena temporal y solicita el cambio inmediato.",
+            "Usuario creado correctamente.",
             "OK",
-            contrasena_temporal_generada=contrasena_temporal,
-            contrasena_temporal_expira_en=expira_en,
-            requiere_mostrar_credencial_temporal=True,
         )
 
     def actualizar_usuario_operativo(
@@ -215,15 +209,6 @@ class ServicioUsuarios:
             nuevo_estado=nuevo_estado,
             momento=momento,
         )
-        self.repositorio_usuarios.registrar_auditoria(
-            usuario_id=actor.identificador,
-            accion="CAMBIAR_ESTADO_USUARIO",
-            entidad="usuarios",
-            entidad_id=usuario_objetivo.identificador,
-            resumen=f"Cambio de estado del usuario {usuario_objetivo.nombre_usuario}",
-            datos_antes_json=json.dumps({"estado": usuario_objetivo.estado}, ensure_ascii=True),
-            datos_despues_json=json.dumps({"estado": nuevo_estado}, ensure_ascii=True),
-        )
         return ResultadoGestionUsuarios(
             True,
             f"Usuario {nuevo_estado.lower()} correctamente.",
@@ -234,11 +219,13 @@ class ServicioUsuarios:
         self,
         actor: UsuarioAutenticado,
         nombre_usuario_objetivo: str,
+        nueva_contrasena: str,
+        confirmacion_contrasena: str,
     ) -> ResultadoGestionUsuarios:
         if not self._puede_gestionar_usuarios(actor):
             return ResultadoGestionUsuarios(
                 exito=False,
-                mensaje="No tienes permisos para generar acceso temporal.",
+                mensaje="No tienes permisos para restablecer contrasenas.",
                 codigo="PERMISO_DENEGADO",
             )
 
@@ -265,39 +252,20 @@ class ServicioUsuarios:
                 codigo="PERMISO_DENEGADO",
             )
 
-        momento_actual = datetime.now()
-        momento = self._formatear_fecha(momento_actual)
-        contrasena_temporal = self._generar_contrasena_temporal()
-        expira_en = self._formatear_fecha(momento_actual + timedelta(minutes=MINUTOS_CONTRASENA_TEMPORAL))
+        validacion = self._validar_contrasena(nueva_contrasena, confirmacion_contrasena)
+        if validacion is not None:
+            return validacion
+        momento = self._formatear_fecha(datetime.now())
         self.repositorio_usuarios.restablecer_contrasena_administrativa(
             actor_id=actor.identificador,
             objetivo_id=usuario_objetivo.identificador,
-            nuevo_hash=generar_hash_contrasena(contrasena_temporal),
+            nuevo_hash=generar_hash_contrasena(nueva_contrasena),
             momento=momento,
-            contrasena_temporal_expira_en=expira_en,
-        )
-        self.repositorio_usuarios.registrar_auditoria(
-            usuario_id=actor.identificador,
-            accion="RESTABLECER_CONTRASENA",
-            entidad="usuarios",
-            entidad_id=usuario_objetivo.identificador,
-            resumen=f"Generacion de acceso temporal para {usuario_objetivo.nombre_usuario}",
-            datos_antes_json=json.dumps(
-                {"estado": usuario_objetivo.estado, "requiere_cambio": usuario_objetivo.requiere_cambio_contrasena},
-                ensure_ascii=True,
-            ),
-            datos_despues_json=json.dumps(
-                {"estado": "ACTIVO", "requiere_cambio": True, "expira_en": expira_en},
-                ensure_ascii=True,
-            ),
         )
         return ResultadoGestionUsuarios(
             exito=True,
-            mensaje="Acceso temporal generado. El usuario debe cambiarlo en su proximo acceso.",
+            mensaje="Contrasena restablecida correctamente.",
             codigo="OK",
-            contrasena_temporal_generada=contrasena_temporal,
-            contrasena_temporal_expira_en=expira_en,
-            requiere_mostrar_credencial_temporal=True,
         )
 
     def desbloquear_usuario_operativo(
@@ -334,15 +302,6 @@ class ServicioUsuarios:
             actor_id=actor.identificador,
             objetivo_id=usuario_objetivo.identificador,
             momento=momento,
-        )
-        self.repositorio_usuarios.registrar_auditoria(
-            usuario_id=actor.identificador,
-            accion="DESBLOQUEAR_USUARIO",
-            entidad="usuarios",
-            entidad_id=usuario_objetivo.identificador,
-            resumen=f"Desbloqueo administrativo del usuario {usuario_objetivo.nombre_usuario}",
-            datos_antes_json=json.dumps({"estado": usuario_objetivo.estado}, ensure_ascii=True),
-            datos_despues_json=json.dumps({"estado": "ACTIVO"}, ensure_ascii=True),
         )
         return ResultadoGestionUsuarios(
             exito=True,
@@ -416,9 +375,21 @@ class ServicioUsuarios:
             return None
 
     @staticmethod
-    def _generar_contrasena_temporal() -> str:
-        alfabeto = ascii_letters + digits
-        return "".join(choice(alfabeto) for _ in range(LONGITUD_CONTRASENA_TEMPORAL))
+    def _validar_contrasena(
+        contrasena: str,
+        confirmacion: str,
+    ) -> ResultadoGestionUsuarios | None:
+        if not contrasena or not confirmacion:
+            return ResultadoGestionUsuarios(False, "Escribe y confirma la contrasena.", "VALIDACION")
+        if len(contrasena) < 8:
+            return ResultadoGestionUsuarios(
+                False,
+                "La contrasena debe tener al menos 8 caracteres.",
+                "VALIDACION",
+            )
+        if contrasena != confirmacion:
+            return ResultadoGestionUsuarios(False, "Las contrasenas no coinciden.", "VALIDACION")
+        return None
 
     @staticmethod
     def _validar_formulario(

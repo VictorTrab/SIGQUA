@@ -23,6 +23,7 @@ from PySide6.QtWidgets import QPushButton  # noqa: E402
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from tests.utilidades_base_datos import inicializar_base_datos_prueba  # noqa: E402
 from comun.ui.temas import obtener_paleta_tema_actual  # noqa: E402
 from modulos.comprobantes import COPIA_AMBAS, COPIA_JUNTA, ResultadoComprobante  # noqa: E402
 from modulos.historial_pagos.controlador import ControladorHistorialPagos  # noqa: E402
@@ -65,7 +66,7 @@ class TestHistorialPagos(unittest.TestCase):
             )
         self.gestor_rutas = GestorRutas(raiz_proyecto=self.raiz_temporal)
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
-        self.ruta_db = self.gestor_base_datos.inicializar_base_datos(incluir_datos_prueba=True)
+        self.ruta_db = inicializar_base_datos_prueba(self.gestor_base_datos)
         self.repositorio_pagos = RepositorioPagosSQLite(self.gestor_base_datos)
         self.servicio_pagos = ServicioPagos(self.repositorio_pagos, gestor_rutas=self.gestor_rutas)
         self.repositorio_historial = RepositorioHistorialPagosSQLite(self.gestor_base_datos)

@@ -14,23 +14,13 @@ if str(RUTA_SRC) not in sys.path:
     sys.path.insert(0, str(RUTA_SRC))
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
-from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from comun.configuracion.gestor_rutas import GestorRutas, RAIZ_INSTALACION  # noqa: E402
 
 
 class TestGestorBaseDatos(unittest.TestCase):
     def setUp(self) -> None:
         self.directorio_temporal = tempfile.TemporaryDirectory()
         self.raiz_temporal = Path(self.directorio_temporal.name)
-        (self.raiz_temporal / "database" / "migrations").mkdir(parents=True, exist_ok=True)
-
-        ruta_esquema_real = (
-            RAIZ_PROYECTO / "database" / "migrations" / "001_esquema_inicial.sql"
-        )
-        contenido_sql = ruta_esquema_real.read_text(encoding="utf-8")
-        (self.raiz_temporal / "database" / "migrations" / "001_esquema_inicial.sql").write_text(
-            contenido_sql,
-            encoding="utf-8",
-        )
 
         self.gestor = GestorBaseDatos(GestorRutas(raiz_proyecto=self.raiz_temporal))
 
@@ -71,6 +61,37 @@ class TestGestorBaseDatos(unittest.TestCase):
             conexion.close()
 
         self.assertEqual(estado_claves_foraneas[0], 1)
+
+    def test_rutas_operativas_de_produccion_quedan_fuera_del_proyecto(self) -> None:
+        gestor_rutas = GestorRutas()
+
+        self.assertEqual(
+            gestor_rutas.obtener_ruta_exportaciones(),
+            Path.home() / "Documents" / "SIGQUA_EXPORTACIONES",
+        )
+        self.assertEqual(
+            gestor_rutas.obtener_ruta_exportaciones_reportes(),
+            gestor_rutas.obtener_ruta_exportaciones() / "Reportes",
+        )
+        self.assertEqual(
+            gestor_rutas.obtener_ruta_exportaciones_comprobantes(),
+            gestor_rutas.obtener_ruta_exportaciones() / "Comprobantes",
+        )
+        self.assertEqual(
+            gestor_rutas.obtener_ruta_reportes_predeterminada(),
+            gestor_rutas.obtener_ruta_exportaciones_reportes(),
+        )
+        self.assertFalse(
+            gestor_rutas.obtener_ruta_exportaciones().is_relative_to(RAIZ_INSTALACION)
+        )
+        self.assertFalse(
+            gestor_rutas.obtener_ruta_reportes_predeterminada().is_relative_to(
+                RAIZ_INSTALACION
+            )
+        )
+        self.assertFalse(
+            gestor_rutas.obtener_ruta_respaldos().is_relative_to(RAIZ_INSTALACION)
+        )
 
 
 if __name__ == "__main__":
