@@ -71,10 +71,6 @@ class UsuarioAutenticado:
     def tiene_permiso(self, codigo_permiso: str) -> bool:
         return codigo_permiso in self.permisos
 
-    def es_superadministrador(self) -> bool:
-        return "SUPERADMINISTRADOR" in self.roles
-
-
 @dataclass(slots=True)
 class ResultadoOperacion:
     """Resultado generico para operaciones del modulo."""

@@ -71,8 +71,8 @@ El repositorio conserva unicamente reglas operativas minimas para Codex: `agents
 20. En PySide6, no reutilizar widgets que hayan sido reemplazados como `centralWidget` ni asumir que siguen vivos despues de cambios de contenedor.
 21. Cuando haya navegacion entre pantallas o modulos en PySide6, preferir contenedores persistentes como `QStackedWidget` antes que reemplazar widgets raiz y conservar referencias fragiles.
 22. Cuando un flujo dependa de ciclo de vida de widgets, registrar eventos relevantes con logs y verificar explicitamente el retorno de navegacion en pruebas.
-23. La seguridad activa debe respetar la separacion entre `ADMINISTRADOR` operativo y `SUPERADMINISTRADOR` tecnico oculto.
-24. El modulo de mantenimiento debe quedar reservado para `SUPERADMINISTRADOR`.
+23. `ADMINISTRADOR` es el rol de mayor privilegio disponible en esta version.
+24. No existe un modulo tecnico de mantenimiento dentro del shell principal.
 25. La recuperacion de acceso vigente es local y administrativa, nunca por correo en esta version.
 26. Todo dato precargado, semilla, ejemplo o registro marcado para desarrollo dentro del repositorio o de la base local debe considerarse exclusivamente dato de prueba y nunca dato productivo real.
 27. Antes de cambiar infraestructura visual de PySide6 como modales, animaciones, geometria o estilo global, verificar primero documentacion oficial de Qt for Python y usarla como fuente principal.
@@ -109,5 +109,5 @@ Un cambio se considera correcto solo si:
 - usa contratos si en el futuro vuelve a tocar integraciones externas;
 - centraliza rutas;
 - cuida seguridad basica;
-- respeta la separacion entre administracion operativa y mantenimiento tecnico;
+- respeta los permisos del rol `ADMINISTRADOR` y los roles operativos;
 - deja el codigo claro, mantenible y escalable.

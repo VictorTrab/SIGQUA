@@ -19,7 +19,6 @@ MODULOS_OPERATIVOS = (
     ModuloNavegacion("planes_pago", "Planes de pago", "Acuerdos, cuotas y saldos financiados.", "calendar-stats.svg", "modulo.planes_pago"),
     ModuloNavegacion("reportes", "Reportes", "Consultas administrativas, indicadores y exportaciones.", "chart-bar.svg", "modulo.reportes"),
     ModuloNavegacion("configuracion", "Configuración", "Parámetros operativos, comprobantes y control local.", "settings-2.svg", "modulo.configuracion"),
-    ModuloNavegacion("mantenimiento", "Mantenimiento", "Herramientas técnicas sensibles y soporte avanzado.", "tool.svg", "mantenimiento.ver", True),
 )
 
 
@@ -43,13 +42,10 @@ class ServicioModuloPrincipal:
             metricas=self.repositorio_modulo_principal.obtener_metricas_dashboard(),
             analitica=self.repositorio_modulo_principal.obtener_analitica_dashboard(),
             modulos=modulos_visibles,
-            puede_abrir_mantenimiento=usuario.tiene_permiso("mantenimiento.ver"),
         )
 
     @staticmethod
     def _resolver_perfil(usuario: UsuarioAutenticado) -> str:
-        if usuario.es_superadministrador():
-            return "SUPERADMINISTRADOR"
         if "ADMINISTRADOR" in usuario.roles:
             return "ADMINISTRADOR"
         if "CAJERO" in usuario.roles:
@@ -58,8 +54,6 @@ class ServicioModuloPrincipal:
 
     @staticmethod
     def _puede_ver_modulo(usuario: UsuarioAutenticado, modulo: ModuloNavegacion) -> bool:
-        if modulo.es_tecnico:
-            return usuario.tiene_permiso(modulo.permiso_requerido or "")
         if modulo.permiso_requerido is None:
             return True
-        return usuario.tiene_permiso(modulo.permiso_requerido) or usuario.es_superadministrador()
+        return usuario.tiene_permiso(modulo.permiso_requerido)

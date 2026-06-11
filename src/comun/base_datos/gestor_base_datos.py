@@ -11,9 +11,6 @@ from comun.configuracion.gestor_rutas import GestorRutas
 class GestorBaseDatos:
     """Centraliza la inicializacion y apertura segura de la base de datos."""
 
-    VERSION_MIGRACION_DATOS_PRUEBA = "004"
-    VERSION_MIGRACION_USUARIOS_ROLES_FIJOS = "016"
-
     def __init__(self, gestor_rutas: GestorRutas | None = None) -> None:
         self._gestor_rutas = gestor_rutas or GestorRutas()
 
@@ -53,8 +50,9 @@ class GestorBaseDatos:
         self._aplicar_migraciones_pendientes(
             ruta_base_datos,
             ruta_migraciones,
-            incluir_datos_prueba=incluir_datos_prueba,
         )
+        if incluir_datos_prueba:
+            self._aplicar_datos_prueba(ruta_base_datos)
         return ruta_base_datos
 
     def _crear_base_desde_esquema_inicial(
@@ -95,8 +93,6 @@ class GestorBaseDatos:
         self,
         ruta_base_datos: Path,
         ruta_migraciones: Path,
-        *,
-        incluir_datos_prueba: bool,
     ) -> None:
         rutas_migracion = sorted(ruta_migraciones.glob("[0-9][0-9][0-9]_*.sql"))
         if not rutas_migracion:
@@ -116,18 +112,8 @@ class GestorBaseDatos:
                 version = ruta_migracion.stem.split("_", maxsplit=1)[0]
                 if version in versiones_aplicadas:
                     continue
-                if (
-                    version == self.VERSION_MIGRACION_DATOS_PRUEBA
-                    and not incluir_datos_prueba
-                ):
-                    continue
 
                 script_sql = ruta_migracion.read_text(encoding="utf-8")
-                script_sql = self._preparar_script_migracion(
-                    conexion,
-                    version,
-                    script_sql,
-                )
                 with conexion:
                     conexion.executescript(script_sql)
 
@@ -147,34 +133,36 @@ class GestorBaseDatos:
         finally:
             conexion.close()
 
-    def _preparar_script_migracion(
-        self,
-        conexion: sqlite3.Connection,
-        version: str,
-        script_sql: str,
-    ) -> str:
-        """Ajusta migraciones con compatibilidad adicional para estados parciales."""
-        if (
-            version == self.VERSION_MIGRACION_USUARIOS_ROLES_FIJOS
-            and self._tabla_tiene_columna(
-                conexion,
-                tabla="usuarios",
-                columna="contrasena_temporal_expira_en",
+    def _aplicar_datos_prueba(self, ruta_base_datos: Path) -> None:
+        """Carga fixtures locales sin convertirlos en una migracion productiva."""
+        ruta_semilla = Path(__file__).with_name("datos_prueba.sql")
+        if not ruta_semilla.exists():
+            raise FileNotFoundError(
+                f"No se encontro la semilla de datos de prueba: {ruta_semilla}"
             )
-        ):
-            return script_sql.replace(
-                "ALTER TABLE usuarios ADD COLUMN contrasena_temporal_expira_en TEXT NULL;\n\n",
-                "",
-                1,
-            )
-        return script_sql
 
-    @staticmethod
-    def _tabla_tiene_columna(
-        conexion: sqlite3.Connection,
-        *,
-        tabla: str,
-        columna: str,
-    ) -> bool:
-        columnas = conexion.execute(f"PRAGMA table_info({tabla});").fetchall()
-        return any(str(fila[1]) == columna for fila in columnas)
+        conexion = sqlite3.connect(ruta_base_datos)
+        try:
+            ya_aplicada = conexion.execute(
+                """
+                SELECT 1
+                FROM usuarios
+                WHERE lower(nombre_usuario) = 'cajero_demo'
+                LIMIT 1;
+                """
+            ).fetchone()
+            if ya_aplicada:
+                return
+
+            with conexion:
+                conexion.executescript(ruta_semilla.read_text(encoding="utf-8"))
+
+            errores_claves_foraneas = conexion.execute(
+                "PRAGMA foreign_key_check;"
+            ).fetchall()
+            if errores_claves_foraneas:
+                raise RuntimeError(
+                    "La semilla de pruebas genero errores de claves foraneas."
+                )
+        finally:
+            conexion.close()

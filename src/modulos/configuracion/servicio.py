@@ -74,7 +74,6 @@ CLAVES_SISTEMA = (
     "sistema.respaldo_automatico",
     "seguridad.duracion_sesion_horas",
     "respaldo.ruta_principal",
-    "mantenimiento.ruta_respaldos",
 )
 CLAVES_REPORTES_PDF = (
     "reportes.ruta_salida",
@@ -780,7 +779,6 @@ class ServicioConfiguracion:
             "respaldo.ruta_principal",
             self._valor_parametro(
                 parametros,
-                "mantenimiento.ruta_respaldos",
                 str(self._gestor_rutas.obtener_ruta_respaldos()),
             ),
         )

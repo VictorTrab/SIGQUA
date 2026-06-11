@@ -1464,7 +1464,6 @@ class VistaModuloPrincipal(QWidget):
     """Shell operativo con sidebar, header y area central navegable."""
 
     cerrar_sesion_solicitada = Signal()
-    abrir_mantenimiento_solicitado = Signal()
     modulo_solicitado = Signal(str)
 
     def __init__(self) -> None:
@@ -1606,8 +1605,6 @@ class VistaModuloPrincipal(QWidget):
             )
         self._reconstruir_sidebar(estado.modulos)
         self.actualizar_dashboard(estado)
-        self._boton_mantenimiento.setVisible(estado.puede_abrir_mantenimiento)
-        self._panel_acciones_sidebar.setVisible(estado.puede_abrir_mantenimiento)
         self.mostrar_modulo("dashboard")
         self._actualizar_disposicion_dashboard()
         self._animar_aparicion_dashboard()
@@ -1793,21 +1790,6 @@ class VistaModuloPrincipal(QWidget):
         self._contenedor_botones.setSpacing(12)
         self._scroll_navegacion.setWidget(contenedor_navegacion)
         layout_sidebar.addWidget(self._scroll_navegacion, 1)
-
-        self._panel_acciones_sidebar = QFrame()
-        self._panel_acciones_sidebar.setObjectName("panelAccionesSidebar")
-        layout_acciones_sidebar = QVBoxLayout(self._panel_acciones_sidebar)
-        layout_acciones_sidebar.setContentsMargins(0, 8, 0, 0)
-        layout_acciones_sidebar.setSpacing(6)
-
-        self._boton_mantenimiento = self._crear_boton_sidebar(
-            ModuloNavegacion("mantenimiento", "Mantenimiento", "", "tool.svg"),
-            tipo="accion",
-        )
-        self._boton_mantenimiento.clicked.connect(self.abrir_mantenimiento_solicitado.emit)
-        self._boton_mantenimiento.setVisible(False)
-        layout_acciones_sidebar.addWidget(self._boton_mantenimiento)
-        layout_sidebar.addWidget(self._panel_acciones_sidebar)
 
         panel = QWidget()
         panel.setObjectName("panelPrincipal")
@@ -2271,8 +2253,6 @@ class VistaModuloPrincipal(QWidget):
         }
 
         for modulo in modulos:
-            if modulo.codigo == "mantenimiento":
-                continue
             secciones[self._resolver_categoria_sidebar(modulo.codigo)].append(modulo)
 
         for titulo_seccion, modulos_seccion in secciones.items():

@@ -73,22 +73,7 @@ class TestPagos(unittest.TestCase):
                 fila[1] for fila in conexion.execute("PRAGMA table_info(metodos_pago);").fetchall()
             }
             version = conexion.execute(
-                "SELECT 1 FROM esquema_migraciones WHERE version = '007' LIMIT 1;"
-            ).fetchone()
-            version_008 = conexion.execute(
-                "SELECT 1 FROM esquema_migraciones WHERE version = '008' LIMIT 1;"
-            ).fetchone()
-            version_009 = conexion.execute(
-                "SELECT 1 FROM esquema_migraciones WHERE version = '009' LIMIT 1;"
-            ).fetchone()
-            version_011 = conexion.execute(
-                "SELECT 1 FROM esquema_migraciones WHERE version = '011' LIMIT 1;"
-            ).fetchone()
-            version_023 = conexion.execute(
-                "SELECT 1 FROM esquema_migraciones WHERE version = '023' LIMIT 1;"
-            ).fetchone()
-            version_026 = conexion.execute(
-                "SELECT 1 FROM esquema_migraciones WHERE version = '026' LIMIT 1;"
+                "SELECT 1 FROM esquema_migraciones WHERE version = '001' LIMIT 1;"
             ).fetchone()
             columnas_procesos = {
                 fila[1] for fila in conexion.execute("PRAGMA table_info(procesos_servicio);").fetchall()
@@ -146,11 +131,6 @@ class TestPagos(unittest.TestCase):
         self.assertIn("estado", columnas_impresiones)
         self.assertIn("requiere_referencia", columnas_metodos)
         self.assertIsNotNone(version)
-        self.assertIsNotNone(version_008)
-        self.assertIsNotNone(version_009)
-        self.assertIsNotNone(version_011)
-        self.assertIsNotNone(version_023)
-        self.assertIsNotNone(version_026)
         self.assertNotIn("multa_corte_centavos", columnas_procesos)
         self.assertIsNotNone(deposito)
         self.assertEqual(deposito[0], 1)

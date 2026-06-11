@@ -26,7 +26,7 @@ class GestorRutas:
         return self.obtener_ruta_directorio_base_datos() / "migrations"
 
     def obtener_ruta_esquema_inicial_base_datos(self) -> Path:
-        return self.obtener_ruta_migraciones_base_datos() / "002_esquema_inicial.sql"
+        return self.obtener_ruta_migraciones_base_datos() / "001_esquema_inicial.sql"
 
     def obtener_ruta_logs(self) -> Path:
         return self.raiz_proyecto / "logs"

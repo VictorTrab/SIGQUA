@@ -49,18 +49,6 @@ class TestUsuariosSeguridad(unittest.TestCase):
             roles=("ADMINISTRADOR",),
             permisos=frozenset({"modulo.usuarios"}),
         )
-        self.superadmin = UsuarioAutenticado(
-            identificador=self._obtener_id_usuario("superadmin"),
-            nombre_usuario="superadmin",
-            nombre_completo="Superadministrador Tecnico",
-            correo="superadmin@sigqua.local",
-            estado="ACTIVO",
-            es_tecnico=True,
-            es_oculto=True,
-            roles=("SUPERADMINISTRADOR",),
-            permisos=frozenset({"mantenimiento.ver"}),
-        )
-
     def tearDown(self) -> None:
         self.directorio_temporal.cleanup()
 
@@ -71,14 +59,6 @@ class TestUsuariosSeguridad(unittest.TestCase):
         self.assertIn("admin", nombres)
         self.assertIn("cajero1", nombres)
         self.assertNotIn("superadmin", nombres)
-
-    def test_superadmin_puede_ver_usuarios_tecnicos(self) -> None:
-        usuarios = self.servicio.listar_usuarios_para_administracion(self.superadmin)
-        nombres = {usuario.nombre_usuario for usuario in usuarios}
-
-        self.assertIn("superadmin", nombres)
-        self.assertIn("admin", nombres)
-        self.assertIn("cajero1", nombres)
 
     def test_roles_asignables_solo_muestran_roles_fijos_visibles(self) -> None:
         roles = self.servicio.listar_roles_asignables(self.admin)
@@ -117,14 +97,6 @@ class TestUsuariosSeguridad(unittest.TestCase):
         self.assertEqual(restablecida_por, self.admin.identificador)
         self.assertIsNotNone(expira_en)
         self.assertGreaterEqual(total_auditoria, 1)
-
-    def test_admin_no_puede_restablecer_superadministrador(self) -> None:
-        resultado = self.servicio.restablecer_contrasena_administrativa(
-            actor=self.admin,
-            nombre_usuario_objetivo="superadmin",
-        )
-        self.assertFalse(resultado.exito)
-        self.assertEqual(resultado.codigo, "PERMISO_DENEGADO")
 
     def test_admin_puede_desbloquear_usuario_operativo(self) -> None:
         conexion = self.gestor_base_datos.obtener_conexion()
@@ -238,111 +210,10 @@ class TestUsuariosSeguridad(unittest.TestCase):
         self.assertEqual(len(filtrados), 1)
         self.assertEqual(filtrados[0].nombre_usuario, "cajero1")
 
-    def test_migracion_normaliza_roles_personalizados_y_multiples_roles(self) -> None:
-        directorio = tempfile.TemporaryDirectory()
-        try:
-            raiz = Path(directorio.name)
-            self._copiar_migraciones(raiz, incluir_016=False)
-            gestor_rutas = GestorRutas(raiz_proyecto=raiz)
-            gestor_bd = GestorBaseDatos(gestor_rutas)
-            gestor_bd.inicializar_base_datos(incluir_datos_prueba=True)
-            conexion = gestor_bd.obtener_conexion()
-            try:
-                with conexion:
-                    conexion.execute(
-                        """
-                        INSERT INTO roles(nombre, descripcion, es_sistema, estado, creado_en, actualizado_en)
-                        VALUES ('Supervisor', 'Rol heredado', 0, 'ACTIVO', datetime('now', 'localtime'), datetime('now', 'localtime'));
-                        """
-                    )
-                    rol_supervisor = int(
-                        conexion.execute("SELECT id FROM roles WHERE nombre = 'Supervisor';").fetchone()[0]
-                    )
-                    permiso_pagos = int(
-                        conexion.execute("SELECT id FROM permisos WHERE codigo = 'pagos.registrar';").fetchone()[0]
-                    )
-                    conexion.execute(
-                        "INSERT INTO roles_permisos(rol_id, permiso_id) VALUES (?, ?);",
-                        (rol_supervisor, permiso_pagos),
-                    )
-                    conexion.execute(
-                        """
-                        INSERT INTO usuarios(
-                            nombre_usuario,
-                            nombre_completo,
-                            correo,
-                            contrasena_hash,
-                            estado,
-                            requiere_cambio_contrasena
-                        )
-                        VALUES ('legacy1', 'Legacy Uno', 'legacy1@sigqua.local', 'CAMBIAR_HASH_EN_DESARROLLO', 'ACTIVO', 0);
-                        """
-                    )
-                    usuario_legacy = int(
-                        conexion.execute("SELECT id FROM usuarios WHERE nombre_usuario = 'legacy1';").fetchone()[0]
-                    )
-                    conexion.execute(
-                        "INSERT INTO usuarios_roles(usuario_id, rol_id) VALUES (?, ?);",
-                        (usuario_legacy, rol_supervisor),
-                    )
-                    usuario_admin = int(
-                        conexion.execute("SELECT id FROM usuarios WHERE nombre_usuario = 'admin';").fetchone()[0]
-                    )
-                    rol_consulta = int(
-                        conexion.execute("SELECT id FROM roles WHERE nombre = 'CONSULTA';").fetchone()[0]
-                    )
-                    conexion.execute(
-                        "INSERT INTO usuarios_roles(usuario_id, rol_id) VALUES (?, ?);",
-                        (usuario_admin, rol_consulta),
-                    )
-            finally:
-                conexion.close()
-
-            contenido = (RAIZ_PROYECTO / "database" / "migrations" / "016_usuarios_roles_fijos_y_contrasena_temporal.sql").read_text(encoding="utf-8")
-            conexion = gestor_bd.obtener_conexion()
-            try:
-                with conexion:
-                    conexion.executescript(contenido)
-            finally:
-                conexion.close()
-
-            conexion = sqlite3.connect(gestor_rutas.obtener_ruta_base_datos())
-            try:
-                rol_legacy = conexion.execute(
-                    "SELECT COUNT(*) FROM roles WHERE nombre = 'Supervisor';"
-                ).fetchone()[0]
-                rol_usuario_legacy = conexion.execute(
-                    """
-                    SELECT r.nombre
-                    FROM usuarios_roles ur
-                    INNER JOIN roles r ON r.id = ur.rol_id
-                    WHERE ur.usuario_id = (SELECT id FROM usuarios WHERE nombre_usuario = 'legacy1');
-                    """
-                ).fetchall()
-                roles_admin = conexion.execute(
-                    """
-                    SELECT r.nombre
-                    FROM usuarios_roles ur
-                    INNER JOIN roles r ON r.id = ur.rol_id
-                    WHERE ur.usuario_id = (SELECT id FROM usuarios WHERE nombre_usuario = 'admin')
-                      AND r.nombre IN ('ADMINISTRADOR', 'CAJERO', 'CONSULTA');
-                    """
-                ).fetchall()
-            finally:
-                conexion.close()
-
-            self.assertEqual(rol_legacy, 0)
-            self.assertEqual([fila[0] for fila in rol_usuario_legacy], ["CAJERO"])
-            self.assertEqual([fila[0] for fila in roles_admin], ["ADMINISTRADOR"])
-        finally:
-            directorio.cleanup()
-
     @staticmethod
-    def _copiar_migraciones(raiz_temporal: Path, incluir_016: bool = True) -> None:
+    def _copiar_migraciones(raiz_temporal: Path) -> None:
         (raiz_temporal / "database" / "migrations").mkdir(parents=True, exist_ok=True)
         for ruta_migracion in (RAIZ_PROYECTO / "database" / "migrations").glob("*.sql"):
-            if not incluir_016 and ruta_migracion.name == "016_usuarios_roles_fijos_y_contrasena_temporal.sql":
-                continue
             contenido_sql = ruta_migracion.read_text(encoding="utf-8")
             (raiz_temporal / "database" / "migrations" / ruta_migracion.name).write_text(
                 contenido_sql,

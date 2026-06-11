@@ -37,10 +37,6 @@ class ServicioUsuarios:
         self,
         actor: UsuarioAutenticado,
     ) -> list[UsuarioSistema]:
-        if actor.es_superadministrador():
-            operativos = self.repositorio_usuarios.listar_operativos_visibles()
-            tecnicos = self.repositorio_usuarios.listar_tecnicos()
-            return operativos + tecnicos
         return self.repositorio_usuarios.listar_operativos_visibles()
 
     def listar_roles_asignables(
@@ -63,9 +59,7 @@ class ServicioUsuarios:
         return ResumenUsuarios(
             total_usuarios=len(usuarios),
             usuarios_activos=sum(1 for usuario in usuarios if usuario.estado == "ACTIVO"),
-            administradores=sum(
-                1 for usuario in usuarios if "ADMINISTRADOR" in usuario.roles or usuario.es_superadministrador()
-            ),
+            administradores=sum(1 for usuario in usuarios if "ADMINISTRADOR" in usuario.roles),
             accesos_hoy=accesos_hoy,
         )
 
@@ -95,7 +89,7 @@ class ServicioUsuarios:
             if filtro_rapido == FILTRO_USUARIOS_INACTIVOS:
                 return usuario.estado != "ACTIVO"
             if filtro_rapido == FILTRO_USUARIOS_ADMINISTRADORES:
-                return "ADMINISTRADOR" in usuario.roles or usuario.es_superadministrador()
+                return "ADMINISTRADOR" in usuario.roles
             return True
 
         def coincide_rol(usuario: UsuarioSistema) -> bool:
@@ -168,7 +162,7 @@ class ServicioUsuarios:
         if not self._puede_gestionar_usuario(actor, objetivo):
             return ResultadoGestionUsuarios(
                 False,
-                "No puedes editar usuarios tecnicos o superadministradores.",
+                "No puedes editar usuarios tecnicos u ocultos.",
                 "PERMISO_DENEGADO",
             )
 
@@ -209,7 +203,7 @@ class ServicioUsuarios:
         if not self._puede_gestionar_usuario(actor, usuario_objetivo):
             return ResultadoGestionUsuarios(
                 False,
-                "No puedes modificar usuarios tecnicos o superadministradores.",
+                "No puedes modificar usuarios tecnicos u ocultos.",
                 "PERMISO_DENEGADO",
             )
 
@@ -267,7 +261,7 @@ class ServicioUsuarios:
         if not self._puede_gestionar_usuario(actor, usuario_objetivo):
             return ResultadoGestionUsuarios(
                 exito=False,
-                mensaje="No puedes gestionar usuarios tecnicos o superadministradores.",
+                mensaje="No puedes gestionar usuarios tecnicos u ocultos.",
                 codigo="PERMISO_DENEGADO",
             )
 
@@ -331,7 +325,7 @@ class ServicioUsuarios:
         if not self._puede_gestionar_usuario(actor, usuario_objetivo):
             return ResultadoGestionUsuarios(
                 exito=False,
-                mensaje="No puedes desbloquear usuarios tecnicos o superadministradores.",
+                mensaje="No puedes desbloquear usuarios tecnicos u ocultos.",
                 codigo="PERMISO_DENEGADO",
             )
 
@@ -400,9 +394,7 @@ class ServicioUsuarios:
 
     @staticmethod
     def _puede_gestionar_usuario(actor: UsuarioAutenticado, objetivo: UsuarioSistema) -> bool:
-        if actor.es_superadministrador():
-            return True
-        return not objetivo.es_tecnico and not objetivo.es_oculto and not objetivo.es_superadministrador()
+        return not objetivo.es_tecnico and not objetivo.es_oculto
 
     def _resolver_rol_asignable(self, rol_id: int, actor: UsuarioAutenticado) -> RolSistema | None:
         for rol in self.listar_roles_asignables(actor):
@@ -448,4 +440,4 @@ class ServicioUsuarios:
 
     @staticmethod
     def _puede_gestionar_usuarios(actor: UsuarioAutenticado) -> bool:
-        return actor.es_superadministrador() or actor.tiene_permiso(PERMISO_MODULO_USUARIOS)
+        return actor.tiene_permiso(PERMISO_MODULO_USUARIOS)

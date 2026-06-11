@@ -23,15 +23,11 @@ class ControladorModuloPrincipal:
         self.vista_modulo_principal.cerrar_sesion_solicitada.connect(
             self._manejar_cierre_sesion
         )
-        self.vista_modulo_principal.abrir_mantenimiento_solicitado.connect(
-            self._manejar_apertura_mantenimiento
-        )
         self.vista_modulo_principal.modulo_solicitado.connect(self._manejar_modulo_solicitado)
         bus_actualizaciones_modulos.actualizacion_emitida.connect(
             self._manejar_actualizacion_modulo
         )
         self._callback_cierre_sesion: Callable[[], None] | None = None
-        self._callback_apertura_mantenimiento: Callable[[], None] | None = None
         self._usuario_actual: UsuarioAutenticado | None = None
         self._dashboard_pendiente_actualizacion = False
 
@@ -51,19 +47,9 @@ class ControladorModuloPrincipal:
     ) -> None:
         self._callback_cierre_sesion = callback_cierre_sesion
 
-    def configurar_callback_apertura_mantenimiento(
-        self,
-        callback_apertura_mantenimiento: Callable[[], None],
-    ) -> None:
-        self._callback_apertura_mantenimiento = callback_apertura_mantenimiento
-
     def _manejar_cierre_sesion(self) -> None:
         if self._callback_cierre_sesion is not None:
             self._callback_cierre_sesion()
-
-    def _manejar_apertura_mantenimiento(self) -> None:
-        if self._callback_apertura_mantenimiento is not None:
-            self._callback_apertura_mantenimiento()
 
     def _manejar_modulo_solicitado(self, codigo: str) -> None:
         if codigo == "dashboard" and self._dashboard_pendiente_actualizacion:

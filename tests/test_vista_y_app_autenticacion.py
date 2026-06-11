@@ -35,7 +35,6 @@ from modulos.autenticacion.vista import (  # noqa: E402
     ANCHO_MAXIMO_TARJETA,
     VistaAutenticacion,
 )
-from modulos.mantenimiento.vista import VistaMantenimiento  # noqa: E402
 from modulos.barrios.vista import (  # noqa: E402
     DialogoConfirmacionEstadoBarrio,
     DialogoDetalleBarrio,
@@ -463,7 +462,6 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertIsNotNone(ventana_principal.sesion_activa)
             self.assertEqual(ventana_principal.sesion_activa.token_sesion, "token-prueba-123")
             self.assertEqual(ventana_principal.contenedor_central.count(), 2)
-            self.assertFalse(ventana_principal.vista_modulo_principal._boton_mantenimiento.isVisible())
             self.assertIsInstance(ventana_principal.vista_casas, VistaCasas)
             self.assertIsInstance(ventana_principal.vista_planes_pago, VistaPlanesPago)
             self.assertIsInstance(ventana_principal.vista_historial_pagos, VistaHistorialPagos)
@@ -630,49 +628,6 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
             self.assertIs(vista_autenticacion._stack.currentWidget(), vista_autenticacion._pagina_restablecer)
             self.assertIn("admin", vista_autenticacion._label_usuario_restablecer.text().lower())
-            ventana_principal.close()
-        finally:
-            shutil.rmtree(raiz_temporal, ignore_errors=True)
-
-    def test_superadmin_ve_y_abre_mantenimiento_tecnico(self) -> None:
-        raiz_temporal = self._crear_raiz_temporal_prueba("test_superadmin")
-        try:
-            self._copiar_migraciones(raiz_temporal)
-
-            gestor_rutas = GestorRutas(raiz_proyecto=raiz_temporal)
-            _, ventana_principal, vista_autenticacion = crear_ventana_principal(gestor_rutas)
-
-            vista_autenticacion.autenticacion_exitosa.emit(
-                SesionIniciada(
-                    usuario=UsuarioAutenticado(
-                        identificador=99,
-                        nombre_usuario="superadmin",
-                        nombre_completo="Superadministrador Tecnico",
-                        correo="superadmin@sigqua.local",
-                        estado="ACTIVO",
-                        es_tecnico=True,
-                        es_oculto=True,
-                        roles=("SUPERADMINISTRADOR",),
-                        permisos=frozenset({"mantenimiento.ver", "seguridad.ver_logs"}),
-                    ),
-                    token_sesion="token-superadmin-1",
-                )
-            )
-            self._esperar_arranque_principal(ventana_principal)
-
-            self.assertFalse(ventana_principal.vista_modulo_principal._boton_mantenimiento.isHidden())
-            ventana_principal.vista_modulo_principal._boton_mantenimiento.click()
-            self.assertIsInstance(
-                ventana_principal.contenedor_central.currentWidget(),
-                VistaMantenimiento,
-            )
-            self.assertTrue(ventana_principal.isMaximized())
-            self.assertIsNone(ventana_principal.menuWidget())
-            ventana_principal.vista_mantenimiento.volver_solicitado.emit()
-            self.assertIsInstance(
-                ventana_principal.contenedor_central.currentWidget(),
-                VistaModuloPrincipal,
-            )
             ventana_principal.close()
         finally:
             shutil.rmtree(raiz_temporal, ignore_errors=True)
@@ -930,7 +885,6 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                     "clock.svg",
                 ),
             ),
-            puede_abrir_mantenimiento=False,
         )
         vista_barrios = VistaBarrios()
         vista_historial = VistaHistorialPagos()
@@ -985,7 +939,6 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                     "settings-2.svg",
                 ),
             ),
-            puede_abrir_mantenimiento=False,
         )
         vista_configuracion = VistaConfiguracion()
         vista_principal.registrar_modulo("configuracion", vista_configuracion)
@@ -1001,7 +954,6 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 for codigo in seccion._modulos
             },
         )
-        self.assertFalse(vista_principal._boton_mantenimiento.isVisible())
         self.assertIsNone(vista_principal._dialogo_perfil_usuario)
         self.assertEqual(
             vista_principal._panel_perfil_usuario._nombre.text(),
@@ -1041,7 +993,6 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                     "settings-2.svg",
                 ),
             ),
-            puede_abrir_mantenimiento=False,
         )
         vista_principal.mostrar_estado(estado)
         vista_principal.resize(1200, 900)

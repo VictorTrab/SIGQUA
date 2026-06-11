@@ -30,12 +30,6 @@ from modulos.autenticacion import (
     ServicioAutenticacion,
     VistaAutenticacion,
 )
-from modulos.mantenimiento import (
-    ControladorMantenimiento,
-    RepositorioMantenimientoSQLite,
-    ServicioMantenimiento,
-    VistaMantenimiento,
-)
 from modulos.morosidad import (
     ControladorMorosidad,
     RepositorioMorosidadSQLite,
@@ -255,9 +249,6 @@ def crear_ventana_principal(
         servicio_respaldo=servicio_respaldo,
         servicio_comprobantes=servicio_comprobantes,
     )
-    repositorio_mantenimiento = RepositorioMantenimientoSQLite(gestor_base_datos)
-    servicio_mantenimiento = ServicioMantenimiento(repositorio_mantenimiento)
-
     vista_autenticacion = VistaAutenticacion(gestor_rutas=gestor_rutas)
     contenedor_central = ContenedorApiladoAjustable()
     contenedor_central.setSizePolicy(
@@ -303,7 +294,6 @@ def crear_ventana_principal(
     ventana_principal.servicio_morosidad = servicio_morosidad
     ventana_principal.servicio_reportes = servicio_reportes
     ventana_principal.servicio_configuracion = servicio_configuracion
-    ventana_principal.servicio_mantenimiento = servicio_mantenimiento
     ventana_principal.vista_autenticacion = vista_autenticacion
     ventana_principal.configurar_callback_cierre_controlado(
         lambda: _manejar_cierre_ventana_principal(
@@ -377,30 +367,11 @@ def _manejar_autenticacion_exitosa(
                 servicio_autenticacion=servicio_autenticacion,
             )
         )
-        controlador_modulo_principal.configurar_callback_apertura_mantenimiento(
-            lambda: _manejar_apertura_mantenimiento(ventana_principal)
-        )
         ventana_principal.contenedor_central.addWidget(vista_modulo_principal)
         ventana_principal.vista_modulo_principal = vista_modulo_principal
         ventana_principal.controlador_modulo_principal = controlador_modulo_principal
         ventana_principal.servicio_modulo_principal = servicio_modulo_principal
         _registrar_modulos_operativos(ventana_principal)
-
-    if (
-        sesion_iniciada.usuario.tiene_permiso("mantenimiento.ver")
-        and not hasattr(ventana_principal, "vista_mantenimiento")
-    ):
-        vista_mantenimiento = VistaMantenimiento()
-        controlador_mantenimiento = ControladorMantenimiento(
-            servicio_mantenimiento=ventana_principal.servicio_mantenimiento,
-            vista_mantenimiento=vista_mantenimiento,
-        )
-        controlador_mantenimiento.configurar_callback_volver(
-            lambda: _manejar_retorno_desde_mantenimiento(ventana_principal)
-        )
-        ventana_principal.contenedor_central.addWidget(vista_mantenimiento)
-        ventana_principal.vista_mantenimiento = vista_mantenimiento
-        ventana_principal.controlador_mantenimiento = controlador_mantenimiento
 
     controlador_modulo_principal = ventana_principal.controlador_modulo_principal
     vista_modulo_principal = ventana_principal.vista_modulo_principal
@@ -450,12 +421,9 @@ def _iniciar_arranque_post_login(
         ),
         (
             "Cargando administración...",
-            lambda: (
-                _registrar_modulos_operativos_por_codigos(
-                    ventana_principal,
-                    ("reportes", "usuarios", "configuracion"),
-                ),
-                _asegurar_mantenimiento_disponible(ventana_principal, usuario),
+            lambda: _registrar_modulos_operativos_por_codigos(
+                ventana_principal,
+                ("reportes", "usuarios", "configuracion"),
             ),
         ),
         (
@@ -564,37 +532,10 @@ def _asegurar_shell_principal_instanciado(
             servicio_autenticacion=servicio_autenticacion,
         )
     )
-    controlador_modulo_principal.configurar_callback_apertura_mantenimiento(
-        lambda: _manejar_apertura_mantenimiento(ventana_principal)
-    )
     ventana_principal.contenedor_central.addWidget(vista_modulo_principal)
     ventana_principal.vista_modulo_principal = vista_modulo_principal
     ventana_principal.controlador_modulo_principal = controlador_modulo_principal
     ventana_principal.servicio_modulo_principal = servicio_modulo_principal
-
-
-def _asegurar_mantenimiento_disponible(
-    ventana_principal: QMainWindow,
-    usuario: object,
-) -> None:
-    """Instancia mantenimiento tecnico si la sesion puede usarlo."""
-    if not usuario.tiene_permiso("mantenimiento.ver") or hasattr(
-        ventana_principal,
-        "vista_mantenimiento",
-    ):
-        return
-
-    vista_mantenimiento = VistaMantenimiento()
-    controlador_mantenimiento = ControladorMantenimiento(
-        servicio_mantenimiento=ventana_principal.servicio_mantenimiento,
-        vista_mantenimiento=vista_mantenimiento,
-    )
-    controlador_mantenimiento.configurar_callback_volver(
-        lambda: _manejar_retorno_desde_mantenimiento(ventana_principal)
-    )
-    ventana_principal.contenedor_central.addWidget(vista_mantenimiento)
-    ventana_principal.vista_mantenimiento = vista_mantenimiento
-    ventana_principal.controlador_mantenimiento = controlador_mantenimiento
 
 
 def _finalizar_arranque_post_login(
@@ -1092,33 +1033,6 @@ def _manejar_cierre_sesion(
     )
     _aplicar_modo_autenticacion(ventana_principal)
     logger.info("Se regreso al flujo de autenticacion.")
-
-
-def _manejar_apertura_mantenimiento(ventana_principal: QMainWindow) -> None:
-    """Abre el panel tecnico si la sesion actual tiene permisos."""
-    sesion_activa = getattr(ventana_principal, "sesion_activa", None)
-    if sesion_activa is None or not sesion_activa.usuario.tiene_permiso("mantenimiento.ver"):
-        logger.warning("Se intento abrir mantenimiento sin permisos suficientes.")
-        return
-
-    if not hasattr(ventana_principal, "controlador_mantenimiento"):
-        logger.warning("No existe un controlador de mantenimiento inicializado.")
-        return
-
-    ventana_principal.controlador_mantenimiento.mostrar_panel()
-    ventana_principal.setWindowTitle(TITULO_VENTANA_OCULTO)
-    ventana_principal.contenedor_central.setCurrentWidget(ventana_principal.vista_mantenimiento)
-    _aplicar_modo_principal(ventana_principal)
-
-
-def _manejar_retorno_desde_mantenimiento(ventana_principal: QMainWindow) -> None:
-    """Regresa del mantenimiento tecnico al modulo principal."""
-    if hasattr(ventana_principal, "vista_modulo_principal"):
-        ventana_principal.setWindowTitle(TITULO_VENTANA_OCULTO)
-        ventana_principal.contenedor_central.setCurrentWidget(
-            ventana_principal.vista_modulo_principal
-        )
-        _aplicar_modo_principal(ventana_principal)
 
 
 def _aplicar_modo_autenticacion(ventana_principal: QMainWindow) -> None:

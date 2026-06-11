@@ -73,4 +73,3 @@ class EstadoModuloPrincipal:
     metricas: tuple[MetricaDashboard, ...]
     analitica: AnaliticaDashboard
     modulos: tuple[ModuloNavegacion, ...]
-    puede_abrir_mantenimiento: bool = False

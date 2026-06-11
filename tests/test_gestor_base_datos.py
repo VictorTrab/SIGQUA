@@ -24,10 +24,10 @@ class TestGestorBaseDatos(unittest.TestCase):
         (self.raiz_temporal / "database" / "migrations").mkdir(parents=True, exist_ok=True)
 
         ruta_esquema_real = (
-            RAIZ_PROYECTO / "database" / "migrations" / "002_esquema_inicial.sql"
+            RAIZ_PROYECTO / "database" / "migrations" / "001_esquema_inicial.sql"
         )
         contenido_sql = ruta_esquema_real.read_text(encoding="utf-8")
-        (self.raiz_temporal / "database" / "migrations" / "002_esquema_inicial.sql").write_text(
+        (self.raiz_temporal / "database" / "migrations" / "001_esquema_inicial.sql").write_text(
             contenido_sql,
             encoding="utf-8",
         )

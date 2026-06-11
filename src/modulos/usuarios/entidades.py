@@ -56,9 +56,6 @@ class UsuarioSistema:
     def tiene_permiso(self, codigo_permiso: str) -> bool:
         return codigo_permiso in self.permisos
 
-    def es_superadministrador(self) -> bool:
-        return "SUPERADMINISTRADOR" in self.roles
-
     @property
     def rol_principal(self) -> str:
         return self.roles[0] if self.roles else "Sin rol"

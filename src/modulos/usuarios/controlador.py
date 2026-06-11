@@ -239,7 +239,7 @@ class ControladorUsuarios:
 
     @staticmethod
     def _es_usuario_operable(usuario: UsuarioSistema) -> bool:
-        return not usuario.es_tecnico and not usuario.es_oculto and not usuario.es_superadministrador()
+        return not usuario.es_tecnico and not usuario.es_oculto
 
     def _mostrar_sin_sesion(self) -> None:
         self._vista_usuarios.mostrar_mensaje("No hay una sesion activa.", es_error=True)

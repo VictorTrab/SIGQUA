@@ -1326,7 +1326,7 @@ class VistaUsuarios(QWidget):
             )
         )
 
-        if usuario.es_tecnico or usuario.es_oculto or usuario.es_superadministrador():
+        if usuario.es_tecnico or usuario.es_oculto:
             boton_editar.setDisabled(True)
             boton_estado.setDisabled(True)
             boton_seguridad.setDisabled(True)
