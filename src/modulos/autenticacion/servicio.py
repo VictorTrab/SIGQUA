@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import hashlib
+import math
 from logging import Logger
 from secrets import token_urlsafe
 
@@ -26,7 +27,8 @@ from modulos.autenticacion.repositorio import RepositorioAutenticacion
 FORMATO_FECHA_BD = "%Y-%m-%d %H:%M:%S"
 MENSAJE_LOGIN_INVALIDO = "Usuario o contraseña incorrectos."
 CODIGO_VALIDACION = "VALIDACION"
-MAXIMO_INTENTOS_FALLIDOS = 5
+ESPERAS_PROGRESIVAS_MINUTOS = (5, 10, 15, 30, 60)
+INTENTOS_ANTES_DE_ESPERA = 5
 
 
 class ServicioAutenticacion:
@@ -114,41 +116,88 @@ class ServicioAutenticacion:
                 codigo="USUARIO_BLOQUEADO",
             )
 
-        if not verificar_contrasena(contrasena_plana, usuario.contrasena_hash):
-            intentos_fallidos = self.repositorio_autenticacion.incrementar_intentos_fallidos(
-                usuario.identificador,
-                self._formatear_fecha(self._ahora()),
+        momento_actual = self._ahora()
+        bloqueado_hasta = self._parsear_fecha(usuario.bloqueado_hasta)
+        if bloqueado_hasta is not None and momento_actual < bloqueado_hasta:
+            minutos_restantes = max(
+                1,
+                math.ceil((bloqueado_hasta - momento_actual).total_seconds() / 60),
             )
-            motivo = "CONTRASENA_INVALIDA"
-            if intentos_fallidos >= MAXIMO_INTENTOS_FALLIDOS:
-                self.repositorio_autenticacion.bloquear_usuario(
-                    usuario_id=usuario.identificador,
-                    momento=self._formatear_fecha(self._ahora()),
-                )
-                motivo = "USUARIO_BLOQUEADO_POR_INTENTOS"
             self.repositorio_autenticacion.registrar_intento_login(
                 identificador=nombre_usuario,
                 resultado="FALLIDO",
                 usuario_id=usuario.identificador,
-                motivo=motivo,
+                motivo="ESPERA_SEGURIDAD_ACTIVA",
+                equipo=ip_origen,
+            )
+            return ResultadoLogin(
+                exito=False,
+                mensaje=(
+                    f"Espera {minutos_restantes} "
+                    f"{'minuto' if minutos_restantes == 1 else 'minutos'} antes de intentar de nuevo."
+                ),
+                codigo="ESPERA_SEGURIDAD",
+            )
+
+        if not verificar_contrasena(contrasena_plana, usuario.contrasena_hash):
+            intentos_fallidos = self.repositorio_autenticacion.incrementar_intentos_fallidos(
+                usuario.identificador,
+                self._formatear_fecha(momento_actual),
+            )
+            if intentos_fallidos < INTENTOS_ANTES_DE_ESPERA:
+                intentos_restantes = INTENTOS_ANTES_DE_ESPERA - intentos_fallidos
+                self.repositorio_autenticacion.registrar_intento_login(
+                    identificador=nombre_usuario,
+                    resultado="FALLIDO",
+                    usuario_id=usuario.identificador,
+                    motivo="CONTRASENA_INVALIDA",
+                    equipo=ip_origen,
+                )
+                self._logger.warning(
+                    "Intento de login con contrasena incorrecta para '%s'.",
+                    nombre_usuario,
+                )
+                return ResultadoLogin(
+                    exito=False,
+                    mensaje=(
+                        f"Usuario o contraseña incorrectos. Quedan {intentos_restantes} "
+                        f"{'intento' if intentos_restantes == 1 else 'intentos'} "
+                        "antes de la espera de seguridad."
+                    ),
+                    codigo="LOGIN_INVALIDO",
+                )
+
+            indice_espera = min(
+                intentos_fallidos - INTENTOS_ANTES_DE_ESPERA + 1,
+                len(ESPERAS_PROGRESIVAS_MINUTOS),
+            ) - 1
+            minutos_espera = ESPERAS_PROGRESIVAS_MINUTOS[indice_espera]
+            fin_espera = momento_actual + timedelta(minutes=minutos_espera)
+            self.repositorio_autenticacion.programar_espera_login(
+                usuario_id=usuario.identificador,
+                momento=self._formatear_fecha(momento_actual),
+                bloqueado_hasta=self._formatear_fecha(fin_espera),
+            )
+            self.repositorio_autenticacion.registrar_intento_login(
+                identificador=nombre_usuario,
+                resultado="FALLIDO",
+                usuario_id=usuario.identificador,
+                motivo=f"CONTRASENA_INVALIDA_ESPERA_{minutos_espera}_MIN",
                 equipo=ip_origen,
             )
             self._logger.warning(
                 "Intento de login con contrasena incorrecta para '%s'.",
                 nombre_usuario,
             )
-            mensaje = MENSAJE_LOGIN_INVALIDO
-            codigo = "LOGIN_INVALIDO"
-            if intentos_fallidos >= MAXIMO_INTENTOS_FALLIDOS:
-                mensaje = "Tu usuario fue bloqueado por seguridad. Contacta al administrador."
-                codigo = "USUARIO_BLOQUEADO"
             return ResultadoLogin(
                 exito=False,
-                mensaje=mensaje,
-                codigo=codigo,
+                mensaje=(
+                    "Contraseña incorrecta. "
+                    f"Espera {minutos_espera} minutos antes de intentar de nuevo."
+                ),
+                codigo="ESPERA_SEGURIDAD",
             )
 
-        momento_actual = self._ahora()
         self.repositorio_autenticacion.reiniciar_intentos_fallidos(
             usuario.identificador,
             self._formatear_fecha(momento_actual),

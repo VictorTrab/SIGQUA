@@ -4,7 +4,9 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 
 RAIZ_PROYECTO = Path(__file__).resolve().parents[1]
@@ -154,20 +156,34 @@ class TestAutenticacion(unittest.TestCase):
         self.assertEqual(total_fallidos, 1)
         self.assertEqual(total_sesiones, 0)
 
-    def test_login_fallido_repetido_bloquea_usuario(self) -> None:
-        for _ in range(5):
-            resultado = self.servicio.iniciar_sesion(
-                CredencialesUsuario(nombre_usuario="admin", contrasena_plana="mal-clave")
-            )
+    def test_login_fallido_aplica_esperas_progresivas_sin_bloqueo_permanente(self) -> None:
+        inicio = datetime(2026, 6, 12, 8, 0, 0)
+        esperas = (5, 10, 15, 30, 60)
 
-        self.assertFalse(resultado.exito)
-        self.assertEqual(resultado.codigo, "USUARIO_BLOQUEADO")
+        for intento in range(1, 5):
+            with patch.object(self.servicio, "_ahora", return_value=inicio):
+                resultado = self.servicio.iniciar_sesion(
+                    CredencialesUsuario(nombre_usuario="admin", contrasena_plana="mal-clave")
+                )
+            self.assertFalse(resultado.exito)
+            self.assertEqual(resultado.codigo, "LOGIN_INVALIDO")
+            self.assertIn(str(5 - intento), resultado.mensaje)
+
+        for indice, minutos in enumerate(esperas):
+            momento = inicio + timedelta(minutes=sum(esperas[:indice]))
+            with patch.object(self.servicio, "_ahora", return_value=momento):
+                resultado = self.servicio.iniciar_sesion(
+                    CredencialesUsuario(nombre_usuario="admin", contrasena_plana="mal-clave")
+                )
+            self.assertFalse(resultado.exito)
+            self.assertEqual(resultado.codigo, "ESPERA_SEGURIDAD")
+            self.assertIn(str(minutos), resultado.mensaje)
 
         conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
         try:
-            estado, intentos = conexion.execute(
+            estado, intentos, bloqueado_hasta = conexion.execute(
                 """
-                SELECT estado, intentos_fallidos
+                SELECT estado, intentos_fallidos, bloqueado_hasta
                 FROM usuarios
                 WHERE nombre_usuario = 'admin';
                 """
@@ -175,8 +191,58 @@ class TestAutenticacion(unittest.TestCase):
         finally:
             conexion.close()
 
-        self.assertEqual(estado, "BLOQUEADO")
-        self.assertEqual(intentos, 5)
+        self.assertEqual(estado, "ACTIVO")
+        self.assertEqual(intentos, 9)
+        self.assertEqual(bloqueado_hasta, "2026-06-12 10:00:00")
+
+    def test_login_durante_espera_no_valida_credencial_correcta(self) -> None:
+        inicio = datetime(2026, 6, 12, 8, 0, 0)
+        for _ in range(4):
+            with patch.object(self.servicio, "_ahora", return_value=inicio):
+                intento_libre = self.servicio.iniciar_sesion(
+                    CredencialesUsuario(nombre_usuario="admin", contrasena_plana="mal-clave")
+                )
+            self.assertEqual(intento_libre.codigo, "LOGIN_INVALIDO")
+        with patch.object(self.servicio, "_ahora", return_value=inicio):
+            quinto_fallo = self.servicio.iniciar_sesion(
+                CredencialesUsuario(nombre_usuario="admin", contrasena_plana="mal-clave")
+            )
+        with patch.object(
+            self.servicio,
+            "_ahora",
+            return_value=inicio + timedelta(minutes=2),
+        ):
+            durante_espera = self.servicio.iniciar_sesion(
+                CredencialesUsuario(nombre_usuario="admin", contrasena_plana="Sigqua2026!")
+            )
+        with patch.object(
+            self.servicio,
+            "_ahora",
+            return_value=inicio + timedelta(minutes=5),
+        ):
+            despues_espera = self.servicio.iniciar_sesion(
+                CredencialesUsuario(nombre_usuario="admin", contrasena_plana="Sigqua2026!")
+            )
+
+        self.assertEqual(quinto_fallo.codigo, "ESPERA_SEGURIDAD")
+        self.assertEqual(durante_espera.codigo, "ESPERA_SEGURIDAD")
+        self.assertIn("3 minutos", durante_espera.mensaje)
+        self.assertTrue(despues_espera.exito)
+
+        conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
+        try:
+            intentos, bloqueado_hasta = conexion.execute(
+                """
+                SELECT intentos_fallidos, bloqueado_hasta
+                FROM usuarios
+                WHERE nombre_usuario = 'admin';
+                """
+            ).fetchone()
+        finally:
+            conexion.close()
+
+        self.assertEqual(intentos, 0)
+        self.assertIsNone(bloqueado_hasta)
 
     def test_login_bloqueado_falla_con_mensaje_especifico(self) -> None:
         conexion = self.gestor_base_datos.obtener_conexion()
@@ -196,6 +262,7 @@ class TestAutenticacion(unittest.TestCase):
         self.assertIn("bloqueado", resultado.mensaje.lower())
 
     def test_restablecimiento_local_actualiza_hash_y_permita_login_nuevo(self) -> None:
+        momento_restablecimiento = datetime(2026, 6, 12, 9, 0, 0)
         resultado = self.servicio.restablecer_contrasena(
             nombre_usuario="admin",
             nueva_contrasena="NuevaClave123!",
@@ -203,14 +270,20 @@ class TestAutenticacion(unittest.TestCase):
         )
         self.assertTrue(resultado.exito)
 
-        login_anterior = self.servicio.iniciar_sesion(
-            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="Sigqua2026!")
-        )
+        with patch.object(
+            self.servicio,
+            "_ahora",
+            return_value=momento_restablecimiento,
+        ):
+            login_anterior = self.servicio.iniciar_sesion(
+                CredencialesUsuario(nombre_usuario="admin", contrasena_plana="Sigqua2026!")
+            )
         self.assertFalse(login_anterior.exito)
 
-        login_nuevo = self.servicio.iniciar_sesion(
-            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="NuevaClave123!")
-        )
+        with patch.object(self.servicio, "_ahora", return_value=momento_restablecimiento):
+            login_nuevo = self.servicio.iniciar_sesion(
+                CredencialesUsuario(nombre_usuario="admin", contrasena_plana="NuevaClave123!")
+            )
         self.assertTrue(login_nuevo.exito)
         self.assertFalse(login_nuevo.requiere_cambio_contrasena)
         self.assertIsNotNone(login_nuevo.token_sesion)

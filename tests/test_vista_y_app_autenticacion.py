@@ -236,7 +236,8 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertEqual(panel_formulario.objectName(), "panelFormularioLogin")
         self.assertIn("QFrame#panelInstitucionalLogin", vista.styleSheet())
         self.assertIn("QFrame#panelFormularioLogin", vista.styleSheet())
-        self.assertIn("background: #FFFFFF", vista.styleSheet())
+        self.assertIn("stop: 0 #111D29", vista.styleSheet())
+        self.assertIn("stop: 1 #09121B", vista.styleSheet())
         self.assertIsNotNone(badge_contexto)
         self.assertIsNotNone(badge_icono)
         self.assertIsNotNone(badge_texto)
@@ -1609,7 +1610,8 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertNotIn("Base de datos", textos_sistema)
         self.assertNotIn("Modo de operacion", textos_sistema)
         self.assertNotIn("Autenticacion", textos_sistema)
-        self.assertIn("Intentos permitidos", textos_sistema)
+        self.assertIn("Espera por intentos fallidos", textos_sistema)
+        self.assertIn("Desde el 5.º intento: 5, 10, 15, 30 y 60 min", textos_sistema)
 
         textos_comprobantes = [
             label.text() for label in vista._tabs.widget(3).findChildren(QLabel)

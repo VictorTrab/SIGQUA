@@ -52,13 +52,13 @@ class RepositorioAutenticacion(Protocol):
     def incrementar_intentos_fallidos(self, usuario_id: int, momento: str) -> int:
         """Incrementa y devuelve el total de intentos fallidos."""
 
-    def bloquear_usuario(
+    def programar_espera_login(
         self,
         usuario_id: int,
         momento: str,
-        bloqueado_hasta: str | None = None,
+        bloqueado_hasta: str,
     ) -> None:
-        """Bloquea un usuario por politicas de seguridad."""
+        """Programa una espera temporal antes del siguiente intento."""
 
     def finalizar_sesion(self, token_sesion_hash: str, momento: str) -> None:
         """Marca una sesion como finalizada."""
@@ -246,16 +246,15 @@ class RepositorioAutenticacionSQLite:
                 fila = conexion.execute(consulta_total, (usuario_id,)).fetchone()
         return int(fila["intentos_fallidos"]) if fila is not None else 0
 
-    def bloquear_usuario(
+    def programar_espera_login(
         self,
         usuario_id: int,
         momento: str,
-        bloqueado_hasta: str | None = None,
+        bloqueado_hasta: str,
     ) -> None:
         consulta = """
             UPDATE usuarios
-            SET estado = 'BLOQUEADO',
-                bloqueado_hasta = ?,
+            SET bloqueado_hasta = ?,
                 actualizado_en = ?
             WHERE id = ?;
         """

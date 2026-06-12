@@ -46,11 +46,11 @@ from modulos.autenticacion.entidades import SesionIniciada, UsuarioAutenticado
 
 ANCHO_MAXIMO_TARJETA = 410
 UMBRAL_PANEL_INSTITUCIONAL = 720
-COLOR_GRADIENTE_INICIAL = "#001D39"
-COLOR_GRADIENTE_FINAL = "#7BBDE8"
-COLOR_ICONO_INPUT = "#0A6F8F"
+COLOR_GRADIENTE_INICIAL = "#07111F"
+COLOR_GRADIENTE_FINAL = "#123C50"
+COLOR_ICONO_INPUT = "#78C8E8"
 COLOR_ICONO_PRIMARIO = "#FFFFFF"
-COLOR_ICONO_SECUNDARIO = "#0A4174"
+COLOR_ICONO_SECUNDARIO = "#78C8E8"
 COLOR_ICONO_ESTADO = "#75C7F0"
 COLOR_ICONO_ADVERTENCIA = "#F5B84B"
 TAMANO_ICONO_ACCION_INPUT = 18
@@ -149,18 +149,18 @@ class CampoAnimado(QLineEdit):
 
     def _aplicar_estilo_animado(self) -> None:
         borde = _interpolar_color(
-            QColor(209, 213, 219, 255),
-            QColor(0, 175, 160, 255),
+            QColor(52, 74, 94, 255),
+            QColor(56, 189, 248, 255),
             self._progreso_realce,
         )
         fondo = _interpolar_color(
-            QColor(255, 255, 255, 255),
-            QColor(244, 250, 255, 255),
+            QColor(19, 31, 44, 255),
+            QColor(22, 42, 57, 255),
             self._progreso_realce,
         )
         sombra = _interpolar_color(
-            QColor(10, 111, 143, 0),
-            QColor(10, 111, 143, 28),
+            QColor(56, 189, 248, 0),
+            QColor(56, 189, 248, 42),
             self._progreso_realce,
         )
         self._sombra.setBlurRadius(12 + (self._progreso_realce * 8))
@@ -172,9 +172,10 @@ class CampoAnimado(QLineEdit):
             f"border: 1px solid rgba({borde.red()}, {borde.green()}, {borde.blue()}, {borde.alpha()});"
             "border-radius: 14px;"
             f"background-color: rgba({fondo.red()}, {fondo.green()}, {fondo.blue()}, {fondo.alpha()});"
-            "color: #172A3A;"
-            "selection-background-color: #0A6F8F;"
+            "color: #F1F7FB;"
+            "selection-background-color: #1689B7;"
             "selection-color: #FFFFFF;"
+            "placeholder-text-color: #7F93A6;"
             "font-size: 15px;"
             "}"
         )
@@ -232,13 +233,13 @@ class BotonAnimado(QPushButton):
         self._aplicar_estilo_secundario()
 
     def _aplicar_estilo_primario(self) -> None:
-        base = QColor(0, 191, 166, 255)
-        hover = QColor(0, 168, 145, 255)
-        pressed = QColor(0, 140, 122, 255)
+        base = QColor(0, 184, 166, 255)
+        hover = QColor(16, 199, 181, 255)
+        pressed = QColor(0, 151, 137, 255)
         color_actual = self._color_por_progreso(base, hover, pressed)
         sombra = _interpolar_color(
-            QColor(0, 191, 166, 0),
-            QColor(0, 191, 166, 72),
+            QColor(0, 184, 166, 0),
+            QColor(0, 184, 166, 86),
             min(self._progreso_interaccion, 1.0),
         )
         self._sombra.setBlurRadius(18 + min(self._progreso_interaccion, 1.0) * 10)
@@ -255,15 +256,15 @@ class BotonAnimado(QPushButton):
             "padding: 0 18px;"
             "}"
             "QPushButton:disabled {"
-            "background-color: rgba(0, 191, 166, 0.52);"
+            "background-color: rgba(0, 184, 166, 0.42);"
             "color: rgba(255, 255, 255, 0.92);"
             "}"
         )
 
     def _aplicar_estilo_secundario(self) -> None:
         base_fondo = QColor(255, 255, 255, 0)
-        hover_fondo = QColor(0, 191, 166, 14)
-        pressed_fondo = QColor(0, 191, 166, 24)
+        hover_fondo = QColor(56, 189, 248, 18)
+        pressed_fondo = QColor(56, 189, 248, 30)
         base_borde = QColor(255, 255, 255, 0)
         hover_borde = QColor(255, 255, 255, 0)
         pressed_borde = QColor(255, 255, 255, 0)
@@ -282,7 +283,7 @@ class BotonAnimado(QPushButton):
             f"border: 1px solid rgba({borde_actual.red()}, {borde_actual.green()}, {borde_actual.blue()}, {borde_actual.alpha()});"
             "border-radius: 8px;"
             f"background-color: rgba({fondo_actual.red()}, {fondo_actual.green()}, {fondo_actual.blue()}, {fondo_actual.alpha()});"
-            "color: #00AFA0;"
+            "color: #78C8E8;"
             "font-size: 13px;"
             "font-weight: 600;"
             "padding: 0 10px;"
@@ -290,7 +291,7 @@ class BotonAnimado(QPushButton):
             "QPushButton:disabled {"
             "border-color: rgba(255, 255, 255, 0);"
             "background-color: transparent;"
-            "color: rgba(0, 175, 160, 0.5);"
+            "color: rgba(120, 200, 232, 0.46);"
             "}"
         )
 
@@ -1049,9 +1050,9 @@ class VistaAutenticacion(QWidget):
         return label
 
     def _mostrar_mensaje(self, label: QLabel, mensaje: str, es_exito: bool) -> None:
-        color_borde = "rgba(25, 135, 84, 0.22)" if es_exito else "rgba(180, 55, 55, 0.26)"
-        color_texto = "#0F5132" if es_exito else "#842029"
-        color_fondo = "rgba(55, 211, 153, 0.11)" if es_exito else "rgba(242, 116, 116, 0.13)"
+        color_borde = "rgba(45, 212, 191, 0.30)" if es_exito else "rgba(248, 113, 113, 0.32)"
+        color_texto = "#8CE9DC" if es_exito else "#FCA5A5"
+        color_fondo = "rgba(13, 84, 78, 0.34)" if es_exito else "rgba(104, 35, 43, 0.34)"
         label.setStyleSheet(
             "QLabel {"
             f"border: 1px solid {color_borde};"
@@ -1165,9 +1166,9 @@ class VistaAutenticacion(QWidget):
                 background: qlineargradient(
                     x1: 0, y1: 0,
                     x2: 1, y2: 1,
-                    stop: 0 #E8F4FA,
-                    stop: 0.58 #F7FBFE,
-                    stop: 1 #D7ECF6
+                    stop: 0 #050B13,
+                    stop: 0.48 #0A1825,
+                    stop: 1 #123445
                 );
             }}
             QStackedWidget#stackAutenticacion,
@@ -1181,26 +1182,33 @@ class VistaAutenticacion(QWidget):
                 background: qlineargradient(
                     x1: 0, y1: 0,
                     x2: 1, y2: 1,
-                    stop: 0 #081C2E,
-                    stop: 0.40 #123A50,
-                    stop: 0.72 #087B82,
-                    stop: 1 #00BFA6
+                    stop: 0 #06111F,
+                    stop: 0.40 #0A2638,
+                    stop: 0.72 #0B4B58,
+                    stop: 1 #087D74
                 );
             }}
             QFrame#auroraLoginSuperior {{
-                background: rgba(70, 218, 255, 0.18);
+                background: rgba(56, 189, 248, 0.15);
                 border-radius: 125px;
             }}
             QFrame#auroraLoginMedia {{
-                background: rgba(0, 191, 166, 0.16);
+                background: rgba(45, 212, 191, 0.14);
                 border-radius: 97px;
             }}
             QFrame#auroraLoginInferior {{
-                background: rgba(27, 161, 255, 0.16);
+                background: rgba(59, 130, 246, 0.13);
                 border-radius: 126px;
             }}
             QFrame#panelFormularioLogin {{
-                background: #FFFFFF;
+                background: qlineargradient(
+                    x1: 0, y1: 0,
+                    x2: 0.92, y2: 1,
+                    stop: 0 #111D29,
+                    stop: 0.55 #0D1722,
+                    stop: 1 #09121B
+                );
+                border-left: 1px solid rgba(120, 200, 232, 0.14);
             }}
             QLabel#logoMarcaLoginInstitucional {{
                 margin-bottom: 0;
@@ -1240,19 +1248,19 @@ class VistaAutenticacion(QWidget):
                 font-weight: 600;
             }}
             QFrame#badgeContexto {{
-                color: #008C7A;
-                background-color: rgba(0, 191, 166, 0.08);
-                border: 1px solid rgba(0, 191, 166, 0.28);
+                color: #64DCCB;
+                background-color: rgba(45, 212, 191, 0.10);
+                border: 1px solid rgba(45, 212, 191, 0.28);
                 border-radius: 12px;
                 margin: 0 0 6px 0;
             }}
             QLabel#badgeContextoIcono {{
-                color: #008C7A;
+                color: #64DCCB;
                 margin: 0;
                 padding: 0;
             }}
             QLabel#badgeContextoTexto {{
-                color: #008C7A;
+                color: #64DCCB;
                 font-size: 10px;
                 font-weight: 800;
                 letter-spacing: 0.3px;
@@ -1262,48 +1270,48 @@ class VistaAutenticacion(QWidget):
                 margin-bottom: -2px;
             }}
             QLabel#tituloPagina {{
-                color: #0F172A;
+                color: #F4F8FB;
                 font-size: 32px;
                 font-weight: 900;
                 letter-spacing: 0.1px;
             }}
             QLabel#subtituloPagina,
             QLabel#textoExplicativo {{
-                color: #5F5665;
+                color: #9FB0BF;
                 font-size: 16px;
                 line-height: 1.25;
             }}
             QLabel#pieLogin {{
-                color: #8D93A3;
+                color: #718597;
                 font-size: 12px;
                 font-weight: 600;
                 padding-top: 4px;
             }}
             QLabel#etiquetaCampo {{
-                color: #111827;
+                color: #DDE7EE;
                 font-size: 13px;
                 font-weight: 800;
                 letter-spacing: 0.1px;
             }}
             QLabel#textoAyudaLogin {{
-                color: #5F5665;
+                color: #91A4B5;
                 font-size: 13px;
                 font-weight: 500;
             }}
             QFrame#estadoAccesoLogin {{
-                background: rgba(240, 249, 255, 0.96);
-                border: 1px solid rgba(14, 165, 233, 0.14);
+                background: rgba(19, 43, 58, 0.94);
+                border: 1px solid rgba(56, 189, 248, 0.22);
                 border-radius: 12px;
             }}
             QLabel#textoEstadoAccesoLogin {{
-                color: #0F5F73;
+                color: #A9E3F7;
                 font-size: 12px;
                 font-weight: 700;
             }}
             QProgressBar#barraProgresoAccesoLogin {{
                 border: none;
                 border-radius: 2px;
-                background: rgba(14, 165, 233, 0.12);
+                background: rgba(56, 189, 248, 0.14);
             }}
             QProgressBar#barraProgresoAccesoLogin::chunk {{
                 border-radius: 2px;
@@ -1318,23 +1326,23 @@ class VistaAutenticacion(QWidget):
                 background: transparent;
                 border: none;
                 border-radius: 6px;
-                color: #00AFA0;
+                color: #64DCCB;
                 font-size: 13px;
                 font-weight: 800;
                 padding: 0 2px;
                 text-align: left;
             }}
             QPushButton#enlaceAyudaLogin:hover {{
-                background: rgba(0, 191, 166, 0.06);
-                color: #009685;
+                background: rgba(45, 212, 191, 0.09);
+                color: #8CE9DC;
             }}
             QPushButton#enlaceAyudaLogin:pressed {{
-                background: rgba(0, 191, 166, 0.09);
-                color: #008C7A;
+                background: rgba(45, 212, 191, 0.14);
+                color: #53CDBB;
             }}
             QPushButton#enlaceAyudaLogin:disabled {{
                 background: transparent;
-                color: #90A3B2;
+                color: #536879;
             }}
             QLineEdit,
             QPushButton#botonPrimario,

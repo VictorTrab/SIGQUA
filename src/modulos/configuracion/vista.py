@@ -233,7 +233,7 @@ class VistaConfiguracion(QWidget):
         self._campo_firma_reportes_pdf.setText(estado.reportes_pdf.firma_texto_linea)
         self._actualizar_estado_firma_reportes_pdf()
 
-        self._valor_intentos.setText(str(estado.seguridad.maximo_intentos_fallidos))
+        self._valor_intentos.setText("Desde el 5.º intento: 5, 10, 15, 30 y 60 min")
         self._valor_sesion.setText(self._texto_duracion_sesion(estado.seguridad.duracion_sesion_horas))
         self._valor_restablecimiento.setText("Administrativo")
         self._valor_cambio_clave.setText("Solo durante la activacion inicial")
@@ -978,7 +978,7 @@ class VistaConfiguracion(QWidget):
             "Seguridad local",
             "Controles simples para proteger el acceso administrativo.",
             [
-                self._crear_fila_resumen("Intentos permitidos", self._valor_intentos),
+                self._crear_fila_resumen("Espera por intentos fallidos", self._valor_intentos),
                 self._crear_bloque_campo("Tiempo de cierre automatico de sesion", self._combo_duracion_sesion),
                 self._crear_fila_resumen("Duracion actual", self._valor_sesion),
                 self._crear_fila_resumen(
