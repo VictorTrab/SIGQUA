@@ -10,7 +10,6 @@ from PySide6.QtCore import QtMsgType, qInstallMessageHandler
 
 PATRONES_QT_RUIDOSOS = (
     "QPropertyAnimation::updateState (opacity): Changing state of an animation without target",
-    "QWindowsWindow::setGeometry: Unable to set geometry",
     "QFont::setPointSize: Point size <= 0",
     "QFontDatabase: Cannot find font directory",
     "This plugin does not support propagateSizeHints()",

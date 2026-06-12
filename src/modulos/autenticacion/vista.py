@@ -694,9 +694,6 @@ class VistaAutenticacion(QWidget):
         copyright_login.setObjectName("copyrightLogin")
         fila_footer.addWidget(copyright_login)
         fila_footer.addStretch(1)
-        estado_local = QLabel("●  Sistema local")
-        estado_local.setObjectName("estadoLocalLogin")
-        fila_footer.addWidget(estado_local)
         layout.addLayout(fila_footer)
         return panel
 
@@ -1241,11 +1238,6 @@ class VistaAutenticacion(QWidget):
                 color: rgba(222, 240, 252, 0.95);
                 font-size: 13px;
                 font-weight: 500;
-            }}
-            QLabel#estadoLocalLogin {{
-                color: rgba(222, 240, 252, 0.95);
-                font-size: 13px;
-                font-weight: 600;
             }}
             QFrame#badgeContexto {{
                 color: #64DCCB;

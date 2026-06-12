@@ -19,6 +19,7 @@ if str(RUTA_SRC) not in sys.path:
     sys.path.insert(0, str(RUTA_SRC))
 
 from PySide6.QtCore import QTimer, Qt  # noqa: E402
+from PySide6.QtGui import QIcon  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication, QFrame, QLabel, QLineEdit, QPushButton, QScrollArea, QTableWidget, QTextEdit, QToolButton, QWidget  # noqa: E402
 
@@ -79,7 +80,11 @@ from modulos.historial_pagos.vista import VistaHistorialPagos  # noqa: E402
 from modulos.morosidad.vista import VistaMorosidad  # noqa: E402
 from modulos.pagos.vista import VistaPagos  # noqa: E402
 from modulos.planes_pago.vista import VistaPlanesPago  # noqa: E402
-from modulos.principal.vista import VistaModuloPrincipal  # noqa: E402
+from modulos.principal.vista import (  # noqa: E402
+    ANCHO_RUPTURA_DASHBOARD_AMPLIO,
+    ANCHO_RUPTURA_DASHBOARD_MEDIO,
+    VistaModuloPrincipal,
+)
 from modulos.principal.entidades import AnaliticaDashboard, EstadoModuloPrincipal, ModuloNavegacion  # noqa: E402
 from modulos.reportes.vista import VistaReportes  # noqa: E402
 from modulos.usuarios.entidades import PermisoSistema, ResumenUsuarios, RolSistema, UsuarioSistema  # noqa: E402
@@ -242,6 +247,10 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         self.assertIsNotNone(badge_icono)
         self.assertIsNotNone(badge_texto)
         self.assertIn("Bienvenido", [label.text() for label in vista._pagina_login.findChildren(QLabel)])
+        self.assertNotIn(
+            "Sistema local",
+            [label.text() for label in vista._pagina_login.findChildren(QLabel)],
+        )
         self.assertEqual(badge_texto.text(), "Acceso seguro")
         self.assertEqual(vista._boton_login.text(), "Iniciar sesión")
         self.assertIsNotNone(texto_ayuda)
@@ -395,8 +404,23 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
 
             gestor_rutas = GestorRutas(raiz_proyecto=raiz_temporal)
             _, ventana_principal, vista_autenticacion = crear_ventana_principal(gestor_rutas)
+            tamanos_icono = {
+                (tamano.width(), tamano.height())
+                for tamano in QIcon(
+                    str(gestor_rutas.obtener_ruta_icono_aplicacion())
+                ).availableSizes()
+            }
 
             self.assertIs(ventana_principal.centralWidget(), ventana_principal.contenedor_central)
+            self.assertIn((16, 16), tamanos_icono)
+            self.assertIn((32, 32), tamanos_icono)
+            self.assertIn((256, 256), tamanos_icono)
+            self.assertFalse(ventana_principal.icono_autenticacion.isNull())
+            self.assertFalse(ventana_principal.icono_shell.isNull())
+            self.assertEqual(
+                ventana_principal.windowIcon().cacheKey(),
+                ventana_principal.icono_autenticacion.cacheKey(),
+            )
             self.assertIs(ventana_principal.contenedor_central.currentWidget(), vista_autenticacion)
             self.assertFalse(ventana_principal.windowTitle().strip("\u200b"))
             self.assertEqual(ventana_principal.minimumWidth(), ANCHO_VENTANA_AUTENTICACION)
@@ -469,10 +493,14 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertIsInstance(ventana_principal.vista_planes_pago, VistaPlanesPago)
             self.assertIsInstance(ventana_principal.vista_historial_pagos, VistaHistorialPagos)
             self.assertIsInstance(ventana_principal.vista_configuracion, VistaConfiguracion)
+            self.assertEqual(
+                ventana_principal.windowIcon().cacheKey(),
+                ventana_principal.icono_shell.cacheKey(),
+            )
             self.assertFalse(
                 bool(ventana_principal.windowFlags() & Qt.WindowType.FramelessWindowHint)
             )
-            self.assertFalse(
+            self.assertTrue(
                 bool(ventana_principal.windowFlags() & Qt.WindowType.WindowMaximizeButtonHint)
             )
             self.assertTrue(
@@ -515,6 +543,10 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.assertIs(ventana_principal.centralWidget(), ventana_principal.contenedor_central)
             self.assertIs(ventana_principal.contenedor_central.currentWidget(), vista_autenticacion)
             self.assertIsNone(ventana_principal.sesion_activa)
+            self.assertEqual(
+                ventana_principal.windowIcon().cacheKey(),
+                ventana_principal.icono_autenticacion.cacheKey(),
+            )
             self.assertFalse(ventana_principal.windowTitle().strip("\u200b"))
             self.assertEqual(ventana_principal.contenedor_central.count(), 2)
             self.assertGreaterEqual(alto_minimo_principal, 0)
@@ -568,19 +600,27 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             self.aplicacion.processEvents()
             self.assertTrue(vista_principal._scroll_dashboard.widgetResizable())
 
+            def modo_esperado() -> str:
+                ancho = vista_principal._scroll_dashboard.viewport().width()
+                if ancho >= ANCHO_RUPTURA_DASHBOARD_AMPLIO:
+                    return "amplio"
+                if ancho >= ANCHO_RUPTURA_DASHBOARD_MEDIO:
+                    return "medio"
+                return "compacto"
+
             ventana_principal.resize(1200, 760)
             self.aplicacion.processEvents()
-            self.assertEqual(vista_principal._modo_dashboard_actual, "compacto")
+            self.assertEqual(vista_principal._modo_dashboard_actual, modo_esperado())
             self.assertGreater(vista_principal._scroll_dashboard.verticalScrollBar().maximum(), 0)
 
             ventana_principal.resize(1500, 960)
             self.aplicacion.processEvents()
-            self.assertEqual(vista_principal._modo_dashboard_actual, "medio")
+            self.assertEqual(vista_principal._modo_dashboard_actual, modo_esperado())
             self.assertGreater(vista_principal._scroll_dashboard.verticalScrollBar().maximum(), 0)
 
             ventana_principal.resize(1900, 1080)
             self.aplicacion.processEvents()
-            self.assertEqual(vista_principal._modo_dashboard_actual, "amplio")
+            self.assertEqual(vista_principal._modo_dashboard_actual, modo_esperado())
             self.assertIs(
                 vista_principal._stack_contenido.currentWidget(),
                 vista_principal._pagina_dashboard,
@@ -590,8 +630,38 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         finally:
             shutil.rmtree(raiz_temporal, ignore_errors=True)
 
-    def test_dashboard_conserva_paneles_al_redimensionar_con_sidebar_fijo(self) -> None:
+    def test_dashboard_sidebar_usa_layout_nativo_y_conserva_paneles_al_redimensionar(self) -> None:
         vista_principal = VistaModuloPrincipal()
+        vista_principal._reconstruir_sidebar(
+            (
+                ModuloNavegacion("dashboard", "Inicio", "Resumen.", "home.svg"),
+                ModuloNavegacion("barrios", "Barrios", "Barrios.", "map-2.svg"),
+                ModuloNavegacion("abonados", "Abonados", "Abonados.", "id.svg"),
+                ModuloNavegacion("casas", "Casas", "Casas.", "home.svg"),
+                ModuloNavegacion("pagos", "Pagos", "Pagos.", "receipt-2.svg"),
+                ModuloNavegacion(
+                    "historial_pagos",
+                    "Historial de pagos",
+                    "Historial.",
+                    "clock.svg",
+                ),
+                ModuloNavegacion("morosidad", "Morosidad", "Morosidad.", "alert.svg"),
+                ModuloNavegacion(
+                    "planes_pago",
+                    "Planes de pago",
+                    "Planes.",
+                    "calendar.svg",
+                ),
+                ModuloNavegacion("usuarios", "Usuarios", "Usuarios.", "users.svg"),
+                ModuloNavegacion("reportes", "Reportes", "Reportes.", "chart.svg"),
+                ModuloNavegacion(
+                    "configuracion",
+                    "Configuración",
+                    "Configuración.",
+                    "settings-2.svg",
+                ),
+            )
+        )
         vista_principal.resize(1200, 900)
         vista_principal.show()
         self.aplicacion.processEvents()
@@ -603,15 +673,32 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             vista_principal._panel_insights,
         )
         anchos_iniciales = tuple(panel.width() for panel in paneles)
+        self.assertGreaterEqual(vista_principal._sidebar.width(), 184)
+        self.assertLessEqual(vista_principal._sidebar.width(), 216)
+        self.assertEqual(
+            vista_principal._contenedor_botones.alignment(),
+            Qt.AlignmentFlag.AlignVCenter,
+        )
+        vista_principal.resize(1200, 560)
+        self.aplicacion.processEvents()
+        self.assertGreater(
+            vista_principal._scroll_navegacion.verticalScrollBar().maximum(),
+            0,
+        )
 
-        for _ in range(3):
-            vista_principal.resize(1500, 900)
-            self.aplicacion.processEvents()
-            vista_principal.resize(1200, 900)
-            self.aplicacion.processEvents()
+        vista_principal.resize(1500, 900)
+        self.aplicacion.processEvents()
+        self.assertGreaterEqual(vista_principal._sidebar.width(), 184)
+        self.assertLessEqual(vista_principal._sidebar.width(), 216)
 
+        vista_principal.resize(1900, 1030)
+        self.aplicacion.processEvents()
+        self.assertGreaterEqual(vista_principal._sidebar.width(), 184)
+        self.assertLessEqual(vista_principal._sidebar.width(), 216)
+
+        vista_principal.resize(1200, 900)
+        self.aplicacion.processEvents()
         self.assertEqual(vista_principal._modo_dashboard_actual, "compacto")
-        self.assertEqual(vista_principal._sidebar.width(), 184)
         self.assertEqual(tuple(panel.width() for panel in paneles), anchos_iniciales)
         vista_principal.close()
 
@@ -789,14 +876,21 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
         header_principal = vista_principal.findChild(QFrame, "headerPrincipal")
 
         self.assertEqual(vista_principal._sidebar.minimumWidth(), 184)
-        self.assertEqual(vista_principal._sidebar.maximumWidth(), 184)
+        self.assertEqual(vista_principal._sidebar.maximumWidth(), 216)
         self.assertIsNotNone(contenedor_sidebar)
-        self.assertEqual(contenedor_sidebar.width(), 208)
+        self.assertGreaterEqual(contenedor_sidebar.width(), 208)
+        self.assertLessEqual(contenedor_sidebar.width(), 240)
         self.assertGreater(vista_principal._sidebar.x(), 0)
         self.assertIsNone(vista_principal.findChild(QPushButton, "botonColapsarSidebar"))
         self.assertIsNotNone(logo)
         self.assertFalse(logo.pixmap().isNull())
-        self.assertEqual(logo.pixmap().width(), 128)
+        self.assertEqual(logo.pixmap().width(), 160)
+        self.assertGreaterEqual(encabezado_sidebar.height(), 68)
+        self.assertLessEqual(encabezado_sidebar.height(), 82)
+        self.assertEqual(
+            logo.mapTo(encabezado_sidebar, logo.rect().center()).x(),
+            encabezado_sidebar.rect().center().x(),
+        )
         self.assertIsNotNone(boton_perfil)
         self.assertLessEqual(boton_perfil.width(), 190)
         self.assertIsNone(vista_principal.findChild(QLabel, "indicadorPerfilHeader"))
@@ -828,6 +922,10 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             )
         )
         self.aplicacion.processEvents()
+        self.assertEqual(
+            vista_principal._contenedor_botones.alignment(),
+            Qt.AlignmentFlag.AlignVCenter,
+        )
         for codigo, texto in (
             ("historial_pagos", "Historial de pagos"),
             ("planes_pago", "Planes de pago"),

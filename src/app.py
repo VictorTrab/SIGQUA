@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-import ctypes
 import signal
 from typing import Callable
 
@@ -23,6 +22,7 @@ from comun.ui import (
     DialogoMensajeSigqua,
 )
 from comun.ui.qt_mensajes import configurar_filtro_mensajes_qt
+from comun.ui.iconos import obtener_pixmap_tabler_coloreado
 from modulos.autenticacion import (
     ControladorAutenticacion,
     SesionIniciada,
@@ -108,20 +108,8 @@ MARGEN_VENTANA_PRINCIPAL = 72
 MAXIMO_TAMANO_VENTANA = 16777215
 RETARDO_FASE_ARRANQUE_MS = 18
 TITULO_VENTANA_OCULTO = "\u200b"
-_GWL_STYLE = -16
-_GWL_EXSTYLE = -20
-_GCLP_HICON = -14
-_GCLP_HICONSM = -34
-_WS_MAXIMIZEBOX = 0x00010000
-_WS_EX_DLGMODALFRAME = 0x00000001
-_WM_SETICON = 0x0080
-_ICON_SMALL = 0
-_ICON_BIG = 1
-_ICON_SMALL2 = 2
-_SWP_NOSIZE = 0x0001
-_SWP_NOMOVE = 0x0002
-_SWP_NOZORDER = 0x0004
-_SWP_FRAMECHANGED = 0x0020
+COLOR_ICONO_VENTANA = "#D8EEF8"
+TAMANOS_ICONO_VENTANA = (16, 20, 24, 32, 40, 48, 64)
 FLAGS_VENTANA_AUTENTICACION = (
     Qt.WindowType.Window
     | Qt.WindowType.CustomizeWindowHint
@@ -130,7 +118,10 @@ FLAGS_VENTANA_AUTENTICACION = (
     | Qt.WindowType.WindowMinimizeButtonHint
     | Qt.WindowType.WindowCloseButtonHint
 )
-FLAGS_VENTANA_PRINCIPAL = FLAGS_VENTANA_AUTENTICACION
+FLAGS_VENTANA_PRINCIPAL = (
+    FLAGS_VENTANA_AUTENTICACION
+    | Qt.WindowType.WindowMaximizeButtonHint
+)
 
 
 class VentanaPrincipalSigqua(QMainWindow):
@@ -188,10 +179,7 @@ def crear_ventana_principal(
 
     ruta_icono = gestor_rutas.obtener_ruta_icono_aplicacion()
     if ruta_icono.exists():
-        icono = QIcon(str(ruta_icono))
-        aplicacion.setWindowIcon(icono)
-    else:
-        icono = QIcon()
+        aplicacion.setWindowIcon(QIcon(str(ruta_icono)))
 
     gestor_base_datos = GestorBaseDatos(gestor_rutas=gestor_rutas)
     gestor_base_datos.inicializar_base_datos()
@@ -264,8 +252,10 @@ def crear_ventana_principal(
     ventana_principal = VentanaPrincipalSigqua()
     ventana_principal.setWindowTitle(TITULO_VENTANA_OCULTO)
     ventana_principal.setCentralWidget(contenedor_central)
-    if not icono.isNull():
-        ventana_principal.setWindowIcon(icono)
+    ventana_principal.icono_autenticacion = _crear_icono_ventana_tabler(
+        "login-2.svg"
+    )
+    ventana_principal.icono_shell = _crear_icono_ventana_tabler("home-2.svg")
     _aplicar_modo_autenticacion(ventana_principal)
 
     controlador = ControladorAutenticacion(
@@ -316,7 +306,6 @@ def iniciar_aplicacion() -> int:
     temporizador_senales.timeout.connect(lambda: None)
     temporizador_senales.start(200)
     ventana_principal.show()
-    _programar_ocultamiento_icono_barra_titulo(ventana_principal)
     _centrar_ventana_en_pantalla(ventana_principal)
     logger.info("Aplicacion iniciada en modo autenticacion fija.")
     return aplicacion.exec()
@@ -1045,6 +1034,8 @@ def _aplicar_modo_autenticacion(ventana_principal: QMainWindow) -> None:
         ventana_principal.hide()
     ventana_principal.showNormal()
     ventana_principal.setWindowFlags(FLAGS_VENTANA_AUTENTICACION)
+    icono_autenticacion = getattr(ventana_principal, "icono_autenticacion", QIcon())
+    ventana_principal.setWindowIcon(icono_autenticacion)
     if isinstance(ventana_principal, VentanaPrincipalSigqua):
         ventana_principal.establecer_modo_autenticacion(True)
     ventana_principal.setMinimumSize(
@@ -1063,121 +1054,71 @@ def _aplicar_modo_autenticacion(ventana_principal: QMainWindow) -> None:
     if estaba_visible:
         ventana_principal.showNormal()
         ventana_principal.show()
-    _programar_ocultamiento_icono_barra_titulo(ventana_principal)
     _centrar_ventana_en_pantalla(ventana_principal)
 
 
 def _aplicar_modo_principal(ventana_principal: QMainWindow) -> None:
-    """Libera restricciones del login y abre el shell principal maximizado."""
+    """Abre el shell maximizado y deja la geometria al gestor nativo."""
     estaba_visible = ventana_principal.isVisible()
     if estaba_visible:
         ventana_principal.hide()
     ventana_principal.showNormal()
     ventana_principal.setWindowFlags(FLAGS_VENTANA_PRINCIPAL)
+    icono_shell = getattr(ventana_principal, "icono_shell", QIcon())
+    ventana_principal.setWindowIcon(icono_shell)
     if isinstance(ventana_principal, VentanaPrincipalSigqua):
         ventana_principal.establecer_modo_autenticacion(False)
     ventana_principal.setMinimumSize(0, 0)
     ventana_principal.setMaximumSize(MAXIMO_TAMANO_VENTANA, MAXIMO_TAMANO_VENTANA)
-    pantalla = ventana_principal.screen() or QApplication.primaryScreen()
-    if pantalla is not None:
-        geometria_disponible = pantalla.availableGeometry()
-        ancho_objetivo = max(
-            min(ANCHO_VENTANA_PRINCIPAL, geometria_disponible.width()),
-            geometria_disponible.width() - MARGEN_VENTANA_PRINCIPAL,
-        )
-        alto_objetivo = max(
-            min(ALTO_VENTANA_PRINCIPAL, geometria_disponible.height()),
-            geometria_disponible.height() - MARGEN_VENTANA_PRINCIPAL,
-        )
-        ancho_objetivo = min(ancho_objetivo, geometria_disponible.width())
-        alto_objetivo = min(alto_objetivo, geometria_disponible.height())
-        ventana_principal.resize(ancho_objetivo, alto_objetivo)
-    else:
-        ventana_principal.resize(ANCHO_VENTANA_PRINCIPAL, ALTO_VENTANA_PRINCIPAL)
-    _maximizar_respetando_area_util(ventana_principal)
-    _programar_ocultamiento_icono_barra_titulo(ventana_principal)
-
-
-def _programar_ocultamiento_icono_barra_titulo(
-    ventana_principal: QMainWindow,
-) -> None:
-    _ocultar_icono_barra_titulo_windows(ventana_principal)
-    QTimer.singleShot(
-        0,
-        lambda: _ocultar_icono_barra_titulo_windows(ventana_principal),
-    )
-    QTimer.singleShot(
-        80,
-        lambda: _ocultar_icono_barra_titulo_windows(ventana_principal),
-    )
-
-
-def _ocultar_icono_barra_titulo_windows(ventana_principal: QMainWindow) -> None:
-    """Oculta el icono del marco nativo sin quitarlo de la barra de tareas."""
-    if sys.platform != "win32":
-        return
-
-    hwnd = int(ventana_principal.winId())
-    user32 = ctypes.windll.user32
-    estilo_extendido = user32.GetWindowLongW(hwnd, _GWL_EXSTYLE)
-    user32.SetWindowLongW(
-        hwnd,
-        _GWL_EXSTYLE,
-        estilo_extendido | _WS_EX_DLGMODALFRAME,
-    )
-    for tipo_icono in (_ICON_SMALL, _ICON_BIG, _ICON_SMALL2):
-        user32.SendMessageW(hwnd, _WM_SETICON, tipo_icono, 0)
-    user32.SetClassLongPtrW(hwnd, _GCLP_HICON, 0)
-    user32.SetClassLongPtrW(hwnd, _GCLP_HICONSM, 0)
-    user32.SetWindowPos(
-        hwnd,
-        0,
-        0,
-        0,
-        0,
-        _SWP_NOSIZE | _SWP_NOMOVE | _SWP_NOZORDER | _SWP_FRAMECHANGED,
-    )
-
-
-def _maximizar_respetando_area_util(ventana_principal: QMainWindow) -> None:
-    """Maximiza con semantica nativa sin dejar visible el boton maximizar."""
-    if sys.platform != "win32":
-        ventana_principal.showMaximized()
-        return
-
-    hwnd = int(ventana_principal.winId())
-    user32 = ctypes.windll.user32
-    estilo = user32.GetWindowLongW(hwnd, _GWL_STYLE)
-    user32.SetWindowLongW(hwnd, _GWL_STYLE, estilo | _WS_MAXIMIZEBOX)
-    user32.SetWindowPos(
-        hwnd,
-        0,
-        0,
-        0,
-        0,
-        _SWP_NOSIZE | _SWP_NOMOVE | _SWP_NOZORDER | _SWP_FRAMECHANGED,
-    )
+    ventana_principal.resize(ANCHO_VENTANA_PRINCIPAL, ALTO_VENTANA_PRINCIPAL)
     ventana_principal.showMaximized()
     QTimer.singleShot(
         0,
-        lambda: _retirar_boton_maximizar_nativo(ventana_principal),
+        lambda: _verificar_maximizado_en_area_util(ventana_principal),
+    )
+    QTimer.singleShot(
+        120,
+        lambda: _verificar_maximizado_en_area_util(ventana_principal),
     )
 
 
-def _retirar_boton_maximizar_nativo(ventana_principal: QMainWindow) -> None:
-    if sys.platform != "win32" or not ventana_principal.isVisible():
+def _crear_icono_ventana_tabler(nombre_icono: str) -> QIcon:
+    """Construye un icono Tabler nitido para el marco nativo."""
+    icono = QIcon()
+    for tamano in TAMANOS_ICONO_VENTANA:
+        icono.addPixmap(
+            obtener_pixmap_tabler_coloreado(
+                nombre_icono=nombre_icono,
+                color_hexadecimal=COLOR_ICONO_VENTANA,
+                tamano=tamano,
+            )
+        )
+    return icono
+
+
+def _verificar_maximizado_en_area_util(ventana_principal: QMainWindow) -> None:
+    """Registra si el gestor nativo maximizo fuera del area util."""
+    if not ventana_principal.isVisible():
         return
-    hwnd = int(ventana_principal.winId())
-    user32 = ctypes.windll.user32
-    estilo = user32.GetWindowLongW(hwnd, _GWL_STYLE)
-    user32.SetWindowLongW(hwnd, _GWL_STYLE, estilo & ~_WS_MAXIMIZEBOX)
-    user32.SetWindowPos(
-        hwnd,
-        0,
-        0,
-        0,
-        0,
-        _SWP_NOSIZE | _SWP_NOMOVE | _SWP_NOZORDER | _SWP_FRAMECHANGED,
+    pantalla = ventana_principal.screen() or QApplication.primaryScreen()
+    if pantalla is None:
+        return
+
+    disponible = pantalla.availableGeometry()
+    marco = ventana_principal.frameGeometry()
+    if disponible.contains(marco):
+        logger.info(
+            "Shell maximizado dentro del area util: pantalla=%sx%s marco=%sx%s.",
+            disponible.width(),
+            disponible.height(),
+            marco.width(),
+            marco.height(),
+        )
+        return
+    logger.warning(
+        "Shell maximizado fuera del area util: disponible=%s marco=%s.",
+        disponible.getRect(),
+        marco.getRect(),
     )
 
 

@@ -85,9 +85,12 @@ from modulos.principal.entidades import (
 
 
 COLOR_FONDO_PRINCIPAL = "#101214"
-ANCHO_MINIMO_SHELL_PRINCIPAL = 960
-ALTO_MINIMO_SHELL_PRINCIPAL = 640
-ANCHO_SIDEBAR = 184
+ANCHO_MINIMO_SHELL_PRINCIPAL = 720
+ALTO_MINIMO_SHELL_PRINCIPAL = 560
+ANCHO_SIDEBAR_MINIMO = 184
+ANCHO_SIDEBAR_MAXIMO = 216
+ANCHO_CONTENEDOR_SIDEBAR_MINIMO = 208
+ANCHO_CONTENEDOR_SIDEBAR_MAXIMO = 240
 ANCHO_RUPTURA_DASHBOARD_AMPLIO = 1320
 ANCHO_RUPTURA_DASHBOARD_MEDIO = 980
 ANCHO_RUPTURA_METRICAS_6_COLUMNAS = 1120
@@ -670,7 +673,11 @@ class BotonSidebar(QPushButton):
 
         self._contenido = QWidget()
         self._contenido.setObjectName("contenidoBotonSidebar")
-        self._contenido.setFixedWidth(148)
+        self._contenido.setMinimumWidth(0)
+        self._contenido.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
         self._contenido.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         layout_contenido = QHBoxLayout(self._contenido)
         layout_contenido.setContentsMargins(0, 0, 0, 0)
@@ -690,9 +697,8 @@ class BotonSidebar(QPushButton):
 
         layout_contenido.addWidget(self._icono, 0, Qt.AlignmentFlag.AlignVCenter)
         layout_contenido.addWidget(self._texto, 1, Qt.AlignmentFlag.AlignVCenter)
-        layout.addStretch(1)
-        layout.addWidget(self._contenido, 0, Qt.AlignmentFlag.AlignVCenter)
-        layout.addStretch(1)
+        layout.setContentsMargins(10, 0, 10, 0)
+        layout.addWidget(self._contenido, 1, Qt.AlignmentFlag.AlignVCenter)
 
     def text(self) -> str:
         return self._texto_sidebar
@@ -728,7 +734,6 @@ class BotonSidebar(QPushButton):
         self.style().polish(self)
         self._texto.style().unpolish(self._texto)
         self._texto.style().polish(self._texto)
-
 
 class SeccionSidebarDesplegable(QFrame):
     """Agrupa modulos del sidebar en bloques compactos."""
@@ -1755,15 +1760,24 @@ class VistaModuloPrincipal(QWidget):
 
         self._contenedor_sidebar = QWidget()
         self._contenedor_sidebar.setObjectName("contenedorSidebarFlotante")
-        self._contenedor_sidebar.setFixedWidth(ANCHO_SIDEBAR + 24)
+        self._contenedor_sidebar.setMinimumWidth(ANCHO_CONTENEDOR_SIDEBAR_MINIMO)
+        self._contenedor_sidebar.setMaximumWidth(ANCHO_CONTENEDOR_SIDEBAR_MAXIMO)
+        self._contenedor_sidebar.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Expanding,
+        )
         layout_contenedor_sidebar = QVBoxLayout(self._contenedor_sidebar)
         layout_contenedor_sidebar.setContentsMargins(14, 14, 10, 14)
         layout_contenedor_sidebar.setSpacing(0)
 
         self._sidebar = QFrame()
         self._sidebar.setObjectName("sidebarPrincipal")
-        self._sidebar.setFixedWidth(ANCHO_SIDEBAR)
-        self._sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        self._sidebar.setMinimumWidth(ANCHO_SIDEBAR_MINIMO)
+        self._sidebar.setMaximumWidth(ANCHO_SIDEBAR_MAXIMO)
+        self._sidebar.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
         sombra_sidebar = QGraphicsDropShadowEffect(self._sidebar)
         sombra_sidebar.setBlurRadius(22)
         sombra_sidebar.setOffset(0, 8)
@@ -1774,7 +1788,8 @@ class VistaModuloPrincipal(QWidget):
         layout_sidebar.setContentsMargins(8, 14, 8, 12)
         layout_sidebar.setSpacing(10)
 
-        layout_sidebar.addWidget(self._crear_encabezado_sidebar())
+        self._encabezado_sidebar = self._crear_encabezado_sidebar()
+        layout_sidebar.addWidget(self._encabezado_sidebar)
 
         self._scroll_navegacion = QScrollArea()
         self._scroll_navegacion.setObjectName("scrollNavegacionSidebar")
@@ -1788,6 +1803,7 @@ class VistaModuloPrincipal(QWidget):
         self._contenedor_botones = QVBoxLayout(contenedor_navegacion)
         self._contenedor_botones.setContentsMargins(0, 0, 0, 0)
         self._contenedor_botones.setSpacing(12)
+        self._contenedor_botones.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         self._scroll_navegacion.setWidget(contenedor_navegacion)
         layout_sidebar.addWidget(self._scroll_navegacion, 1)
 
@@ -1835,8 +1851,8 @@ class VistaModuloPrincipal(QWidget):
         layout_panel.addWidget(header)
         layout_panel.addWidget(self._stack_contenido, 1)
 
-        layout_contenedor_sidebar.addWidget(self._sidebar)
-        layout_raiz.addWidget(self._contenedor_sidebar)
+        layout_contenedor_sidebar.addWidget(self._sidebar, 1)
+        layout_raiz.addWidget(self._contenedor_sidebar, 0)
         layout_raiz.addWidget(panel, 1)
 
     def _actualizar_encabezado_modulo(self, codigo: str) -> None:
@@ -2273,8 +2289,6 @@ class VistaModuloPrincipal(QWidget):
             widget_seccion.marcar_modulo_activo(self._modulo_activo)
             self._contenedor_botones.addWidget(widget_seccion)
 
-        self._contenedor_botones.addStretch(1)
-
     def _solicitar_modulo(self, codigo: str) -> None:
         self.modulo_solicitado.emit(codigo)
         self.mostrar_modulo(codigo)
@@ -2322,9 +2336,14 @@ class VistaModuloPrincipal(QWidget):
     def _crear_encabezado_sidebar(self) -> QWidget:
         encabezado = QWidget()
         encabezado.setObjectName("encabezadoSidebar")
-        encabezado.setFixedHeight(54)
+        encabezado.setMinimumHeight(68)
+        encabezado.setMaximumHeight(82)
+        encabezado.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Fixed,
+        )
         layout = QVBoxLayout(encabezado)
-        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setContentsMargins(4, 8, 4, 8)
         layout.setSpacing(0)
 
         self._logo_sidebar = QLabel()
@@ -2333,11 +2352,11 @@ class VistaModuloPrincipal(QWidget):
         ruta_logo = GestorRutas().obtener_ruta_logo_marca()
         pixmap_logo = obtener_pixmap_marca(
             ruta_marca=ruta_logo,
-            ancho_logico=128,
+            ancho_logico=160,
             factor_escala=self.devicePixelRatioF(),
         )
         self._logo_sidebar.setPixmap(pixmap_logo)
-        layout.addWidget(self._logo_sidebar)
+        layout.addWidget(self._logo_sidebar, 0, Qt.AlignmentFlag.AlignCenter)
         return encabezado
 
     @staticmethod
