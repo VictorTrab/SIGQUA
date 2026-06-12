@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from comun.actualizaciones import EventoModuloActualizado, bus_actualizaciones_modulos
+from comun.cobros import ErrorCicloCobro
 from modulos.autenticacion.entidades import UsuarioAutenticado
 from modulos.pagos.entidades import FormularioPago, ResumenConfirmacionPago, ResultadoPago
 from modulos.pagos.servicio import ServicioPagos
@@ -41,7 +42,11 @@ class ControladorPagos:
         self.vista_pagos.registrar_pago_plan_solicitado.connect(self._registrar_pago_plan)
 
     def _refrescar(self, filtro: str = "") -> None:
-        estado = self.servicio_pagos.obtener_estado(filtro=filtro)
+        try:
+            estado = self.servicio_pagos.obtener_estado(filtro=filtro)
+        except ErrorCicloCobro as error:
+            self.vista_pagos.mostrar_mensaje(str(error), es_error=True)
+            return
         self.vista_pagos.mostrar_estado(
             estado,
             self.servicio_pagos.formatear_moneda,

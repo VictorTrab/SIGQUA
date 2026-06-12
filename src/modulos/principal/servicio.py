@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from comun.cobros import ServicioCicloCobro
 from modulos.autenticacion.entidades import UsuarioAutenticado
 from modulos.principal.entidades import EstadoModuloPrincipal, ModuloNavegacion
 from modulos.principal.repositorio import RepositorioModuloPrincipal
@@ -25,13 +26,20 @@ MODULOS_OPERATIVOS = (
 class ServicioModuloPrincipal:
     """Orquesta el estado inicial del shell principal."""
 
-    def __init__(self, repositorio_modulo_principal: RepositorioModuloPrincipal) -> None:
+    def __init__(
+        self,
+        repositorio_modulo_principal: RepositorioModuloPrincipal,
+        servicio_ciclo_cobro: ServicioCicloCobro | None = None,
+    ) -> None:
         self.repositorio_modulo_principal = repositorio_modulo_principal
+        self._servicio_ciclo_cobro = servicio_ciclo_cobro
 
     def obtener_estado_para_usuario(
         self,
         usuario: UsuarioAutenticado,
     ) -> EstadoModuloPrincipal:
+        if self._servicio_ciclo_cobro is not None:
+            self._servicio_ciclo_cobro.ejecutar()
         modulos_visibles = tuple(
             modulo for modulo in MODULOS_OPERATIVOS if self._puede_ver_modulo(usuario, modulo)
         )

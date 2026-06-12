@@ -938,6 +938,56 @@ class TestPagos(unittest.TestCase):
         self.assertEqual(cuotas[0], ("PAGADO", 0))
         self.assertEqual(cuotas[1], ("PAGADO", 0))
 
+    def test_repositorio_rechaza_pago_parcial_de_mensualidad(self) -> None:
+        with closing(self.gestor_base_datos.obtener_conexion()) as conexion:
+            with self.assertRaisesRegex(ValueError, "saldo completo"):
+                self.repositorio._actualizar_saldo_cargo(
+                    conexion,
+                    cargo_id=2,
+                    monto_pagado=10000,
+                )
+            fila = conexion.execute(
+                "SELECT estado, saldo_pendiente_centavos FROM cargos WHERE id = 2;"
+            ).fetchone()
+
+        self.assertEqual((fila["estado"], fila["saldo_pendiente_centavos"]), ("VENCIDO", 35000))
+
+    def test_repositorio_rechaza_pago_parcial_de_cuota(self) -> None:
+        casa_id = self._crear_casa_activa_sin_cargos()
+        self._crear_plan_activo_para_casa(casa_id)
+        diagnostico = self.servicio.obtener_diagnostico_plan(casa_id)
+        assert diagnostico is not None
+        formulario = FormularioPago(
+            casa_id=casa_id,
+            tipo_pago="PLAN_PAGO",
+            cantidad_meses=0,
+            metodo_pago_id=self._obtener_metodo("EFECTIVO"),
+            plan_pago_id=diagnostico.plan_pago_id,
+            cuotas_plan_pago_ids=(diagnostico.cuotas_cobrables[0].cuota_id,),
+        )
+        confirmacion = self.servicio.preparar_confirmacion(formulario)
+        assert isinstance(confirmacion, ResumenConfirmacionPago)
+        confirmacion.detalles[0].monto_centavos -= 1
+
+        with closing(self.gestor_base_datos.obtener_conexion()) as conexion:
+            with self.assertRaisesRegex(ValueError, "saldo completo"):
+                self.repositorio._persistir_detalles_plan_pago(
+                    conexion,
+                    pago_id=1,
+                    resumen=confirmacion,
+                )
+            fila = conexion.execute(
+                """
+                SELECT estado, saldo_pendiente_centavos
+                FROM cuotas_plan_pago
+                WHERE id = ?;
+                """,
+                (confirmacion.detalles[0].cargo_id,),
+            ).fetchone()
+
+        self.assertNotEqual(fila["estado"], "PAGADO")
+        self.assertGreater(fila["saldo_pendiente_centavos"], 0)
+
     def test_controlador_avanza_flujo_plan_con_cuota_preseleccionada(self) -> None:
         app = QApplication.instance() or QApplication([])
         vista = VistaPagos()

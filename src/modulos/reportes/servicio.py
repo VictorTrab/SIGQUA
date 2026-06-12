@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from comun.cobros import ServicioCicloCobro
 from comun.configuracion.identidad_empresa import (
     CLAVES_IDENTIDAD_EMPRESA,
     CLAVES_IDENTIDAD_LEGADAS_JUNTA,
@@ -73,6 +74,7 @@ class ServicioReportes:
         repositorio_configuracion: RepositorioConfiguracionSQLite | None = None,
         gestor_rutas: GestorRutas | None = None,
         servicio_reporte_pdf: ServicioReportePdf | None = None,
+        servicio_ciclo_cobro: ServicioCicloCobro | None = None,
     ) -> None:
         self.repositorio_reportes = repositorio_reportes
         self._repositorio_configuracion = repositorio_configuracion
@@ -80,12 +82,15 @@ class ServicioReportes:
         self._servicio_reporte_pdf = servicio_reporte_pdf or ServicioReportePdf(
             gestor_rutas=self._gestor_rutas,
         )
+        self._servicio_ciclo_cobro = servicio_ciclo_cobro
 
     def obtener_estado(
         self,
         codigo_reporte: str = "",
         filtros: dict[str, str] | None = None,
     ) -> EstadoReportes:
+        if self._servicio_ciclo_cobro is not None:
+            self._servicio_ciclo_cobro.ejecutar()
         filtros_normalizados = self._normalizar_filtros(filtros)
         self._validar_rango(
             filtros_normalizados.get("fecha_desde", ""),

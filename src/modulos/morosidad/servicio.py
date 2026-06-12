@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
+from comun.cobros import ServicioCicloCobro
 from comun.configuracion.identidad_empresa import (
     CLAVES_IDENTIDAD_EMPRESA,
     CLAVES_IDENTIDAD_LEGADAS_JUNTA,
@@ -53,14 +54,17 @@ class ServicioMorosidad:
         repositorio_morosidad: RepositorioMorosidad,
         gestor_rutas: GestorRutas | None = None,
         servicio_estado_cuenta: ServicioEstadoCuenta | None = None,
+        servicio_ciclo_cobro: ServicioCicloCobro | None = None,
     ) -> None:
         self._repositorio_morosidad = repositorio_morosidad
         self._gestor_rutas = gestor_rutas or GestorRutas()
         self._servicio_estado_cuenta = servicio_estado_cuenta or ServicioEstadoCuenta(
             gestor_rutas=self._gestor_rutas
         )
+        self._servicio_ciclo_cobro = servicio_ciclo_cobro
 
     def obtener_estado(self, filtros: FiltroMorosidad | None = None, pagina: int = 1) -> EstadoMorosidad:
+        self._ejecutar_ciclo_cobro()
         filtros = filtros or FiltroMorosidad()
         pagina = max(1, pagina)
         rangos = self.obtener_parametros_mora_visual()
@@ -100,6 +104,7 @@ class ServicioMorosidad:
         return EstadoMorosidad(resumen=resumen, pagina=pagina_resultado, filtros=filtros)
 
     def obtener_detalle(self, abonado_id: int) -> DetalleMorosidad | None:
+        self._ejecutar_ciclo_cobro()
         detalle = self._repositorio_morosidad.obtener_detalle_abonado(abonado_id)
         if detalle is None:
             return None
@@ -288,3 +293,7 @@ class ServicioMorosidad:
         if meses_vencidos <= media:
             return FILTRO_MOROSIDAD_MEDIA
         return FILTRO_MOROSIDAD_SEVERA
+
+    def _ejecutar_ciclo_cobro(self) -> None:
+        if self._servicio_ciclo_cobro is not None:
+            self._servicio_ciclo_cobro.ejecutar()

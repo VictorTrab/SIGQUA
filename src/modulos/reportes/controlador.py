@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from comun.actualizaciones import EventoModuloActualizado, bus_actualizaciones_modulos
+from comun.cobros import ErrorCicloCobro
 from comun.ui.documentos_pdf import abrir_documento_pdf
 from modulos.autenticacion.entidades import UsuarioAutenticado
 from modulos.reportes.servicio import ServicioReportes
@@ -36,7 +37,7 @@ class ControladorReportes:
                 codigo_reporte=self._codigo_reporte_actual,
                 filtros=self._filtros_actuales,
             )
-        except ValueError as error:
+        except (ErrorCicloCobro, ValueError) as error:
             self.vista_reportes.mostrar_mensaje(str(error), es_error=True)
             return
         if not self._codigo_reporte_actual:
@@ -101,7 +102,7 @@ class ControladorReportes:
                 generado_por=self._resolver_nombre_actor(),
                 directorio_destino=directorio_destino,
             )
-        except (OSError, ValueError) as error:
+        except (ErrorCicloCobro, OSError, ValueError) as error:
             self.vista_reportes.mostrar_mensaje(str(error), es_error=True)
             return
         finally:

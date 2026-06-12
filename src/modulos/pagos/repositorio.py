@@ -1094,20 +1094,19 @@ class RepositorioPagosSQLite:
                 raise ValueError("No se pueden mezclar cuotas de planes distintos en un mismo pago.")
             if saldo_actual <= 0:
                 raise ValueError("Una de las cuotas seleccionadas ya no tiene saldo pendiente.")
-            nuevo_saldo = max(0, saldo_actual - detalle.monto_centavos)
-            nuevo_estado = "PAGADO" if nuevo_saldo == 0 else "PARCIAL"
+            if detalle.monto_centavos != saldo_actual:
+                raise ValueError("Cada cuota debe pagarse por su saldo completo.")
             conexion.execute(
                 """
                 UPDATE cuotas_plan_pago
-                SET saldo_pendiente_centavos = ?,
-                    estado = ?,
+                SET saldo_pendiente_centavos = 0,
+                    estado = 'PAGADO',
                     actualizado_en = datetime('now', 'localtime')
                 WHERE id = ?;
                 """,
-                (nuevo_saldo, nuevo_estado, detalle.cargo_id),
+                (detalle.cargo_id,),
             )
-            if nuevo_estado == "PAGADO":
-                cuotas_pagadas += 1
+            cuotas_pagadas += 1
             conexion.execute(
                 """
                 INSERT INTO pagos_detalle(
@@ -1373,10 +1372,11 @@ class RepositorioPagosSQLite:
                 estado_administrativo = 'OPERATIVA',
                 motivo_estado_administrativo = 'NINGUNO',
                 ha_tenido_servicio_activo = 1,
+                fecha_inicio_cobro = ?,
                 actualizado_en = datetime('now', 'localtime')
             WHERE id = ?;
             """,
-            (resumen.casa.casa_id,),
+            (fecha_activacion.isoformat(), resumen.casa.casa_id),
         )
 
     @staticmethod
@@ -1392,19 +1392,17 @@ class RepositorioPagosSQLite:
         if fila is None:
             raise ValueError("Cargo no encontrado.")
         saldo_actual = int(fila["saldo_pendiente_centavos"] or 0)
-        if monto_pagado > saldo_actual:
-            raise ValueError("El pago excede el saldo del cargo.")
-        nuevo_saldo = saldo_actual - monto_pagado
-        nuevo_estado = "PAGADO" if nuevo_saldo == 0 else "PARCIAL"
+        if monto_pagado != saldo_actual:
+            raise ValueError("La mensualidad debe pagarse por el saldo completo del cargo.")
         conexion.execute(
             """
             UPDATE cargos
-            SET saldo_pendiente_centavos = ?,
-                estado = ?,
+            SET saldo_pendiente_centavos = 0,
+                estado = 'PAGADO',
                 actualizado_en = datetime('now', 'localtime')
             WHERE id = ?;
             """,
-            (nuevo_saldo, nuevo_estado, cargo_id),
+            (cargo_id,),
         )
 
     @staticmethod

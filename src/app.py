@@ -12,6 +12,7 @@ from PySide6.QtGui import QCloseEvent, QFont, QIcon
 from PySide6.QtWidgets import QApplication, QDialog, QMainWindow, QSizePolicy
 
 from comun.base_datos import GestorBaseDatos
+from comun.cobros import ErrorCicloCobro, RepositorioCicloCobroSQLite, ServicioCicloCobro
 from comun.configuracion.gestor_rutas import GestorRutas
 from comun.respaldo import ServicioRespaldoLocal
 from comun.logs import obtener_logger_sigqua
@@ -184,6 +185,10 @@ def crear_ventana_principal(
     gestor_base_datos = GestorBaseDatos(gestor_rutas=gestor_rutas)
     gestor_base_datos.inicializar_base_datos()
     logger.info("Base de datos inicializada en %s", gestor_rutas.obtener_ruta_base_datos())
+    servicio_ciclo_cobro = ServicioCicloCobro(
+        RepositorioCicloCobroSQLite(gestor_base_datos)
+    )
+    servicio_ciclo_cobro.ejecutar()
 
     repositorio_autenticacion = RepositorioAutenticacionSQLite(gestor_base_datos)
     repositorio_configuracion = RepositorioConfiguracionSQLite(gestor_base_datos)
@@ -216,6 +221,7 @@ def crear_ventana_principal(
         repositorio_pagos,
         gestor_rutas=gestor_rutas,
         servicio_comprobantes=servicio_comprobantes,
+        servicio_ciclo_cobro=servicio_ciclo_cobro,
     )
     repositorio_historial_pagos = RepositorioHistorialPagosSQLite(gestor_base_datos)
     servicio_historial_pagos = ServicioHistorialPagos(
@@ -227,12 +233,14 @@ def crear_ventana_principal(
     servicio_morosidad = ServicioMorosidad(
         repositorio_morosidad,
         gestor_rutas=gestor_rutas,
+        servicio_ciclo_cobro=servicio_ciclo_cobro,
     )
     repositorio_reportes = RepositorioReportesSQLite(gestor_base_datos)
     servicio_reportes = ServicioReportes(
         repositorio_reportes,
         repositorio_configuracion=repositorio_configuracion,
         gestor_rutas=gestor_rutas,
+        servicio_ciclo_cobro=servicio_ciclo_cobro,
     )
     servicio_configuracion = ServicioConfiguracion(
         repositorio_configuracion,
@@ -275,6 +283,7 @@ def crear_ventana_principal(
     ventana_principal.controlador_autenticacion = controlador
     ventana_principal.gestor_rutas = gestor_rutas
     ventana_principal.gestor_base_datos = gestor_base_datos
+    ventana_principal.servicio_ciclo_cobro = servicio_ciclo_cobro
     ventana_principal.servicio_autenticacion = servicio_autenticacion
     ventana_principal.servicio_usuarios = servicio_usuarios
     ventana_principal.servicio_barrios = servicio_barrios
@@ -300,7 +309,20 @@ def crear_ventana_principal(
 
 def iniciar_aplicacion() -> int:
     """Inicia la aplicacion mostrando el login en tamano fijo."""
-    aplicacion, ventana_principal, _ = crear_ventana_principal()
+    try:
+        aplicacion, ventana_principal, _ = crear_ventana_principal()
+    except ErrorCicloCobro as error:
+        logger.error("SIGQUA bloqueo el arranque por un fallo del ciclo de cobro.")
+        aplicacion = QApplication.instance() or QApplication(sys.argv)
+        DialogoMensajeSigqua(
+            titulo="Cobros no actualizados",
+            mensaje=(
+                f"{error} SIGQUA no se iniciara para evitar mostrar "
+                "informacion financiera desactualizada."
+            ),
+            variante="error",
+        ).exec()
+        return 1
     signal.signal(signal.SIGINT, lambda *_: aplicacion.quit())
     temporizador_senales = QTimer(aplicacion)
     temporizador_senales.timeout.connect(lambda: None)
@@ -348,6 +370,7 @@ def _manejar_autenticacion_exitosa(
         vista_modulo_principal = VistaModuloPrincipal()
         servicio_modulo_principal = ServicioModuloPrincipal(
             RepositorioModuloPrincipalSQLite(ventana_principal.gestor_base_datos),
+            servicio_ciclo_cobro=ventana_principal.servicio_ciclo_cobro,
         )
         controlador_modulo_principal = ControladorModuloPrincipal(
             servicio_modulo_principal=servicio_modulo_principal,
@@ -513,6 +536,7 @@ def _asegurar_shell_principal_instanciado(
     vista_modulo_principal = VistaModuloPrincipal()
     servicio_modulo_principal = ServicioModuloPrincipal(
         RepositorioModuloPrincipalSQLite(ventana_principal.gestor_base_datos),
+        servicio_ciclo_cobro=ventana_principal.servicio_ciclo_cobro,
     )
     controlador_modulo_principal = ControladorModuloPrincipal(
         servicio_modulo_principal=servicio_modulo_principal,

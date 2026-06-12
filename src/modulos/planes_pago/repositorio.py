@@ -888,10 +888,11 @@ class RepositorioPlanesPagoSQLite:
                 estado_administrativo = 'OPERATIVA',
                 motivo_estado_administrativo = 'NINGUNO',
                 ha_tenido_servicio_activo = 1,
+                fecha_inicio_cobro = ?,
                 actualizado_en = datetime('now', 'localtime')
             WHERE id = ?;
             """,
-            (plan.casa_id,),
+            (fecha_activacion, plan.casa_id),
         )
 
     @staticmethod

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from comun.actualizaciones import EventoModuloActualizado, bus_actualizaciones_modulos
+from comun.cobros import ErrorCicloCobro
 from comun.ui import ejecutar_acciones_documento_pdf
 from modulos.morosidad.entidades import FiltroMorosidad
 from modulos.morosidad.servicio import ServicioMorosidad
@@ -51,7 +52,11 @@ class ControladorMorosidad:
         self._refrescar()
 
     def _mostrar_detalle(self, abonado_id: int) -> None:
-        detalle = self._servicio_morosidad.obtener_detalle(abonado_id)
+        try:
+            detalle = self._servicio_morosidad.obtener_detalle(abonado_id)
+        except ErrorCicloCobro as error:
+            self._vista_morosidad.mostrar_mensaje(str(error), es_error=True)
+            return
         if detalle is None:
             self._vista_morosidad.mostrar_mensaje(
                 "No fue posible encontrar el detalle del abonado seleccionado.",
@@ -67,7 +72,11 @@ class ControladorMorosidad:
             self._emitir_documento(abonado_id)
 
     def _emitir_documento(self, abonado_id: int) -> None:
-        detalle = self._servicio_morosidad.obtener_detalle(abonado_id)
+        try:
+            detalle = self._servicio_morosidad.obtener_detalle(abonado_id)
+        except ErrorCicloCobro as error:
+            self._vista_morosidad.mostrar_mensaje(str(error), es_error=True)
+            return
         if detalle is None:
             self._vista_morosidad.mostrar_mensaje(
                 "No fue posible reconstruir la deuda del abonado seleccionado.",
@@ -106,7 +115,14 @@ class ControladorMorosidad:
         self._vista_morosidad.mostrar_mensaje(evento.mensaje, es_error=False)
 
     def _refrescar(self) -> None:
-        estado = self._servicio_morosidad.obtener_estado(self._filtros, pagina=self._pagina_actual)
+        try:
+            estado = self._servicio_morosidad.obtener_estado(
+                self._filtros,
+                pagina=self._pagina_actual,
+            )
+        except ErrorCicloCobro as error:
+            self._vista_morosidad.mostrar_mensaje(str(error), es_error=True)
+            return
         self._pagina_actual = estado.pagina.pagina_actual
         self._vista_morosidad.establecer_filtro_severidad(self._filtros.severidad)
         self._vista_morosidad.mostrar_resumen(

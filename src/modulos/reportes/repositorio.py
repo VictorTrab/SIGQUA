@@ -231,7 +231,7 @@ class RepositorioReportesSQLite:
                     COUNT(
                         DISTINCT CASE
                             WHEN cc.codigo = 'SERVICIO_MENSUAL'
-                             AND cg.estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
+                             AND cg.estado = 'VENCIDO'
                              AND cg.saldo_pendiente_centavos > 0
                              AND cg.anulado_en IS NULL
                              AND NOT EXISTS (

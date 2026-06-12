@@ -6,6 +6,7 @@ from calendar import monthrange
 from datetime import date, datetime
 import sqlite3
 
+from comun.cobros import ServicioCicloCobro
 from comun.configuracion.gestor_rutas import GestorRutas
 from modulos.comprobantes import RepositorioComprobantesSQLite, ServicioComprobantes
 from modulos.pagos.entidades import (
@@ -39,12 +40,16 @@ class ServicioPagos:
         repositorio_pagos: RepositorioPagos,
         gestor_rutas: GestorRutas | None = None,
         servicio_comprobantes: ServicioComprobantes | None = None,
+        servicio_ciclo_cobro: ServicioCicloCobro | None = None,
     ):
         self.repositorio_pagos = repositorio_pagos
         self._gestor_rutas = gestor_rutas or GestorRutas()
         self._servicio_comprobantes = servicio_comprobantes or self._crear_servicio_comprobantes_predeterminado()
+        self._servicio_ciclo_cobro = servicio_ciclo_cobro
 
     def obtener_estado(self, filtro: str = "") -> EstadoModuloPagos:
+        if self._servicio_ciclo_cobro is not None:
+            self._servicio_ciclo_cobro.ejecutar()
         impresora_configurada = False
         pendientes_impresion = 0
         if self._servicio_comprobantes is not None:

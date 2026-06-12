@@ -415,6 +415,12 @@ class RepositorioCasasSQLite:
                         barrio_id = ?,
                         direccion_referencia = ?,
                         estado_servicio = ?,
+                        fecha_inicio_cobro = CASE
+                            WHEN estado_administrativo = 'SUSPENDIDA'
+                             AND ? = 'OPERATIVA'
+                            THEN date('now', 'localtime')
+                            ELSE fecha_inicio_cobro
+                        END,
                         estado_administrativo = ?,
                         motivo_estado_administrativo = ?,
                         ha_tenido_servicio_activo = ?,
@@ -427,6 +433,7 @@ class RepositorioCasasSQLite:
                         casa.barrio_id,
                         casa.direccion_referencia,
                         casa.estado_servicio,
+                        casa.estado_administrativo,
                         casa.estado_administrativo,
                         casa.motivo_estado_administrativo,
                         1 if casa.ha_tenido_servicio_activo else 0,
@@ -448,10 +455,21 @@ class RepositorioCasasSQLite:
                     UPDATE casas
                     SET estado_administrativo = ?,
                         motivo_estado_administrativo = ?,
+                        fecha_inicio_cobro = CASE
+                            WHEN estado_administrativo = 'SUSPENDIDA'
+                             AND ? = 'OPERATIVA'
+                            THEN date('now', 'localtime')
+                            ELSE fecha_inicio_cobro
+                        END,
                         actualizado_en = datetime('now', 'localtime')
                     WHERE id = ? AND eliminado_en IS NULL;
                     """,
-                    (estado_administrativo, motivo_estado_administrativo, casa_id),
+                    (
+                        estado_administrativo,
+                        motivo_estado_administrativo,
+                        estado_administrativo,
+                        casa_id,
+                    ),
                 )
 
     def cortar_servicio(
@@ -565,6 +583,12 @@ class RepositorioCasasSQLite:
                     """
                     UPDATE casas
                     SET abonado_id = ?,
+                        fecha_inicio_cobro = CASE
+                            WHEN ? = 'ACTIVO'
+                             AND motivo_estado_administrativo IN ('ABONADO_INACTIVO', 'REASIGNACION_PENDIENTE')
+                            THEN date('now', 'localtime')
+                            ELSE fecha_inicio_cobro
+                        END,
                         estado_administrativo = CASE
                             WHEN ? = 'ACTIVO'
                              AND motivo_estado_administrativo IN ('ABONADO_INACTIVO', 'REASIGNACION_PENDIENTE')
@@ -580,7 +604,13 @@ class RepositorioCasasSQLite:
                         actualizado_en = datetime('now', 'localtime')
                     WHERE id = ? AND eliminado_en IS NULL;
                     """,
-                    (nuevo_abonado_id, str(fila_nuevo_abonado["estado"] or ""), str(fila_nuevo_abonado["estado"] or ""), casa_id),
+                    (
+                        nuevo_abonado_id,
+                        str(fila_nuevo_abonado["estado"] or ""),
+                        str(fila_nuevo_abonado["estado"] or ""),
+                        str(fila_nuevo_abonado["estado"] or ""),
+                        casa_id,
+                    ),
                 )
                 conexion.execute(
                     """
@@ -747,6 +777,7 @@ class RepositorioCasasSQLite:
                     UPDATE casas
                     SET estado_administrativo = 'OPERATIVA',
                         motivo_estado_administrativo = 'NINGUNO',
+                        fecha_inicio_cobro = date('now', 'localtime'),
                         actualizado_en = datetime('now', 'localtime')
                     WHERE abonado_id = ?
                       AND eliminado_en IS NULL
