@@ -18,6 +18,42 @@ PARAMETROS_SCRYPT = {
 }
 
 
+def validar_politica_contrasena(
+    contrasena: str,
+    confirmacion: str,
+    *,
+    nombre_usuario: str = "",
+    correo: str = "",
+) -> str | None:
+    """Devuelve el primer incumplimiento de la politica o ``None``."""
+    if not contrasena or not contrasena.strip():
+        return "La contrasena no puede estar vacia ni contener solo espacios."
+    if len(contrasena) < 8:
+        return "La contrasena debe tener al menos 8 caracteres."
+    if not any(caracter.isupper() for caracter in contrasena):
+        return "La contrasena debe incluir una letra mayuscula."
+    if not any(caracter.islower() for caracter in contrasena):
+        return "La contrasena debe incluir una letra minuscula."
+    if not any(caracter.isdigit() for caracter in contrasena):
+        return "La contrasena debe incluir un numero."
+    if not any(
+        caracter.isprintable()
+        and not caracter.isalnum()
+        and not caracter.isspace()
+        for caracter in contrasena
+    ):
+        return "La contrasena debe incluir un simbolo."
+    if contrasena != confirmacion:
+        return "Las contrasenas no coinciden."
+
+    contrasena_comparable = contrasena.strip().casefold()
+    if nombre_usuario.strip() and contrasena_comparable == nombre_usuario.strip().casefold():
+        return "La contrasena no puede ser igual al nombre de usuario."
+    if correo.strip() and contrasena_comparable == correo.strip().casefold():
+        return "La contrasena no puede ser igual al correo."
+    return None
+
+
 def generar_hash_contrasena(contrasena_plana: str, sal: bytes | None = None) -> str:
     """Genera un hash scrypt versionado apto para persistencia."""
     sal_efectiva = sal or secrets.token_bytes(LONGITUD_SAL_BYTES)

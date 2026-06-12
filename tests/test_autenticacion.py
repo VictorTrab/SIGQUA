@@ -50,7 +50,7 @@ class TestAutenticacion(unittest.TestCase):
 
     def test_login_valido_crea_sesion_y_registra_intento(self) -> None:
         resultado = self.servicio.iniciar_sesion(
-            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="SIGQUA2026!")
+            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="Sigqua2026!")
         )
 
         self.assertTrue(resultado.exito)
@@ -76,12 +76,30 @@ class TestAutenticacion(unittest.TestCase):
 
     def test_credencial_inicial_no_tiene_caducidad_temporal(self) -> None:
         resultado = self.servicio.iniciar_sesion(
-            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="SIGQUA2026!")
+            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="Sigqua2026!")
         )
 
         self.assertTrue(resultado.exito)
         self.assertTrue(resultado.requiere_cambio_contrasena)
         self.assertIsNone(resultado.token_sesion)
+
+    def test_credencial_inicial_anterior_deja_de_funcionar(self) -> None:
+        resultado = self.servicio.iniciar_sesion(
+            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="SIGQUA2026!")
+        )
+
+        self.assertFalse(resultado.exito)
+        self.assertIsNone(resultado.token_sesion)
+
+    def test_activacion_inicial_rechaza_contrasena_fuera_de_politica(self) -> None:
+        resultado = self.servicio.restablecer_contrasena(
+            nombre_usuario="admin",
+            nueva_contrasena="sinmayuscula1!",
+            confirmacion_contrasena="sinmayuscula1!",
+        )
+
+        self.assertFalse(resultado.exito)
+        self.assertIn("mayuscula", resultado.mensaje.lower())
 
     def test_login_usa_duracion_sesion_configurada(self) -> None:
         self.repositorio_configuracion.actualizar_valores(
@@ -171,7 +189,7 @@ class TestAutenticacion(unittest.TestCase):
             conexion.close()
 
         resultado = self.servicio.iniciar_sesion(
-            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="SIGQUA2026!")
+            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="Sigqua2026!")
         )
 
         self.assertFalse(resultado.exito)
@@ -186,7 +204,7 @@ class TestAutenticacion(unittest.TestCase):
         self.assertTrue(resultado.exito)
 
         login_anterior = self.servicio.iniciar_sesion(
-            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="SIGQUA2026!")
+            CredencialesUsuario(nombre_usuario="admin", contrasena_plana="Sigqua2026!")
         )
         self.assertFalse(login_anterior.exito)
 

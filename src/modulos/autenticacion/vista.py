@@ -550,6 +550,12 @@ class VistaAutenticacion(QWidget):
                 self._campo_confirmacion_contrasena,
             )
         )
+        ayuda_contrasena = QLabel(
+            "Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo."
+        )
+        ayuda_contrasena.setObjectName("textoExplicativo")
+        ayuda_contrasena.setWordWrap(True)
+        contenido.addWidget(ayuda_contrasena)
 
         self._mensaje_restablecer = self._crear_label_mensaje()
         contenido.addWidget(self._mensaje_restablecer)

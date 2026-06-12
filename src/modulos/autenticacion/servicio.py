@@ -8,7 +8,11 @@ from logging import Logger
 from secrets import token_urlsafe
 
 from comun.logs import obtener_logger_sigqua
-from comun.seguridad import generar_hash_contrasena, verificar_contrasena
+from comun.seguridad import (
+    generar_hash_contrasena,
+    validar_politica_contrasena,
+    verificar_contrasena,
+)
 from modulos.configuracion.repositorio import RepositorioConfiguracionSQLite
 from modulos.autenticacion.entidades import (
     CredencialesUsuario,
@@ -217,27 +221,6 @@ class ServicioAutenticacion:
                 codigo=CODIGO_VALIDACION,
             )
 
-        if not nueva_contrasena or not confirmacion_contrasena:
-            return ResultadoOperacion(
-                exito=False,
-                mensaje="Completa ambos campos de contraseña.",
-                codigo=CODIGO_VALIDACION,
-            )
-
-        if len(nueva_contrasena) < 8:
-            return ResultadoOperacion(
-                exito=False,
-                mensaje="La nueva contraseña debe tener al menos 8 caracteres.",
-                codigo=CODIGO_VALIDACION,
-            )
-
-        if nueva_contrasena != confirmacion_contrasena:
-            return ResultadoOperacion(
-                exito=False,
-                mensaje="Las contraseñas no coinciden.",
-                codigo=CODIGO_VALIDACION,
-            )
-
         usuario = self.repositorio_autenticacion.obtener_usuario_por_nombre_usuario(
             nombre_usuario_normalizado
         )
@@ -253,6 +236,19 @@ class ServicioAutenticacion:
                 exito=False,
                 mensaje="Solo se permite restablecer contraseña para usuarios activos.",
                 codigo="USUARIO_NO_ACTIVO",
+            )
+
+        mensaje_validacion = validar_politica_contrasena(
+            nueva_contrasena,
+            confirmacion_contrasena,
+            nombre_usuario=usuario.nombre_usuario,
+            correo=usuario.correo,
+        )
+        if mensaje_validacion is not None:
+            return ResultadoOperacion(
+                exito=False,
+                mensaje=mensaje_validacion,
+                codigo=CODIGO_VALIDACION,
             )
 
         marca_tiempo = self._formatear_fecha(self._ahora())

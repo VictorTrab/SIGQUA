@@ -280,12 +280,14 @@ class RepositorioUsuariosSQLite:
                         estado,
                         observaciones,
                         requiere_cambio_contrasena,
+                        intentos_fallidos,
+                        bloqueado_hasta,
                         creado_en,
                         actualizado_en,
                         creado_por,
                         actualizado_por
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?);
+                    VALUES (?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, ?, ?);
                     """,
                     (
                         formulario.nombre_usuario,

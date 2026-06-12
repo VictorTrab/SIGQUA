@@ -83,7 +83,11 @@ from modulos.principal.vista import VistaModuloPrincipal  # noqa: E402
 from modulos.principal.entidades import AnaliticaDashboard, EstadoModuloPrincipal, ModuloNavegacion  # noqa: E402
 from modulos.reportes.vista import VistaReportes  # noqa: E402
 from modulos.usuarios.entidades import PermisoSistema, ResumenUsuarios, RolSistema, UsuarioSistema  # noqa: E402
-from modulos.usuarios.vista import VistaUsuarios  # noqa: E402
+from modulos.usuarios.vista import (  # noqa: E402
+    DialogoFormularioUsuario,
+    DialogoGestionAccesoUsuario,
+    VistaUsuarios,
+)
 
 
 class TestVistaYAppAutenticacion(unittest.TestCase):
@@ -1733,6 +1737,47 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
             )
         )
         vista.close()
+
+    def test_usuarios_muestra_politica_y_controles_de_visibilidad_sin_cambio_obligatorio(self) -> None:
+        rol = RolSistema(
+            identificador=3,
+            nombre="CAJERO",
+            descripcion="Acceso de caja",
+            estado="ACTIVO",
+            es_sistema=True,
+        )
+        usuario = UsuarioSistema(
+            identificador=2,
+            nombre_usuario="cajero1",
+            nombre_completo="Cajero Uno",
+            correo="cajero1@sigqua.local",
+            estado="ACTIVO",
+            roles=("CAJERO",),
+            requiere_cambio_contrasena=True,
+        )
+        dialogo_creacion = DialogoFormularioUsuario([rol])
+        dialogo_acceso = DialogoGestionAccesoUsuario(usuario)
+
+        for dialogo in (dialogo_creacion, dialogo_acceso):
+            textos = [label.text() for label in dialogo.findChildren(QLabel)]
+            self.assertTrue(any("Mínimo 8 caracteres" in texto for texto in textos))
+            self.assertFalse(any("Cambio obligatorio" in texto for texto in textos))
+
+        for campo in (
+            dialogo_creacion._campo_contrasena,
+            dialogo_creacion._campo_confirmacion,
+            dialogo_acceso._campo_contrasena,
+            dialogo_acceso._campo_confirmacion,
+        ):
+            self.assertEqual(campo.echoMode(), QLineEdit.EchoMode.Password)
+            self.assertEqual(len(campo.actions()), 1)
+            campo.actions()[0].trigger()
+            self.assertEqual(campo.echoMode(), QLineEdit.EchoMode.Normal)
+            campo.actions()[0].trigger()
+            self.assertEqual(campo.echoMode(), QLineEdit.EchoMode.Password)
+
+        dialogo_creacion.close()
+        dialogo_acceso.close()
 
 
 if __name__ == "__main__":

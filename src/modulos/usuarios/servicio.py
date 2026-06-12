@@ -6,7 +6,7 @@ import csv
 import sqlite3
 from datetime import datetime
 
-from comun.seguridad import generar_hash_contrasena
+from comun.seguridad import generar_hash_contrasena, validar_politica_contrasena
 from modulos.autenticacion.entidades import UsuarioAutenticado
 from modulos.usuarios.entidades import FormularioUsuario, ResumenUsuarios, ResultadoGestionUsuarios, RolSistema, UsuarioSistema
 from modulos.usuarios.repositorio import RepositorioUsuarios
@@ -112,6 +112,8 @@ class ServicioUsuarios:
         validacion = self._validar_contrasena(
             formulario.contrasena,
             formulario.confirmacion_contrasena,
+            formulario.nombre_usuario,
+            formulario.correo,
         )
         if validacion is not None:
             return validacion
@@ -252,7 +254,12 @@ class ServicioUsuarios:
                 codigo="PERMISO_DENEGADO",
             )
 
-        validacion = self._validar_contrasena(nueva_contrasena, confirmacion_contrasena)
+        validacion = self._validar_contrasena(
+            nueva_contrasena,
+            confirmacion_contrasena,
+            usuario_objetivo.nombre_usuario,
+            usuario_objetivo.correo,
+        )
         if validacion is not None:
             return validacion
         momento = self._formatear_fecha(datetime.now())
@@ -378,18 +385,20 @@ class ServicioUsuarios:
     def _validar_contrasena(
         contrasena: str,
         confirmacion: str,
+        nombre_usuario: str = "",
+        correo: str = "",
     ) -> ResultadoGestionUsuarios | None:
-        if not contrasena or not confirmacion:
-            return ResultadoGestionUsuarios(False, "Escribe y confirma la contrasena.", "VALIDACION")
-        if len(contrasena) < 8:
-            return ResultadoGestionUsuarios(
-                False,
-                "La contrasena debe tener al menos 8 caracteres.",
-                "VALIDACION",
-            )
-        if contrasena != confirmacion:
-            return ResultadoGestionUsuarios(False, "Las contrasenas no coinciden.", "VALIDACION")
-        return None
+        mensaje = validar_politica_contrasena(
+            contrasena,
+            confirmacion,
+            nombre_usuario=nombre_usuario,
+            correo=correo,
+        )
+        return (
+            ResultadoGestionUsuarios(False, mensaje, "VALIDACION")
+            if mensaje is not None
+            else None
+        )
 
     @staticmethod
     def _validar_formulario(

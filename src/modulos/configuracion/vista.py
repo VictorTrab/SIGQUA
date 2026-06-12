@@ -236,7 +236,7 @@ class VistaConfiguracion(QWidget):
         self._valor_intentos.setText(str(estado.seguridad.maximo_intentos_fallidos))
         self._valor_sesion.setText(self._texto_duracion_sesion(estado.seguridad.duracion_sesion_horas))
         self._valor_restablecimiento.setText("Administrativo")
-        self._valor_cambio_clave.setText("Obligatorio cuando hay clave temporal")
+        self._valor_cambio_clave.setText("Solo durante la activacion inicial")
 
         self._valor_nombre_sistema.setText(estado.informacion.nombre_sistema)
         self._valor_version_sistema.setText(estado.informacion.version_sistema or "Sin version")

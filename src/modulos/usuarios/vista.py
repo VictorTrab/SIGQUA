@@ -51,6 +51,7 @@ from comun.ui.temas import (
     obtener_paleta_tema,
     resolver_nombre_tema,
 )
+from comun.seguridad import validar_politica_contrasena
 from modulos.usuarios.entidades import (
     FormularioUsuario,
     PermisoSistema,
@@ -64,6 +65,36 @@ from modulos.usuarios.servicio import (
     FILTRO_USUARIOS_INACTIVOS,
     FILTRO_USUARIOS_TODOS,
 )
+
+
+AYUDA_POLITICA_CONTRASENA = (
+    "Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo."
+)
+
+
+def _configurar_visibilidad_contrasena(campo: QLineEdit) -> None:
+    accion = campo.addAction(
+        obtener_icono_tabler_coloreado("eye.svg", "#c8d6f1", tamano=18),
+        QLineEdit.ActionPosition.TrailingPosition,
+    )
+    accion.setObjectName("accionVisibilidadContrasena")
+    accion.setToolTip("Mostrar contrasena")
+
+    def alternar() -> None:
+        oculto = campo.echoMode() == QLineEdit.EchoMode.Password
+        campo.setEchoMode(
+            QLineEdit.EchoMode.Normal if oculto else QLineEdit.EchoMode.Password
+        )
+        accion.setIcon(
+            obtener_icono_tabler_coloreado(
+                "eye-off.svg" if oculto else "eye.svg",
+                "#c8d6f1",
+                tamano=18,
+            )
+        )
+        accion.setToolTip("Ocultar contrasena" if oculto else "Mostrar contrasena")
+
+    accion.triggered.connect(alternar)
 
 
 class TarjetaResumenUsuario(TarjetaResumenOperativa):
@@ -163,12 +194,16 @@ class DialogoFormularioUsuario(DialogoBaseSigqua):
         if formulario.rol_id <= 0:
             self._mostrar_error("Selecciona un rol visible para continuar.")
             return
-        if self._usuario is None and not formulario.contrasena:
-            self._mostrar_error("Define la contrasena inicial del usuario.")
-            return
-        if self._usuario is None and formulario.contrasena != formulario.confirmacion_contrasena:
-            self._mostrar_error("Las contrasenas no coinciden.")
-            return
+        if self._usuario is None:
+            error_contrasena = validar_politica_contrasena(
+                formulario.contrasena,
+                formulario.confirmacion_contrasena,
+                nombre_usuario=formulario.nombre_usuario,
+                correo=formulario.correo,
+            )
+            if error_contrasena is not None:
+                self._mostrar_error(error_contrasena)
+                return
         self._mensaje.setVisible(False)
         super().accept()
 
@@ -221,9 +256,11 @@ class DialogoFormularioUsuario(DialogoBaseSigqua):
         self._campo_contrasena = QLineEdit()
         self._campo_contrasena.setEchoMode(QLineEdit.EchoMode.Password)
         self._campo_contrasena.setPlaceholderText("Minimo 8 caracteres")
+        _configurar_visibilidad_contrasena(self._campo_contrasena)
         self._campo_confirmacion = QLineEdit()
         self._campo_confirmacion.setEchoMode(QLineEdit.EchoMode.Password)
         self._campo_confirmacion.setPlaceholderText("Repite la contrasena")
+        _configurar_visibilidad_contrasena(self._campo_confirmacion)
         if self._usuario is None:
             grid_seguridad.addWidget(
                 self._crear_bloque("Contrasena inicial", self._campo_contrasena),
@@ -237,7 +274,7 @@ class DialogoFormularioUsuario(DialogoBaseSigqua):
             )
         panel_seguridad.layout().addLayout(grid_seguridad)
         ayuda = QLabel(
-            "La contrasena se almacena protegida mediante scrypt."
+            f"{AYUDA_POLITICA_CONTRASENA} Se almacena protegida mediante scrypt."
             if self._usuario is None
             else "Para cambiar la contrasena usa la accion de gestion de acceso."
         )
@@ -425,14 +462,6 @@ class DialogoDetalleUsuario(DialogoBaseSigqua):
         grid_identidad.addWidget(CampoDetalleSigqua("Correo", self._usuario.correo), 0, 0)
         grid_identidad.addWidget(CampoDetalleSigqua("Rol visible", self._usuario.rol_principal), 0, 1)
         grid_identidad.addWidget(CampoDetalleSigqua("Estado", self._usuario.estado.title()), 1, 0)
-        grid_identidad.addWidget(
-            CampoDetalleSigqua(
-                "Cambio obligatorio",
-                "Pendiente" if self._usuario.requiere_cambio_contrasena else "No",
-            ),
-            1,
-            1,
-        )
 
         grid_actividad = QGridLayout()
         grid_actividad.setHorizontalSpacing(14)
@@ -516,14 +545,6 @@ class DialogoDetalleUsuario(DialogoBaseSigqua):
         grid_identidad.addWidget(self._crear_campo("Correo", self._usuario.correo), 0, 0)
         grid_identidad.addWidget(self._crear_campo("Rol visible", self._usuario.rol_principal), 0, 1)
         grid_identidad.addWidget(self._crear_campo("Estado", self._usuario.estado.title()), 1, 0)
-        grid_identidad.addWidget(
-            self._crear_campo(
-                "Cambio obligatorio",
-                "Pendiente" if self._usuario.requiere_cambio_contrasena else "No",
-            ),
-            1,
-            1,
-        )
 
         grid_actividad = QGridLayout()
         grid_actividad.setHorizontalSpacing(14)
@@ -791,8 +812,6 @@ class DialogoGestionAccesoUsuario(DialogoBaseSigqua):
         layout_panel.addWidget(etiqueta_usuario)
 
         contexto = []
-        if self._usuario.requiere_cambio_contrasena:
-            contexto.append("La cuenta ya tiene cambio obligatorio de contrasena pendiente.")
         if self._usuario.intentos_fallidos > 0 or self._usuario.estado == "BLOQUEADO":
             contexto.append(
                 f"Intentos fallidos actuales: {self._usuario.intentos_fallidos}. Puedes desbloquear la cuenta."
@@ -807,13 +826,19 @@ class DialogoGestionAccesoUsuario(DialogoBaseSigqua):
         self._campo_contrasena = QLineEdit()
         self._campo_contrasena.setEchoMode(QLineEdit.EchoMode.Password)
         self._campo_contrasena.setPlaceholderText("Minimo 8 caracteres")
+        _configurar_visibilidad_contrasena(self._campo_contrasena)
         self._campo_confirmacion = QLineEdit()
         self._campo_confirmacion.setEchoMode(QLineEdit.EchoMode.Password)
         self._campo_confirmacion.setPlaceholderText("Repite la contrasena")
+        _configurar_visibilidad_contrasena(self._campo_confirmacion)
         layout_panel.addWidget(self._crear_bloque("Nueva contrasena", self._campo_contrasena))
         layout_panel.addWidget(
             self._crear_bloque("Confirmar contrasena", self._campo_confirmacion)
         )
+        ayuda = QLabel(AYUDA_POLITICA_CONTRASENA)
+        ayuda.setObjectName("descripcionDialogoSigqua")
+        ayuda.setWordWrap(True)
+        layout_panel.addWidget(ayuda)
 
         self._mensaje = QLabel("")
         self._mensaje.setObjectName("mensajeErrorDialogoSigqua")
@@ -869,11 +894,14 @@ class DialogoGestionAccesoUsuario(DialogoBaseSigqua):
         return bloque
 
     def _confirmar_restablecimiento(self) -> None:
-        if len(self._campo_contrasena.text()) < 8:
-            self._mostrar_error("La contrasena debe tener al menos 8 caracteres.")
-            return
-        if self._campo_contrasena.text() != self._campo_confirmacion.text():
-            self._mostrar_error("Las contrasenas no coinciden.")
+        error_contrasena = validar_politica_contrasena(
+            self._campo_contrasena.text(),
+            self._campo_confirmacion.text(),
+            nombre_usuario=self._usuario.nombre_usuario,
+            correo=self._usuario.correo,
+        )
+        if error_contrasena is not None:
+            self._mostrar_error(error_contrasena)
             return
         self._resultado = "restablecer"
         self.accept()

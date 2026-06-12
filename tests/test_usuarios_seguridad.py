@@ -15,8 +15,12 @@ if str(RUTA_SRC) not in sys.path:
 
 from comun.base_datos import GestorBaseDatos  # noqa: E402
 from comun.configuracion.gestor_rutas import GestorRutas  # noqa: E402
+from comun.seguridad import validar_politica_contrasena, verificar_contrasena  # noqa: E402
 from tests.utilidades_base_datos import inicializar_base_datos_prueba  # noqa: E402
-from modulos.autenticacion.entidades import UsuarioAutenticado  # noqa: E402
+from modulos.autenticacion.entidades import CredencialesUsuario, UsuarioAutenticado  # noqa: E402
+from modulos.autenticacion.repositorio import RepositorioAutenticacionSQLite  # noqa: E402
+from modulos.autenticacion.servicio import ServicioAutenticacion  # noqa: E402
+from modulos.configuracion.repositorio import RepositorioConfiguracionSQLite  # noqa: E402
 from modulos.usuarios.entidades import FormularioUsuario  # noqa: E402
 from modulos.usuarios.repositorio import RepositorioUsuariosSQLite  # noqa: E402
 from modulos.usuarios.servicio import ServicioUsuarios  # noqa: E402
@@ -89,6 +93,7 @@ class TestUsuariosSeguridad(unittest.TestCase):
         self.assertEqual(requiere_cambio, 0)
         self.assertEqual(restablecida_por, self.admin.identificador)
         self.assertNotEqual(contrasena_hash, "NuevaClaveCajero1!")
+        self.assertTrue(verificar_contrasena("NuevaClaveCajero1!", contrasena_hash))
 
     def test_admin_puede_desbloquear_usuario_operativo(self) -> None:
         conexion = self.gestor_base_datos.obtener_conexion()
@@ -148,6 +153,95 @@ class TestUsuariosSeguridad(unittest.TestCase):
         self.assertFalse(usuario.requiere_cambio_contrasena)
         self.assertEqual(usuario.creado_por_nombre, "Administrador del Sistema")
         self.assertEqual(usuario.actualizado_por_nombre, "Administrador del Sistema")
+
+        conexion = sqlite3.connect(self.gestor_rutas.obtener_ruta_base_datos())
+        try:
+            hash_persistido, intentos, bloqueado_hasta = conexion.execute(
+                """
+                SELECT contrasena_hash, intentos_fallidos, bloqueado_hasta
+                FROM usuarios
+                WHERE nombre_usuario = 'recepcion1';
+                """
+            ).fetchone()
+        finally:
+            conexion.close()
+
+        self.assertTrue(hash_persistido.startswith("scrypt$"))
+        self.assertNotEqual(hash_persistido, formulario.contrasena)
+        self.assertTrue(verificar_contrasena(formulario.contrasena, hash_persistido))
+        self.assertEqual(intentos, 0)
+        self.assertIsNone(bloqueado_hasta)
+
+        servicio_autenticacion = ServicioAutenticacion(
+            RepositorioAutenticacionSQLite(self.gestor_base_datos),
+            repositorio_configuracion=RepositorioConfiguracionSQLite(
+                self.gestor_base_datos
+            ),
+        )
+        login = servicio_autenticacion.iniciar_sesion(
+            CredencialesUsuario("recepcion1", formulario.contrasena)
+        )
+        self.assertTrue(login.exito)
+        self.assertFalse(login.requiere_cambio_contrasena)
+
+    def test_politica_compartida_rechaza_cada_requisito_por_separado(self) -> None:
+        casos = (
+            ("       ", "       ", "solo espacios"),
+            ("Ab1!", "Ab1!", "al menos 8"),
+            ("clave123!", "clave123!", "mayuscula"),
+            ("CLAVE123!", "CLAVE123!", "minuscula"),
+            ("ClaveSegura!", "ClaveSegura!", "numero"),
+            ("Clave123 ", "Clave123 ", "simbolo"),
+            ("Clave123\u200b", "Clave123\u200b", "simbolo"),
+            ("Clave123!", "Otra123!", "no coinciden"),
+        )
+
+        for contrasena, confirmacion, fragmento in casos:
+            with self.subTest(fragmento=fragmento):
+                mensaje = validar_politica_contrasena(contrasena, confirmacion)
+                self.assertIsNotNone(mensaje)
+                self.assertIn(fragmento, mensaje.lower())
+
+    def test_politica_compara_usuario_y_correo_sin_mayusculas_ni_espacios_externos(self) -> None:
+        mensaje_usuario = validar_politica_contrasena(
+            "  Usuario1!  ",
+            "  Usuario1!  ",
+            nombre_usuario="usuario1!",
+        )
+        mensaje_correo = validar_politica_contrasena(
+            "  Persona1@Ejemplo.com  ",
+            "  Persona1@Ejemplo.com  ",
+            correo="persona1@ejemplo.COM",
+        )
+
+        self.assertIn("nombre de usuario", mensaje_usuario or "")
+        self.assertIn("correo", mensaje_correo or "")
+
+    def test_creacion_y_restablecimiento_rechazan_contrasenas_debiles(self) -> None:
+        formulario = FormularioUsuario(
+            identificador=None,
+            nombre_usuario="consulta1",
+            nombre_completo="Consulta Uno",
+            correo="consulta1@sigqua.local",
+            estado="ACTIVO",
+            rol_id=self._obtener_id_rol("CONSULTA"),
+            observaciones="",
+            contrasena="sinmayuscula1!",
+            confirmacion_contrasena="sinmayuscula1!",
+        )
+
+        creacion = self.servicio.crear_usuario_operativo(self.admin, formulario)
+        restablecimiento = self.servicio.restablecer_contrasena_administrativa(
+            actor=self.admin,
+            nombre_usuario_objetivo="cajero1",
+            nueva_contrasena="SINMINUSCULA1!",
+            confirmacion_contrasena="SINMINUSCULA1!",
+        )
+
+        self.assertFalse(creacion.exito)
+        self.assertIn("mayuscula", creacion.mensaje.lower())
+        self.assertFalse(restablecimiento.exito)
+        self.assertIn("minuscula", restablecimiento.mensaje.lower())
 
     def test_admin_puede_actualizar_usuario_operativo(self) -> None:
         usuario = self.repositorio.obtener_por_nombre_usuario("cajero1")
