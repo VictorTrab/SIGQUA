@@ -212,14 +212,18 @@ def crear_ventana_principal(
     repositorio_barrios = RepositorioBarriosSQLite(gestor_base_datos)
     servicio_barrios = ServicioBarrios(repositorio_barrios)
     repositorio_casas = RepositorioCasasSQLite(gestor_base_datos)
-    servicio_casas = ServicioCasas(repositorio_casas)
+    repositorio_pagos = RepositorioPagosSQLite(gestor_base_datos)
+    servicio_casas = ServicioCasas(repositorio_casas, repositorio_pagos)
     repositorio_abonados = RepositorioAbonadosSQLite(gestor_base_datos)
-    servicio_abonados = ServicioAbonados(repositorio_abonados, repositorio_casas)
+    servicio_abonados = ServicioAbonados(
+        repositorio_abonados,
+        repositorio_casas,
+        repositorio_pagos,
+    )
     repositorio_planes_pago = RepositorioPlanesPagoSQLite(gestor_base_datos)
     servicio_planes_pago = ServicioPlanesPago(repositorio_planes_pago)
     repositorio_comprobantes = RepositorioComprobantesSQLite(gestor_base_datos)
     servicio_comprobantes = ServicioComprobantes(repositorio_comprobantes)
-    repositorio_pagos = RepositorioPagosSQLite(gestor_base_datos)
     servicio_pagos = ServicioPagos(
         repositorio_pagos,
         gestor_rutas=gestor_rutas,

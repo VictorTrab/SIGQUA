@@ -63,11 +63,35 @@ class TestPlantillaBaseDatos(unittest.TestCase):
                     """
                 )
             }
+            configuracion_adelantos = dict(
+                conexion.execute(
+                    """
+                    SELECT clave, valor
+                    FROM configuracion_sistema
+                    WHERE clave = 'cobro.permitir_pago_adelantado';
+                    """
+                ).fetchall()
+            )
+            indice_adelantos = conexion.execute(
+                """
+                SELECT 1
+                FROM sqlite_master
+                WHERE type = 'index'
+                  AND name = 'idx_pagos_adelantados_casa_periodo_unico';
+                """
+            ).fetchone()
 
         self.assertEqual(roles, {"ADMINISTRADOR", "CAJERO", "CONSULTA"})
         self.assertEqual(usuarios, [("admin", 0, 0, 1)])
         self.assertEqual(conteos, {tabla: 0 for tabla in conteos})
         self.assertEqual(tablas_excluidas, set())
+        self.assertEqual(
+            configuracion_adelantos,
+            {
+                "cobro.permitir_pago_adelantado": "0",
+            },
+        )
+        self.assertIsNotNone(indice_adelantos)
         self.assertEqual(
             hashlib.sha256(ruta_plantilla.read_bytes()).hexdigest(),
             hash_antes,

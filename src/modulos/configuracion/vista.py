@@ -83,7 +83,7 @@ class VistaConfiguracion(QWidget):
         bool,
         str,
     )
-    guardar_parametros_cobro_solicitado = Signal(int, bool, int, bool, int, bool, bool, int, int, int)
+    guardar_parametros_cobro_solicitado = Signal(int, bool, int, bool, int, bool, bool, int, int)
     probar_impresora_comprobantes_solicitado = Signal(str)
     probar_impresora_reportes_solicitado = Signal(str)
     restaurar_respaldo_externo_solicitado = Signal(str)
@@ -149,7 +149,7 @@ class VistaConfiguracion(QWidget):
         self._tarjeta_adelantos.actualizar(
             "Activos" if estado.parametros_cobro.permitir_pago_adelantado else "Bloqueados",
             (
-                f"Hasta {estado.parametros_cobro.meses_adelanto_maximo} meses."
+                "Cupo automatico hasta diciembre."
                 if estado.parametros_cobro.permitir_pago_adelantado
                 else "Deshabilitado."
             ),
@@ -210,9 +210,6 @@ class VistaConfiguracion(QWidget):
         self._check_pago_adelantado.blockSignals(True)
         self._check_pago_adelantado.setChecked(estado.parametros_cobro.permitir_pago_adelantado)
         self._check_pago_adelantado.blockSignals(False)
-        self._campo_meses_adelanto_maximo.setText(
-            str(estado.parametros_cobro.meses_adelanto_maximo)
-        )
         self._actualizar_estado_campos_cobro()
 
         self._seleccionar_duracion_sesion(estado.seguridad.duracion_sesion_horas)
@@ -264,7 +261,6 @@ class VistaConfiguracion(QWidget):
             self._campo_precio_mensual,
             self._campo_multa_automatica,
             self._campo_meses_para_corte,
-            self._campo_meses_adelanto_maximo,
             self._campo_ruta_reportes_pdf,
             self._campo_firma_reportes_pdf,
         )
@@ -674,10 +670,14 @@ class VistaConfiguracion(QWidget):
         self._check_prorrateo_activacion = QCheckBox(
             "Cobrar primera mensualidad prorrateada en conexion y reconexion"
         )
-        self._check_pago_adelantado = QCheckBox("Permitir pago adelantado")
+        self._check_pago_adelantado = QCheckBox("Permitir pagos adelantados")
         self._check_pago_adelantado.toggled.connect(self._actualizar_estado_campos_cobro)
-        self._campo_meses_adelanto_maximo = QLineEdit()
-        self._campo_meses_adelanto_maximo.setPlaceholderText("Maximo de meses adelantados")
+        ayuda_adelantos = QLabel(
+            "El sistema calcula automaticamente el cupo desde el mes actual hasta diciembre. "
+            "Los meses ya cubiertos no vuelven a estar disponibles."
+        )
+        ayuda_adelantos.setObjectName("textoAyudaConfiguracion")
+        ayuda_adelantos.setWordWrap(True)
 
         panel_precio = self._crear_panel(
             "Precio mensual del servicio",
@@ -706,12 +706,15 @@ class VistaConfiguracion(QWidget):
             ],
         )
         panel_adelantos = self._crear_panel(
-            "Pago adelantado",
-            "Controla pagos de meses futuros.",
+            "Pagos adelantados",
+            (
+                "Permite registrar mensualidades desde el mes actual hasta diciembre "
+                "cuando la casa no tiene obligaciones pendientes."
+            ),
             [
                 self._check_prorrateo_activacion,
                 self._check_pago_adelantado,
-                self._crear_bloque_campo("Maximo de meses adelantados", self._campo_meses_adelanto_maximo),
+                ayuda_adelantos,
             ],
         )
 
@@ -1139,14 +1142,12 @@ class VistaConfiguracion(QWidget):
             self._leer_entero(self._campo_meses_para_corte.text()),
             self._check_prorrateo_activacion.isChecked(),
             self._check_pago_adelantado.isChecked(),
-            self._leer_entero(self._campo_meses_adelanto_maximo.text()),
             self.MORA_BAJA_HASTA_VERSION,
             self.MORA_MEDIA_HASTA_VERSION,
         )
 
     def _actualizar_estado_campos_cobro(self) -> None:
         self._campo_multa_automatica.setEnabled(self._check_multa_automatica.isChecked())
-        self._campo_meses_adelanto_maximo.setEnabled(self._check_pago_adelantado.isChecked())
 
     def _mostrar_ayuda(self) -> None:
         from comun.ui import DialogoMensajeSigqua

@@ -6,6 +6,10 @@ import csv
 from datetime import datetime
 from typing import Protocol
 
+from comun.pagos_adelantados import (
+    EstadoFinancieroCasaAbonado,
+    LectorPagosAdelantados,
+)
 from modulos.abonados.entidades import (
     Abonado,
     FILTRO_ABONADOS_TODOS,
@@ -44,9 +48,11 @@ class ServicioAbonados:
         self,
         repositorio_abonados: RepositorioAbonados,
         repositorio_casas_relacionado: RepositorioCasasRelacionado | None = None,
+        lector_adelantos: LectorPagosAdelantados | None = None,
     ) -> None:
         self._repositorio_abonados = repositorio_abonados
         self._repositorio_casas_relacionado = repositorio_casas_relacionado
+        self._lector_adelantos = lector_adelantos
 
     def obtener_resumen(self) -> ResumenAbonados:
         return self._repositorio_abonados.obtener_resumen()
@@ -77,6 +83,14 @@ class ServicioAbonados:
 
     def obtener_por_id(self, abonado_id: int) -> Abonado | None:
         return self._repositorio_abonados.obtener_por_id(abonado_id)
+
+    def listar_estados_casas(
+        self,
+        abonado_id: int,
+    ) -> tuple[EstadoFinancieroCasaAbonado, ...]:
+        if self._lector_adelantos is None:
+            return ()
+        return self._lector_adelantos.listar_estados_casas_abonado(abonado_id)
 
     def listar_barrios_disponibles(self) -> list[OpcionBarrio]:
         return self._repositorio_abonados.listar_barrios_disponibles()

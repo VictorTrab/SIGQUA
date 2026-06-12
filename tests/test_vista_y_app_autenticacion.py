@@ -121,7 +121,6 @@ class TestVistaYAppAutenticacion(unittest.TestCase):
                 5,
                 False,
                 True,
-                12,
                 2,
                 5,
             ),

@@ -46,7 +46,6 @@ CLAVES_COBRO = (
     "cobro.meses_para_corte",
     "cobro.cobrar_mensualidad_prorrateada_activacion",
     "cobro.permitir_pago_adelantado",
-    "cobro.meses_adelanto_maximo",
     "cobro.mora_leve_hasta_meses",
     "cobro.mora_media_hasta_meses",
 )
@@ -152,9 +151,6 @@ class ServicioConfiguracion:
             ),
             permitir_pago_adelantado=self._a_booleano(
                 self._valor_parametro(parametros, "cobro.permitir_pago_adelantado", "0")
-            ),
-            meses_adelanto_maximo=self._a_entero(
-                self._valor_parametro(parametros, "cobro.meses_adelanto_maximo", "0")
             ),
             mora_leve_hasta_meses=self._a_entero(
                 self._valor_parametro(parametros, "cobro.mora_leve_hasta_meses", "2")
@@ -428,7 +424,6 @@ class ServicioConfiguracion:
         meses_para_corte: int,
         cobrar_mensualidad_prorrateada_activacion: bool,
         permitir_pago_adelantado: bool,
-        meses_adelanto_maximo: int,
         mora_leve_hasta_meses: int,
         mora_media_hasta_meses: int,
         actor_id: int | None = None,
@@ -439,18 +434,12 @@ class ServicioConfiguracion:
             return ResultadoGestionConfiguracion(False, "La multa automatica por mora no puede ser negativa.", "VALIDACION")
         if meses_para_corte < 1:
             return ResultadoGestionConfiguracion(False, "Define al menos un mes para el umbral de corte o alerta.", "VALIDACION")
-        if permitir_pago_adelantado and meses_adelanto_maximo < 1:
-            return ResultadoGestionConfiguracion(False, "Indica el maximo de meses adelantados permitidos.", "VALIDACION")
-        if permitir_pago_adelantado and meses_adelanto_maximo > 12:
-            return ResultadoGestionConfiguracion(False, "El maximo recomendado de adelantos es de 12 meses.", "VALIDACION")
         if mora_leve_hasta_meses < 1:
             return ResultadoGestionConfiguracion(False, "La prioridad baja debe cubrir al menos 1 mes vencido.", "VALIDACION")
         if mora_media_hasta_meses <= mora_leve_hasta_meses:
             return ResultadoGestionConfiguracion(False, "La prioridad media debe terminar despues de la prioridad baja.", "VALIDACION")
         if not multa_mora_automatica_activa:
             multa_mora_automatica_centavos = 0
-        if not permitir_pago_adelantado:
-            meses_adelanto_maximo = 0
         try:
             self._repositorio_configuracion.actualizar_valores(
                 {
@@ -463,7 +452,6 @@ class ServicioConfiguracion:
                         "1" if cobrar_mensualidad_prorrateada_activacion else "0"
                     ),
                     "cobro.permitir_pago_adelantado": "1" if permitir_pago_adelantado else "0",
-                    "cobro.meses_adelanto_maximo": str(meses_adelanto_maximo),
                     "cobro.mora_leve_hasta_meses": str(mora_leve_hasta_meses),
                     "cobro.mora_media_hasta_meses": str(mora_media_hasta_meses),
                 },

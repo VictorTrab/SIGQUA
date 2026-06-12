@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from comun.pagos_adelantados import (
+    ConfiguracionPagoAdelantado,
+    ResumenAdelantoCasa,
+)
 
 TIPO_PAGO_MENSUALIDAD = "MENSUALIDAD"
 TIPO_PAGO_PLAN = "PLAN_PAGO"
@@ -195,6 +199,9 @@ class DiagnosticoPagoMensual:
     estado_visual: str
     mensaje_diagnostico: str
     alertas: tuple[str, ...] = ()
+    configuracion_adelanto: ConfiguracionPagoAdelantado = ConfiguracionPagoAdelantado(False)
+    resumen_adelanto: ResumenAdelantoCasa = ResumenAdelantoCasa(0)
+    maximo_meses_seleccionable: int = 0
 
 
 @dataclass(slots=True)

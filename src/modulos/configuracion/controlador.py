@@ -128,7 +128,6 @@ class ControladorConfiguracion:
         meses_para_corte: int,
         cobrar_mensualidad_prorrateada_activacion: bool,
         permitir_pago_adelantado: bool,
-        meses_adelanto_maximo: int,
         mora_leve_hasta_meses: int,
         mora_media_hasta_meses: int,
     ) -> None:
@@ -140,7 +139,6 @@ class ControladorConfiguracion:
             meses_para_corte=meses_para_corte,
             cobrar_mensualidad_prorrateada_activacion=cobrar_mensualidad_prorrateada_activacion,
             permitir_pago_adelantado=permitir_pago_adelantado,
-            meses_adelanto_maximo=meses_adelanto_maximo,
             mora_leve_hasta_meses=mora_leve_hasta_meses,
             mora_media_hasta_meses=mora_media_hasta_meses,
             actor_id=None if self._actor is None else self._actor.identificador,

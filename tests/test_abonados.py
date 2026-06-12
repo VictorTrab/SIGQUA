@@ -25,6 +25,9 @@ from modulos.abonados.entidades import (  # noqa: E402
 from modulos.abonados.repositorio import RepositorioAbonadosSQLite  # noqa: E402
 from modulos.abonados.servicio import ServicioAbonados  # noqa: E402
 from modulos.casas.repositorio import RepositorioCasasSQLite  # noqa: E402
+from modulos.pagos.entidades import FormularioPago  # noqa: E402
+from modulos.pagos.repositorio import RepositorioPagosSQLite  # noqa: E402
+from modulos.pagos.servicio import ServicioPagos  # noqa: E402
 
 
 class TestAbonados(unittest.TestCase):
@@ -42,8 +45,17 @@ class TestAbonados(unittest.TestCase):
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
         inicializar_base_datos_prueba(self.gestor_base_datos)
         self.repositorio_casas = RepositorioCasasSQLite(self.gestor_base_datos)
+        self.repositorio_pagos = RepositorioPagosSQLite(self.gestor_base_datos)
         self.repositorio = RepositorioAbonadosSQLite(self.gestor_base_datos)
-        self.servicio = ServicioAbonados(self.repositorio, self.repositorio_casas)
+        self.servicio = ServicioAbonados(
+            self.repositorio,
+            self.repositorio_casas,
+            self.repositorio_pagos,
+        )
+        self.servicio_pagos = ServicioPagos(
+            self.repositorio_pagos,
+            gestor_rutas=self.gestor_rutas,
+        )
 
     def tearDown(self) -> None:
         if self.raiz_temporal.exists():
@@ -72,6 +84,20 @@ class TestAbonados(unittest.TestCase):
         self.assertEqual(pagina_sin_mora.total_registros, 3)
         self.assertEqual(pagina_con_plan.total_registros, 1)
         self.assertEqual(pagina_con_plan.items[0].nombre_completo, "Carlos Ramirez")
+
+    def test_estados_casas_priorizan_deuda_y_muestran_adelanto(self) -> None:
+        metodo = self.repositorio_pagos.listar_metodos_pago_activos()[0]
+        resultado = self.servicio_pagos.registrar_pago(
+            FormularioPago(1, "MENSUALIDAD", 1, metodo.identificador),
+            actor_id=1,
+        )
+
+        casas_ana = self.servicio.listar_estados_casas(1)
+        casas_carlos = self.servicio.listar_estados_casas(2)
+
+        self.assertTrue(resultado.exito, resultado.mensaje)
+        self.assertEqual(casas_ana[0].resumen_adelanto.meses_activos, 1)
+        self.assertEqual(casas_carlos[0].meses_pendientes, 2)
 
     def test_inactivar_abonado_suspenda_casas_asociadas(self) -> None:
         carlos = next(item for item in self.servicio.listar().items if item.nombre_completo == "Carlos Ramirez")

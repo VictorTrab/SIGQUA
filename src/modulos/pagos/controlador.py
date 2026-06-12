@@ -167,7 +167,13 @@ class ControladorPagos:
             self._refrescar()
             bus_actualizaciones_modulos.emitir(
                 modulo_origen="pagos",
-                modulos_afectados=("historial_pagos", "morosidad", "reportes"),
+                modulos_afectados=(
+                    "historial_pagos",
+                    "morosidad",
+                    "reportes",
+                    "casas",
+                    "abonados",
+                ),
             )
 
     def _registrar_pago_conexion(self, formulario: FormularioPago) -> None:
@@ -217,7 +223,13 @@ class ControladorPagos:
             self._refrescar()
             bus_actualizaciones_modulos.emitir(
                 modulo_origen="pagos",
-                modulos_afectados=("historial_pagos", "morosidad", "reportes"),
+                modulos_afectados=(
+                    "historial_pagos",
+                    "morosidad",
+                    "reportes",
+                    "casas",
+                    "abonados",
+                ),
             )
 
     def _manejar_actualizacion_modulo(self, evento: object) -> None:

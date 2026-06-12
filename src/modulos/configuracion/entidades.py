@@ -45,7 +45,6 @@ class ParametrosCobro:
     meses_para_corte: int
     cobrar_mensualidad_prorrateada_activacion: bool
     permitir_pago_adelantado: bool
-    meses_adelanto_maximo: int
     mora_leve_hasta_meses: int
     mora_media_hasta_meses: int
 

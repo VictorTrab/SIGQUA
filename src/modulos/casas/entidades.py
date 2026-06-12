@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+
+from comun.pagos_adelantados import ResumenAdelantoCasa
 from math import ceil
 
 
@@ -245,6 +247,7 @@ class DetalleCasa:
     plan_activo: PlanActivoCasa | None = None
     historial_propietarios: tuple[HistorialPropietarioCasa, ...] = field(default_factory=tuple)
     ultima_fecha_cambio_dueno: str = ""
+    resumen_adelanto: ResumenAdelantoCasa = ResumenAdelantoCasa(0)
 
 
 @dataclass(slots=True)

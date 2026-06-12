@@ -50,6 +50,7 @@ from comun.ui import (
     resolver_variante_boton_modal,
 )
 from comun.ui.componentes import COLOR_FONDO_DIALOGO, RADIO_TARJETA_DIALOGO
+from comun.pagos_adelantados import EstadoFinancieroCasaAbonado
 from comun.ui.temas import (
     TEMA_SIGQUA_PREDETERMINADO,
     obtener_fondo_header_destacado,
@@ -334,6 +335,7 @@ class DialogoDetalleAbonado(DialogoBaseSigqua):
         fecha_creacion: str,
         fecha_actualizada: str,
         deuda_formateada: str,
+        estados_casas: tuple[EstadoFinancieroCasaAbonado, ...] = (),
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -341,6 +343,7 @@ class DialogoDetalleAbonado(DialogoBaseSigqua):
         self._fecha_creacion = fecha_creacion
         self._fecha_actualizada = fecha_actualizada
         self._deuda_formateada = deuda_formateada
+        self._estados_casas = estados_casas
         self._accion_resultado = "cerrar"
         self.setMinimumWidth(820)
         self.setMinimumHeight(620)
@@ -443,6 +446,26 @@ class DialogoDetalleAbonado(DialogoBaseSigqua):
             self._abonado.observaciones or "Sin observaciones registradas.",
         )
 
+        tabla_casas = QTableWidget()
+        configurar_tabla_operativa(tabla_casas, ["Casa", "Estado financiero"])
+        tabla_casas.setObjectName("tablaCasasDetalleAbonado")
+        tabla_casas.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        tabla_casas.setRowCount(len(self._estados_casas))
+        tabla_casas.setMinimumHeight(max(120, min(250, 48 + (len(self._estados_casas) * 34))))
+        tabla_casas.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        for fila, estado_casa in enumerate(self._estados_casas):
+            if estado_casa.meses_pendientes > 0:
+                estado_texto = f"Debe {estado_casa.meses_pendientes} mes(es)"
+            elif estado_casa.resumen_adelanto.ultimo_periodo_cubierto:
+                estado_texto = (
+                    "Adelantado hasta "
+                    f"{estado_casa.resumen_adelanto.ultimo_periodo_cubierto}"
+                )
+            else:
+                estado_texto = "Al dia"
+            tabla_casas.setItem(fila, 0, crear_item_tabla(estado_casa.casa_codigo))
+            tabla_casas.setItem(fila, 1, crear_item_tabla(estado_texto))
+
         fila_acciones = QHBoxLayout()
         fila_acciones.setSpacing(10)
         variante_cerrar = resolver_variante_boton_modal("Cerrar", "neutro")
@@ -491,6 +514,13 @@ class DialogoDetalleAbonado(DialogoBaseSigqua):
                 "Resumen financiero",
                 "Visualiza rapidamente casas asociadas, mora y deuda pendiente.",
                 fila_metricas,
+            )
+        )
+        panel_detalle_layout.addWidget(
+            SeccionDetalleSigqua(
+                "Casas asociadas",
+                "La deuda pendiente tiene prioridad sobre la cobertura adelantada.",
+                tabla_casas,
             )
         )
         panel_detalle_layout.addWidget(
@@ -693,12 +723,14 @@ class VistaAbonados(QWidget):
         fecha_creacion: str,
         fecha_actualizada: str,
         deuda_formateada: str,
+        estados_casas: tuple[EstadoFinancieroCasaAbonado, ...] = (),
     ) -> str:
         dialogo = DialogoDetalleAbonado(
             abonado=abonado,
             fecha_creacion=fecha_creacion,
             fecha_actualizada=fecha_actualizada,
             deuda_formateada=deuda_formateada,
+            estados_casas=estados_casas,
             parent=self,
         )
         dialogo.exec()

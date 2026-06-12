@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import date, datetime
+import sqlite3
 
 from comun.configuracion.gestor_rutas import GestorRutas
 from modulos.comprobantes import RepositorioComprobantesSQLite, ServicioComprobantes
@@ -75,13 +76,24 @@ class ServicioPagos:
         casa = self.repositorio_pagos.obtener_casa(casa_id)
         if casa is None:
             return None
+        cargos = self.repositorio_pagos.listar_cargos_mensuales(casa_id)
+        configuracion = self.repositorio_pagos.obtener_configuracion_pago_adelantado()
+        resumen_adelanto = self.repositorio_pagos.obtener_resumen_adelanto_casa(casa_id)
+        periodos_ocupados = self.repositorio_pagos.listar_periodos_mensuales_ocupados(casa_id)
+        capacidad_adelanto = self._calcular_capacidad_adelanto(
+            resumen_adelanto.periodos_activos,
+            periodos_ocupados,
+        )
+        bloqueo_adelanto = self._resolver_bloqueo_adelanto(casa, casa_id)
+        if not configuracion.permitir_pago_adelantado or bloqueo_adelanto:
+            capacidad_adelanto = 0
         alertas: list[str] = []
         resultado = self._validar_estado_operativo_mensual(
             casa.abonado_estado,
             casa.estado_servicio,
             casa.estado_administrativo,
         )
-        permite_continuar = resultado is None
+        permite_continuar = resultado is None and (bool(cargos) or capacidad_adelanto > 0)
         if resultado is not None:
             alertas.append(resultado.mensaje)
         if casa.meses_vencidos > 0:
@@ -92,9 +104,18 @@ class ServicioPagos:
             alertas.append(
                 "La casa esta cortada: en este flujo solo se permite regularizar deuda existente, sin adelantos."
             )
-        if casa.deuda_total_centavos <= 0:
+        if casa.deuda_total_centavos <= 0 and capacidad_adelanto > 0:
             alertas.append(
-                "La casa no tiene deuda mensual pendiente; cualquier pago se tratara como adelanto si la regla vigente lo permite."
+                "La casa no tiene deuda mensual pendiente; el pago se aplicara a periodos adelantados."
+            )
+        if not cargos and capacidad_adelanto <= 0 and resultado is None:
+            alertas.append(
+                bloqueo_adelanto
+                or (
+                    "Los pagos adelantados estan desactivados en Configuracion."
+                    if not configuracion.permitir_pago_adelantado
+                    else "La casa no tiene mensualidades pendientes ni capacidad disponible para adelantos."
+                )
             )
         if not alertas:
             alertas.append("La casa cumple las reglas vigentes para continuar con el pago mensual.")
@@ -104,6 +125,9 @@ class ServicioPagos:
             estado_visual=ESTADO_VISUAL_PAGO_OK if permite_continuar else ESTADO_VISUAL_PAGO_BLOQUEADO,
             mensaje_diagnostico=alertas[0],
             alertas=tuple(alertas),
+            configuracion_adelanto=configuracion,
+            resumen_adelanto=resumen_adelanto,
+            maximo_meses_seleccionable=len(cargos) + capacidad_adelanto,
         )
 
     def obtener_diagnostico_conexion(self, casa_id: int) -> DiagnosticoPagoActivacion | None:
@@ -235,6 +259,13 @@ class ServicioPagos:
 
         meses_adelantados = meses_solicitados - len(detalles)
         if meses_adelantados > 0:
+            configuracion = self.repositorio_pagos.obtener_configuracion_pago_adelantado()
+            if not configuracion.permitir_pago_adelantado:
+                return ResultadoPago(
+                    False,
+                    "Los pagos adelantados estan desactivados en Configuracion.",
+                    "VALIDACION",
+                )
             if casa.estado_servicio == "CORTADO":
                 return ResultadoPago(
                     False,
@@ -247,9 +278,35 @@ class ServicioPagos:
                     "No se pueden registrar pagos adelantados mientras exista deuda vencida no mensual.",
                     "VALIDACION",
                 )
-            ultimo_anio, ultimo_mes = self._resolver_ultimo_periodo(cargos)
-            for desplazamiento in range(1, meses_adelantados + 1):
-                anio, mes = self._sumar_meses(ultimo_anio, ultimo_mes, desplazamiento)
+            if self.repositorio_pagos.tiene_plan_reconexion_pendiente(casa.casa_id):
+                return ResultadoPago(
+                    False,
+                    "Regulariza primero el plan de reconexion pendiente antes de registrar adelantos.",
+                    "VALIDACION",
+                )
+            resumen_adelanto = self.repositorio_pagos.obtener_resumen_adelanto_casa(casa.casa_id)
+            periodos_ocupados = self.repositorio_pagos.listar_periodos_mensuales_ocupados(
+                casa.casa_id
+            )
+            capacidad = self._calcular_capacidad_adelanto(
+                resumen_adelanto.periodos_activos,
+                periodos_ocupados,
+            )
+            if meses_adelantados > capacidad:
+                return ResultadoPago(
+                    False,
+                    (
+                        f"No puedes registrar {meses_adelantados} mes(es) adelantado(s). "
+                        f"La capacidad disponible hasta diciembre es de {capacidad}."
+                    ),
+                    "VALIDACION",
+                )
+            periodos_adelantados = self._resolver_periodos_adelanto(
+                resumen_adelanto.periodos_activos,
+                periodos_ocupados,
+                meses_adelantados,
+            )
+            for anio, mes in periodos_adelantados:
                 detalles.append(
                     DetalleAplicacionPago(
                         cargo_id=None,
@@ -306,6 +363,12 @@ class ServicioPagos:
                     actor_id=actor_id,
                 )
                 comprobantes = () if comprobante is None else (comprobante,)
+        except sqlite3.IntegrityError:
+            return ResultadoPago(
+                False,
+                "No fue posible registrar el pago porque uno de los periodos adelantados ya fue cubierto.",
+                "CONFLICTO",
+            )
         except Exception as error:
             return ResultadoPago(False, f"No fue posible registrar el pago. {error}", "ERROR_SQLITE")
         mensaje = f"Pago registrado correctamente. Comprobante {comprobante.numero_comprobante}." if comprobante is not None else "Pago registrado correctamente."
@@ -753,24 +816,42 @@ class ServicioPagos:
     def _separar_fecha_hora(self, valor: str) -> tuple[str, str]:
         return self.formatear_fecha(valor), self.formatear_hora(valor)
 
-    @staticmethod
-    def _resolver_ultimo_periodo(cargos: list[object]) -> tuple[int, int]:
-        periodos = [
-            (cargo.periodo_anio, cargo.periodo_mes)
-            for cargo in cargos
-            if cargo.periodo_anio is not None and cargo.periodo_mes is not None
-        ]
-        if periodos:
-            return max(periodos)
-        hoy = date.today()
-        if hoy.month == 1:
-            return hoy.year - 1, 12
-        return hoy.year, hoy.month - 1
+    def _resolver_bloqueo_adelanto(self, casa: object, casa_id: int) -> str:
+        if casa.estado_servicio == "CORTADO":
+            return "No se pueden registrar adelantos mientras la casa este cortada."
+        resumen_deuda = self.repositorio_pagos.obtener_resumen_deuda_pago(casa_id)
+        if resumen_deuda.deuda_vencida_no_mensual_centavos > 0:
+            return "Regulariza primero la deuda vencida no mensual antes de registrar adelantos."
+        if self.repositorio_pagos.tiene_plan_reconexion_pendiente(casa_id):
+            return "Regulariza primero el plan de reconexion pendiente antes de registrar adelantos."
+        return ""
 
     @staticmethod
-    def _sumar_meses(anio: int, mes: int, desplazamiento: int) -> tuple[int, int]:
-        indice = (anio * 12) + (mes - 1) + desplazamiento
-        return indice // 12, (indice % 12) + 1
+    def _calcular_capacidad_adelanto(
+        periodos_activos: tuple[tuple[int, int], ...],
+        periodos_ocupados: tuple[tuple[int, int], ...],
+    ) -> int:
+        hoy = date.today()
+        ocupados = set(periodos_activos) | set(periodos_ocupados)
+        capacidad_anual = sum(
+            1 for mes in range(hoy.month, 13) if (hoy.year, mes) not in ocupados
+        )
+        return capacidad_anual
+
+    @staticmethod
+    def _resolver_periodos_adelanto(
+        periodos_activos: tuple[tuple[int, int], ...],
+        periodos_ocupados: tuple[tuple[int, int], ...],
+        cantidad: int,
+    ) -> tuple[tuple[int, int], ...]:
+        hoy = date.today()
+        ocupados = set(periodos_activos) | set(periodos_ocupados)
+        disponibles = tuple(
+            (hoy.year, mes)
+            for mes in range(hoy.month, 13)
+            if (hoy.year, mes) not in ocupados
+        )
+        return disponibles[:cantidad]
 
     @staticmethod
     def _etiqueta_tipo_pago(tipo_pago: str) -> str:

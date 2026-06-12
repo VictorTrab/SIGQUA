@@ -2040,6 +2040,8 @@ class FlujoPagoMensual(QWidget):
                 "Meses pendientes",
                 "Meses vencidos",
                 "Deuda anterior",
+                "Meses adelantados",
+                "Cubierto hasta",
             )
         ):
             label = QLabel(etiqueta)
@@ -2123,8 +2125,9 @@ class FlujoPagoMensual(QWidget):
         layout_formulario.setSpacing(14)
 
         self._input_cantidad_meses = QSpinBox()
-        self._input_cantidad_meses.setRange(1, 36)
+        self._input_cantidad_meses.setRange(1, 1)
         self._input_cantidad_meses.setValue(1)
+        self._input_cantidad_meses.setEnabled(False)
         self._input_cantidad_meses.setSuffix(" mes(es)")
         self._combo_metodo = QComboBox()
         self._input_referencia = QLineEdit()
@@ -2469,6 +2472,9 @@ class FlujoPagoMensual(QWidget):
             self._label_contexto_datos.setText("Sin casa seleccionada.")
             for valor in self._metricas_diagnostico.values():
                 valor.setText("-")
+            self._input_cantidad_meses.setRange(1, 1)
+            self._input_cantidad_meses.setValue(1)
+            self._input_cantidad_meses.setEnabled(False)
             self._aplicar_estado_visual_diagnostico(None)
             return
         self._label_casa_diagnostico.setText(casa.casa_codigo)
@@ -2488,6 +2494,27 @@ class FlujoPagoMensual(QWidget):
         self._metricas_diagnostico["Deuda anterior"].setText(
             self._formatear_moneda(casa.deuda_total_centavos)
         )
+        resumen_adelanto = (
+            self._diagnostico_actual.resumen_adelanto
+            if self._diagnostico_actual is not None
+            else None
+        )
+        self._metricas_diagnostico["Meses adelantados"].setText(
+            str(resumen_adelanto.meses_activos) if resumen_adelanto is not None else "0"
+        )
+        self._metricas_diagnostico["Cubierto hasta"].setText(
+            resumen_adelanto.ultimo_periodo_cubierto
+            if resumen_adelanto is not None and resumen_adelanto.ultimo_periodo_cubierto
+            else "Sin cobertura"
+        )
+        maximo_meses = (
+            self._diagnostico_actual.maximo_meses_seleccionable
+            if self._diagnostico_actual is not None
+            else 0
+        )
+        self._input_cantidad_meses.setRange(1, max(1, maximo_meses))
+        self._input_cantidad_meses.setValue(min(self._input_cantidad_meses.value(), max(1, maximo_meses)))
+        self._input_cantidad_meses.setEnabled(maximo_meses > 0)
         self._label_contexto_datos.setText(
             f"Casa {casa.casa_codigo} · {casa.abonado_nombre} · Estado {casa.estado_servicio}"
         )

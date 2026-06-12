@@ -41,6 +41,9 @@ from modulos.casas.entidades import (  # noqa: E402
 from modulos.casas.repositorio import RepositorioCasasSQLite  # noqa: E402
 from modulos.casas.servicio import ServicioCasas  # noqa: E402
 from modulos.casas.vista import DialogoFormularioCasa, VistaCasas  # noqa: E402
+from modulos.pagos.entidades import FormularioPago  # noqa: E402
+from modulos.pagos.repositorio import RepositorioPagosSQLite  # noqa: E402
+from modulos.pagos.servicio import ServicioPagos  # noqa: E402
 
 
 class TestCasas(unittest.TestCase):
@@ -58,7 +61,12 @@ class TestCasas(unittest.TestCase):
         self.gestor_base_datos = GestorBaseDatos(self.gestor_rutas)
         inicializar_base_datos_prueba(self.gestor_base_datos)
         self.repositorio = RepositorioCasasSQLite(self.gestor_base_datos)
-        self.servicio = ServicioCasas(self.repositorio)
+        self.repositorio_pagos = RepositorioPagosSQLite(self.gestor_base_datos)
+        self.servicio = ServicioCasas(self.repositorio, self.repositorio_pagos)
+        self.servicio_pagos = ServicioPagos(
+            self.repositorio_pagos,
+            gestor_rutas=self.gestor_rutas,
+        )
 
     def tearDown(self) -> None:
         if self.raiz_temporal.exists():
@@ -90,6 +98,22 @@ class TestCasas(unittest.TestCase):
         self.assertEqual(len(detalle_historial.historial_propietarios), 1)
         self.assertIn("Ana Martinez", detalle_historial.historial_propietarios[0].abonado_anterior_nombre)
         self.assertIn("Ernesto Lopez", detalle_historial.historial_propietarios[0].abonado_nuevo_nombre)
+
+    def test_detalle_muestra_cobertura_adelantada_activa(self) -> None:
+        metodo = self.repositorio_pagos.listar_metodos_pago_activos()[0]
+        resultado = self.servicio_pagos.registrar_pago(
+            FormularioPago(1, "MENSUALIDAD", 1, metodo.identificador),
+            actor_id=1,
+        )
+
+        detalle = self.servicio.obtener_detalle(1)
+
+        self.assertTrue(resultado.exito, resultado.mensaje)
+        self.assertIsNotNone(detalle)
+        assert detalle is not None
+        self.assertEqual(detalle.resumen_adelanto.meses_activos, 1)
+        self.assertGreater(detalle.resumen_adelanto.monto_activo_centavos, 0)
+        self.assertTrue(detalle.resumen_adelanto.ultimo_periodo_cubierto)
 
     def test_cambio_dueno_migra_deuda_plan_e_historial(self) -> None:
         resultado = self.servicio.cambiar_dueno(

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import csv
+from dataclasses import replace
 from datetime import datetime
 
+from comun.pagos_adelantados import LectorPagosAdelantados
 from modulos.casas.entidades import (
     Casa,
     DetalleCasa,
@@ -34,8 +36,13 @@ class ServicioCasas:
 
     TAMANO_PAGINA = 10
 
-    def __init__(self, repositorio_casas: RepositorioCasas) -> None:
+    def __init__(
+        self,
+        repositorio_casas: RepositorioCasas,
+        lector_adelantos: LectorPagosAdelantados | None = None,
+    ) -> None:
         self._repositorio_casas = repositorio_casas
+        self._lector_adelantos = lector_adelantos
 
     def obtener_resumen(self) -> ResumenCasas:
         return self._repositorio_casas.obtener_resumen()
@@ -68,7 +75,13 @@ class ServicioCasas:
         return self._repositorio_casas.obtener_por_id(casa_id)
 
     def obtener_detalle(self, casa_id: int) -> DetalleCasa | None:
-        return self._repositorio_casas.obtener_detalle(casa_id)
+        detalle = self._repositorio_casas.obtener_detalle(casa_id)
+        if detalle is None or self._lector_adelantos is None:
+            return detalle
+        return replace(
+            detalle,
+            resumen_adelanto=self._lector_adelantos.obtener_resumen_adelanto_casa(casa_id),
+        )
 
     def listar_abonados_disponibles(self) -> list[OpcionAbonado]:
         return self._repositorio_casas.listar_abonados_disponibles()

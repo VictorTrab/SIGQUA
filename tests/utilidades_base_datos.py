@@ -59,6 +59,7 @@ INSERT INTO usuarios(
 (4,'consulta_demo','Consulta de Prueba','consulta.demo@sigqua.local','scrypt$c081b3c0b1cabcfd1e173ac2293394ee$d3c88ce38c9accabda7c2beeef20c9cb0be9bf8a1014f702cc83d90c83fb8d7e8904a200712554282f89cdc1f6adc9fb2b3544f3732c7fabea9b6357a051a94d','ACTIVO',NULL,NULL,'[PRUEBA] Usuario de consulta.','2026-06-09 15:07:37','2026-06-09 15:07:37',NULL,1,1,0,0,0,0,NULL,NULL,NULL);
 INSERT INTO usuarios_roles VALUES(3,3,'2026-06-09 15:07:38'),(4,4,'2026-06-09 15:07:38');
 UPDATE configuracion_sistema SET valor='35000' WHERE clave='cobro.precio_mensual_centavos';
+UPDATE configuracion_sistema SET valor='1' WHERE clave='cobro.permitir_pago_adelantado';
 PRAGMA foreign_keys = ON;
 """
 

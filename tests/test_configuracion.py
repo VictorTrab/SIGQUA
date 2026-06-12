@@ -60,7 +60,6 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.parametros_cobro.meses_para_corte, 5)
         self.assertFalse(estado.parametros_cobro.cobrar_mensualidad_prorrateada_activacion)
         self.assertTrue(estado.parametros_cobro.permitir_pago_adelantado)
-        self.assertEqual(estado.parametros_cobro.meses_adelanto_maximo, 12)
         self.assertEqual(estado.parametros_cobro.mora_leve_hasta_meses, 2)
         self.assertEqual(estado.parametros_cobro.mora_media_hasta_meses, 5)
         self.assertEqual(estado.factura.titulo_documento, "RECIBO DE PAGO")
@@ -114,7 +113,6 @@ class TestConfiguracion(unittest.TestCase):
             meses_para_corte=3,
             cobrar_mensualidad_prorrateada_activacion=True,
             permitir_pago_adelantado=True,
-            meses_adelanto_maximo=6,
             mora_leve_hasta_meses=2,
             mora_media_hasta_meses=4,
             actor_id=1,
@@ -134,7 +132,6 @@ class TestConfiguracion(unittest.TestCase):
         self.assertEqual(estado.parametros_cobro.meses_para_corte, 3)
         self.assertTrue(estado.parametros_cobro.cobrar_mensualidad_prorrateada_activacion)
         self.assertTrue(estado.parametros_cobro.permitir_pago_adelantado)
-        self.assertEqual(estado.parametros_cobro.meses_adelanto_maximo, 6)
         self.assertEqual(estado.parametros_cobro.mora_leve_hasta_meses, 2)
         self.assertEqual(estado.parametros_cobro.mora_media_hasta_meses, 4)
         self.assertEqual(estado.informacion.actualizado_por, "Administrador del Sistema")
@@ -359,25 +356,6 @@ class TestConfiguracion(unittest.TestCase):
             meses_para_corte=0,
             cobrar_mensualidad_prorrateada_activacion=False,
             permitir_pago_adelantado=False,
-            meses_adelanto_maximo=0,
-            mora_leve_hasta_meses=2,
-            mora_media_hasta_meses=5,
-            actor_id=1,
-        )
-
-        self.assertFalse(resultado.exito)
-        self.assertEqual(resultado.codigo, "VALIDACION")
-
-    def test_no_permite_adelantos_sin_limite_valido(self) -> None:
-        resultado = self.servicio.guardar_parametros_cobro(
-            precio_mensual_centavos=2500,
-            multa_mora_automatica_activa=False,
-            multa_mora_automatica_centavos=0,
-            corte_automatico_activo=False,
-            meses_para_corte=5,
-            cobrar_mensualidad_prorrateada_activacion=False,
-            permitir_pago_adelantado=True,
-            meses_adelanto_maximo=0,
             mora_leve_hasta_meses=2,
             mora_media_hasta_meses=5,
             actor_id=1,
@@ -395,7 +373,6 @@ class TestConfiguracion(unittest.TestCase):
             meses_para_corte=5,
             cobrar_mensualidad_prorrateada_activacion=False,
             permitir_pago_adelantado=False,
-            meses_adelanto_maximo=0,
             mora_leve_hasta_meses=3,
             mora_media_hasta_meses=3,
             actor_id=1,

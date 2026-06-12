@@ -84,6 +84,7 @@ class ControladorAbonados:
             fecha_creacion=self._servicio_abonados.formatear_fecha_hora(abonado.creado_en),
             fecha_actualizada=self._servicio_abonados.formatear_fecha_hora(abonado.actualizado_en),
             deuda_formateada=self._servicio_abonados.formatear_moneda(abonado.deuda_total_centavos),
+            estados_casas=self._servicio_abonados.listar_estados_casas(abonado_id),
         )
         if accion == "editar":
             self._editar_abonado(abonado_id)

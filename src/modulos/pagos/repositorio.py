@@ -8,6 +8,11 @@ from datetime import date
 from typing import Protocol
 
 from comun.base_datos import GestorBaseDatos
+from comun.pagos_adelantados import (
+    ConfiguracionPagoAdelantado,
+    EstadoFinancieroCasaAbonado,
+    ResumenAdelantoCasa,
+)
 from comun.configuracion.identidad_empresa import (
     CLAVES_IDENTIDAD_EMPRESA,
     CLAVES_IDENTIDAD_LEGADAS_JUNTA,
@@ -107,6 +112,27 @@ class RepositorioPagos(Protocol):
 
     def obtener_diagnostico_plan(self, casa_id: int) -> DiagnosticoPagoPlan | None:
         """Obtiene el diagnostico de plan activo y sus cuotas cobrables para una casa."""
+
+    def obtener_configuracion_pago_adelantado(self) -> ConfiguracionPagoAdelantado:
+        """Obtiene la politica vigente para adelantos."""
+
+    def obtener_resumen_adelanto_casa(self, casa_id: int) -> ResumenAdelantoCasa:
+        """Obtiene la cobertura adelantada activa de una casa."""
+
+    def listar_periodos_mensuales_ocupados(
+        self,
+        casa_id: int,
+    ) -> tuple[tuple[int, int], ...]:
+        """Lista periodos mensuales ya representados por un cargo vigente."""
+
+    def listar_estados_casas_abonado(
+        self,
+        abonado_id: int,
+    ) -> tuple[EstadoFinancieroCasaAbonado, ...]:
+        """Lista estados financieros de las casas de un abonado."""
+
+    def tiene_plan_reconexion_pendiente(self, casa_id: int) -> bool:
+        """Indica si la casa tiene cuotas pendientes de un plan de reconexion."""
 
     def guardar_pago_confirmado(
         self,
@@ -539,6 +565,113 @@ class RepositorioPagosSQLite:
         if fila is None:
             return False
         return self._a_booleano(str(fila["valor"] or "0"))
+
+    def obtener_configuracion_pago_adelantado(self) -> ConfiguracionPagoAdelantado:
+        consulta = """
+            SELECT clave, valor
+            FROM configuracion_sistema
+            WHERE clave = 'cobro.permitir_pago_adelantado';
+        """
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            valores = {
+                str(fila["clave"]): str(fila["valor"] or "")
+                for fila in conexion.execute(consulta).fetchall()
+            }
+        permitir = self._a_booleano(valores.get("cobro.permitir_pago_adelantado", "0"))
+        return ConfiguracionPagoAdelantado(permitir)
+
+    def obtener_resumen_adelanto_casa(self, casa_id: int) -> ResumenAdelantoCasa:
+        hoy = date.today()
+        consulta = """
+            SELECT pc.anio, pc.mes, pa.monto_centavos
+            FROM pagos_adelantados pa
+            INNER JOIN periodos_cobro pc ON pc.id = pa.periodo_id
+            WHERE pa.casa_id = ?
+              AND pc.anio = ?
+              AND pc.mes BETWEEN ? AND 12
+            ORDER BY pc.anio, pc.mes;
+        """
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            filas = conexion.execute(consulta, (casa_id, hoy.year, hoy.month)).fetchall()
+        periodos = tuple((int(fila["anio"]), int(fila["mes"])) for fila in filas)
+        configuracion = self.obtener_configuracion_pago_adelantado()
+        meses_activos = len(periodos)
+        meses_libres_anio = max(0, (13 - hoy.month) - meses_activos)
+        capacidad = meses_libres_anio if configuracion.permitir_pago_adelantado else 0
+        return ResumenAdelantoCasa(
+            casa_id=casa_id,
+            meses_activos=meses_activos,
+            monto_activo_centavos=sum(int(fila["monto_centavos"] or 0) for fila in filas),
+            ultimo_periodo_cubierto=self._resolver_ultimo_periodo_contiguo(
+                periodos,
+                hoy.year,
+                hoy.month,
+            ),
+            periodos_activos=periodos,
+            capacidad_disponible=capacidad,
+        )
+
+    def listar_periodos_mensuales_ocupados(
+        self,
+        casa_id: int,
+    ) -> tuple[tuple[int, int], ...]:
+        hoy = date.today()
+        consulta = """
+            SELECT DISTINCT pc.anio, pc.mes
+            FROM cargos c
+            INNER JOIN conceptos_cobro cc ON cc.id = c.concepto_id
+            INNER JOIN periodos_cobro pc ON pc.id = c.periodo_id
+            WHERE c.casa_id = ?
+              AND c.anulado_en IS NULL
+              AND cc.codigo = 'SERVICIO_MENSUAL'
+              AND pc.anio = ?
+              AND pc.mes BETWEEN ? AND 12
+            ORDER BY pc.anio, pc.mes;
+        """
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            filas = conexion.execute(consulta, (casa_id, hoy.year, hoy.month)).fetchall()
+        return tuple((int(fila["anio"]), int(fila["mes"])) for fila in filas)
+
+    def listar_estados_casas_abonado(
+        self,
+        abonado_id: int,
+    ) -> tuple[EstadoFinancieroCasaAbonado, ...]:
+        consulta = f"""
+            SELECT
+                c.id AS casa_id,
+                printf('CA-%03d', c.id) AS casa_codigo,
+                COALESCE(dd.meses_pendientes, 0) AS meses_pendientes
+            FROM casas c
+            LEFT JOIN ({SUBCONSULTA_DEUDA_CASA}) dd ON dd.casa_id = c.id
+            WHERE c.abonado_id = ? AND c.eliminado_en IS NULL
+            ORDER BY c.id;
+        """
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            filas = conexion.execute(consulta, (abonado_id,)).fetchall()
+        return tuple(
+            EstadoFinancieroCasaAbonado(
+                casa_id=int(fila["casa_id"]),
+                casa_codigo=str(fila["casa_codigo"]),
+                meses_pendientes=int(fila["meses_pendientes"] or 0),
+                resumen_adelanto=self.obtener_resumen_adelanto_casa(int(fila["casa_id"])),
+            )
+            for fila in filas
+        )
+
+    def tiene_plan_reconexion_pendiente(self, casa_id: int) -> bool:
+        consulta = """
+            SELECT 1
+            FROM planes_pago pp
+            INNER JOIN cuotas_plan_pago cp ON cp.plan_pago_id = pp.id
+            WHERE pp.casa_id = ?
+              AND pp.estado = 'ACTIVO'
+              AND pp.tipo_plan = 'RECONEXION'
+              AND cp.estado IN ('PENDIENTE', 'PARCIAL', 'VENCIDO')
+              AND cp.saldo_pendiente_centavos > 0
+            LIMIT 1;
+        """
+        with closing(self._gestor_base_datos.obtener_conexion()) as conexion:
+            return conexion.execute(consulta, (casa_id,)).fetchone() is not None
 
     def guardar_pago_confirmado(
         self,
@@ -1387,6 +1520,18 @@ class RepositorioPagosSQLite:
             """
         ).fetchone()
         return f"REC-{int(fila['ultimo_numero']):06d}"
+
+    @staticmethod
+    def _resolver_ultimo_periodo_contiguo(
+        periodos: tuple[tuple[int, int], ...],
+        anio: int,
+        mes_inicio: int,
+    ) -> str:
+        ultimo_mes = max(
+            (mes for periodo_anio, mes in periodos if periodo_anio == anio and mes >= mes_inicio),
+            default=0,
+        )
+        return f"{ultimo_mes:02d}/{anio:04d}" if ultimo_mes else ""
 
     @staticmethod
     def _fila_a_casa(fila: object) -> CasaPago:

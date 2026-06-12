@@ -909,6 +909,18 @@ class DialogoDetalleCasa(DialogoBaseSigqua):
             )
 
         plan_campo = CampoDetalleSigqua("Plan activo", plan_texto)
+        adelanto = self._detalle.resumen_adelanto
+        cobertura_campos = [
+            CampoDetalleSigqua("Meses adelantados", str(adelanto.meses_activos)),
+            CampoDetalleSigqua(
+                "Cubierto hasta",
+                adelanto.ultimo_periodo_cubierto or "Sin cobertura adelantada",
+            ),
+            CampoDetalleSigqua(
+                "Monto adelantado",
+                self._formateador_moneda(adelanto.monto_activo_centavos),
+            ),
+        ]
         direccion = CampoDetalleSigqua("Referencia", casa.direccion_referencia or "Sin referencia registrada.")
         if self._detalle.historial_propietarios:
             primera_linea = self._detalle.historial_propietarios[0]
@@ -950,6 +962,13 @@ class DialogoDetalleCasa(DialogoBaseSigqua):
         layout_panel.addWidget(encabezado)
         layout_panel.addWidget(SeccionDetalleSigqua("Contexto operativo", "Identifica el propietario actual, barrio y trazabilidad base de la casa.", grid_info))
         layout_panel.addWidget(SeccionDetalleSigqua("Estado financiero", "Resume periodos pendientes, mora y deuda acumulada de la casa.", fila_metricas))
+        layout_panel.addWidget(
+            SeccionDetalleSigqua(
+                "Cobertura adelantada",
+                "Muestra mensualidades vigentes pagadas desde el mes actual.",
+                cobertura_campos,
+            )
+        )
         layout_panel.addWidget(SeccionDetalleSigqua("Plan y localizacion", "Muestra el plan activo vinculado y la referencia operativa de la casa.", [plan_campo, direccion]))
         layout_panel.addWidget(SeccionDetalleSigqua("Trazabilidad", "Conserva el ultimo movimiento y las observaciones administrativas de la casa.", [historial, observaciones, reactivacion]))
         layout_scroll.addWidget(panel_detalle)

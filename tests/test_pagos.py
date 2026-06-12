@@ -346,7 +346,7 @@ class TestPagos(unittest.TestCase):
         self.assertEqual(resultado.codigo, "VALIDACION")
         self.assertIn("deuda vencida no mensual", resultado.mensaje)
 
-    def test_pago_adelantado_no_duplica_periodo_casa(self) -> None:
+    def test_pago_adelantado_continua_sin_duplicar_periodo_casa(self) -> None:
         casa_id = self._crear_casa_activa_sin_cargos()
         metodo_id = self._obtener_metodo("EFECTIVO")
         formulario = FormularioPago(
@@ -360,14 +360,125 @@ class TestPagos(unittest.TestCase):
         segundo_resultado = self.servicio.registrar_pago(formulario, actor_id=1)
 
         self.assertTrue(resultado.exito, resultado.mensaje)
-        self.assertFalse(segundo_resultado.exito)
+        self.assertTrue(segundo_resultado.exito, segundo_resultado.mensaje)
+        self.assertIsNotNone(resultado.comprobante)
+        assert resultado.comprobante is not None
+        self.assertTrue(
+            any("adelantada" in detalle.lower() for detalle in resultado.comprobante.detalles)
+        )
         with closing(sqlite3.connect(self.ruta_db)) as conexion:
             adelantos = conexion.execute(
-                "SELECT COUNT(*) FROM pagos_adelantados WHERE casa_id = ?;",
+                """
+                SELECT COUNT(*), COUNT(DISTINCT periodo_id)
+                FROM pagos_adelantados
+                WHERE casa_id = ?;
+                """,
                 (casa_id,),
             ).fetchone()
 
-        self.assertEqual(adelantos[0], 2)
+        self.assertEqual(adelantos, (4, 4))
+
+    def test_adelanto_historico_deja_de_consumir_cupo(self) -> None:
+        from datetime import date
+
+        casa_id = self._crear_casa_activa_sin_cargos()
+        metodo_id = self._obtener_metodo("EFECTIVO")
+        resultado = self.servicio.registrar_pago(
+            FormularioPago(casa_id, "MENSUALIDAD", 1, metodo_id),
+            actor_id=1,
+        )
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            periodo_id = conexion.execute(
+                "SELECT periodo_id FROM pagos_adelantados WHERE casa_id = ?;",
+                (casa_id,),
+            ).fetchone()[0]
+            conexion.execute(
+                "UPDATE periodos_cobro SET anio = ? WHERE id = ?;",
+                (date.today().year - 1, periodo_id),
+            )
+            conexion.commit()
+
+        resumen = self.repositorio.obtener_resumen_adelanto_casa(casa_id)
+
+        self.assertTrue(resultado.exito, resultado.mensaje)
+        self.assertEqual(resumen.meses_activos, 0)
+        self.assertEqual(resumen.monto_activo_centavos, 0)
+        self.assertEqual(resumen.capacidad_disponible, min(12, 13 - date.today().month))
+
+    def test_configuracion_desactivada_permite_deuda_pero_bloquea_adelanto(self) -> None:
+        casa_con_deuda = self._obtener_casa_por_dni("0801199000022")
+        casa_sin_cargos = self._crear_casa_activa_sin_cargos()
+        metodo_id = self._obtener_metodo("EFECTIVO")
+        with closing(sqlite3.connect(self.ruta_db)) as conexion:
+            conexion.execute(
+                """
+                UPDATE configuracion_sistema
+                SET valor = '0'
+                WHERE clave = 'cobro.permitir_pago_adelantado';
+                """
+            )
+            conexion.commit()
+
+        pago_deuda = self.servicio.preparar_confirmacion(
+            FormularioPago(casa_con_deuda, "MENSUALIDAD", 1, metodo_id)
+        )
+        adelanto = self.servicio.preparar_confirmacion(
+            FormularioPago(casa_sin_cargos, "MENSUALIDAD", 1, metodo_id)
+        )
+
+        self.assertIsInstance(pago_deuda, ResumenConfirmacionPago)
+        self.assertNotIsInstance(adelanto, ResumenConfirmacionPago)
+        self.assertIn("desactivados", adelanto.mensaje.lower())
+
+    def test_cupo_de_adelantos_se_calcula_hasta_diciembre(self) -> None:
+        casa_id = self._crear_casa_activa_sin_cargos()
+        metodo_id = self._obtener_metodo("EFECTIVO")
+        from datetime import date
+
+        cupo = 13 - date.today().month
+        diagnostico = self.servicio.obtener_diagnostico_pago_mensual(casa_id)
+        exceso = self.servicio.preparar_confirmacion(
+            FormularioPago(casa_id, "MENSUALIDAD", cupo + 1, metodo_id)
+        )
+
+        self.assertIsNotNone(diagnostico)
+        assert diagnostico is not None
+        self.assertEqual(diagnostico.maximo_meses_seleccionable, cupo)
+        self.assertNotIsInstance(exceso, ResumenConfirmacionPago)
+
+    def test_adelanto_no_supera_diciembre_y_mes_actual_consume_cupo(self) -> None:
+        from datetime import date
+
+        casa_id = self._crear_casa_activa_sin_cargos()
+        metodo_id = self._obtener_metodo("EFECTIVO")
+        meses_disponibles = 13 - date.today().month
+        confirmacion = self.servicio.preparar_confirmacion(
+            FormularioPago(casa_id, "MENSUALIDAD", meses_disponibles, metodo_id)
+        )
+        exceso = self.servicio.preparar_confirmacion(
+            FormularioPago(casa_id, "MENSUALIDAD", meses_disponibles + 1, metodo_id)
+        )
+
+        self.assertIsInstance(confirmacion, ResumenConfirmacionPago)
+        assert isinstance(confirmacion, ResumenConfirmacionPago)
+        self.assertEqual(confirmacion.detalles[0].periodo_mes, date.today().month)
+        self.assertEqual(confirmacion.detalles[-1].periodo_mes, 12)
+        self.assertNotIsInstance(exceso, ResumenConfirmacionPago)
+
+    def test_plan_reconexion_pendiente_bloquea_solo_el_adelanto(self) -> None:
+        casa_id = self._obtener_casa_por_dni("0801199000022")
+        metodo_id = self._obtener_metodo("EFECTIVO")
+
+        deuda = self.servicio.preparar_confirmacion(
+            FormularioPago(casa_id, "MENSUALIDAD", 2, metodo_id)
+        )
+        con_adelanto = self.servicio.preparar_confirmacion(
+            FormularioPago(casa_id, "MENSUALIDAD", 3, metodo_id)
+        )
+
+        self.assertIsInstance(deuda, ResumenConfirmacionPago)
+        self.assertNotIsInstance(con_adelanto, ResumenConfirmacionPago)
+        self.assertIn("plan de reconexion", con_adelanto.mensaje.lower())
 
     def test_diagnostico_activacion_clasifica_por_antecedente(self) -> None:
         casa_conexion, _dni_conexion = self._crear_casa_cortada_para_activacion(
